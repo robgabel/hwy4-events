@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Hwy4Event, EventCategory } from "@/lib/types";
+import { useState, useMemo, useCallback } from "react";
+import { Hwy4Event, Hwy4Org, EventCategory } from "@/lib/types";
 import EventCard from "./EventCard";
 import FilterBar from "./FilterBar";
 import { format, parseISO, isToday, isTomorrow, isThisWeek } from "date-fns";
@@ -31,19 +31,38 @@ function groupEventsByDate(events: Hwy4Event[]) {
 
 export default function EventList({
   initialEvents,
+  orgs,
 }: {
   initialEvents: Hwy4Event[];
+  orgs: Hwy4Org[];
 }) {
   const [category, setCategory] = useState<EventCategory | "all">("all");
   const [town, setTown] = useState<string>("all");
+  const [enabledOrgs, setEnabledOrgs] = useState<Set<string>>(new Set());
+
+  const toggleOrg = useCallback((slug: string) => {
+    setEnabledOrgs((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) {
+        next.delete(slug);
+      } else {
+        next.add(slug);
+      }
+      return next;
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     return initialEvents.filter((e) => {
+      // Visibility: show public events always, private only if their org is toggled on
+      if (e.visibility === "private") {
+        if (!e.org_slug || !enabledOrgs.has(e.org_slug)) return false;
+      }
       if (category !== "all" && e.category !== category) return false;
       if (town !== "all" && e.town !== town) return false;
       return true;
     });
-  }, [initialEvents, category, town]);
+  }, [initialEvents, category, town, enabledOrgs]);
 
   const groups = useMemo(() => groupEventsByDate(filtered), [filtered]);
 
@@ -55,6 +74,9 @@ export default function EventList({
         onCategoryChange={setCategory}
         onTownChange={setTown}
         eventCount={filtered.length}
+        orgs={orgs}
+        enabledOrgs={enabledOrgs}
+        onToggleOrg={toggleOrg}
       />
 
       {groups.length === 0 ? (
@@ -79,6 +101,7 @@ export default function EventList({
             onClick={() => {
               setCategory("all");
               setTown("all");
+              setEnabledOrgs(new Set());
             }}
             className="mt-2 text-sm font-medium text-pine hover:underline"
           >

@@ -7,6 +7,8 @@ export type EventCategory =
   | "other";
 
 export type EventStatus = "confirmed" | "tentative" | "cancelled";
+export type EventVisibility = "public" | "private";
+export type EventImportance = "major" | "minor";
 
 export interface Hwy4Event {
   id: string;
@@ -25,6 +27,15 @@ export interface Hwy4Event {
   event_url: string | null;
   source_url: string;
   source_name: string | null;
+  visibility: EventVisibility;
+  org_slug: string | null;
+  importance: EventImportance | null;
+}
+
+export interface Hwy4Org {
+  id: string;
+  slug: string;
+  display_name: string;
 }
 
 export const CATEGORY_LABELS: Record<EventCategory, string> = {

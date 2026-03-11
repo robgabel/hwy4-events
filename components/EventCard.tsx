@@ -10,7 +10,13 @@ function formatTime(time: string | null): string | null {
   return `${display}:${m} ${ampm}`;
 }
 
+const ORG_LABELS: Record<string, string> = {
+  "moose-lodge": "Moose Lodge",
+  "sequoia-woods": "Sequoia Woods",
+};
+
 export default function EventCard({ event }: { event: Hwy4Event }) {
+  const isPrivate = event.visibility === "private";
   const dateObj = parseISO(event.date);
   const dayOfWeek = format(dateObj, "EEE");
   const monthDay = format(dateObj, "MMM d");
@@ -24,7 +30,7 @@ export default function EventCard({ event }: { event: Hwy4Event }) {
     : null;
 
   return (
-    <article className="group flex gap-4 rounded-xl border border-stone-light/30 bg-white p-4 shadow-sm transition-all hover:border-sage/50 hover:shadow-md sm:p-5">
+    <article className={`group flex gap-4 rounded-xl border p-4 shadow-sm transition-all hover:shadow-md sm:p-5 ${isPrivate ? "border-l-4 border-l-earth/40 border-t-stone-light/30 border-r-stone-light/30 border-b-stone-light/30 bg-earth/[0.02]" : "border-stone-light/30 bg-white hover:border-sage/50"}`}>
       {/* Date block */}
       <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-forest/5 py-2.5">
         <span className="text-xs font-medium uppercase text-pine">
@@ -61,6 +67,14 @@ export default function EventCard({ event }: { event: Hwy4Event }) {
           {event.status === "tentative" && (
             <span className="inline-flex items-center rounded-full bg-sunset/10 px-2 py-0.5 text-xs font-medium text-sunset">
               Tentative
+            </span>
+          )}
+          {isPrivate && event.org_slug && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-earth/10 px-2 py-0.5 text-xs font-medium text-earth">
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              {ORG_LABELS[event.org_slug] || event.org_slug}
             </span>
           )}
         </div>
