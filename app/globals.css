@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  /* Mountain palette */
+  --color-forest: #1B3A2D;
+  --color-forest-light: #244D3A;
+  --color-pine: #2D5A3D;
+  --color-sage: #8B9E7E;
+  --color-sage-light: #B5C4A8;
+  --color-earth: #6B4226;
+  --color-earth-light: #8B5E3C;
+  --color-bark: #4A3728;
+  --color-stone: #A09484;
+  --color-stone-light: #C4B8AA;
+  --color-cream: #FDF8F3;
+  --color-warm-white: #F5F0EB;
+  --color-sky: #5A8FA8;
+  --color-sky-light: #7DB3CC;
+  --color-sunset: #D4855C;
+
+  /* Fonts */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Mountain ridge SVG as repeating divider */
+body {
+  background-color: var(--color-cream);
+  color: var(--color-forest);
+}
+
+/* Hero section with mountain gradient */
+.hero-gradient {
+  background: linear-gradient(
+    180deg,
+    var(--color-forest) 0%,
+    var(--color-forest-light) 40%,
+    var(--color-pine) 70%,
+    var(--color-sage) 100%
+  );
+}
+
+/* Mountain silhouette background */
+.mountain-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.mountain-bg::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 120' preserveAspectRatio='none'%3E%3Cpath d='M0,120 L0,80 Q120,20 240,60 Q360,100 480,40 Q600,0 720,50 Q840,90 960,30 Q1080,0 1200,55 Q1320,90 1440,45 L1440,120 Z' fill='%23FDF8F3'/%3E%3C/svg%3E")
+    no-repeat bottom center;
+  background-size: cover;
+  pointer-events: none;
+}
+
+/* Tree line decoration */
+.tree-line::before {
+  content: "";
+  position: absolute;
+  bottom: 100px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60' preserveAspectRatio='none'%3E%3Cpath d='M10,60 L15,30 L20,60 M30,60 L37,20 L44,60 M55,60 L60,35 L65,60 M75,60 L82,15 L89,60 M100,60 L105,25 L110,60 M120,60 L127,10 L134,60 M145,60 L150,30 L155,60 M165,60 L172,18 L179,60 M190,60 L195,32 L200,60' stroke='%232D5A3D' stroke-width='2' fill='none' opacity='0.3'/%3E%3C/svg%3E")
+    repeat-x bottom center;
+  background-size: 200px 60px;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Category badge colors */
+.badge-live_music {
+  background-color: color-mix(in srgb, var(--color-sunset) 15%, transparent);
+  color: var(--color-earth);
+}
+.badge-festival {
+  background-color: color-mix(in srgb, var(--color-sage) 25%, transparent);
+  color: var(--color-forest);
+}
+.badge-civic {
+  background-color: color-mix(in srgb, var(--color-sky) 15%, transparent);
+  color: var(--color-sky);
+}
+.badge-resort {
+  background-color: color-mix(in srgb, var(--color-stone) 20%, transparent);
+  color: var(--color-bark);
+}
+.badge-lodge {
+  background-color: color-mix(in srgb, var(--color-earth) 15%, transparent);
+  color: var(--color-earth);
+}
+.badge-other {
+  background-color: color-mix(in srgb, var(--color-stone) 15%, transparent);
+  color: var(--color-stone);
+}
