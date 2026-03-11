@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { Hwy4Event, Hwy4Org } from "@/lib/types";
+import { SITE_URL, SITE_NAME } from "@/lib/constants";
+import { generateEventSlug } from "@/lib/slugs";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
 
@@ -40,14 +42,76 @@ async function getOrgs(): Promise<Hwy4Org[]> {
   return data as Hwy4Org[];
 }
 
+function ItemListSchema({ events }: { events: Hwy4Event[] }) {
+  const publicEvents = events.filter((e) => e.visibility === "public");
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Upcoming Events Along Highway 4",
+    description:
+      "Live music, festivals, and community events in the Sierra Nevada foothills of Calaveras County.",
+    numberOfItems: publicEvents.length,
+    itemListElement: publicEvents.slice(0, 50).map((event, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      url: `${SITE_URL}/events/${generateEventSlug(event.name, event.date, event.town)}`,
+      item: {
+        "@type": "Event",
+        name: event.name,
+        startDate: event.start_time
+          ? `${event.date}T${event.start_time}`
+          : event.date,
+        ...(event.end_time && { endDate: `${event.date}T${event.end_time}` }),
+        location: {
+          "@type": "Place",
+          name: event.venue_name,
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: event.town,
+            addressRegion: "CA",
+            addressCountry: "US",
+          },
+        },
+        ...(event.description && { description: event.description }),
+        ...(event.price && {
+          offers: {
+            "@type": "Offer",
+            price: event.price === "Free" ? "0" : event.price,
+            priceCurrency: "USD",
+            availability: "https://schema.org/InStock",
+          },
+        }),
+        eventAttendanceMode:
+          "https://schema.org/OfflineEventAttendanceMode",
+        eventStatus: "https://schema.org/EventScheduled",
+      },
+    })),
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
+}
+
 export default async function Home() {
   const [events, orgs] = await Promise.all([getEvents(), getOrgs()]);
 
   return (
     <main>
       <Header />
+      <ItemListSchema events={events} />
       <div className="mx-auto max-w-5xl px-4 py-8">
-        <EventList initialEvents={events} orgs={orgs} />
+        <section aria-label="What events are happening along Highway 4?">
+          <p className="mb-6 text-center text-stone">
+            {SITE_NAME} is your guide to live music, festivals, and community
+            happenings in Angels Camp, Murphys, Arnold, Bear Valley, and the
+            Sierra Nevada foothills of Calaveras County — updated daily.
+          </p>
+          <EventList initialEvents={events} orgs={orgs} />
+        </section>
       </div>
     </main>
   );

@@ -1,5 +1,7 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
+import { generateEventSlug } from "@/lib/slugs";
 import { format, parseISO } from "date-fns";
+import Link from "next/link";
 
 function formatTime(time: string | null): string | null {
   if (!time) return null;
@@ -34,6 +36,7 @@ export default function EventCard({
   const isPrivate = event.visibility === "private";
   const dateObj = parseISO(event.date);
   const dayOfWeek = format(dateObj, "EEE");
+  const slug = generateEventSlug(event.name, event.date, event.town);
 
   const startTime = formatTime(event.start_time);
   const endTime = formatTime(event.end_time);
@@ -114,18 +117,9 @@ export default function EventCard({
               isUpNext ? "text-lg text-forest" : "text-forest"
             }`}
           >
-            {event.event_url ? (
-              <a
-                href={event.event_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:underline"
-              >
-                {event.name}
-              </a>
-            ) : (
-              event.name
-            )}
+            <Link href={`/events/${slug}`} className="hover:underline">
+              {event.name}
+            </Link>
           </h3>
           <span
             className={`badge-${event.category} inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}
