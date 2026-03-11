@@ -1,4 +1,4 @@
-import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
+import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
 import { format, parseISO } from "date-fns";
 
 function formatTime(time: string | null): string | null {
@@ -15,11 +15,25 @@ const ORG_LABELS: Record<string, string> = {
   "sequoia-woods": "Sequoia Woods",
 };
 
-export default function EventCard({ event }: { event: Hwy4Event }) {
+const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
+  live_music: "#D4855C",
+  festival: "#8B9E7E",
+  civic: "#5A8FA8",
+  resort: "#A09484",
+  lodge: "#6B4226",
+  other: "#C4B8AA",
+};
+
+export default function EventCard({
+  event,
+  isUpNext = false,
+}: {
+  event: CollapsedEvent;
+  isUpNext?: boolean;
+}) {
   const isPrivate = event.visibility === "private";
   const dateObj = parseISO(event.date);
   const dayOfWeek = format(dateObj, "EEE");
-  const monthDay = format(dateObj, "MMM d");
 
   const startTime = formatTime(event.start_time);
   const endTime = formatTime(event.end_time);
@@ -29,23 +43,77 @@ export default function EventCard({ event }: { event: Hwy4Event }) {
       : startTime
     : null;
 
+  const hasDateRange = event.isCollapsed && event.endDate;
+  const endDateObj = hasDateRange ? parseISO(event.endDate!) : null;
+  const sameMonth =
+    endDateObj && format(dateObj, "MMM") === format(endDateObj, "MMM");
+
+  const accentColor = CATEGORY_ACCENT_COLORS[event.category];
+
   return (
-    <article className={`group flex gap-4 rounded-xl border p-4 shadow-sm transition-all hover:shadow-md sm:p-5 ${isPrivate ? "border-l-4 border-l-earth/40 border-t-stone-light/30 border-r-stone-light/30 border-b-stone-light/30 bg-earth/[0.02]" : "border-stone-light/30 bg-white hover:border-sage/50"}`}>
+    <article
+      className={`group relative flex gap-4 overflow-hidden rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-5 ${
+        isUpNext
+          ? "border-pine/20 bg-white shadow-md ring-1 ring-pine/10"
+          : isPrivate
+            ? "border-stone-light/30 bg-earth/[0.02]"
+            : "border-stone-light/30 bg-white hover:border-sage/40"
+      }`}
+      style={{ borderLeftWidth: "4px", borderLeftColor: accentColor }}
+    >
       {/* Date block */}
-      <div className="flex w-16 shrink-0 flex-col items-center rounded-lg bg-forest/5 py-2.5">
-        <span className="text-xs font-medium uppercase text-pine">
-          {dayOfWeek}
-        </span>
-        <span className="text-lg font-bold text-forest">
-          {format(dateObj, "d")}
-        </span>
-        <span className="text-xs text-stone">{format(dateObj, "MMM")}</span>
+      <div
+        className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-lg py-2.5 ${
+          isUpNext ? "bg-pine/10" : "bg-forest/5"
+        }`}
+      >
+        {hasDateRange ? (
+          <>
+            <span className="text-[11px] font-semibold text-pine">
+              {format(dateObj, "MMM d")}
+            </span>
+            <span className="text-[10px] leading-tight text-stone">—</span>
+            <span className="text-[11px] font-semibold text-pine">
+              {sameMonth
+                ? format(endDateObj!, "d")
+                : format(endDateObj!, "MMM d")}
+            </span>
+            <span className="mt-1 rounded-full bg-forest/10 px-1.5 py-0.5 text-[9px] font-medium text-forest">
+              {event.dayCount}d
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="text-xs font-medium uppercase text-pine">
+              {dayOfWeek}
+            </span>
+            <span className="text-lg font-bold text-forest">
+              {format(dateObj, "d")}
+            </span>
+            <span className="text-xs text-stone">
+              {format(dateObj, "MMM")}
+            </span>
+          </>
+        )}
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-start gap-2">
-          <h3 className="font-semibold text-forest group-hover:text-pine">
+          {isUpNext && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-pine/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-pine">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pine/60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-pine" />
+              </span>
+              Up Next
+            </span>
+          )}
+          <h3
+            className={`font-semibold transition-colors group-hover:text-pine ${
+              isUpNext ? "text-lg text-forest" : "text-forest"
+            }`}
+          >
             {event.event_url ? (
               <a
                 href={event.event_url}
@@ -65,14 +133,41 @@ export default function EventCard({ event }: { event: Hwy4Event }) {
             {CATEGORY_LABELS[event.category]}
           </span>
           {event.status === "tentative" && (
-            <span className="inline-flex items-center rounded-full bg-sunset/10 px-2 py-0.5 text-xs font-medium text-sunset">
+            <span className="group/tip relative inline-flex items-center gap-1 rounded-full bg-sunset/10 px-2 py-0.5 text-xs font-medium text-sunset">
               Tentative
+              <svg
+                className="h-3 w-3 opacity-60"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M12 18h.01"
+                />
+              </svg>
+              <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden w-48 -translate-x-1/2 rounded-lg bg-forest px-3 py-2 text-center text-[11px] leading-snug font-normal text-white shadow-lg group-hover/tip:block">
+                Date or details not yet confirmed by the organizer
+                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-forest" />
+              </span>
             </span>
           )}
           {isPrivate && event.org_slug && (
             <span className="inline-flex items-center gap-1 rounded-full bg-earth/10 px-2 py-0.5 text-xs font-medium text-earth">
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              <svg
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
               </svg>
               {ORG_LABELS[event.org_slug] || event.org_slug}
             </span>
@@ -80,7 +175,9 @@ export default function EventCard({ event }: { event: Hwy4Event }) {
         </div>
 
         {event.description && (
-          <p className="mt-1.5 line-clamp-2 text-sm text-stone">
+          <p
+            className={`mt-1.5 text-sm text-stone ${isUpNext ? "line-clamp-3" : "line-clamp-2"}`}
+          >
             {event.description}
           </p>
         )}
@@ -101,7 +198,6 @@ export default function EventCard({ event }: { event: Hwy4Event }) {
 
         {/* Meta row */}
         <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone">
-          {/* Location */}
           <span className="flex items-center gap-1">
             <svg
               className="h-3.5 w-3.5"
@@ -124,7 +220,6 @@ export default function EventCard({ event }: { event: Hwy4Event }) {
             {event.venue_name}, {event.town}
           </span>
 
-          {/* Time */}
           {timeRange && (
             <span className="flex items-center gap-1">
               <svg
@@ -144,7 +239,6 @@ export default function EventCard({ event }: { event: Hwy4Event }) {
             </span>
           )}
 
-          {/* Price */}
           {event.price && (
             <span className="flex items-center gap-1">
               <svg
