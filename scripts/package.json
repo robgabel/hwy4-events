@@ -1,0 +1,19 @@
+{
+  "name": "hwy4-events-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Event scraping pipeline for Hwy 4 Events",
+  "scripts": {
+    "scrape": "tsx scrape.ts",
+    "scrape:bear-valley": "tsx scrape.ts --source bear-valley"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@supabase/supabase-js": "^2.98.0",
+    "playwright": "^1.52.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}

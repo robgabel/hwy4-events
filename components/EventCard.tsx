@@ -15,6 +15,7 @@ function formatTime(time: string | null): string | null {
 const ORG_LABELS: Record<string, string> = {
   "moose-lodge": "Moose Lodge",
   "sequoia-woods": "Sequoia Woods",
+  "bear-valley": "Bear Valley",
 };
 
 const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
