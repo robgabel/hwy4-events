@@ -21,10 +21,6 @@ jobs:
         run: npm install
         working-directory: scripts
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-        working-directory: scripts
-
       - name: Run scrapers
         run: npx tsx scrape.ts
         working-directory: scripts
@@ -32,3 +28,4 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
