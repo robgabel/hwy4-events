@@ -17,7 +17,7 @@ export async function scrapeBearValley(): Promise<void> {
 
   try {
     // Step 1: Fetch the events hub page
-    const hubPage = await fetchPage(page, EVENTS_URL);
+    const hubPage = await fetchPage(page, EVENTS_URL, { scrollAndWait: true });
 
     // Log page info for debugging
     console.log(`Page title: ${hubPage.title}`);
