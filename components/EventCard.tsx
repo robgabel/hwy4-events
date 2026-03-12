@@ -37,6 +37,29 @@ const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
   other: "#C4B8AA",
 };
 
+function getEventImage(event: CollapsedEvent): string {
+  // 1. Per-event override from database
+  if (event.image_url) return event.image_url;
+
+  // 2. Venue-specific match
+  const venueLower = event.venue_name.toLowerCase();
+  if (venueLower.includes("ironstone")) return "/images/ironstone.jpg";
+  if (venueLower.includes("bear valley")) return "/images/bear_valley.jpg";
+  if (venueLower.includes("sequoia woods")) return "/images/sequoia_woods.jpg";
+  if (venueLower.includes("moose lodge")) return "/images/lodge.jpg";
+  if (venueLower.includes("fairgrounds")) return "/images/fairgrounds.jpg";
+
+  // 3. Category-specific refinements
+  if (event.category === "live_music") {
+    if (venueLower.includes("winery") || venueLower.includes("vineyard"))
+      return "/images/wine_glasses.jpg";
+    return "/images/acoustic_guitar.jpg";
+  }
+
+  // 4. Category fallback
+  return CATEGORY_IMAGES[event.category];
+}
+
 export default function EventCard({
   event,
   isUpNext = false,
@@ -269,7 +292,7 @@ export default function EventCard({
       <div className="hidden shrink-0 sm:block">
         <div className="relative h-20 w-20 overflow-hidden rounded-lg">
           <Image
-            src={event.image_url || CATEGORY_IMAGES[event.category]}
+            src={getEventImage(event)}
             alt=""
             fill
             className="object-cover"
