@@ -88,6 +88,7 @@ export async function upsertEvents(
         category: event.category,
         artists: event.artists,
         status: "confirmed",
+        is_past: false,
         price: event.price,
         event_url: event.event_url,
         source_url: sourceUrl,
