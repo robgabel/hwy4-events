@@ -6,7 +6,6 @@ const EVENTS_URL = "https://www.bearvalley.com/events-activities";
 const SOURCE_NAME = "Bear Valley Mountain Resort";
 const ORG_SLUG = "bear-valley";
 const MAX_POSTS = 20;
-const POST_AGE_LIMIT_DAYS = 60;
 const DELAY_MS = 1500; // Polite delay between page fetches
 
 export async function scrapeBearValley(): Promise<void> {
@@ -20,100 +19,93 @@ export async function scrapeBearValley(): Promise<void> {
     // Step 1: Fetch the events hub page
     const hubPage = await fetchPage(page, EVENTS_URL);
 
-    // Step 2: Extract /post/* links
-    const postLinks = hubPage.links
+    // Log page info for debugging
+    console.log(`Page title: ${hubPage.title}`);
+    console.log(`Page text length: ${hubPage.text.length} chars`);
+    console.log(`Total links found: ${hubPage.links.length}`);
+
+    // Log unique internal links for debugging
+    const internalLinks = hubPage.links
       .filter((link) => {
         try {
-          const url = new URL(link);
-          return (
-            url.hostname === "www.bearvalley.com" &&
-            url.pathname.startsWith("/post/")
-          );
+          return new URL(link).hostname === "www.bearvalley.com";
         } catch {
           return false;
         }
       })
-      // Deduplicate links
-      .filter((link, i, arr) => arr.indexOf(link) === i)
-      .slice(0, MAX_POSTS);
-
-    console.log(`Found ${postLinks.length} post links`);
-
-    if (postLinks.length === 0) {
-      console.warn("No post links found — page structure may have changed");
-      return;
+      .filter((link, i, arr) => arr.indexOf(link) === i);
+    console.log(`Unique internal links: ${internalLinks.length}`);
+    for (const link of internalLinks.slice(0, 30)) {
+      console.log(`  ${new URL(link).pathname}`);
     }
 
-    // Step 3: Fetch each post page
-    const posts: { title: string; text: string; url: string }[] = [];
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - POST_AGE_LIMIT_DAYS);
+    // Step 2: Find event detail links (try multiple patterns)
+    const eventLinks = internalLinks.filter((link) => {
+      const pathname = new URL(link).pathname;
+      return (
+        pathname.startsWith("/post/") ||
+        pathname.startsWith("/event/") ||
+        pathname.startsWith("/events/") ||
+        (pathname.includes("event") && pathname !== "/events-activities")
+      );
+    });
 
-    for (const link of postLinks) {
-      await delay(DELAY_MS);
-      try {
-        const postContent = await fetchPage(page, link);
-
-        // Skip very short posts (likely navigation-only pages)
-        if (postContent.text.trim().length < 50) {
-          console.log(`  Skipping ${link} (too short)`);
-          continue;
-        }
-
-        posts.push({
-          title: postContent.title,
-          text: postContent.text,
-          url: link,
-        });
-        console.log(`  Fetched: ${postContent.title}`);
-      } catch (err) {
-        console.error(`  Failed to fetch ${link}:`, (err as Error).message);
-      }
-    }
-
-    console.log(`\nFetched ${posts.length} posts, extracting events...`);
-
-    // Step 4: Extract events via LLM
     const currentYear = new Date().getFullYear();
     const today = new Date().toISOString().slice(0, 10);
     let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0 };
 
-    for (const post of posts) {
+    if (eventLinks.length > 0) {
+      // Strategy A: Scrape individual event pages
+      console.log(`\nFound ${eventLinks.length} event links, scraping each...`);
+
+      const posts: { title: string; text: string; url: string }[] = [];
+      for (const link of eventLinks.slice(0, MAX_POSTS)) {
+        await delay(DELAY_MS);
+        try {
+          const postContent = await fetchPage(page, link);
+          if (postContent.text.trim().length < 50) {
+            console.log(`  Skipping ${link} (too short)`);
+            continue;
+          }
+          posts.push({ title: postContent.title, text: postContent.text, url: link });
+          console.log(`  Fetched: ${postContent.title}`);
+        } catch (err) {
+          console.error(`  Failed to fetch ${link}:`, (err as Error).message);
+        }
+      }
+
+      for (const post of posts) {
+        const events = await extractEvents(post.title, post.url, post.text, currentYear);
+        const futureEvents = events.filter((e) => e.date >= today);
+        console.log(`  ${post.title}: ${events.length} events, ${futureEvents.length} future`);
+        if (futureEvents.length === 0) continue;
+
+        const result = await upsertEvents(futureEvents, SOURCE_NAME, ORG_SLUG, post.url);
+        totalResult.inserted += result.inserted;
+        totalResult.updated += result.updated;
+        totalResult.unchanged += result.unchanged;
+      }
+    } else {
+      // Strategy B: Extract events directly from the hub page content
+      console.log("\nNo event detail links found — extracting from hub page directly");
+      console.log(`Hub page text preview (first 500 chars):\n${hubPage.text.slice(0, 500)}`);
+
       const events = await extractEvents(
-        post.title,
-        post.url,
-        post.text,
+        hubPage.title,
+        EVENTS_URL,
+        hubPage.text,
         currentYear
       );
 
-      if (events.length === 0) {
-        console.log(`  No events found in: ${post.title}`);
-        continue;
-      }
-
-      // Filter out past events
       const futureEvents = events.filter((e) => e.date >= today);
-      console.log(
-        `  ${post.title}: ${events.length} events extracted, ${futureEvents.length} future`
-      );
+      console.log(`Extracted ${events.length} events, ${futureEvents.length} future`);
 
-      if (futureEvents.length === 0) continue;
-
-      // Step 5: Upsert to Supabase
-      const result = await upsertEvents(
-        futureEvents,
-        SOURCE_NAME,
-        ORG_SLUG,
-        post.url
-      );
-
-      totalResult.inserted += result.inserted;
-      totalResult.updated += result.updated;
-      totalResult.unchanged += result.unchanged;
+      if (futureEvents.length > 0) {
+        totalResult = await upsertEvents(futureEvents, SOURCE_NAME, ORG_SLUG, EVENTS_URL);
+      }
     }
 
     console.log("\n=== Bear Valley Summary ===");
-    console.log(`Posts crawled: ${posts.length}`);
     console.log(`Events inserted: ${totalResult.inserted}`);
     console.log(`Events updated: ${totalResult.updated}`);
     console.log(`Events unchanged: ${totalResult.unchanged}`);
