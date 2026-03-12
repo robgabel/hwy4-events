@@ -1,0 +1,34 @@
+name: Daily Event Scrape
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # 8 AM UTC (midnight PST)
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: scripts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: scripts
+
+      - name: Run scrapers
+        run: npx tsx scrape.ts
+        working-directory: scripts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

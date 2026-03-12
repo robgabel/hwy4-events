@@ -30,6 +30,8 @@ export interface Hwy4Event {
   visibility: EventVisibility;
   org_slug: string | null;
   importance: EventImportance | null;
+  dedup_key: string | null;
+  last_scraped_at: string | null;
 }
 
 export interface Hwy4Org {
