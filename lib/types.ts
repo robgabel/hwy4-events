@@ -32,6 +32,7 @@ export interface Hwy4Event {
   importance: EventImportance | null;
   dedup_key: string | null;
   last_scraped_at: string | null;
+  image_url: string | null;
 }
 
 export interface Hwy4Org {

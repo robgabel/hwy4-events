@@ -1,6 +1,7 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
 import { generateEventSlug } from "@/lib/slugs";
 import { format, parseISO } from "date-fns";
+import Image from "next/image";
 import Link from "next/link";
 
 function formatTime(time: string | null): string | null {
@@ -16,6 +17,15 @@ const ORG_LABELS: Record<string, string> = {
   "moose-lodge": "Moose Lodge",
   "sequoia-woods": "Sequoia Woods",
   "bear-valley": "Bear Valley",
+};
+
+const CATEGORY_IMAGES: Record<EventCategory, string> = {
+  live_music: "/images/live_music.jpg",
+  festival: "/images/festival.jpg",
+  civic: "/images/civic.jpg",
+  resort: "/images/resort.jpg",
+  lodge: "/images/lodge.jpg",
+  other: "/images/other.jpg",
 };
 
 const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
@@ -252,6 +262,19 @@ export default function EventCard({
               {event.price}
             </span>
           )}
+        </div>
+      </div>
+
+      {/* Thumbnail */}
+      <div className="hidden shrink-0 sm:block">
+        <div className="relative h-20 w-20 overflow-hidden rounded-lg">
+          <Image
+            src={event.image_url || CATEGORY_IMAGES[event.category]}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="80px"
+          />
         </div>
       </div>
     </article>
