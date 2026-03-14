@@ -17,16 +17,29 @@ export interface ExtractedEvent {
 
 const client = new Anthropic();
 
+export interface VenueContext {
+  defaultVenue: string;
+  defaultTown: string;
+  defaultAddress?: string;
+}
+
+const DEFAULT_VENUE_CONTEXT: VenueContext = {
+  defaultVenue: "Bear Valley Mountain Resort",
+  defaultTown: "Bear Valley",
+};
+
 /**
- * Use Claude to extract structured events from unstructured blog post text.
+ * Use Claude to extract structured events from unstructured page content.
  */
 export async function extractEvents(
   title: string,
   url: string,
   content: string,
-  year: number
+  year: number,
+  venueContext?: VenueContext
 ): Promise<ExtractedEvent[]> {
-  const prompt = `Extract all discrete events from this Bear Valley blog post.
+  const ctx = venueContext ?? DEFAULT_VENUE_CONTEXT;
+  const prompt = `Extract all discrete events from this venue's events page.
 For each event, return JSON with these fields:
 
 - name: Event name
@@ -34,9 +47,9 @@ For each event, return JSON with these fields:
 - date: ISO date (YYYY-MM-DD)
 - start_time: HH:MM (24h) or null
 - end_time: HH:MM (24h) or null
-- venue_name: Specific venue (e.g., "Bear Valley Mountain Resort", "Bear Valley Lodge")
-- town: "Bear Valley"
-- address: Street address if mentioned, else null
+- venue_name: Specific venue if mentioned, else "${ctx.defaultVenue}"
+- town: "${ctx.defaultTown}"
+- address: Street address if mentioned, else ${ctx.defaultAddress ? `"${ctx.defaultAddress}"` : "null"}
 - category: One of: live_music, festival, civic, resort, other
 - price: Price string (e.g., "$30", "Free") or null
 - artists: Array of performer names, or null
@@ -47,13 +60,13 @@ Rules:
 - If a post describes a date range (e.g., "July 17 – August 2"), create ONE entry with the start date and note the full date range in the description.
 - If no events are found, return an empty array.
 - Use ${year} for dates unless the post clearly states a different year.
-- Default venue_name to "Bear Valley Mountain Resort" if no specific venue is mentioned.
+- Default venue_name to "${ctx.defaultVenue}" if no specific venue is mentioned.
 
 Return a JSON array only, no other text.
 
-Post title: ${title}
-Post URL: ${url}
-Post content:
+Page title: ${title}
+Page URL: ${url}
+Page content:
 ${content}`;
 
   const message = await client.messages.create({

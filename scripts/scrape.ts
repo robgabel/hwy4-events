@@ -1,7 +1,17 @@
 import { scrapeBearValley } from "./scrapers/bear-valley.js";
+import { scrapeBrandingIron } from "./scrapers/branding-iron.js";
+import { scrapeCampConnellGeneralStore } from "./scrapers/camp-connell-general-store.js";
+import { scrapeLubeRoom } from "./scrapers/lube-room.js";
+import { scrapeMurphysIrishPub } from "./scrapers/murphys-irish-pub.js";
+import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 
 const SCRAPERS: Record<string, () => Promise<void>> = {
   "bear-valley": scrapeBearValley,
+  "branding-iron": scrapeBrandingIron,
+  "camp-connell-general-store": scrapeCampConnellGeneralStore,
+  "lube-room": scrapeLubeRoom,
+  "murphys-irish-pub": scrapeMurphysIrishPub,
+  "mystic-saloon": scrapeMysticSaloon,
 };
 
 async function main() {

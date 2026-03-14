@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
+import { TOWN_INFO } from "@/lib/towns";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 
@@ -214,6 +215,13 @@ export default async function EventPage({ params }: PageProps) {
               {event.address && (
                 <span className="block text-xs text-stone">
                   {event.address}
+                </span>
+              )}
+              {TOWN_INFO[event.town] && (
+                <span className="mt-1 block text-xs text-stone">
+                  {TOWN_INFO[event.town].elevation.toLocaleString()} ft
+                  {" · "}
+                  {TOWN_INFO[event.town].driveFromArnold}
                 </span>
               )}
             </dd>
