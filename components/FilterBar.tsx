@@ -1,7 +1,6 @@
 "use client";
 
 import { EventCategory, CATEGORY_LABELS, TOWNS, Hwy4Org } from "@/lib/types";
-import ElevationStrip from "./ElevationStrip";
 
 interface FilterBarProps {
   selectedCategory: EventCategory | "all";
@@ -77,14 +76,6 @@ export default function FilterBar({
             </span>
           </div>
         </div>
-      </div>
-
-      {/* Elevation strip - the corridor */}
-      <div className="hidden sm:block">
-        <ElevationStrip
-          selectedTown={selectedTown}
-          onTownChange={onTownChange}
-        />
       </div>
 
       {/* Member Events Toggle */}
