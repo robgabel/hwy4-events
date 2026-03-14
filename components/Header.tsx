@@ -24,7 +24,7 @@ export default function Header({ greeting }: { greeting?: string | null }) {
         </h1>
 
         <p className="mt-3 font-display text-lg text-sage-light/90">
-          From the Frog Jump to the summit
+          From the Frog Jump to Monte Wolfes
         </p>
         <p className="mt-1 text-sm text-sage-light/60">
           Angels Camp &middot; Murphys &middot; Arnold &middot; Bear Valley
