@@ -106,6 +106,34 @@ body {
   animation: fadeIn 0.3s ease-out both;
 }
 
+/* Map overrides — blend Leaflet controls with mountain palette */
+.leaflet-container {
+  font-family: var(--font-sans);
+}
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: rgba(253, 248, 243, 0.85) !important;
+  color: var(--color-stone) !important;
+}
+.leaflet-control-attribution a {
+  color: var(--color-pine) !important;
+}
+.leaflet-control-zoom a {
+  background: var(--color-warm-white) !important;
+  color: var(--color-forest) !important;
+  border-color: var(--color-stone-light) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--color-cream) !important;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(74, 55, 40, 0.12) !important;
+}
+.leaflet-popup-tip {
+  box-shadow: none !important;
+}
+
 /* Hide scrollbar for horizontal scroll areas */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

@@ -6,6 +6,7 @@ import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
+import EventMap from "@/components/EventMapWrapper";
 
 export const revalidate = 3600;
 
@@ -235,6 +236,12 @@ export default async function EventPage({ params }: PageProps) {
             </div>
           )}
         </dl>
+
+        <EventMap
+          town={event.town}
+          venueName={event.venue_name}
+          address={event.address}
+        />
 
         {event.description && (
           <section className="mb-6">
