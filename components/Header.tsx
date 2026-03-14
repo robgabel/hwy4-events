@@ -19,20 +19,9 @@ export default function Header({ greeting }: { greeting?: string | null }) {
 
       {/* Content */}
       <div className="relative z-10 mx-auto max-w-5xl px-4 pb-20 pt-10 text-center sm:pb-24 sm:pt-12">
-        {/* Title with Millie */}
-        <div className="mb-1 flex items-center justify-center gap-3">
-          <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
-            Hwy 4 Events
-          </h1>
-          <Image
-            src="/millie-lying-white.svg"
-            alt="Millie the sheepadoodle"
-            width={90}
-            height={54}
-            className="hidden opacity-80 sm:block"
-            priority
-          />
-        </div>
+        <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
+          Hwy 4 Events
+        </h1>
 
         <p className="mt-3 font-display text-lg text-sage-light/90">
           From the Frog Jump to the summit
