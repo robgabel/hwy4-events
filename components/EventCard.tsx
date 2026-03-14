@@ -89,9 +89,9 @@ export default function EventCard({
 
   return (
     <article
-      className={`group relative flex gap-4 overflow-hidden rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-5 ${
+      className={`card-warm group relative flex gap-4 overflow-hidden rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 sm:p-5 ${
         isUpNext
-          ? "border-pine/20 bg-white shadow-md ring-1 ring-pine/10"
+          ? "border-earth/20 bg-white ring-1 ring-earth/10"
           : isPrivate
             ? "border-stone-light/30 bg-earth/[0.02]"
             : "border-stone-light/30 bg-white hover:border-sage/40"
@@ -101,7 +101,7 @@ export default function EventCard({
       {/* Date block */}
       <div
         className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-lg py-2.5 ${
-          isUpNext ? "bg-pine/10" : "bg-forest/5"
+          isUpNext ? "bg-earth/8" : "bg-forest/5"
         }`}
       >
         {hasDateRange ? (
@@ -138,7 +138,7 @@ export default function EventCard({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-start gap-2">
           {isUpNext && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-pine/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-pine">
+            <span className="font-display inline-flex items-center gap-1 rounded-full bg-earth/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-earth">
               Up Next
             </span>
           )}

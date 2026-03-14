@@ -24,9 +24,11 @@
   --font-display: var(--font-display, "Bitter", ui-serif, Georgia, serif);
 }
 
+/* Subtle paper texture on body */
 body {
   background-color: var(--color-cream);
   color: var(--color-forest);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
 }
 
 /* Hero photo header */
@@ -48,6 +50,18 @@ body {
   background-size: cover;
   pointer-events: none;
   z-index: 2;
+}
+
+/* Warm card shadows — feels like sitting on a wooden surface */
+.card-warm {
+  box-shadow:
+    0 1px 3px rgba(74, 55, 40, 0.06),
+    0 4px 12px rgba(74, 55, 40, 0.04);
+}
+.card-warm:hover {
+  box-shadow:
+    0 2px 8px rgba(74, 55, 40, 0.1),
+    0 8px 24px rgba(74, 55, 40, 0.06);
 }
 
 /* Category badge colors */
