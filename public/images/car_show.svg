@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4A3F35"/>
+      <stop offset="100%" stop-color="#352D25"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <!-- Classic car silhouette -->
+  <g transform="translate(100,108)">
+    <!-- Car body -->
+    <path d="M-60 0 L-55 -8 Q-45 -10 -40 -10 L-30 -10 Q-25 -28 -15 -30 L25 -30 Q35 -28 40 -10 L55 -10 Q60 -10 62 -5 L62 0 L60 5 L-58 5 L-60 0Z" fill="#C4493C" opacity="0.9"/>
+    <!-- Windshield -->
+    <path d="M-22 -28 L-12 -28 Q-8 -28 -5 -15 L-25 -15 Q-24 -25 -22 -28Z" fill="#7BA7BC" opacity="0.6"/>
+    <!-- Rear window -->
+    <path d="M0 -28 L22 -28 Q24 -25 25 -15 L-2 -15 Q-1 -25 0 -28Z" fill="#7BA7BC" opacity="0.5"/>
+    <!-- Chrome trim -->
+    <line x1="-55" y1="-3" x2="58" y2="-3" stroke="#D4A553" stroke-width="1.5" opacity="0.6"/>
+    <!-- Headlight -->
+    <circle cx="58" cy="-5" r="4" fill="#F5E6C8" opacity="0.8"/>
+    <!-- Taillight -->
+    <circle cx="-55" cy="-5" r="3" fill="#FF6B4A" opacity="0.7"/>
+    <!-- Front wheel -->
+    <circle cx="38" cy="5" r="10" fill="#2A2420"/>
+    <circle cx="38" cy="5" r="7" fill="#555"/>
+    <circle cx="38" cy="5" r="3" fill="#D4A553" opacity="0.5"/>
+    <!-- Rear wheel -->
+    <circle cx="-35" cy="5" r="10" fill="#2A2420"/>
+    <circle cx="-35" cy="5" r="7" fill="#555"/>
+    <circle cx="-35" cy="5" r="3" fill="#D4A553" opacity="0.5"/>
+    <!-- Ground line -->
+    <line x1="-70" y1="15" x2="70" y2="15" stroke="#8B9E7E" stroke-width="1" opacity="0.3"/>
+  </g>
+  <!-- Pines in background -->
+  <g opacity="0.15">
+    <path d="M25 80 L35 50 L45 80Z" fill="#8B9E7E"/>
+    <path d="M150 85 L162 48 L174 85Z" fill="#8B9E7E"/>
+    <path d="M165 90 L172 65 L179 90Z" fill="#8B9E7E"/>
+  </g>
+</svg>
