@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3A4A5A"/>
+      <stop offset="100%" stop-color="#2A3640"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <!-- Flag bunting / banner -->
+  <g transform="translate(100,60)">
+    <!-- Banner string -->
+    <path d="M-65 -15 Q-30 5 0 -10 Q30 5 65 -15" fill="none" stroke="#F5E6C8" stroke-width="1.5" opacity="0.5"/>
+    <!-- Pennants -->
+    <path d="M-55 -12 L-45 -8 L-50 8Z" fill="#C4493C" opacity="0.7"/>
+    <path d="M-40 -6 L-30 -2 L-35 14Z" fill="#F5E6C8" opacity="0.6"/>
+    <path d="M-25 -4 L-15 -6 L-20 12Z" fill="#5A8FA8" opacity="0.7"/>
+    <path d="M-10 -8 L0 -10 L-5 8Z" fill="#C4493C" opacity="0.7"/>
+    <path d="M5 -10 L15 -8 L10 8Z" fill="#F5E6C8" opacity="0.6"/>
+    <path d="M20 -6 L30 -4 L25 12Z" fill="#8B9E7E" opacity="0.7"/>
+    <path d="M35 -2 L45 -6 L40 14Z" fill="#C4493C" opacity="0.7"/>
+    <path d="M50 -8 L60 -12 L55 6Z" fill="#5A8FA8" opacity="0.7"/>
+  </g>
+  <!-- Three stick figures marching -->
+  <g transform="translate(100,130)" opacity="0.7">
+    <!-- Person 1 -->
+    <circle cx="-30" cy="-25" r="6" fill="#F5E6C8"/>
+    <line x1="-30" y1="-19" x2="-30" y2="0" stroke="#F5E6C8" stroke-width="2.5"/>
+    <line x1="-30" y1="-12" x2="-38" y2="-4" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="-30" y1="-12" x2="-22" y2="-18" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="-30" y1="0" x2="-36" y2="12" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="-30" y1="0" x2="-24" y2="12" stroke="#F5E6C8" stroke-width="2"/>
+    <!-- Flag in hand -->
+    <line x1="-22" y1="-18" x2="-22" y2="-38" stroke="#D4A553" stroke-width="1.5"/>
+    <path d="M-22 -38 L-12 -34 L-22 -30Z" fill="#C4493C" opacity="0.8"/>
+    <!-- Person 2 -->
+    <circle cx="0" cy="-22" r="6" fill="#F5E6C8"/>
+    <line x1="0" y1="-16" x2="0" y2="3" stroke="#F5E6C8" stroke-width="2.5"/>
+    <line x1="0" y1="-9" x2="-8" y2="-1" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="0" y1="-9" x2="8" y2="-1" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="0" y1="3" x2="-6" y2="15" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="0" y1="3" x2="6" y2="15" stroke="#F5E6C8" stroke-width="2"/>
+    <!-- Person 3 -->
+    <circle cx="30" cy="-25" r="6" fill="#F5E6C8"/>
+    <line x1="30" y1="-19" x2="30" y2="0" stroke="#F5E6C8" stroke-width="2.5"/>
+    <line x1="30" y1="-12" x2="22" y2="-4" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="30" y1="-12" x2="38" y2="-18" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="30" y1="0" x2="24" y2="12" stroke="#F5E6C8" stroke-width="2"/>
+    <line x1="30" y1="0" x2="36" y2="12" stroke="#F5E6C8" stroke-width="2"/>
+    <!-- Flag in hand -->
+    <line x1="38" y1="-18" x2="38" y2="-38" stroke="#D4A553" stroke-width="1.5"/>
+    <path d="M38 -38 L48 -34 L38 -30Z" fill="#5A8FA8" opacity="0.8"/>
+  </g>
+  <!-- Stars -->
+  <g opacity="0.2" fill="#F5E6C8">
+    <circle cx="20" cy="25" r="2"/>
+    <circle cx="170" cy="35" r="1.5"/>
+    <circle cx="45" cy="170" r="1.5"/>
+    <circle cx="160" cy="175" r="2"/>
+  </g>
+</svg>

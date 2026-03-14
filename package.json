@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@mendable/firecrawl-js": "^4.16.0",
     "@supabase/supabase-js": "^2.98.0",
     "date-fns": "^4.1.0",
     "leaflet": "^1.9.4",

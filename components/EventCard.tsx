@@ -17,6 +17,9 @@ const ORG_LABELS: Record<string, string> = {
   "moose-lodge": "Moose Lodge",
   "sequoia-woods": "Sequoia Woods",
   "bear-valley": "Bear Valley",
+  "watering-hole": "The Watering Hole",
+  "gocalaveras": "GoCalaveras",
+  "visit-murphys": "Visit Murphys",
 };
 
 const CATEGORY_IMAGES: Record<EventCategory, string> = {
@@ -48,15 +51,22 @@ function getEventImage(event: CollapsedEvent): string {
   if (venueLower.includes("sequoia woods")) return "/images/sequoia_woods.jpg";
   if (venueLower.includes("moose lodge")) return "/images/lodge.jpg";
   if (venueLower.includes("fairgrounds")) return "/images/fairgrounds.jpg";
+  if (venueLower.includes("watering hole")) return "/images/brewery.svg";
 
-  // 3. Category-specific refinements
+  // 3. Event name keyword matching for community events
+  const nameLower = event.name.toLowerCase();
+  if (nameLower.includes("car show") || nameLower.includes("classic car"))
+    return "/images/car_show.svg";
+  if (nameLower.includes("parade")) return "/images/parade.svg";
+
+  // 4. Category-specific refinements
   if (event.category === "live_music") {
     if (venueLower.includes("winery") || venueLower.includes("vineyard"))
       return "/images/wine_glasses.jpg";
     return "/images/acoustic_guitar.jpg";
   }
 
-  // 4. Category fallback
+  // 5. Category fallback
   return CATEGORY_IMAGES[event.category];
 }
 
