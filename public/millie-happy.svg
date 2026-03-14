@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180" fill="none">
+  <!-- Millie front-facing happy - sheepadoodle, mouth open, tail up -->
+  <g stroke="#1B3A2D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Body -->
+    <path d="M40 90 C35 85 30 75 32 65 C34 55 42 50 50 48 L110 48 C118 50 126 55 128 65 C130 75 125 85 120 90 L120 145 C120 152 115 155 108 155 L52 155 C45 155 40 152 40 145Z" fill="#1B3A2D"/>
+
+    <!-- White chest -->
+    <path d="M55 65 C55 58 62 52 80 52 C98 52 105 58 105 65 L105 155 L55 155Z" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+
+    <!-- Head - large, round, fluffy white face -->
+    <path d="M28 45 C28 20 48 2 80 2 C112 2 132 20 132 45 C132 70 112 82 80 82 C48 82 28 70 28 45Z" fill="white"/>
+
+    <!-- Black patch over right eye area extending to ear -->
+    <path d="M95 15 C105 12 120 15 128 25 C132 32 130 42 125 48 C118 50 108 48 102 42 C96 36 94 25 95 15Z" fill="#1B3A2D"/>
+
+    <!-- Left ear - floppy, dark -->
+    <path d="M35 30 C28 25 20 30 18 40 C16 50 20 60 28 62 C34 58 38 50 38 42Z" fill="#1B3A2D"/>
+
+    <!-- Right ear - floppy, dark -->
+    <path d="M125 30 C132 25 140 30 142 40 C144 50 140 60 132 62 C126 58 122 50 122 42Z" fill="#1B3A2D"/>
+
+    <!-- Eyes -->
+    <circle cx="62" cy="40" r="5" fill="#1B3A2D"/>
+    <circle cx="63" cy="39" r="1.5" fill="white"/>
+    <circle cx="98" cy="40" r="5" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <circle cx="98" cy="40" r="3" fill="#1B3A2D"/>
+    <circle cx="99" cy="39" r="1" fill="white"/>
+
+    <!-- Nose -->
+    <ellipse cx="80" cy="55" rx="7" ry="5" fill="#1B3A2D"/>
+
+    <!-- Happy open mouth -->
+    <path d="M68 62 C72 70 88 70 92 62" stroke="#1B3A2D" stroke-width="2" fill="none"/>
+    <path d="M70 62 C74 66 86 66 90 62 L90 64 C86 68 74 68 70 64Z" fill="#E8878C" stroke="none"/>
+    <!-- Tongue -->
+    <path d="M76 66 C76 72 84 72 84 66" fill="#E8878C" stroke="#1B3A2D" stroke-width="1"/>
+
+    <!-- Front legs/paws -->
+    <path d="M52 145 L52 165 C52 170 58 172 62 170 L64 165 L64 145" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <path d="M96 145 L96 165 C96 170 102 172 106 170 L108 165 L108 145" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <!-- Black spot on paw -->
+    <circle cx="58" cy="166" r="4" fill="#1B3A2D"/>
+
+    <!-- Tail wagging up (black, fluffy) -->
+    <path d="M120 90 C130 82 138 75 140 65 C142 58 138 55 134 58 C130 62 132 70 128 78" stroke="#1B3A2D" stroke-width="5" fill="none"/>
+
+    <!-- Fluffy texture on head -->
+    <path d="M42 18 C44 14 48 15 46 19" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+    <path d="M70 5 C72 1 76 2 74 6" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+    <path d="M55 10 C57 6 61 7 59 11" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+  </g>
+</svg>

@@ -33,6 +33,7 @@ export interface Hwy4Event {
   dedup_key: string | null;
   last_scraped_at: string | null;
   image_url: string | null;
+  robs_pick: boolean;
 }
 
 export interface Hwy4Org {
@@ -70,6 +71,7 @@ export const TOWNS = [
   "Murphys",
   "Arnold",
   "Avery",
+  "Camp Connell",
   "Bear Valley",
   "Dorrington",
   "White Pines",

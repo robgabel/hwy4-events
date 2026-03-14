@@ -139,11 +139,19 @@ export default function EventCard({
         <div className="flex flex-wrap items-start gap-2">
           {isUpNext && (
             <span className="inline-flex items-center gap-1 rounded-full bg-pine/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-pine">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pine/60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-pine" />
-              </span>
               Up Next
+            </span>
+          )}
+          {event.robs_pick && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                <ellipse cx="12" cy="15.5" rx="5" ry="4.5"/>
+                <ellipse cx="6.5" cy="9" rx="2.2" ry="2.8" transform="rotate(-15 6.5 9)"/>
+                <ellipse cx="10" cy="6.5" rx="2" ry="2.8" transform="rotate(-5 10 6.5)"/>
+                <ellipse cx="14" cy="6.5" rx="2" ry="2.8" transform="rotate(5 14 6.5)"/>
+                <ellipse cx="17.5" cy="9" rx="2.2" ry="2.8" transform="rotate(15 17.5 9)"/>
+              </svg>
+              Rob&apos;s Pick
             </span>
           )}
           <h3

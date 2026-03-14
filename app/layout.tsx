@@ -5,6 +5,9 @@ import {
   SITE_DESCRIPTION,
   SITE_OG_DESCRIPTION,
 } from "@/lib/constants";
+import LastChecked from "@/components/LastChecked";
+import Image from "next/image";
+import { Suspense } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -93,13 +96,13 @@ export default function RootLayout({
         {children}
         <footer className="border-t border-stone-light/50 bg-warm-white py-10 text-center">
           <div className="mx-auto max-w-5xl px-4">
-            <svg
-              className="mx-auto h-6 w-6 text-sage opacity-40"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M12 2L6 10h3l-4 8h5v4h4v-4h5l-4-8h3L12 2z" />
-            </svg>
+            <Image
+              src="/millie-lying.svg"
+              alt=""
+              width={40}
+              height={24}
+              className="mx-auto opacity-30"
+            />
 
             <p className="mt-3 text-sm text-stone">
               Events along the Highway 4 corridor
@@ -130,9 +133,15 @@ export default function RootLayout({
               </a>
             </div>
 
-            <p className="mt-5 text-xs text-stone-light">
-              Data refreshed daily. Not all events may be listed.
-            </p>
+            <Suspense
+              fallback={
+                <p className="mt-5 text-xs text-stone-light">
+                  Updated regularly. Not all events may be listed.
+                </p>
+              }
+            >
+              <LastChecked />
+            </Suspense>
             <nav className="mt-3 flex flex-wrap justify-center gap-4 text-xs text-stone-light">
               <a href="/about" className="hover:text-pine hover:underline">
                 About the Hwy 4 Corridor

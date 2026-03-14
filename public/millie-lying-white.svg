@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" fill="none">
+  <!-- Millie lying down - white version for dark backgrounds -->
+  <g stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Body outline -->
+    <path d="M45 75 C35 70 28 58 32 48 C36 38 45 35 55 33 C62 31 68 30 75 32 C82 28 92 25 102 26 C112 27 118 32 122 38 C128 35 136 34 142 37 C148 40 152 46 150 54 C155 56 158 62 156 70 C154 78 148 82 140 84 L55 84 C48 84 45 80 45 75Z" fill="white" fill-opacity="0.15"/>
+
+    <!-- White chest/belly patch -->
+    <path d="M55 84 C55 78 58 68 65 62 C72 56 82 54 90 56 C96 58 100 64 100 72 C100 78 96 84 90 84Z" fill="white" fill-opacity="0.3" stroke="white" stroke-width="1.5"/>
+
+    <!-- Head -->
+    <path d="M140 50 C144 42 152 36 160 36 C168 36 174 42 176 50 C178 56 176 62 172 66 C168 70 162 72 156 72 C148 72 142 68 140 62Z" fill="white" fill-opacity="0.35"/>
+
+    <!-- Black ear (floppy) - shown as filled white on dark -->
+    <path d="M168 38 C174 36 180 40 182 48 C184 54 180 60 174 62 C170 58 168 52 168 46Z" fill="white" fill-opacity="0.15"/>
+
+    <!-- Left ear -->
+    <path d="M152 38 C148 34 142 36 140 42 C139 46 141 50 144 50" fill="white" fill-opacity="0.15"/>
+
+    <!-- Eye -->
+    <circle cx="160" cy="50" r="3" fill="white"/>
+
+    <!-- Nose -->
+    <ellipse cx="174" cy="58" rx="4" ry="3" fill="white"/>
+
+    <!-- Mouth hint -->
+    <path d="M172 61 C170 63 168 63 166 62" stroke="white" stroke-width="1.5" fill="none"/>
+
+    <!-- Front paws stretched out -->
+    <path d="M140 84 C140 80 142 76 146 76 L170 76 C174 76 176 80 176 84" fill="white" fill-opacity="0.3" stroke="white" stroke-width="1.5"/>
+    <!-- Paw detail -->
+    <path d="M150 84 L150 80 M156 84 L156 80 M162 84 L162 80" stroke="white" stroke-width="1" opacity="0.6"/>
+
+    <!-- Back paw peeking out -->
+    <path d="M42 84 C42 80 45 76 50 76 C54 76 56 80 56 84" fill="white" fill-opacity="0.15" stroke="white" stroke-width="1.5"/>
+
+    <!-- Tail - curly/fluffy -->
+    <path d="M32 48 C26 42 22 38 24 32 C26 28 32 28 34 32" stroke="white" stroke-width="3" fill="none"/>
+
+    <!-- Fluffy texture on body -->
+    <path d="M60 35 C62 32 66 33 64 36" stroke="white" stroke-width="1" fill="none" opacity="0.5"/>
+    <path d="M80 28 C82 25 86 26 84 29" stroke="white" stroke-width="1" fill="none" opacity="0.5"/>
+    <path d="M110 30 C112 27 116 28 114 31" stroke="white" stroke-width="1" fill="none" opacity="0.5"/>
+    <path d="M130 38 C132 35 136 36 134 39" stroke="white" stroke-width="1" fill="none" opacity="0.5"/>
+  </g>
+</svg>

@@ -14,7 +14,7 @@ async function getAllEvents(): Promise<Hwy4Event[]> {
   const { data } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance"
+      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick"
     )
     .gte("date", today)
     .eq("is_past", false)

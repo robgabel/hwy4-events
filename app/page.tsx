@@ -12,7 +12,7 @@ async function getEvents(): Promise<Hwy4Event[]> {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance"
+      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick"
     )
     .gte("date", today)
     .eq("is_past", false)
@@ -26,6 +26,17 @@ async function getEvents(): Promise<Hwy4Event[]> {
   }
 
   return data as Hwy4Event[];
+}
+
+async function getGreeting(): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("site_config")
+    .select("value")
+    .eq("key", "greeting")
+    .single();
+
+  if (error || !data?.value) return null;
+  return data.value;
 }
 
 async function getOrgs(): Promise<Hwy4Org[]> {
@@ -97,32 +108,35 @@ function ItemListSchema({ events }: { events: Hwy4Event[] }) {
 }
 
 export default async function Home() {
-  const [events, orgs] = await Promise.all([getEvents(), getOrgs()]);
+  const [events, orgs, greeting] = await Promise.all([
+    getEvents(),
+    getOrgs(),
+    getGreeting(),
+  ]);
 
   return (
     <main>
-      <Header />
+      <Header greeting={greeting} />
       <ItemListSchema events={events} />
       <div className="mx-auto max-w-5xl px-4 py-8">
         <section aria-label="What events are happening along Highway 4?">
           <div className="mb-6 text-center text-stone">
             <p>
-              I created {SITE_NAME} to be my personal, one-stop local guide to
-              live music, festivals, and community happenings in our neck of the
-              woods. Never miss a Lube Room show again :)
+              I built {SITE_NAME} because I kept missing great shows at the Lube
+              Room. 11 years of cabin weekends and I still can&apos;t keep track
+              of what&apos;s happening — so I made this.
             </p>
             <p className="mt-3">
-              This site updates daily. I hope you find it as useful as I do.
-              Please{" "}
+              I hope you find it as useful as I do.{" "}
               <a
                 href="mailto:rob@gabel.ai"
                 className="font-medium text-pine hover:underline"
               >
-                email me
+                Email me
               </a>{" "}
-              suggestions to improve it!
+              if I&apos;m missing something!
             </p>
-            <p className="mt-3">— Rob</p>
+            <p className="mt-3">— Rob (and Millie 🐾)</p>
           </div>
           <EventList initialEvents={events} orgs={orgs} />
         </section>
