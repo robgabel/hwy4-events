@@ -123,7 +123,7 @@ export default function RootLayout({
               </svg>
               <span className="text-stone">Know about an event?</span>
               <a
-                href="mailto:hwy4events@example.com?subject=Event%20Submission"
+                href="mailto:rob@gabel.ai?subject=Event%20Submission"
                 className="font-medium text-pine hover:underline"
               >
                 Submit it here
@@ -133,12 +133,18 @@ export default function RootLayout({
             <p className="mt-5 text-xs text-stone-light">
               Data refreshed daily. Not all events may be listed.
             </p>
-            <nav className="mt-3 flex justify-center gap-4 text-xs text-stone-light">
+            <nav className="mt-3 flex flex-wrap justify-center gap-4 text-xs text-stone-light">
               <a href="/about" className="hover:text-pine hover:underline">
                 About the Hwy 4 Corridor
               </a>
               <a href="/faq" className="hover:text-pine hover:underline">
                 FAQ
+              </a>
+              <a href="/terms" className="hover:text-pine hover:underline">
+                Terms
+              </a>
+              <a href="/privacy" className="hover:text-pine hover:underline">
+                Privacy
               </a>
             </nav>
           </div>

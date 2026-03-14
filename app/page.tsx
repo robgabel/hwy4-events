@@ -105,11 +105,25 @@ export default async function Home() {
       <ItemListSchema events={events} />
       <div className="mx-auto max-w-5xl px-4 py-8">
         <section aria-label="What events are happening along Highway 4?">
-          <p className="mb-6 text-center text-stone">
-            {SITE_NAME} is your guide to live music, festivals, and community
-            happenings in Angels Camp, Murphys, Arnold, Bear Valley, and the
-            Sierra Nevada foothills of Calaveras County — updated daily.
-          </p>
+          <div className="mb-6 text-center text-stone">
+            <p>
+              I created {SITE_NAME} to be my personal, one-stop local guide to
+              live music, festivals, and community happenings in our neck of the
+              woods. Never miss a Lube Room show again :)
+            </p>
+            <p className="mt-3">
+              This site updates daily. I hope you find it as useful as I do.
+              Please{" "}
+              <a
+                href="mailto:rob@gabel.ai"
+                className="font-medium text-pine hover:underline"
+              >
+                email me
+              </a>{" "}
+              suggestions to improve it!
+            </p>
+            <p className="mt-3">— Rob</p>
+          </div>
           <EventList initialEvents={events} orgs={orgs} />
         </section>
       </div>

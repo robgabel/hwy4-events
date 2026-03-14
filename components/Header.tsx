@@ -2,8 +2,7 @@ export default function Header() {
   return (
     <header className="hero-gradient mountain-bg tree-line relative">
       <div className="relative z-10 mx-auto max-w-5xl px-4 pb-28 pt-12 text-center">
-        {/* Pine tree icon */}
-        <div className="mb-4 flex items-center justify-center gap-3">
+        <div className="mb-1 flex items-center justify-center gap-4">
           <svg
             className="h-8 w-8 text-sage-light opacity-80"
             viewBox="0 0 24 24"
@@ -11,9 +10,9 @@ export default function Header() {
           >
             <path d="M12 2L6 10h3l-4 8h5v4h4v-4h5l-4-8h3L12 2z" />
           </svg>
-          <span className="text-sm font-medium uppercase tracking-[0.3em] text-sage-light/80">
-            Highway 4 Corridor
-          </span>
+          <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+            Hwy 4 Events
+          </h1>
           <svg
             className="h-8 w-8 text-sage-light opacity-80"
             viewBox="0 0 24 24"
@@ -22,10 +21,6 @@ export default function Header() {
             <path d="M12 2L6 10h3l-4 8h5v4h4v-4h5l-4-8h3L12 2z" />
           </svg>
         </div>
-
-        <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
-          Hwy 4 Events
-        </h1>
 
         <p className="mt-3 text-lg text-sage-light/90">
           Angels Camp &middot; Murphys &middot; Arnold &middot; Bear Valley
