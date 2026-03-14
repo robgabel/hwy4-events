@@ -4,6 +4,7 @@ import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { generateEventSlug } from "@/lib/slugs";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
+import WeeklyBriefing from "@/components/WeeklyBriefing";
 
 export const revalidate = 3600; // revalidate every hour
 
@@ -37,6 +38,28 @@ async function getGreeting(): Promise<string | null> {
 
   if (error || !data?.value) return null;
   return data.value;
+}
+
+async function getBriefing(): Promise<{
+  text: string | null;
+  date: string | null;
+}> {
+  const { data: textData } = await supabase
+    .from("site_config")
+    .select("value")
+    .eq("key", "weekly_briefing")
+    .single();
+
+  const { data: dateData } = await supabase
+    .from("site_config")
+    .select("value")
+    .eq("key", "weekly_briefing_date")
+    .single();
+
+  return {
+    text: textData?.value || null,
+    date: dateData?.value || null,
+  };
 }
 
 async function getOrgs(): Promise<Hwy4Org[]> {
@@ -108,10 +131,11 @@ function ItemListSchema({ events }: { events: Hwy4Event[] }) {
 }
 
 export default async function Home() {
-  const [events, orgs, greeting] = await Promise.all([
+  const [events, orgs, greeting, briefing] = await Promise.all([
     getEvents(),
     getOrgs(),
     getGreeting(),
+    getBriefing(),
   ]);
 
   return (
@@ -138,6 +162,12 @@ export default async function Home() {
             </p>
             <p className="mt-3">— Rob (and Millie 🐾)</p>
           </div>
+          {briefing.text && (
+            <WeeklyBriefing
+              briefing={briefing.text}
+              generatedAt={briefing.date}
+            />
+          )}
           <EventList initialEvents={events} orgs={orgs} />
         </section>
       </div>
