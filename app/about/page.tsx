@@ -92,7 +92,7 @@ export default function AboutPage() {
         </ol>
       </nav>
 
-      <h1 className="mb-2 text-3xl font-bold text-forest">
+      <h1 className="font-display mb-2 text-3xl font-bold text-forest">
         About the Highway 4 Corridor
       </h1>
       <p className="mb-8 text-lg leading-relaxed text-stone">
@@ -104,7 +104,7 @@ export default function AboutPage() {
       </p>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-xl font-semibold text-forest">
+        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
           What is Hwy 4 Events?
         </h2>
         <p className="leading-relaxed text-stone">
@@ -136,7 +136,7 @@ export default function AboutPage() {
       </section>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-xl font-semibold text-forest">
+        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
           What kinds of events can I find here?
         </h2>
         <ul className="ml-4 list-disc space-y-1.5 text-stone">
@@ -164,7 +164,7 @@ export default function AboutPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-xl font-semibold text-forest">
+        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
           How to get to the Highway 4 corridor
         </h2>
         <p className="leading-relaxed text-stone">

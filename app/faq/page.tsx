@@ -120,7 +120,7 @@ export default function FAQPage() {
         </ol>
       </nav>
 
-      <h1 className="mb-2 text-3xl font-bold text-forest">
+      <h1 className="font-display mb-2 text-3xl font-bold text-forest">
         Frequently Asked Questions
       </h1>
       <p className="mb-8 text-stone">

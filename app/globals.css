@@ -17,61 +17,37 @@
   --color-sky: #5A8FA8;
   --color-sky-light: #7DB3CC;
   --color-sunset: #D4855C;
+  --color-gold: #C4922A;
 
-  /* Fonts */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Fonts — set by next/font CSS variables */
+  --font-sans: var(--font-sans, "DM Sans", ui-sans-serif, system-ui, sans-serif);
+  --font-display: var(--font-display, "Bitter", ui-serif, Georgia, serif);
 }
 
-/* Mountain ridge SVG as repeating divider */
 body {
   background-color: var(--color-cream);
   color: var(--color-forest);
 }
 
-/* Hero section with mountain gradient */
-.hero-gradient {
-  background: linear-gradient(
-    180deg,
-    var(--color-forest) 0%,
-    var(--color-forest-light) 40%,
-    var(--color-pine) 70%,
-    var(--color-sage) 100%
-  );
-}
-
-/* Mountain silhouette background */
-.mountain-bg {
+/* Hero photo header */
+.hero-photo {
   position: relative;
   overflow: hidden;
+  background-color: var(--color-forest);
 }
 
-.mountain-bg::after {
+.hero-photo::after {
   content: "";
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 120px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 120' preserveAspectRatio='none'%3E%3Cpath d='M0,120 L0,80 Q120,20 240,60 Q360,100 480,40 Q600,0 720,50 Q840,90 960,30 Q1080,0 1200,55 Q1320,90 1440,45 L1440,120 Z' fill='%23FDF8F3'/%3E%3C/svg%3E")
+  height: 80px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 80' preserveAspectRatio='none'%3E%3Cpath d='M0,80 L0,50 Q360,0 720,30 Q1080,60 1440,15 L1440,80 Z' fill='%23FDF8F3'/%3E%3C/svg%3E")
     no-repeat bottom center;
   background-size: cover;
   pointer-events: none;
-}
-
-/* Tree line decoration */
-.tree-line::before {
-  content: "";
-  position: absolute;
-  bottom: 100px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60' preserveAspectRatio='none'%3E%3Cpath d='M10,60 L15,30 L20,60 M30,60 L37,20 L44,60 M55,60 L60,35 L65,60 M75,60 L82,15 L89,60 M100,60 L105,25 L110,60 M120,60 L127,10 L134,60 M145,60 L150,30 L155,60 M165,60 L172,18 L179,60 M190,60 L195,32 L200,60' stroke='%232D5A3D' stroke-width='2' fill='none' opacity='0.3'/%3E%3C/svg%3E")
-    repeat-x bottom center;
-  background-size: 200px 60px;
-  pointer-events: none;
-  opacity: 0.5;
+  z-index: 2;
 }
 
 /* Category badge colors */

@@ -124,7 +124,7 @@ export default function EventCard({
             <span className="text-xs font-medium uppercase text-pine">
               {dayOfWeek}
             </span>
-            <span className="text-lg font-bold text-forest">
+            <span className="font-display text-lg font-bold text-forest">
               {format(dateObj, "d")}
             </span>
             <span className="text-xs text-stone">

@@ -199,7 +199,7 @@ export default function EventList({
                 className="sticky z-10 -mx-4 mb-3 bg-cream/95 px-4 py-2 backdrop-blur-sm"
                 style={{ top: `${filterHeight}px` }}
               >
-                <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-earth">
+                <h2 className="font-display flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-earth">
                   <span className="h-px flex-1 bg-stone-light/40" />
                   {group.label}
                   <span className="h-px flex-1 bg-stone-light/40" />

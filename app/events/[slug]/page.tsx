@@ -180,7 +180,7 @@ export default async function EventPage({ params }: PageProps) {
               </span>
             )}
           </div>
-          <h1 className="text-3xl font-bold text-forest">{event.name}</h1>
+          <h1 className="font-display text-3xl font-bold text-forest">{event.name}</h1>
         </header>
 
         <dl className="grid gap-3 sm:grid-cols-2 mb-6 text-sm">
@@ -238,7 +238,7 @@ export default async function EventPage({ params }: PageProps) {
 
         {event.description && (
           <section className="mb-6">
-            <h2 className="mb-2 text-lg font-semibold text-forest">
+            <h2 className="font-display mb-2 text-lg font-semibold text-forest">
               About This Event
             </h2>
             <p className="leading-relaxed text-stone">{event.description}</p>
@@ -247,7 +247,7 @@ export default async function EventPage({ params }: PageProps) {
 
         {event.artists && event.artists.length > 0 && (
           <section className="mb-6">
-            <h2 className="mb-2 text-lg font-semibold text-forest">
+            <h2 className="font-display mb-2 text-lg font-semibold text-forest">
               Performers
             </h2>
             <ul className="flex flex-wrap gap-2">

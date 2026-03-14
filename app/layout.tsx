@@ -8,7 +8,22 @@ import {
 import LastChecked from "@/components/LastChecked";
 import Image from "next/image";
 import { Suspense } from "react";
+import { Bitter, DM_Sans } from "next/font/google";
 import "./globals.css";
+
+const bitter = Bitter({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -89,8 +104,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-cream antialiased">
+    <html lang="en" className={`${bitter.variable} ${dmSans.variable}`}>
+      <body className="min-h-screen bg-cream font-sans antialiased">
         <WebSiteSchema />
         <OrganizationSchema />
         {children}
