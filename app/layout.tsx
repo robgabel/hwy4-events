@@ -47,7 +47,7 @@ export const metadata: Metadata = {
         url: "/og",
         width: 1200,
         height: 630,
-        alt: "Hwy 4 Events — Sierra Nevada Foothills event listings",
+        alt: "Hwy 4 Events — Today's events and this week along the Highway 4 corridor",
       },
     ],
   },
@@ -83,7 +83,7 @@ function OrganizationSchema() {
     name: SITE_NAME,
     url: SITE_URL,
     description:
-      "Community event listings for the Highway 4 corridor in the California Sierra Nevada foothills.",
+      "Daily event briefing and listings for the Highway 4 corridor — Angels Camp to Bear Valley in the California Sierra Nevada.",
     areaServed: {
       "@type": "Place",
       name: "Highway 4 Corridor, Calaveras County, California",

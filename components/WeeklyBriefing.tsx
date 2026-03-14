@@ -32,7 +32,11 @@ export default function WeeklyBriefing({
           <span className="ml-auto text-xs text-stone-light">{dateLabel}</span>
         )}
       </div>
-      <p className="leading-relaxed text-stone-800">{briefing}</p>
+      {briefing.split("\n\n").map((paragraph, i) => (
+        <p key={i} className={`leading-relaxed text-stone-800${i > 0 ? " mt-3" : ""}`}>
+          {paragraph}
+        </p>
+      ))}
     </div>
   );
 }

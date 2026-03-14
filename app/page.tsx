@@ -83,7 +83,7 @@ function ItemListSchema({ events }: { events: Hwy4Event[] }) {
     "@type": "ItemList",
     name: "Upcoming Events Along Highway 4",
     description:
-      "Live music, festivals, and community events in the Sierra Nevada foothills of Calaveras County.",
+      "Today's events and this week's lineup along the Highway 4 corridor in the Sierra Nevada foothills.",
     numberOfItems: publicEvents.length,
     itemListElement: publicEvents.slice(0, 50).map((event, index) => ({
       "@type": "ListItem",
