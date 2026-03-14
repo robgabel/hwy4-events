@@ -37,6 +37,17 @@ export default function Header({ greeting }: { greeting?: string | null }) {
           </p>
         )}
       </div>
+
+      {/* Millie peeking over the wave divider */}
+      <div className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2 translate-y-[35%]">
+        <Image
+          src="/millie-happy.svg"
+          alt="Millie the sheepadoodle"
+          width={64}
+          height={64}
+          className="opacity-90 drop-shadow-sm sm:h-[72px] sm:w-[72px]"
+        />
+      </div>
     </header>
   );
 }
