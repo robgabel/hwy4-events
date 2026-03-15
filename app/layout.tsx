@@ -10,7 +10,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} | Sierra Nevada Foothills`,
+    default: `${SITE_NAME} — Angels Camp, Murphys, Arnold, Bear Valley`,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: `${SITE_NAME} | Sierra Nevada Foothills`,
+    title: `${SITE_NAME} — Angels Camp, Murphys, Arnold, Bear Valley`,
     description: SITE_OG_DESCRIPTION,
     type: "website",
     url: SITE_URL,
@@ -29,13 +29,13 @@ export const metadata: Metadata = {
         url: "/og",
         width: 1200,
         height: 630,
-        alt: "Hwy 4 Events — Sierra Nevada Foothills event listings",
+        alt: "Hwy 4 Events — Angels Camp, Murphys, Arnold, Bear Valley",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} | Sierra Nevada Foothills`,
+    title: `${SITE_NAME} — Angels Camp, Murphys, Arnold, Bear Valley`,
     description: SITE_OG_DESCRIPTION,
     images: ["/og"],
   },
