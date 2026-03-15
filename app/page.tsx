@@ -4,6 +4,7 @@ import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { generateEventSlug } from "@/lib/slugs";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
+import WeekNarrative from "@/components/WeekNarrative";
 
 export const revalidate = 3600; // revalidate every hour
 
@@ -40,6 +41,24 @@ async function getOrgs(): Promise<Hwy4Org[]> {
   }
 
   return data as Hwy4Org[];
+}
+
+interface NarrativeData {
+  narrative: string;
+  date_log: { date: string; label: string; dayName: string; header: string }[];
+  generated_at: string;
+}
+
+async function getWeekNarrative(): Promise<NarrativeData | null> {
+  const { data, error } = await supabase
+    .from("hwy4_weekly_narratives")
+    .select("narrative, date_log, generated_at")
+    .order("week_of", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error || !data) return null;
+  return data as NarrativeData;
 }
 
 function ItemListSchema({ events }: { events: Hwy4Event[] }) {
@@ -97,7 +116,11 @@ function ItemListSchema({ events }: { events: Hwy4Event[] }) {
 }
 
 export default async function Home() {
-  const [events, orgs] = await Promise.all([getEvents(), getOrgs()]);
+  const [events, orgs, narrative] = await Promise.all([
+    getEvents(),
+    getOrgs(),
+    getWeekNarrative(),
+  ]);
 
   return (
     <main>
@@ -110,6 +133,13 @@ export default async function Home() {
             happenings in Angels Camp, Murphys, Arnold, Bear Valley, and the
             Sierra Nevada foothills of Calaveras County — updated daily.
           </p>
+          {narrative && (
+            <WeekNarrative
+              narrative={narrative.narrative}
+              dateLog={narrative.date_log}
+              generatedAt={narrative.generated_at}
+            />
+          )}
           <EventList initialEvents={events} orgs={orgs} />
         </section>
       </div>
