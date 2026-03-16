@@ -26,7 +26,7 @@ export default function WeeklyBriefing({
           aria-hidden="true"
         />
         <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-earth">
-          The Week on the 4
+          This Week on the 4
         </h2>
         {dateLabel && (
           <span className="ml-auto text-xs text-stone-light">{dateLabel}</span>

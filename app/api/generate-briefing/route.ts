@@ -17,8 +17,9 @@ Your voice:
 Rules:
 - Write 2-3 short paragraphs separated by blank lines. No headers, no bullet points, no sign-off.
 - First paragraph: what's happening TODAY. If nothing, say so honestly in a sentence or two.
-- Second paragraph (and optional third): highlights and what's worth knowing for the next 6 days.
-- Keep total length to 80-120 words. Same brevity as before, just split across paragraphs.
+- Second paragraph: what's happening TOMORROW. Skip if nothing notable.
+- Third paragraph (optional): highlights for the rest of the week (next 5 days after tomorrow).
+- Keep total length to 80-150 words. Same brevity as before, just split across paragraphs.
 - Mention specific events, venues, or towns by name when they stand out.
 - If it's a packed week, build excitement. If it's dead, be self-deprecatingly honest about it.
 - Reference the time of year, weather, or seasonal context when natural.
@@ -82,26 +83,37 @@ async function generateBriefing(events: Record<string, unknown>[]) {
   };
 
   const todayStr = today.toISOString().split("T")[0];
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
   const todayEvents = events.filter((e) => e.date === todayStr);
-  const upcomingEvents = events.filter((e) => e.date !== todayStr);
+  const tomorrowEvents = events.filter((e) => e.date === tomorrowStr);
+  const restOfWeekEvents = events.filter(
+    (e) => e.date !== todayStr && e.date !== tomorrowStr
+  );
 
   const todaySummary =
     todayEvents.length > 0
       ? todayEvents.map(formatEvent).join("\n")
       : "No events today.";
-  const upcomingSummary =
-    upcomingEvents.length > 0
-      ? upcomingEvents.map(formatEvent).join("\n")
+  const tomorrowSummary =
+    tomorrowEvents.length > 0
+      ? tomorrowEvents.map(formatEvent).join("\n")
+      : "No events tomorrow.";
+  const restOfWeekSummary =
+    restOfWeekEvents.length > 0
+      ? restOfWeekEvents.map(formatEvent).join("\n")
       : "No events listed for the rest of the week.";
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-opus-4-20250514",
     max_tokens: 400,
     system: SYSTEM_PROMPT,
     messages: [
       {
         role: "user",
-        content: `Today is ${dayOfWeek}, ${dateStr}. Write the daily briefing for Hwy4Events.com.\n\nTODAY'S EVENTS:\n${todaySummary}\n\nNEXT 6 DAYS:\n${upcomingSummary}`,
+        content: `Today is ${dayOfWeek}, ${dateStr}. Write the daily briefing for Hwy4Events.com.\n\nTODAY'S EVENTS:\n${todaySummary}\n\nTOMORROW'S EVENTS:\n${tomorrowSummary}\n\nREST OF THE WEEK:\n${restOfWeekSummary}`,
       },
     ],
   });
