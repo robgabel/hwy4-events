@@ -16,7 +16,6 @@ async function getEvents(): Promise<Hwy4Event[]> {
       "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick"
     )
     .gte("date", today)
-    .eq("is_past", false)
     .neq("status", "cancelled")
     .order("date", { ascending: true })
     .order("start_time", { ascending: true });

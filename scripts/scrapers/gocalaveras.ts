@@ -493,8 +493,7 @@ async function crossSourceDedup(
     .select("name, date, town, venue_name, source_name")
     .neq("source_name", SOURCE_NAME)
     .gte("date", minDate)
-    .lte("date", maxDate)
-    .eq("is_past", false);
+    .lte("date", maxDate);
 
   if (error) {
     console.warn("Failed to fetch existing events for dedup:", error.message);

@@ -49,7 +49,6 @@ async function getEventsForBriefing() {
     )
     .gte("date", today)
     .lte("date", nextWeek)
-    .eq("is_past", false)
     .neq("status", "cancelled")
     .eq("visibility", "public")
     .order("date", { ascending: true })

@@ -33,7 +33,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .from("hwy4_events")
       .select("id, name, date, town")
       .gte("date", today)
-      .eq("is_past", false)
       .neq("status", "cancelled")
       .order("date", { ascending: true });
 
