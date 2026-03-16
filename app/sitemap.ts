@@ -29,7 +29,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const { supabase } = await import("@/lib/supabase");
     const today = new Date().toISOString().split("T")[0];
-    const PAGE_SIZE = 1000;
+    const PAGE_SIZE = 60;
     let allEvents: { id: string; name: string; date: string; town: string }[] = [];
     let from = 0;
 

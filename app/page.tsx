@@ -10,7 +10,7 @@ export const revalidate = 3600; // revalidate every hour
 
 async function getEvents(): Promise<Hwy4Event[]> {
   const today = new Date().toISOString().split("T")[0];
-  const PAGE_SIZE = 1000;
+  const PAGE_SIZE = 60;
   let allEvents: Hwy4Event[] = [];
   let from = 0;
 

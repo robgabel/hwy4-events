@@ -13,7 +13,7 @@ export const revalidate = 3600;
 async function getAllEvents(): Promise<Hwy4Event[]> {
   const { supabase } = await import("@/lib/supabase");
   const today = new Date().toISOString().split("T")[0];
-  const PAGE_SIZE = 1000;
+  const PAGE_SIZE = 60;
   let allEvents: Hwy4Event[] = [];
   let from = 0;
 
