@@ -11,6 +11,7 @@ const MONTHS_TO_SCRAPE = 6;
 
 /** Towns along the Hwy 4 corridor that we care about */
 const HWY4_TOWNS = new Set([
+  "copperopolis",
   "angels camp",
   "murphys",
   "avery",
@@ -22,6 +23,7 @@ const HWY4_TOWNS = new Set([
 ]);
 
 const HWY4_TOWN_LIST = [
+  "Copperopolis",
   "Angels Camp",
   "Murphys",
   "Avery",

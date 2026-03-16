@@ -11,6 +11,14 @@ export interface TownInfo {
 
 export const CORRIDOR_TOWNS: TownInfo[] = [
   {
+    name: "Copperopolis",
+    elevation: 850,
+    tagline: "Copper country at the base",
+    driveFromArnold: "40 min down the hill",
+    lat: 37.9810,
+    lng: -120.6380,
+  },
+  {
     name: "Angels Camp",
     elevation: 1300,
     tagline: "Gold Rush gateway town",
