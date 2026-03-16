@@ -32,11 +32,13 @@ async function getEvents(): Promise<Hwy4Event[]> {
     }
 
     allEvents = allEvents.concat(data as Hwy4Event[]);
+    console.log(`[getEvents] Fetched batch: from=${from}, rows=${data?.length}, total so far=${allEvents.length}`);
 
     if (!data || data.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
 
+  console.log(`[getEvents] Done. Total events: ${allEvents.length}`);
   return allEvents;
 }
 
