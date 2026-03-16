@@ -146,9 +146,8 @@ export default async function Home() {
         <section aria-label="What events are happening along Highway 4?">
           <div className="mb-6 text-center text-stone">
             <p>
-              I built {SITE_NAME} because I kept missing great shows at the Lube
-              Room. 11 years of cabin weekends and I still can&apos;t keep track
-              of what&apos;s happening — so I made this.
+              I built {SITE_NAME} because even after 11 years of cabin weekends,
+              I kept missing live music at the Lube Room.
             </p>
             <p className="mt-3">
               I hope you find it as useful as I do.{" "}

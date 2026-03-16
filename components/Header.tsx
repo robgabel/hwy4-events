@@ -19,12 +19,14 @@ export default function Header({ greeting }: { greeting?: string | null }) {
 
       {/* Content */}
       <div className="relative z-10 mx-auto max-w-5xl px-4 pb-20 pt-10 text-center sm:pb-24 sm:pt-12">
-        <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
+        <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl inline-flex items-center justify-center gap-3">
+          <svg aria-hidden="true" className="h-8 w-8 sm:h-10 sm:w-10 text-sage-light/80" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8 8h2L6 14h2.5L5 20h14l-3.5-6H18l-4-6h2L12 2z"/></svg>
           Hwy 4 Events
+          <svg aria-hidden="true" className="h-8 w-8 sm:h-10 sm:w-10 text-sage-light/80" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8 8h2L6 14h2.5L5 20h14l-3.5-6H18l-4-6h2L12 2z"/></svg>
         </h1>
 
         <p className="mt-3 font-display text-lg text-sage-light/90">
-          From the Frog Jump to Monte Wolfes
+          From the Frog Jump to the Grizzly Chair
         </p>
         <p className="mt-1 text-sm text-sage-light/60">
           Angels Camp &middot; Murphys &middot; Arnold &middot; Bear Valley
