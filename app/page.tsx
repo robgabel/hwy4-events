@@ -10,29 +10,31 @@ export const revalidate = 3600; // revalidate every hour
 
 async function getEvents(): Promise<Hwy4Event[]> {
   const today = new Date().toISOString().split("T")[0];
-  const PAGE_SIZE = 60;
+  const PAGE_SIZE = 1000;
   let allEvents: Hwy4Event[] = [];
   let from = 0;
 
   while (true) {
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from("hwy4_events")
       .select(
-        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick"
+        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick",
+        { count: "exact" }
       )
       .gte("date", today)
       .neq("status", "cancelled")
+      .eq("visibility", "public")
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
 
     if (error) {
-      console.error("Failed to fetch events:", error);
+      console.error("[getEvents] Failed to fetch events:", error);
       return allEvents;
     }
 
     allEvents = allEvents.concat(data as Hwy4Event[]);
-    console.log(`[getEvents] Fetched batch: from=${from}, rows=${data?.length}, total so far=${allEvents.length}`);
+    console.log(`[getEvents] Batch: from=${from}, rows=${data?.length}, total so far=${allEvents.length}, db count=${count}`);
 
     if (!data || data.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
