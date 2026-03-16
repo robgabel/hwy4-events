@@ -5,7 +5,8 @@
   "description": "Event scraping pipeline for Hwy 4 Events",
   "scripts": {
     "scrape": "tsx scrape.ts",
-    "scrape:bear-valley": "tsx scrape.ts --source bear-valley"
+    "scrape:bear-valley": "tsx scrape.ts --source bear-valley",
+    "scrape:gocalaveras": "tsx scrape.ts --source gocalaveras"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

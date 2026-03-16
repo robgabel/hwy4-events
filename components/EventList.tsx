@@ -144,6 +144,9 @@ export default function EventList({
       ? groups[0].events[0].id
       : null;
 
+  const MEMBER_ORG_SLUGS = new Set(["moose-lodge", "sequoia-woods"]);
+  const memberOrgs = orgs.filter((o) => MEMBER_ORG_SLUGS.has(o.slug));
+
   return (
     <div>
       {/* Sticky filter bar */}
@@ -157,7 +160,7 @@ export default function EventList({
           onCategoryChange={setCategory}
           onTownChange={setTown}
           eventCount={filtered.length}
-          orgs={orgs}
+          orgs={memberOrgs}
           enabledOrgs={enabledOrgs}
           onToggleOrg={toggleOrg}
         />
