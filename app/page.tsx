@@ -23,7 +23,6 @@ async function getEvents(): Promise<Hwy4Event[]> {
       )
       .gte("date", today)
       .neq("status", "cancelled")
-      .eq("visibility", "public")
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
