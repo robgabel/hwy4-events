@@ -1,4 +1,5 @@
 import { scrapeBearValley } from "./scrapers/bear-valley.js";
+import { scrapeBriceStation } from "./scrapers/brice-station.js";
 import { scrapeBrandingIron } from "./scrapers/branding-iron.js";
 import { scrapeCampConnellGeneralStore } from "./scrapers/camp-connell-general-store.js";
 import { scrapeGoCalaveras } from "./scrapers/gocalaveras.js";
@@ -11,6 +12,7 @@ import { validateEventUrls } from "./lib/validate-urls.js";
 
 const SCRAPERS: Record<string, () => Promise<void>> = {
   "bear-valley": scrapeBearValley,
+  "brice-station": scrapeBriceStation,
   "branding-iron": scrapeBrandingIron,
   "camp-connell-general-store": scrapeCampConnellGeneralStore,
   "gocalaveras": scrapeGoCalaveras,
