@@ -7,6 +7,7 @@ import { scrapeMurphysIrishPub } from "./scrapers/murphys-irish-pub.js";
 import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeWateringHole } from "./scrapers/watering-hole.js";
+import { validateEventUrls } from "./lib/validate-urls.js";
 
 const SCRAPERS: Record<string, () => Promise<void>> = {
   "bear-valley": scrapeBearValley,
@@ -48,6 +49,16 @@ async function main() {
     } catch (err) {
       console.error(`\nError scraping ${source}:`, err);
       // Continue with other sources
+    }
+  }
+
+  // Validate all event URLs after scraping
+  const skipValidation = args.includes("--skip-url-check");
+  if (!skipValidation) {
+    try {
+      await validateEventUrls();
+    } catch (err) {
+      console.error("URL validation failed:", err);
     }
   }
 

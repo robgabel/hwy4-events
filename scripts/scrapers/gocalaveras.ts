@@ -262,8 +262,11 @@ async function fetchMonth(
     `  AJAX response: ${data.json.length} events in JSON, ${data.html?.length || 0} chars HTML`
   );
 
+  // Extract real event URLs from the HTML response
+  const urlMap = extractUrlsFromHtml(data.html, data.json);
+
   // Parse structured event data directly from JSON
-  const events = parseEventONEvents(data.json, year);
+  const events = parseEventONEvents(data.json, year, urlMap);
 
   // Use LLM to classify categories and map towns for events that need it
   if (events.length > 0) {
@@ -271,6 +274,53 @@ async function fetchMonth(
   }
 
   return events;
+}
+
+// ---------- HTML URL extraction ----------
+
+/**
+ * Extract real event URLs from EventON's HTML response.
+ * Each event div contains: <div class="evo_event_schema"><a href="..."></a></div>
+ * We key by event_id to match against the JSON data.
+ */
+function extractUrlsFromHtml(
+  html: string,
+  events: EventONEvent[]
+): Map<number, string> {
+  const urlMap = new Map<number, string>();
+
+  for (const ev of events) {
+    // Match the event div by data-event_id, then extract the schema URL
+    const eventDivRegex = new RegExp(
+      `data-event_id="${ev.event_id}"[^>]*>\\s*<div[^>]*class="evo_event_schema"[^>]*>\\s*<a[^>]*href="([^"]+)"`,
+      "i"
+    );
+    const match = html.match(eventDivRegex);
+    if (match?.[1]) {
+      urlMap.set(ev.event_id, match[1]);
+    }
+  }
+
+  // Fallback: also try matching by event ID in the div id attribute
+  // Format: id="event_191022_0"
+  if (urlMap.size < events.length) {
+    for (const ev of events) {
+      if (urlMap.has(ev.event_id)) continue;
+      const altRegex = new RegExp(
+        `id="event_${ev.event_id}_\\d+"[^>]*>[\\s\\S]*?<a[^>]*href="(https://www\\.gocalaveras\\.com/events/[^"]+)"`,
+        "i"
+      );
+      const match = html.match(altRegex);
+      if (match?.[1]) {
+        urlMap.set(ev.event_id, match[1]);
+      }
+    }
+  }
+
+  console.log(
+    `  URL extraction: ${urlMap.size}/${events.length} real URLs found in HTML`
+  );
+  return urlMap;
 }
 
 // ---------- Structured event parsing ----------
@@ -281,7 +331,8 @@ async function fetchMonth(
  */
 function parseEventONEvents(
   events: EventONEvent[],
-  year: number
+  year: number,
+  urlMap: Map<number, string>
 ): ExtractedEvent[] {
   const results: ExtractedEvent[] = [];
 
@@ -335,16 +386,9 @@ function parseEventONEvents(
       const startTime = `${String(startDate.getHours()).padStart(2, "0")}:${String(startDate.getMinutes()).padStart(2, "0")}`;
       const endTime = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
 
-      // Build event URL from slug if not explicitly set
-      let finalEventUrl = eventUrl;
-      if (!finalEventUrl) {
-        // EventON events have WordPress post URLs
-        const slug = ev.event_title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
-        finalEventUrl = `https://www.gocalaveras.com/events/${slug}/`;
-      }
+      // Use real URL from HTML, PMV external link, or null
+      const finalEventUrl =
+        urlMap.get(ev.event_id) || eventUrl || null;
 
       results.push({
         name: ev.event_title,
