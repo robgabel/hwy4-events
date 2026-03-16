@@ -19,7 +19,6 @@ export async function validateEventUrls(): Promise<{
   const { data: events, error } = await supabaseAdmin
     .from("hwy4_events")
     .select("id, name, event_url")
-    .eq("is_past", false)
     .not("event_url", "is", null)
     .order("date", { ascending: true });
 

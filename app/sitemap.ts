@@ -29,15 +29,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const { supabase } = await import("@/lib/supabase");
     const today = new Date().toISOString().split("T")[0];
-    const { data: events } = await supabase
-      .from("hwy4_events")
-      .select("id, name, date, town")
-      .gte("date", today)
-      .eq("is_past", false)
-      .neq("status", "cancelled")
-      .order("date", { ascending: true });
+    const PAGE_SIZE = 60;
+    let allEvents: { id: string; name: string; date: string; town: string }[] = [];
+    let from = 0;
 
-    eventPages = (events || []).map((event) => ({
+    while (true) {
+      const { data, error } = await supabase
+        .from("hwy4_events")
+        .select("id, name, date, town")
+        .gte("date", today)
+        .neq("status", "cancelled")
+        .order("date", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) break;
+      allEvents = allEvents.concat(data || []);
+      if (!data || data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    eventPages = allEvents.map((event) => ({
       url: `${SITE_URL}/events/${generateEventSlug(event.name, event.date, event.town)}`,
       lastModified: new Date(),
       changeFrequency: "weekly" as const,
