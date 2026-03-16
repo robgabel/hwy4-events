@@ -10,22 +10,34 @@ export const revalidate = 3600; // revalidate every hour
 
 async function getEvents(): Promise<Hwy4Event[]> {
   const today = new Date().toISOString().split("T")[0];
-  const { data, error } = await supabase
-    .from("hwy4_events")
-    .select(
-      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick"
-    )
-    .gte("date", today)
-    .neq("status", "cancelled")
-    .order("date", { ascending: true })
-    .order("start_time", { ascending: true });
+  const PAGE_SIZE = 1000;
+  let allEvents: Hwy4Event[] = [];
+  let from = 0;
 
-  if (error) {
-    console.error("Failed to fetch events:", error);
-    return [];
+  while (true) {
+    const { data, error } = await supabase
+      .from("hwy4_events")
+      .select(
+        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick"
+      )
+      .gte("date", today)
+      .neq("status", "cancelled")
+      .order("date", { ascending: true })
+      .order("start_time", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error("Failed to fetch events:", error);
+      return allEvents;
+    }
+
+    allEvents = allEvents.concat(data as Hwy4Event[]);
+
+    if (!data || data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
 
-  return data as Hwy4Event[];
+  return allEvents;
 }
 
 async function getGreeting(): Promise<string | null> {

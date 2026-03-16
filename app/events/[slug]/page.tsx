@@ -13,16 +13,28 @@ export const revalidate = 3600;
 async function getAllEvents(): Promise<Hwy4Event[]> {
   const { supabase } = await import("@/lib/supabase");
   const today = new Date().toISOString().split("T")[0];
-  const { data } = await supabase
-    .from("hwy4_events")
-    .select(
-      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick"
-    )
-    .gte("date", today)
-    .neq("status", "cancelled")
-    .order("date", { ascending: true });
+  const PAGE_SIZE = 1000;
+  let allEvents: Hwy4Event[] = [];
+  let from = 0;
 
-  return (data as Hwy4Event[]) || [];
+  while (true) {
+    const { data, error } = await supabase
+      .from("hwy4_events")
+      .select(
+        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick"
+      )
+      .gte("date", today)
+      .neq("status", "cancelled")
+      .order("date", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) break;
+    allEvents = allEvents.concat(data as Hwy4Event[]);
+    if (!data || data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return allEvents;
 }
 
 async function findEventBySlug(slug: string): Promise<Hwy4Event | null> {
