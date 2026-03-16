@@ -25,7 +25,8 @@ Rules:
 - Reference the time of year, weather, or seasonal context when natural.
 - Never use corporate language, marketing speak, or generic phrases like "something for everyone."
 - Never use emojis.
-- Make it feel like a friend texting you what's worth doing today and this week.`;
+- Make it feel like a friend texting you what's worth doing today and this week.
+- LINKS: Each event in the data includes a URL. When you mention a specific event by name, link it using markdown format: [event text](url). Link the natural mention of the event — e.g. "[couples tasting](https://example.com/event)" not "[Tuesdays Tasting for Two](url)". Keep links natural and conversational. Don't link every single event — just the ones you name-drop or describe specifically. Venue names and towns should NOT be linked, only event references.`;
 
 async function getEventsForBriefing() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -44,7 +45,7 @@ async function getEventsForBriefing() {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description"
+      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url"
     )
     .gte("date", today)
     .lte("date", nextWeek)
@@ -78,6 +79,7 @@ async function generateBriefing(events: Record<string, unknown>[]) {
       e.price ? `${e.price}` : "",
       e.robs_pick ? "[ROB'S PICK]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
+      e.event_url ? `URL: ${e.event_url}` : "",
     ].filter(Boolean);
     return parts.join(" — ");
   };
