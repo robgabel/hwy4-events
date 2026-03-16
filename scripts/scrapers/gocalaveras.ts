@@ -1,10 +1,10 @@
-import FirecrawlApp from "@mendable/firecrawl-js";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedEvent } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
 
 const EVENTS_URL = "https://www.gocalaveras.com/events/";
+const AJAX_URL = "https://www.gocalaveras.com/wp-admin/admin-ajax.php";
 const SOURCE_NAME = "GoCalaveras.com";
 const ORG_SLUG = "gocalaveras";
 const MONTHS_TO_SCRAPE = 6;
@@ -34,42 +34,79 @@ const HWY4_TOWN_LIST = [
 
 const anthropic = new Anthropic();
 
-const MONTH_NAMES = [
-  "",
-  "january",
-  "february",
-  "march",
-  "april",
-  "may",
-  "june",
-  "july",
-  "august",
-  "september",
-  "october",
-  "november",
-  "december",
-];
+// ---------- Types for EventON AJAX response ----------
+
+interface EventONEvent {
+  ID: number;
+  event_id: number;
+  event_start_unix: number;
+  event_end_unix: number;
+  event_title: string;
+  event_color: number | string;
+  event_type: string;
+  event_past: string;
+  event_pmv: Record<string, string[]>;
+}
+
+interface EventONResponse {
+  status: string;
+  json: EventONEvent[];
+  html: string;
+  cal_month_title: string;
+  SC: Record<string, string>;
+}
+
+// ---------- Main scraper ----------
 
 export async function scrapeGoCalaveras(): Promise<void> {
   console.log("=== GoCalaveras Scraper ===");
 
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing FIRECRAWL_API_KEY environment variable");
-  }
-
-  const firecrawl = new FirecrawlApp({ apiKey });
   const today = new Date().toISOString().slice(0, 10);
 
-  // Build list of months to scrape: current month + next 8
+  // Step 1: Fetch page to get nonce and shortcode config
+  console.log("Fetching page to extract nonce and calendar config...");
+  const pageResp = await fetch(EVENTS_URL, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    },
+  });
+  const html = await pageResp.text();
+
+  const nonceMatch = html.match(/postnonce["']?\s*:\s*["']([a-f0-9]+)["']/);
+  const nonce = nonceMatch?.[1] || "";
+  if (!nonce) {
+    console.error("Could not extract nonce from page");
+    return;
+  }
+
+  const dataSCMatch = html.match(/data-sc='([^']+)'/);
+  if (!dataSCMatch) {
+    console.error("Could not extract data-sc shortcode from page");
+    return;
+  }
+  const baseShortcode = JSON.parse(dataSCMatch[1]);
+  console.log(`Nonce: ${nonce}, Calendar: ${baseShortcode.cal_id}`);
+
+  // Step 2: Build list of months to scrape
   const now = new Date();
-  const monthsToScrape: { month: number; year: number; label: string }[] = [];
+  const monthsToScrape: {
+    month: number;
+    year: number;
+    label: string;
+    startUnix: number;
+    endUnix: number;
+  }[] = [];
+
   for (let i = 0; i < MONTHS_TO_SCRAPE; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const start = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + i + 1, 0, 23, 59, 59);
     monthsToScrape.push({
-      month: d.getMonth() + 1, // 1-indexed
-      year: d.getFullYear(),
-      label: d.toLocaleString("en-US", { month: "long", year: "numeric" }),
+      month: start.getMonth() + 1,
+      year: start.getFullYear(),
+      label: start.toLocaleString("en-US", { month: "long", year: "numeric" }),
+      startUnix: Math.floor(start.getTime() / 1000),
+      endUnix: Math.floor(end.getTime() / 1000),
     });
   }
 
@@ -77,22 +114,29 @@ export async function scrapeGoCalaveras(): Promise<void> {
     `Scraping ${MONTHS_TO_SCRAPE} months: ${monthsToScrape.map((m) => m.label).join(", ")}`
   );
 
-  // Scrape each month and collect all events
+  // Step 3: Fetch each month via direct AJAX POST
   const allEvents: ExtractedEvent[] = [];
 
-  for (const { month, year, label } of monthsToScrape) {
-    console.log(`\n--- Scraping ${label} ---`);
+  for (const { month, year, label, startUnix, endUnix } of monthsToScrape) {
+    console.log(`\n--- Fetching ${label} ---`);
 
     try {
-      const events = await scrapeMonth(firecrawl, month, year);
+      const events = await fetchMonth(
+        baseShortcode,
+        nonce,
+        month,
+        year,
+        startUnix,
+        endUnix
+      );
       console.log(`  ${label}: ${events.length} events extracted`);
       allEvents.push(...events);
     } catch (err) {
-      console.error(`  ${label}: scrape failed:`, err);
+      console.error(`  ${label}: fetch failed:`, err);
     }
   }
 
-  // Filter to Hwy 4 corridor towns
+  // Step 4: Filter to Hwy 4 corridor towns
   const corridorEvents = allEvents.filter((e) =>
     HWY4_TOWNS.has(e.town.toLowerCase().trim())
   );
@@ -121,18 +165,13 @@ export async function scrapeGoCalaveras(): Promise<void> {
     return;
   }
 
-  // Cross-source dedup
+  // Step 5: Cross-source dedup
   const deduped = await crossSourceDedup(futureEvents);
 
   let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0 };
 
   if (deduped.length > 0) {
-    totalResult = await upsertEvents(
-      deduped,
-      SOURCE_NAME,
-      ORG_SLUG,
-      EVENTS_URL
-    );
+    totalResult = await upsertEvents(deduped, SOURCE_NAME, ORG_SLUG, EVENTS_URL);
   }
 
   console.log("\n=== GoCalaveras Summary ===");
@@ -145,112 +184,253 @@ export async function scrapeGoCalaveras(): Promise<void> {
   console.log(`Events unchanged: ${totalResult.unchanged}`);
 }
 
-// ---------- Month-by-month scraping ----------
+// ---------- Direct AJAX month fetching ----------
 
 /**
- * Scrape a single month from GoCalaveras using Firecrawl actions.
- * Uses executeJavascript to trigger EventON's AJAX month navigation,
- * waits for content to load, then scrapes the updated page.
+ * Fetch a single month of events via direct POST to EventON's AJAX endpoint.
+ * This bypasses Firecrawl entirely — no headless browser needed.
+ * The response includes structured JSON with full event data.
  */
-async function scrapeMonth(
-  firecrawl: FirecrawlApp,
+async function fetchMonth(
+  baseShortcode: Record<string, any>,
+  nonce: string,
   month: number,
-  year: number
+  year: number,
+  startUnix: number,
+  endUnix: number
 ): Promise<ExtractedEvent[]> {
-  const monthName = MONTH_NAMES[month];
+  // Build shortcode with target month's date range
+  const shortcode = {
+    ...baseShortcode,
+    fixed_month: String(month),
+    fixed_year: String(year),
+    fixed_day: "1",
+    focus_start_date_range: String(startUnix),
+    focus_end_date_range: String(endUnix),
+  };
 
-  // Use Firecrawl actions to navigate to the target month:
-  // 1. Page loads with default month
-  // 2. Execute JS to trigger EventON's AJAX calendar reload for the target month
-  // 3. Wait for AJAX content
-  // 4. Scrape the updated DOM
-  const result = await firecrawl.scrapeUrl(EVENTS_URL, {
-    formats: ["markdown"],
-    waitFor: 5000,
-    onlyMainContent: true,
-    timeout: 60000,
-    actions: [
-      {
-        type: "executeJavascript" as any,
-        script: `
-          (function() {
-            // EventON calendar uses jQuery AJAX to load months
-            if (typeof jQuery !== 'undefined') {
-              var $ = jQuery;
-              var cal = $('.ajde_evcal_calendar');
-              if (cal.length) {
-                // Trigger EventON's built-in month navigation
-                var data = {
-                  action: 'the_ajax_hook',
-                  direction: 'none',
-                  sort_by: 'sort_date',
-                  filters: [],
-                  fixed_month: ${month},
-                  fixed_year: ${year},
-                  send_unix: 0,
-                  shortcode: JSON.parse(cal.attr('data-shortcode') || '{"cal_id":"1"}')
-                };
-                data.shortcode.fixed_month = ${month};
-                data.shortcode.fixed_year = ${year};
+  // Build form data matching jQuery.ajax serialization
+  const fd = new URLSearchParams();
+  fd.append("action", "the_ajax_hook");
+  fd.append("direction", "none");
+  fd.append("ajaxtype", "initial");
 
-                $.ajax({
-                  url: '/wp-admin/admin-ajax.php',
-                  type: 'POST',
-                  data: data,
-                  success: function(response) {
-                    // EventON returns HTML in the response - inject it
-                    if (response && typeof response === 'object' && response.content) {
-                      cal.find('.eventon_events_list').html(response.content);
-                    } else if (typeof response === 'string') {
-                      cal.find('.eventon_events_list').html(response);
-                    }
-                  }
-                });
-              }
-            }
-
-            // Also try clicking the month in the dropdown selector as fallback
-            var monthItems = document.querySelectorAll('.evo_j_month, .eventon_dropdown li');
-            monthItems.forEach(function(item) {
-              if (item.textContent.toLowerCase().trim() === '${monthName}') {
-                item.click();
-              }
-            });
-
-            return '${monthName} ${year}';
-          })();
-        `,
-      },
-      { type: "wait" as any, milliseconds: 6000 },
-      { type: "scrape" as any },
-    ],
-  } as any);
-
-  // Get markdown from the scrape action result or the main response
-  let markdown = "";
-
-  const actionsResult = (result as any).actions;
-  if (actionsResult?.scrapes?.length > 0) {
-    // The scrape action captured the post-JS-execution state
-    // Use the main markdown which reflects the final page state
-    markdown = result.markdown || actionsResult.scrapes[0].html || "";
-  } else if (result.success && result.markdown) {
-    markdown = result.markdown;
+  for (const [key, val] of Object.entries(shortcode)) {
+    if (typeof val === "object" && val !== null) {
+      fd.append(`shortcode[${key}]`, JSON.stringify(val));
+    } else {
+      fd.append(`shortcode[${key}]`, String(val));
+    }
   }
 
-  if (!markdown || markdown.length < 100) {
-    console.log(
-      `  ${monthName} ${year}: content too short (${markdown.length} chars), skipping`
-    );
+  const resp = await fetch(AJAX_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+      "X-Requested-With": "XMLHttpRequest",
+      Referer: EVENTS_URL,
+    },
+    body: fd.toString(),
+  });
+
+  if (!resp.ok) {
+    throw new Error(`AJAX request failed: ${resp.status}`);
+  }
+
+  const text = await resp.text();
+  if (text.length <= 5) {
+    console.log(`  Empty response (${text.length} chars) — no events this month`);
     return [];
   }
 
-  console.log(`  Markdown: ${markdown.length} chars`);
+  let data: EventONResponse;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    console.warn(`  Failed to parse AJAX response (${text.length} chars)`);
+    return [];
+  }
 
-  const cleaned = cleanGoCalaverasContent(markdown);
-  console.log(`  Cleaned: ${cleaned.length} chars`);
+  if (data.status !== "GOOD" || !data.json || !Array.isArray(data.json)) {
+    console.warn(`  Unexpected response status: ${data.status}`);
+    return [];
+  }
 
-  return extractGoCalaverasEvents(cleaned, year);
+  console.log(
+    `  AJAX response: ${data.json.length} events in JSON, ${data.html?.length || 0} chars HTML`
+  );
+
+  // Parse structured event data directly from JSON
+  const events = parseEventONEvents(data.json, year);
+
+  // Use LLM to classify categories and map towns for events that need it
+  if (events.length > 0) {
+    await classifyEvents(events);
+  }
+
+  return events;
+}
+
+// ---------- Structured event parsing ----------
+
+/**
+ * Parse EventON JSON events into our ExtractedEvent format.
+ * Most fields are directly available — no LLM needed for basic extraction.
+ */
+function parseEventONEvents(
+  events: EventONEvent[],
+  year: number
+): ExtractedEvent[] {
+  const results: ExtractedEvent[] = [];
+
+  for (const ev of events) {
+    try {
+      const startDate = new Date(ev.event_start_unix * 1000);
+      const endDate = new Date(ev.event_end_unix * 1000);
+
+      const pmv = ev.event_pmv || {};
+
+      // Extract location info from PMV metadata
+      const subtitle = pmv.evcal_subtitle?.[0] || "";
+      const locationName = pmv.evcal_location_name?.[0] || subtitle || "";
+      const locationAddress = pmv.evcal_location_address?.[0] || pmv.evcal_location?.[0] || null;
+      const eventUrl = pmv._evcal_exlink?.[0] || null;
+
+      // Parse town from location address
+      let town = "Unknown";
+      if (locationAddress) {
+        // Try to extract town from address string
+        const addressLower = locationAddress.toLowerCase();
+        for (const t of HWY4_TOWN_LIST) {
+          if (addressLower.includes(t.toLowerCase())) {
+            town = t;
+            break;
+          }
+        }
+        // If no match, try to extract from comma-separated parts
+        if (town === "Unknown") {
+          const parts = locationAddress.split(",").map((p: string) => p.trim());
+          if (parts.length >= 2) {
+            town = parts[parts.length - 2] || parts[0]; // Typically "City" is second-to-last
+          }
+        }
+      }
+      // Also check location name for town hints
+      if (town === "Unknown" && locationName) {
+        const nameLower = locationName.toLowerCase();
+        for (const t of HWY4_TOWN_LIST) {
+          if (nameLower.includes(t.toLowerCase())) {
+            town = t;
+            break;
+          }
+        }
+      }
+
+      // Extract price
+      const price = pmv._evcal_ec_f?.[0] || null;
+
+      // Format times
+      const startTime = `${String(startDate.getHours()).padStart(2, "0")}:${String(startDate.getMinutes()).padStart(2, "0")}`;
+      const endTime = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
+
+      // Build event URL from slug if not explicitly set
+      let finalEventUrl = eventUrl;
+      if (!finalEventUrl) {
+        // EventON events have WordPress post URLs
+        const slug = ev.event_title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+        finalEventUrl = `https://www.gocalaveras.com/events/${slug}/`;
+      }
+
+      results.push({
+        name: ev.event_title,
+        description: pmv.evcal_description?.[0]?.slice(0, 200) || null,
+        date: startDate.toISOString().slice(0, 10),
+        start_time: startTime !== "00:00" ? startTime : null,
+        end_time: endTime !== "00:00" ? endTime : null,
+        venue_name: locationName || "Unknown Venue",
+        town,
+        address: locationAddress,
+        category: "other", // Will be classified by LLM
+        price: price ? `$${price}` : null,
+        artists: null, // Will be classified by LLM if applicable
+        event_url: finalEventUrl,
+      });
+    } catch (err) {
+      console.warn(`  Failed to parse event ${ev.event_id}: ${err}`);
+    }
+  }
+
+  return results;
+}
+
+// ---------- LLM-based category classification ----------
+
+/**
+ * Use Claude to classify event categories and extract artists.
+ * Much cheaper than full LLM extraction since we only need classification.
+ */
+async function classifyEvents(events: ExtractedEvent[]): Promise<void> {
+  const eventList = events
+    .map(
+      (e, i) =>
+        `${i}: "${e.name}" at ${e.venue_name}, ${e.town} on ${e.date}${e.description ? ` — ${e.description.slice(0, 100)}` : ""}`
+    )
+    .join("\n");
+
+  const prompt = `Classify these events and extract performer names.
+
+For each event, return a JSON array of objects with:
+- i: event index number
+- category: one of: live_music, festival, civic, resort, other
+  - "live_music" for concerts, music nights, DJ sets, open mic
+  - "festival" for multi-day community events, fairs, seasonal celebrations
+  - "civic" for community meetings, government events, fundraisers
+  - "resort" for resort/lodge-specific activities
+  - "other" for everything else (dinners, wine events, theater, classes, etc.)
+- artists: array of performer/artist names if it's live music, else null
+- town: if the town is "Unknown", infer it from the venue name if possible. Use one of: ${HWY4_TOWN_LIST.join(", ")}. If you can't determine it, return "Unknown".
+
+Events:
+${eventList}
+
+Return ONLY the JSON array, no other text.`;
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const text =
+      message.content[0].type === "text" ? message.content[0].text : "";
+    const jsonStr = text
+      .replace(/^```(?:json)?\n?/, "")
+      .replace(/\n?```$/, "");
+    const classifications = JSON.parse(jsonStr) as Array<{
+      i: number;
+      category: string;
+      artists: string[] | null;
+      town?: string;
+    }>;
+
+    for (const c of classifications) {
+      if (c.i >= 0 && c.i < events.length) {
+        events[c.i].category = c.category;
+        events[c.i].artists = c.artists;
+        if (c.town && c.town !== "Unknown" && events[c.i].town === "Unknown") {
+          events[c.i].town = c.town;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Category classification failed, using defaults:", err);
+  }
 }
 
 // ---------- Cross-source deduplication ----------
@@ -357,170 +537,5 @@ Return ONLY the JSON array, e.g. [0, 3, 5] — no other text.`;
       err
     );
     return newEvents;
-  }
-}
-
-// ---------- Content cleaning ----------
-
-function cleanGoCalaverasContent(markdown: string): string {
-  const lines = markdown.split("\n");
-  const cleaned: string[] = [];
-  let inFilterSection = false;
-
-  for (const line of lines) {
-    const lower = line.toLowerCase().trim();
-
-    if (
-      lower === "event location" ||
-      lower === "event organizer" ||
-      lower === "visitor" ||
-      lower === "community" ||
-      lower === "jump monthscurrent month"
-    ) {
-      inFilterSection = true;
-      continue;
-    }
-
-    if (
-      inFilterSection &&
-      (/^\d{1,2}\w{3}/.test(lower) ||
-        /^#{1,3}\s/.test(line) ||
-        lower.includes("featured") ||
-        /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b.*\d{4}/i.test(
-          line
-        ))
-    ) {
-      inFilterSection = false;
-    }
-
-    if (inFilterSection) continue;
-
-    if (
-      lower === "all" ||
-      lower === "" ||
-      /^(januaryfebruary|20\d{2}20\d{2})/.test(lower) ||
-      lower.startsWith("subscribe to calendar") ||
-      lower.startsWith("add to google") ||
-      lower.startsWith("add to ical") ||
-      lower.startsWith("cookie") ||
-      lower.startsWith("privacy policy")
-    ) {
-      continue;
-    }
-
-    cleaned.push(line);
-  }
-
-  return cleaned.join("\n");
-}
-
-// ---------- LLM extraction ----------
-
-const MAX_CHUNK_CHARS = 40000;
-
-async function extractGoCalaverasEvents(
-  content: string,
-  year: number
-): Promise<ExtractedEvent[]> {
-  if (content.length <= MAX_CHUNK_CHARS) {
-    return extractChunk(content, year);
-  }
-
-  const chunks = splitIntoChunks(content, MAX_CHUNK_CHARS);
-  console.log(`  Content too large — splitting into ${chunks.length} chunks`);
-
-  const allEvents: ExtractedEvent[] = [];
-  for (let i = 0; i < chunks.length; i++) {
-    console.log(
-      `    Chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)`
-    );
-    const events = await extractChunk(chunks[i], year);
-    allEvents.push(...events);
-  }
-
-  return allEvents;
-}
-
-function splitIntoChunks(content: string, maxChars: number): string[] {
-  const lines = content.split("\n");
-  const chunks: string[] = [];
-  let current: string[] = [];
-  let currentLen = 0;
-
-  for (const line of lines) {
-    if (currentLen + line.length + 1 > maxChars && current.length > 0) {
-      chunks.push(current.join("\n"));
-      current = [];
-      currentLen = 0;
-    }
-    current.push(line);
-    currentLen += line.length + 1;
-  }
-
-  if (current.length > 0) {
-    chunks.push(current.join("\n"));
-  }
-
-  return chunks;
-}
-
-async function extractChunk(
-  content: string,
-  year: number
-): Promise<ExtractedEvent[]> {
-  const prompt = `Extract all discrete events from this community events aggregator page.
-This is GoCalaveras.com, an events calendar for Calaveras County, CA.
-
-For each event, return JSON with these fields:
-
-- name: Event name (clean up any run-together text, e.g. "01mayFeaturedBlending Nights" → "Blending Nights")
-- description: 1-2 sentence description if available, else null
-- date: ISO date (YYYY-MM-DD)
-- start_time: HH:MM (24h) or null
-- end_time: HH:MM (24h) or null
-- venue_name: The specific venue name (e.g., "Murphys Wine Bar", "Murphys Creek Theatre")
-- town: The town where the event takes place. Use one of these Hwy 4 corridor towns if it matches: ${HWY4_TOWN_LIST.join(", ")}. For events in "Downtown Murphys" use "Murphys". For other locations, use the town name as stated.
-- address: Street address if mentioned, else null
-- category: One of: live_music, festival, civic, resort, other. Use "festival" for multi-day community events, "live_music" for concerts/music nights, "civic" for community/government events, "other" for everything else (dinners, wine events, theater, etc.)
-- price: Price string (e.g., "$30", "Free") or null
-- artists: Array of performer names, or null
-- event_url: Direct link to event detail page if available, else null
-
-Rules:
-- Only extract events with specific dates. Ignore vague mentions.
-- If a date appears as "01may" or similar compact format, parse it correctly (May 1st).
-- If marked "Featured", ignore that label — it's not part of the event name.
-- If a post describes a date range, create ONE entry with the start date and note the range in the description.
-- If no events are found, return an empty array.
-- Use ${year} for dates unless the content clearly states a different year.
-- Extract ALL events on the page, not just the first few.
-
-Return a JSON array only, no other text.
-
-Page content:
-${content}`;
-
-  const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 8192,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const text =
-    message.content[0].type === "text" ? message.content[0].text : "";
-
-  try {
-    const jsonStr = text
-      .replace(/^```(?:json)?\n?/, "")
-      .replace(/\n?```$/, "");
-    const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as ExtractedEvent[];
-  } catch {
-    console.warn(
-      `Failed to parse LLM response for GoCalaveras chunk:`,
-      text.slice(0, 300)
-    );
-    return [];
   }
 }
