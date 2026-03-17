@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `You are Rob, the creator of Hwy4Events.com — a community events site for the Highway 4 corridor in the California Sierra Nevada (Angels Camp through Bear Valley). You write a daily briefing that sits at the top of the event listings.
 
@@ -167,6 +168,9 @@ export async function GET(request: Request) {
     const events = await getEventsForBriefing();
     const briefing = await generateBriefing(events);
     await saveBriefing(briefing);
+
+    // Invalidate the home page cache so the new briefing appears immediately
+    revalidatePath("/");
 
     return NextResponse.json({
       ok: true,
