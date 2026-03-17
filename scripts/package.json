@@ -6,7 +6,8 @@
   "scripts": {
     "scrape": "tsx scrape.ts",
     "scrape:bear-valley": "tsx scrape.ts --source bear-valley",
-    "scrape:gocalaveras": "tsx scrape.ts --source gocalaveras"
+    "scrape:gocalaveras": "tsx scrape.ts --source gocalaveras",
+    "tag-weekly": "tsx tag-weekly.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

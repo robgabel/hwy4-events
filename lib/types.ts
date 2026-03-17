@@ -34,6 +34,7 @@ export interface Hwy4Event {
   last_scraped_at: string | null;
   image_url: string | null;
   robs_pick: boolean;
+  is_weekly: boolean;
 }
 
 export interface Hwy4Org {

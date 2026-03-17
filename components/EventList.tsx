@@ -1,10 +1,25 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Hwy4Event, Hwy4Org, EventCategory, CollapsedEvent } from "@/lib/types";
+import {
+  Hwy4Event,
+  Hwy4Org,
+  EventCategory,
+  CollapsedEvent,
+  TOWNS,
+} from "@/lib/types";
 import EventCard from "./EventCard";
 import FilterBar from "./FilterBar";
-import { format, parseISO, isToday, isTomorrow, isThisWeek } from "date-fns";
+import { format, parseISO, isToday, isTomorrow, isThisWeek, differenceInCalendarDays } from "date-fns";
+
+const ALL_CATEGORIES: EventCategory[] = [
+  "civic",
+  "festival",
+  "live_music",
+  "lodge",
+  "other",
+  "resort",
+];
 
 function getBaseName(name: string): string {
   return name
@@ -30,9 +45,18 @@ function collapseMultiDayEvents(events: Hwy4Event[]): CollapsedEvent[] {
 
   for (const [baseName, groupEvents] of baseNameMap) {
     if (groupEvents.length > 1) {
-      collapsedGroups.set(baseName, groupEvents);
-      for (const e of groupEvents) {
-        collapsedIds.add(e.id);
+      // Only collapse if dates span a short, consecutive range (not weekly recurrences)
+      const dates = groupEvents.map((e) => parseISO(e.date));
+      const minDate = dates.reduce((a, b) => (a < b ? a : b));
+      const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+      const span = differenceInCalendarDays(maxDate, minDate);
+
+      // Only collapse if the date span is <= 7 days (multi-day event, not weekly)
+      if (span <= 7) {
+        collapsedGroups.set(baseName, groupEvents);
+        for (const e of groupEvents) {
+          collapsedIds.add(e.id);
+        }
       }
     }
   }
@@ -97,8 +121,13 @@ export default function EventList({
   initialEvents: Hwy4Event[];
   orgs: Hwy4Org[];
 }) {
-  const [category, setCategory] = useState<EventCategory | "all">("all");
-  const [town, setTown] = useState<string>("all");
+  const [selectedCategories, setSelectedCategories] = useState<
+    Set<EventCategory>
+  >(new Set(ALL_CATEGORIES));
+  const [selectedTowns, setSelectedTowns] = useState<Set<string>>(
+    new Set(TOWNS)
+  );
+  const [showWeekly, setShowWeekly] = useState(true);
   const [enabledOrgs, setEnabledOrgs] = useState<Set<string>>(new Set());
   const filterRef = useRef<HTMLDivElement>(null);
   const [filterHeight, setFilterHeight] = useState(0);
@@ -130,12 +159,13 @@ export default function EventList({
       if (e.visibility === "private") {
         if (!e.org_slug || !enabledOrgs.has(e.org_slug)) return false;
       }
-      if (category !== "all" && e.category !== category) return false;
-      if (town !== "all" && e.town !== town) return false;
+      if (!selectedCategories.has(e.category)) return false;
+      if (!selectedTowns.has(e.town)) return false;
+      if (e.is_weekly && !showWeekly) return false;
       return true;
     });
     return collapseMultiDayEvents(visible);
-  }, [initialEvents, category, town, enabledOrgs]);
+  }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs]);
 
   const groups = useMemo(() => groupEventsByDate(filtered), [filtered]);
 
@@ -155,10 +185,12 @@ export default function EventList({
         className="sticky top-0 z-20 -mx-4 border-b border-stone-light/0 bg-cream/90 px-4 pb-4 pt-1 backdrop-blur-md [&:not(:first-child)]:border-stone-light/20"
       >
         <FilterBar
-          selectedCategory={category}
-          selectedTown={town}
-          onCategoryChange={setCategory}
-          onTownChange={setTown}
+          selectedCategories={selectedCategories}
+          onCategoriesChange={setSelectedCategories}
+          selectedTowns={selectedTowns}
+          onTownsChange={setSelectedTowns}
+          showWeekly={showWeekly}
+          onShowWeeklyChange={setShowWeekly}
           eventCount={filtered.length}
           orgs={memberOrgs}
           enabledOrgs={enabledOrgs}
@@ -181,8 +213,9 @@ export default function EventList({
             </p>
             <button
               onClick={() => {
-                setCategory("all");
-                setTown("all");
+                setSelectedCategories(new Set(ALL_CATEGORIES));
+                setSelectedTowns(new Set(TOWNS));
+                setShowWeekly(true);
                 setEnabledOrgs(new Set());
               }}
               className="mt-2 text-sm font-medium text-pine hover:underline"
