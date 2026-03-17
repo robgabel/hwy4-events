@@ -17,6 +17,48 @@ export interface ExtractedEvent {
 
 const client = new Anthropic();
 
+const NAMED_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+  "&ndash;": "\u2013",
+  "&mdash;": "\u2014",
+  "&lsquo;": "\u2018",
+  "&rsquo;": "\u2019",
+  "&ldquo;": "\u201C",
+  "&rdquo;": "\u201D",
+  "&nbsp;": " ",
+  "&hellip;": "\u2026",
+};
+
+function decodeHtmlEntities(str: string): string {
+  // Decode numeric entities: &#8211; &#x2013;
+  let decoded = str.replace(/&#(\d+);/g, (_, code) =>
+    String.fromCharCode(parseInt(code, 10))
+  );
+  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+  // Decode named entities
+  decoded = decoded.replace(/&\w+;/g, (entity) =>
+    NAMED_ENTITIES[entity.toLowerCase()] ?? entity
+  );
+  return decoded;
+}
+
+function decodeEventFields(event: ExtractedEvent): ExtractedEvent {
+  return {
+    ...event,
+    name: decodeHtmlEntities(event.name),
+    description: event.description ? decodeHtmlEntities(event.description) : null,
+    venue_name: decodeHtmlEntities(event.venue_name),
+    price: event.price ? decodeHtmlEntities(event.price) : null,
+    artists: event.artists?.map(decodeHtmlEntities) ?? null,
+  };
+}
+
 export interface VenueContext {
   defaultVenue: string;
   defaultTown: string;
@@ -83,7 +125,7 @@ ${content}`;
     const jsonStr = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     const parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed)) return [];
-    return parsed as ExtractedEvent[];
+    return (parsed as ExtractedEvent[]).map(decodeEventFields);
   } catch {
     console.warn(`Failed to parse LLM response for "${title}":`, text.slice(0, 200));
     return [];
