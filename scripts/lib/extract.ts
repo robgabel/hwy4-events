@@ -48,7 +48,7 @@ function decodeHtmlEntities(str: string): string {
   return decoded;
 }
 
-function decodeEventFields(event: ExtractedEvent): ExtractedEvent {
+export function decodeEventFields(event: ExtractedEvent): ExtractedEvent {
   return {
     ...event,
     name: decodeHtmlEntities(event.name),

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { ExtractedEvent } from "../lib/extract.js";
+import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
 
@@ -267,8 +267,8 @@ async function fetchMonth(
   // Extract real event URLs from the HTML response
   const urlMap = extractUrlsFromHtml(data.html, data.json);
 
-  // Parse structured event data directly from JSON
-  const events = parseEventONEvents(data.json, year, urlMap);
+  // Parse structured event data directly from JSON and decode HTML entities
+  const events = parseEventONEvents(data.json, year, urlMap).map(decodeEventFields);
 
   // Use LLM to classify categories and map towns for events that need it
   if (events.length > 0) {
