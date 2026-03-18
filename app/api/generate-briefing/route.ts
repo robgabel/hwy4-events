@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 30;
@@ -167,6 +168,9 @@ export async function GET(request: Request) {
     const events = await getEventsForBriefing();
     const briefing = await generateBriefing(events);
     await saveBriefing(briefing);
+
+    // Bust the ISR cache so the homepage picks up the new briefing immediately
+    revalidatePath("/");
 
     return NextResponse.json({
       ok: true,
