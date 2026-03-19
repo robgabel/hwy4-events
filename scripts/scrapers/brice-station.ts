@@ -2,8 +2,9 @@ import FirecrawlApp from "@mendable/firecrawl-js";
 import { extractEvents } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 
-// Primary: Shopify events collection; Fallback: Square ticketing site
+// Primary: Facebook events (actively maintained); Fallbacks: Shopify & Square (currently 403)
 const EVENTS_URLS = [
+  "https://www.facebook.com/bricestation/events",
   "https://www.bricestation.com/collections/events",
   "https://bricestation-582296.square.site/",
 ];
@@ -15,10 +16,11 @@ async function fetchMarkdown(
   url: string
 ): Promise<string | null> {
   console.log(`  Trying: ${url}`);
+  const isFacebook = url.includes("facebook.com");
   try {
     const result = await firecrawl.scrapeUrl(url, {
       formats: ["markdown"],
-      waitFor: 8000,
+      waitFor: isFacebook ? 10000 : 8000,
       onlyMainContent: false,
       timeout: 30000,
     });
@@ -39,6 +41,12 @@ async function fetchMarkdown(
     const lower = markdown.toLowerCase();
     if (lower.includes("page not found") || lower.includes("404 not found")) {
       console.warn(`  Got a 404 page for ${url}`);
+      return null;
+    }
+
+    // Detect Facebook login wall
+    if (isFacebook && (lower.includes("you must log in") || lower.includes("log in to facebook"))) {
+      console.warn(`  Facebook login wall detected for ${url}`);
       return null;
     }
 
@@ -84,13 +92,18 @@ export async function scrapeBriceStation(): Promise<void> {
   const currentYear = new Date().getFullYear();
   const today = new Date().toISOString().slice(0, 10);
 
+  const isFacebookSource = sourceUrl.includes("facebook.com");
+  const pageTitle = isFacebookSource
+    ? "Brice Station Vineyards Facebook Events"
+    : "Brice Station Events";
+
   const events = await extractEvents(
-    "Brice Station Events",
+    pageTitle,
     sourceUrl,
     markdown,
     currentYear,
     {
-      defaultVenue: "Brice Station",
+      defaultVenue: "Brice Station Vineyards",
       defaultTown: "Murphys",
     }
   );
