@@ -2,13 +2,58 @@ import FirecrawlApp from "@mendable/firecrawl-js";
 import { extractEvents } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 
-const EVENTS_URL = "https://www.mysticsaloon.com/";
+// Try dedicated event pages first, then fall back to homepage
+const EVENTS_URLS = [
+  "https://www.mysticsaloon.com/events",
+  "https://www.mysticsaloon.com/calendar",
+  "https://www.mysticsaloon.com/shows",
+  "https://www.mysticsaloon.com/music",
+  "https://www.mysticsaloon.com/",
+];
 const SOURCE_NAME = "Howard's Mystic Saloon";
 const ORG_SLUG = "mystic-saloon";
 
+async function fetchMarkdown(
+  firecrawl: FirecrawlApp,
+  url: string
+): Promise<string | null> {
+  console.log(`  Trying: ${url}`);
+  try {
+    const result = await firecrawl.scrapeUrl(url, {
+      formats: ["markdown"],
+      waitFor: 10000,
+      onlyMainContent: false,
+      timeout: 30000,
+    });
+
+    if (!result.success) {
+      console.warn(`  Firecrawl failed for ${url}:`, JSON.stringify(result, null, 2));
+      return null;
+    }
+
+    const markdown = result.markdown || "";
+    console.log(`  Markdown length: ${markdown.length} chars`);
+
+    if (markdown.length < 100) {
+      console.warn(`  Content too short for ${url} (${markdown.length} chars)`);
+      return null;
+    }
+
+    const lower = markdown.toLowerCase();
+    if (lower.includes("page not found") || lower.includes("404 not found")) {
+      console.warn(`  Got a 404 page for ${url}`);
+      return null;
+    }
+
+    return markdown;
+  } catch (err) {
+    console.warn(`  Error fetching ${url}:`, err);
+    return null;
+  }
+}
+
 export async function scrapeMysticSaloon(): Promise<void> {
   console.log("=== Howard's Mystic Saloon Scraper ===");
-  console.log(`Fetching: ${EVENTS_URL}`);
 
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey) {
@@ -17,41 +62,34 @@ export async function scrapeMysticSaloon(): Promise<void> {
 
   const firecrawl = new FirecrawlApp({ apiKey });
 
-  const result = await firecrawl.scrapeUrl(EVENTS_URL, {
-    formats: ["markdown"],
-    waitFor: 5000,
-    onlyMainContent: true,
-    timeout: 30000,
-  });
+  // Try each URL until we get usable content
+  let markdown: string | null = null;
+  let sourceUrl = EVENTS_URLS[0];
+  for (const url of EVENTS_URLS) {
+    markdown = await fetchMarkdown(firecrawl, url);
+    if (markdown) {
+      sourceUrl = url;
+      break;
+    }
+  }
 
-  console.log(`Firecrawl success: ${result.success}`);
-  if (!result.success) {
-    console.error("Firecrawl error:", JSON.stringify(result, null, 2));
+  if (!markdown) {
+    console.warn(
+      "No usable content from any Mystic Saloon URL. " +
+      "Events may only be posted on Facebook (facebook.com/mysticsaloon/) or Instagram."
+    );
     return;
   }
 
-  const markdown = result.markdown || "";
-  console.log(`Markdown length: ${markdown.length} chars`);
-  console.log(`Metadata:`, JSON.stringify(result.metadata || {}, null, 2));
+  console.log(`Using content from: ${sourceUrl}`);
   console.log(`\nMarkdown preview (first 1000 chars):\n${markdown.slice(0, 1000)}`);
-
-  if (markdown.length < 100) {
-    console.warn("Page content too short — site may be blocking or empty");
-    return;
-  }
-
-  const lowerContent = markdown.toLowerCase();
-  if (lowerContent.includes("404") || lowerContent.includes("page not found")) {
-    console.warn("Got a 404 page — URL may be wrong or site is blocking");
-    return;
-  }
 
   const currentYear = new Date().getFullYear();
   const today = new Date().toISOString().slice(0, 10);
 
   const events = await extractEvents(
     "Howard's Mystic Saloon Events",
-    EVENTS_URL,
+    sourceUrl,
     markdown,
     currentYear,
     {
@@ -60,6 +98,14 @@ export async function scrapeMysticSaloon(): Promise<void> {
       defaultAddress: "4529 Hwy 4, Avery, CA 95224",
     }
   );
+
+  if (events.length === 0) {
+    console.warn(
+      "0 events extracted. Events may only be on Facebook/Instagram. " +
+      "Full markdown dump for debugging:"
+    );
+    console.warn(markdown.slice(0, 3000));
+  }
 
   const futureEvents = events.filter((e) => e.date >= today);
   console.log(`Extracted ${events.length} events, ${futureEvents.length} future`);
@@ -71,7 +117,7 @@ export async function scrapeMysticSaloon(): Promise<void> {
   let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0 };
 
   if (futureEvents.length > 0) {
-    totalResult = await upsertEvents(futureEvents, SOURCE_NAME, ORG_SLUG, EVENTS_URL);
+    totalResult = await upsertEvents(futureEvents, SOURCE_NAME, ORG_SLUG, sourceUrl);
   }
 
   console.log("\n=== Howard's Mystic Saloon Summary ===");
