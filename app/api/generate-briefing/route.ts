@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 
 export const maxDuration = 60;
 
