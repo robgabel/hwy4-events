@@ -70,7 +70,7 @@ export async function scrapeMysticSaloon(): Promise<void> {
 
   // 1. Try Facebook first
   console.log("Phase 1: Facebook events");
-  const fbEvents = await fetchFacebookEvents(FACEBOOK_PAGE_URL, VENUE_CONTEXT);
+  const fbEvents = await fetchFacebookEvents(FACEBOOK_PAGE_URL, VENUE_CONTEXT, ORG_SLUG);
   allEvents.push(...fbEvents);
 
   // 2. Fall back to website if Facebook returned nothing

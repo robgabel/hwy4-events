@@ -1,7 +1,8 @@
 import { supabaseAdmin } from "./supabase-admin.js";
 
-const BATCH_SIZE = 10; // concurrent HEAD requests
+const BATCH_SIZE = 5; // concurrent HEAD requests
 const TIMEOUT_MS = 10000;
+const BATCH_DELAY_MS = 500; // delay between batches to avoid rate limiting
 
 /**
  * Validate all event_url values in the database.
@@ -36,6 +37,7 @@ export async function validateEventUrls(): Promise<{
 
   let broken = 0;
   let nulled = 0;
+  let rateLimited = 0;
   const brokenIds: string[] = [];
 
   // Process in batches to avoid overwhelming servers
@@ -59,6 +61,10 @@ export async function validateEventUrls(): Promise<{
 
           clearTimeout(timeout);
 
+          // 429 = rate limited, not actually broken — skip
+          if (resp.status === 429) {
+            return { id: event.id, name: event.name, url: event.event_url, ok: true, status: 429, rateLimited: true };
+          }
           if (resp.status >= 400) {
             return { id: event.id, name: event.name, url: event.event_url, ok: false, status: resp.status };
           }
@@ -70,11 +76,18 @@ export async function validateEventUrls(): Promise<{
     );
 
     for (const r of results) {
-      if (!r.ok) {
+      if ((r as any).rateLimited) {
+        rateLimited++;
+      } else if (!r.ok) {
         broken++;
         brokenIds.push(r.id);
         console.log(`  BROKEN (${r.status}): ${r.name} → ${r.url}`);
       }
+    }
+
+    // Delay between batches to avoid rate limiting
+    if (i + BATCH_SIZE < events.length) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
     }
   }
 
@@ -95,7 +108,8 @@ export async function validateEventUrls(): Promise<{
   }
 
   console.log(
-    `URL validation: ${events.length} checked, ${broken} broken, ${nulled} nulled`
+    `URL validation: ${events.length} checked, ${broken} broken, ${nulled} nulled` +
+    (rateLimited > 0 ? `, ${rateLimited} skipped (rate limited)` : "")
   );
   return { checked: events.length, broken, nulled };
 }

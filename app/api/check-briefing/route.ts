@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       status: "fresh",
-      generatedAt: data.value,
+      generatedAt: data?.value,
     });
   }
 

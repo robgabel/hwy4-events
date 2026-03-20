@@ -1,201 +1,246 @@
-import {
-  scrapeFbEventListFromPage,
-  scrapeFbEvent,
-  EventType,
-  type ShortEventData,
-  type EventData,
-} from "facebook-event-scraper";
-import type { ExtractedEvent } from "./extract.js";
-import type { VenueContext } from "./extract.js";
+import axios from "axios";
+import { extractEvents, type VenueContext, type ExtractedEvent } from "./extract.js";
+import { supabaseAdmin } from "./supabase-admin.js";
 
-/** Track Facebook scraper failures per page across a single scrape run. */
-const fbFailures: Record<string, { failed: boolean; error?: string }> = {};
+/** Track Facebook scraper outcomes per page across a single scrape run. */
+const fbStatus: Record<string, { failed: boolean; error?: string }> = {};
 
 /**
  * Returns a summary of which Facebook pages failed during this scrape run.
  * Used by the health check to detect persistent Facebook breakage.
  */
 export function getFacebookStatus(): Record<string, { failed: boolean; error?: string }> {
-  return { ...fbFailures };
+  return { ...fbStatus };
+}
+
+interface ApifyPostResult {
+  text?: string;
+  postText?: string;
+  timestamp?: string;
+  url?: string;
+  [key: string]: unknown;
 }
 
 /**
- * Validate that a ShortEventData has the fields we expect.
- * If facebook-event-scraper breaks due to Facebook HTML changes,
- * these will be missing or wrong.
+ * Get the last scrape date for a given org_slug to avoid re-fetching old posts.
+ * Returns a date string (YYYY-MM-DD) or null if never scraped.
  */
-function isValidShortEvent(event: unknown): event is ShortEventData {
-  if (!event || typeof event !== "object") return false;
-  const e = event as Record<string, unknown>;
-  return (
-    typeof e.id === "string" &&
-    typeof e.name === "string" &&
-    typeof e.url === "string" &&
-    e.id.length > 0 &&
-    e.url.includes("facebook.com")
-  );
-}
+async function getLastScrapeDate(orgSlug: string): Promise<string | null> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("hwy4_events")
+      .select("last_scraped_at")
+      .eq("org_slug", orgSlug)
+      .not("last_scraped_at", "is", null)
+      .order("last_scraped_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-/**
- * Validate that a full EventData has the critical fields we need.
- */
-function isValidFullEvent(event: unknown): event is EventData {
-  if (!event || typeof event !== "object") return false;
-  const e = event as Record<string, unknown>;
-  return (
-    typeof e.name === "string" &&
-    e.name.length > 0 &&
-    typeof e.startTimestamp === "number" &&
-    e.startTimestamp > 0 &&
-    typeof e.url === "string"
-  );
-}
-
-/**
- * Map a Facebook event category label to our category enum.
- */
-function mapCategory(fbCategories: EventData["categories"]): string {
-  if (!Array.isArray(fbCategories)) return "other";
-  const labels = fbCategories.map((c) => c.label.toLowerCase());
-  if (labels.some((l) => l.includes("music") || l.includes("concert"))) {
-    return "live_music";
+    if (data?.last_scraped_at) {
+      return new Date(data.last_scraped_at).toISOString().slice(0, 10);
+    }
+  } catch {
+    // Non-fatal — fall back to default window
   }
-  if (labels.some((l) => l.includes("festival"))) {
-    return "festival";
-  }
-  if (labels.some((l) => l.includes("community") || l.includes("civic"))) {
-    return "civic";
-  }
-  return "other";
+  return null;
 }
 
 /**
- * Convert a Facebook EventData to our ExtractedEvent format.
- */
-function toExtractedEvent(
-  fb: EventData,
-  venue: VenueContext
-): ExtractedEvent {
-  const start = new Date(fb.startTimestamp * 1000);
-  const end = fb.endTimestamp ? new Date(fb.endTimestamp * 1000) : null;
-
-  const date = start.toISOString().slice(0, 10);
-  const startTime = start.toTimeString().slice(0, 5); // HH:MM
-  const endTime = end ? end.toTimeString().slice(0, 5) : null;
-
-  // Use Facebook location if available, otherwise venue defaults
-  const venueName = fb.location?.name || venue.defaultVenue;
-  const address =
-    fb.location?.address || venue.defaultAddress || null;
-
-  return {
-    name: fb.name,
-    description: fb.description?.slice(0, 500) || null,
-    date,
-    start_time: startTime,
-    end_time: endTime,
-    venue_name: venueName,
-    town: venue.defaultTown,
-    address,
-    category: mapCategory(fb.categories),
-    price: null, // Facebook doesn't expose price in a structured way
-    artists: null,
-    event_url: fb.ticketUrl || fb.url,
-  };
-}
-
-/**
- * Fetch upcoming events from a Facebook Page and return them as ExtractedEvent[].
+ * Fetch recent posts from a Facebook Page via Apify's Facebook Posts Scraper.
+ * Uses the synchronous run endpoint to get results in a single API call.
  *
- * @param pageUrl - Full Facebook page URL (e.g. "https://www.facebook.com/bricestation/")
- * @param venue  - Default venue context for the page
+ * Only fetches posts since the last scrape to minimize Apify costs.
+ * First run: fetches last 14 days. Subsequent runs: only new posts.
+ *
+ * Requires APIFY_API_TOKEN environment variable.
+ */
+async function fetchApifyPosts(
+  pageUrl: string,
+  orgSlug: string,
+  maxPosts: number = 20
+): Promise<ApifyPostResult[]> {
+  const token = process.env.APIFY_API_TOKEN;
+  if (!token) {
+    throw new Error("Missing APIFY_API_TOKEN environment variable");
+  }
+
+  // Determine date window: since last scrape, or last 14 days for first run
+  const lastScrape = await getLastScrapeDate(orgSlug);
+  const dateFrom = lastScrape || (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  console.log(`  Fetching posts since: ${dateFrom}${lastScrape ? " (last scrape)" : " (first run, 14-day window)"}`);
+
+  // Use the sync endpoint to run and get results in one call
+  const endpoint =
+    "https://api.apify.com/v2/acts/apify~facebook-posts-scraper/run-sync-get-dataset-items";
+
+  const response = await axios.post(
+    endpoint,
+    {
+      startUrls: [{ url: pageUrl }],
+      resultsLimit: maxPosts,
+      onlyPostsNewerThan: dateFrom,
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      // Apify sync runs can take a while
+      timeout: 120000,
+    }
+  );
+
+  if (!Array.isArray(response.data)) {
+    console.warn(`  Apify returned unexpected response type: ${typeof response.data}`);
+    return [];
+  }
+
+  return response.data as ApifyPostResult[];
+}
+
+/**
+ * Keywords that suggest a post is about an event rather than casual content.
+ */
+const EVENT_KEYWORDS = [
+  "event", "created an event", "live music", "concert", "show",
+  "comedy", "karaoke", "open mic", "dj", "band", "performing",
+  "tickets", "cover charge", "doors open", "starts at",
+  "this saturday", "this friday", "this sunday", "this weekend",
+  "next saturday", "next friday", "next sunday",
+  "pm", "am", // time indicators
+  "march", "april", "may", "june", "july", "august",
+  "september", "october", "november", "december",
+  "january", "february",
+  "feast", "celebration", "special", "happy hour",
+  "food", "menu", "drink specials",
+];
+
+/**
+ * Check if a post likely contains event information.
+ */
+function isEventLikePost(text: string): boolean {
+  const lower = text.toLowerCase();
+  // Must have at least 2 event keywords or be longer than 100 chars with 1 keyword
+  const matchCount = EVENT_KEYWORDS.filter((kw) => lower.includes(kw)).length;
+  return matchCount >= 2 || (matchCount >= 1 && text.length > 100);
+}
+
+/**
+ * Convert a Unix timestamp to a readable date string.
+ */
+function formatTimestamp(ts: string | number | undefined): string {
+  if (!ts) return "unknown date";
+  const num = typeof ts === "string" ? parseInt(ts, 10) : ts;
+  if (isNaN(num) || num < 1000000000) return String(ts);
+  return new Date(num * 1000).toLocaleDateString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * Convert Apify post results into a text blob for LLM extraction.
+ * Filters to event-like posts and formats timestamps as readable dates.
+ */
+function postsToText(posts: ApifyPostResult[]): string {
+  const eventPosts = posts.filter((post) => {
+    const text = post.text || post.postText || "";
+    return text.trim().length > 0 && isEventLikePost(text);
+  });
+
+  console.log(`  Filtered to ${eventPosts.length} event-like posts (of ${posts.length} total)`);
+
+  return eventPosts
+    .map((post, i) => {
+      const text = post.text || post.postText || "";
+      const dateStr = formatTimestamp(post.timestamp);
+      const url = post.url || "";
+      return `--- Post ${i + 1} (posted ${dateStr}) ---\n${text}\n${url ? `Link: ${url}` : ""}`;
+    })
+    .join("\n\n");
+}
+
+/**
+ * Fetch a Facebook Page's recent posts via Apify and extract events using the LLM.
+ *
+ * @param pageUrl - Facebook page URL (e.g. "https://www.facebook.com/mysticsaloon/")
+ * @param venue  - Default venue context
  * @returns Array of extracted events, or empty array on failure
  */
 export async function fetchFacebookEvents(
   pageUrl: string,
-  venue: VenueContext
+  venue: VenueContext,
+  orgSlug: string = ""
 ): Promise<ExtractedEvent[]> {
-  console.log(`  Fetching Facebook events from: ${pageUrl}`);
+  const token = process.env.APIFY_API_TOKEN;
+  if (!token) {
+    console.log("  Skipping Facebook (no APIFY_API_TOKEN set)");
+    fbStatus[pageUrl] = { failed: false, error: "No API token configured" };
+    return [];
+  }
 
-  let shortEvents: unknown[];
+  console.log(`  Fetching Facebook posts via Apify: ${pageUrl}`);
+
+  let posts: ApifyPostResult[];
   try {
-    shortEvents = await scrapeFbEventListFromPage(
-      pageUrl,
-      EventType.Upcoming
-    );
+    posts = await fetchApifyPosts(pageUrl, orgSlug);
   } catch (err: any) {
     const errorMsg = err?.message || String(err);
-    console.warn(`  Facebook event list scrape failed: ${errorMsg}`);
-    fbFailures[pageUrl] = { failed: true, error: errorMsg };
-    return [];
-  }
-
-  if (!Array.isArray(shortEvents)) {
-    console.warn(`  Facebook returned unexpected response type: ${typeof shortEvents}`);
-    fbFailures[pageUrl] = { failed: true, error: `Unexpected response type: ${typeof shortEvents}` };
-    return [];
-  }
-
-  // Validate response shape — detect if facebook-event-scraper is broken
-  const validShort = shortEvents.filter(isValidShortEvent);
-  if (shortEvents.length > 0 && validShort.length === 0) {
-    console.warn(
-      `  Facebook returned ${shortEvents.length} events but none have valid shape. ` +
-      `The scraper may be broken due to Facebook HTML changes.`
-    );
-    console.warn(`  Sample response: ${JSON.stringify(shortEvents[0]).slice(0, 300)}`);
-    fbFailures[pageUrl] = { failed: true, error: "Response shape validation failed" };
-    return [];
-  }
-
-  if (validShort.length < shortEvents.length) {
-    console.warn(
-      `  ${shortEvents.length - validShort.length} of ${shortEvents.length} ` +
-      `Facebook events failed shape validation (skipped)`
-    );
-  }
-
-  if (validShort.length === 0) {
-    console.log(`  No upcoming Facebook events found`);
-    fbFailures[pageUrl] = { failed: false };
-    return [];
-  }
-
-  console.log(`  Found ${validShort.length} upcoming Facebook events, fetching details...`);
-
-  const events: ExtractedEvent[] = [];
-  let detailFailures = 0;
-
-  for (const short of validShort) {
-    try {
-      const full = await scrapeFbEvent(short.url);
-
-      if (!isValidFullEvent(full)) {
-        console.warn(`    Event ${short.id} has invalid detail shape, skipping`);
-        detailFailures++;
-        continue;
-      }
-
-      if (full.isCanceled) {
-        console.log(`    Skipping cancelled: ${full.name}`);
-        continue;
-      }
-      events.push(toExtractedEvent(full, venue));
-    } catch (err) {
-      console.warn(`    Failed to fetch event ${short.id}:`, err);
-      detailFailures++;
+    // Log the full Apify error response for debugging
+    if (err?.response?.data) {
+      console.warn(`  Apify error response:`, JSON.stringify(err.response.data).slice(0, 500));
     }
+    console.warn(`  Apify scrape failed: ${errorMsg}`);
+    fbStatus[pageUrl] = { failed: true, error: errorMsg };
+    return [];
   }
 
-  // If most detail fetches failed, the scraper is likely broken
-  if (detailFailures > 0 && detailFailures >= validShort.length * 0.5) {
-    console.warn(
-      `  WARNING: ${detailFailures}/${validShort.length} event detail fetches failed. ` +
-      `The facebook-event-scraper package may need updating.`
+  if (posts.length === 0) {
+    console.log("  Apify returned 0 posts");
+    fbStatus[pageUrl] = { failed: false };
+    return [];
+  }
+
+  console.log(`  Apify returned ${posts.length} posts`);
+
+  // Convert posts to text for LLM extraction
+  const text = postsToText(posts);
+  if (text.length < 50) {
+    console.warn("  Posts contained no meaningful text");
+    fbStatus[pageUrl] = { failed: false };
+    return [];
+  }
+
+  // Truncate to stay within LLM context limits
+  const truncated = text.slice(0, 15000);
+  console.log(`  Post text: ${text.length} chars (using first ${truncated.length})`);
+  console.log(`  Preview:\n${text.slice(0, 500)}`);
+
+  const currentYear = new Date().getFullYear();
+
+  try {
+    const events = await extractEvents(
+      "Facebook Page Events",
+      pageUrl,
+      truncated,
+      currentYear,
+      venue
     );
-  }
 
-  fbFailures[pageUrl] = { failed: false };
-  console.log(`  Successfully extracted ${events.length} Facebook events`);
-  return events;
+    fbStatus[pageUrl] = { failed: false };
+    console.log(`  Extracted ${events.length} events from ${posts.length} Facebook posts`);
+    return events;
+  } catch (err: any) {
+    const errorMsg = err?.message || String(err);
+    console.warn(`  LLM extraction from Facebook posts failed: ${errorMsg}`);
+    fbStatus[pageUrl] = { failed: true, error: `LLM extraction failed: ${errorMsg}` };
+    return [];
+  }
 }
