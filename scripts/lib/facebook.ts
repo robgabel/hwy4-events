@@ -1,5 +1,6 @@
 import axios from "axios";
 import { extractEvents, type VenueContext, type ExtractedEvent } from "./extract.js";
+import { supabaseAdmin } from "./supabase-admin.js";
 
 /** Track Facebook scraper outcomes per page across a single scrape run. */
 const fbStatus: Record<string, { failed: boolean; error?: string }> = {};
@@ -21,33 +22,68 @@ interface ApifyPostResult {
 }
 
 /**
+ * Get the last scrape date for a given org_slug to avoid re-fetching old posts.
+ * Returns a date string (YYYY-MM-DD) or null if never scraped.
+ */
+async function getLastScrapeDate(orgSlug: string): Promise<string | null> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("hwy4_events")
+      .select("last_scraped_at")
+      .eq("org_slug", orgSlug)
+      .not("last_scraped_at", "is", null)
+      .order("last_scraped_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data?.last_scraped_at) {
+      return new Date(data.last_scraped_at).toISOString().slice(0, 10);
+    }
+  } catch {
+    // Non-fatal — fall back to default window
+  }
+  return null;
+}
+
+/**
  * Fetch recent posts from a Facebook Page via Apify's Facebook Posts Scraper.
  * Uses the synchronous run endpoint to get results in a single API call.
+ *
+ * Only fetches posts since the last scrape to minimize Apify costs.
+ * First run: fetches last 14 days. Subsequent runs: only new posts.
  *
  * Requires APIFY_API_TOKEN environment variable.
  */
 async function fetchApifyPosts(
   pageUrl: string,
-  maxPosts: number = 50
+  orgSlug: string,
+  maxPosts: number = 20
 ): Promise<ApifyPostResult[]> {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) {
     throw new Error("Missing APIFY_API_TOKEN environment variable");
   }
 
+  // Determine date window: since last scrape, or last 14 days for first run
+  const lastScrape = await getLastScrapeDate(orgSlug);
+  const dateFrom = lastScrape || (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  console.log(`  Fetching posts since: ${dateFrom}${lastScrape ? " (last scrape)" : " (first run, 14-day window)"}`);
+
   // Use the sync endpoint to run and get results in one call
   const endpoint =
     "https://api.apify.com/v2/acts/apify~facebook-posts-scraper/run-sync-get-dataset-items";
-
-  // Only fetch posts from the last 60 days to focus on upcoming events
-  const dateFrom = new Date();
-  dateFrom.setDate(dateFrom.getDate() - 60);
 
   const response = await axios.post(
     endpoint,
     {
       startUrls: [{ url: pageUrl }],
       resultsLimit: maxPosts,
+      onlyPostsNewerThan: dateFrom,
     },
     {
       headers: {
@@ -140,7 +176,8 @@ function postsToText(posts: ApifyPostResult[]): string {
  */
 export async function fetchFacebookEvents(
   pageUrl: string,
-  venue: VenueContext
+  venue: VenueContext,
+  orgSlug: string = ""
 ): Promise<ExtractedEvent[]> {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) {
@@ -153,7 +190,7 @@ export async function fetchFacebookEvents(
 
   let posts: ApifyPostResult[];
   try {
-    posts = await fetchApifyPosts(pageUrl);
+    posts = await fetchApifyPosts(pageUrl, orgSlug);
   } catch (err: any) {
     const errorMsg = err?.message || String(err);
     // Log the full Apify error response for debugging
