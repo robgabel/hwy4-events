@@ -115,12 +115,14 @@ export async function fetchFacebookEvents(
   pageUrl: string,
   venue: VenueContext
 ): Promise<ExtractedEvent[]> {
-  console.log(`  Fetching Facebook events from: ${pageUrl}`);
+  // Strip trailing slash — the library's regex rejects URLs ending with /
+  const normalizedUrl = pageUrl.replace(/\/+$/, "");
+  console.log(`  Fetching Facebook events from: ${normalizedUrl}`);
 
   let shortEvents: unknown[];
   try {
     shortEvents = await scrapeFbEventListFromPage(
-      pageUrl,
+      normalizedUrl,
       EventType.Upcoming
     );
   } catch (err: any) {
