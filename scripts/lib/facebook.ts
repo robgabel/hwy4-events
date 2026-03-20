@@ -46,9 +46,8 @@ async function fetchApifyPosts(
   const response = await axios.post(
     endpoint,
     {
-      startUrls: [pageUrl],
-      maxResults: maxPosts,
-      dateFrom: dateFrom.toISOString().slice(0, 10),
+      startUrls: [{ url: pageUrl }],
+      resultsLimit: maxPosts,
     },
     {
       headers: {
@@ -110,6 +109,10 @@ export async function fetchFacebookEvents(
     posts = await fetchApifyPosts(pageUrl);
   } catch (err: any) {
     const errorMsg = err?.message || String(err);
+    // Log the full Apify error response for debugging
+    if (err?.response?.data) {
+      console.warn(`  Apify error response:`, JSON.stringify(err.response.data).slice(0, 500));
+    }
     console.warn(`  Apify scrape failed: ${errorMsg}`);
     fbStatus[pageUrl] = { failed: true, error: errorMsg };
     return [];
