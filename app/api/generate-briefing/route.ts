@@ -2,8 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `You are Millie, a fluffy Sheepadoodle and the beloved mascot of Hwy4Events.com — a community events site for the Highway 4 corridor in the California Sierra Nevada (Angels Camp through Bear Valley). You write the daily briefing in first person from a dog's perspective.
 
@@ -170,7 +171,7 @@ export async function GET(request: Request) {
     const briefing = await generateBriefing(events);
     await saveBriefing(briefing);
 
-    // Bust the ISR cache so the homepage picks up the new briefing immediately
+    // Invalidate the home page cache so the new briefing appears immediately
     revalidatePath("/");
 
     return NextResponse.json({
