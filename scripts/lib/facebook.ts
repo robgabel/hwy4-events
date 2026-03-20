@@ -12,12 +12,19 @@ export function getFacebookStatus(): Record<string, { failed: boolean; error?: s
   return { ...fbStatus };
 }
 
-/** Headers mimicking a basic mobile browser. */
+/** Headers mimicking a desktop browser. */
 const FB_HEADERS = {
-  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
   "accept-language": "en-US,en;q=0.9",
+  "cache-control": "max-age=0",
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "sec-fetch-user": "?1",
+  "upgrade-insecure-requests": "1",
   "user-agent":
-    "Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 };
 
 /**
@@ -27,12 +34,12 @@ const FB_HEADERS = {
 function htmlToText(html: string): string {
   return (
     html
-      // Add newlines before block elements so content doesn't run together
-      .replace(/<\/(div|p|li|h[1-6]|article|section|tr|span)>/gi, "\n")
-      .replace(/<br\s*\/?>/gi, "\n")
       // Remove script and style blocks entirely
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      // Add newlines before block elements so content doesn't run together
+      .replace(/<\/(div|p|li|h[1-6]|article|section|tr|span)>/gi, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
       // Remove all remaining HTML tags
       .replace(/<[^>]+>/g, " ")
       // Decode common HTML entities
@@ -61,10 +68,78 @@ function getPageSlug(url: string): string {
 }
 
 /**
+ * Try multiple Facebook URL variants to fetch page content.
+ * Facebook frequently changes which endpoints work without auth,
+ * so we try several approaches.
+ */
+async function fetchFacebookHtml(slug: string): Promise<{ html: string; source: string } | null> {
+  const attempts = [
+    // 1. mbasic — lightweight HTML, most likely to have post content
+    { url: `https://mbasic.facebook.com/${slug}`, label: "mbasic" },
+    // 2. mobile site
+    { url: `https://m.facebook.com/${slug}`, label: "mobile" },
+    // 3. www with noscript
+    { url: `https://www.facebook.com/${slug}?_fb_noscript=1`, label: "www-noscript" },
+    // 4. www page posts (sometimes accessible)
+    { url: `https://www.facebook.com/${slug}/posts/`, label: "www-posts" },
+  ];
+
+  for (const attempt of attempts) {
+    console.log(`  Trying ${attempt.label}: ${attempt.url}`);
+    try {
+      const response = await axios.get(attempt.url, {
+        headers: FB_HEADERS,
+        timeout: 15000,
+        maxRedirects: 3,
+        // Don't throw on non-2xx so we can inspect the response
+        validateStatus: (status) => status < 500,
+      });
+
+      if (response.status >= 400) {
+        console.log(`    ${attempt.label}: HTTP ${response.status}, skipping`);
+        continue;
+      }
+
+      const html = typeof response.data === "string" ? response.data : "";
+      if (html.length < 1000) {
+        console.log(`    ${attempt.label}: too short (${html.length} chars), skipping`);
+        continue;
+      }
+
+      // Check if we got actual content or just CSS/JS boilerplate
+      const text = htmlToText(html);
+      const hasEventContent =
+        text.includes("created an event") ||
+        text.includes("Live Music") ||
+        text.includes("event") ||
+        // Check for date-like patterns (Mon, Tue, etc.)
+        /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.test(text);
+
+      if (text.length < 200) {
+        console.log(`    ${attempt.label}: text too short after stripping (${text.length} chars)`);
+        continue;
+      }
+
+      if (!hasEventContent && text.length < 2000) {
+        console.log(`    ${attempt.label}: no event-like content detected, skipping`);
+        continue;
+      }
+
+      console.log(`    ${attempt.label}: OK (${html.length} chars HTML, ${text.length} chars text)`);
+      return { html, source: attempt.label };
+    } catch (err: any) {
+      console.log(`    ${attempt.label}: ${err?.message || err}`);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Fetch a Facebook Page's feed as text and extract events using the LLM.
  *
- * Uses mbasic.facebook.com which serves server-rendered HTML with actual
- * post content (unlike www.facebook.com which requires JavaScript).
+ * Tries multiple Facebook URL variants (mbasic, mobile, www) to find
+ * one that returns actual post content without requiring authentication.
  *
  * @param pageUrl - Facebook page URL (e.g. "https://www.facebook.com/mysticsaloon")
  * @param venue  - Default venue context
@@ -81,49 +156,23 @@ export async function fetchFacebookEvents(
     return [];
   }
 
-  // Use mbasic.facebook.com — serves actual HTML content without JavaScript
-  const mbasicUrl = `https://mbasic.facebook.com/${slug}`;
-  console.log(`  Fetching Facebook feed from: ${mbasicUrl}`);
+  console.log(`  Scraping Facebook page: ${slug}`);
+  const result = await fetchFacebookHtml(slug);
 
-  let html: string;
-  try {
-    const response = await axios.get(mbasicUrl, {
-      headers: FB_HEADERS,
-      timeout: 15000,
-      // Follow redirects (Facebook may redirect)
-      maxRedirects: 3,
-    });
-    html = response.data;
-  } catch (err: any) {
-    const errorMsg = err?.message || String(err);
-    console.warn(`  Facebook fetch failed: ${errorMsg}`);
-    fbStatus[pageUrl] = { failed: true, error: errorMsg };
+  if (!result) {
+    console.warn(`  All Facebook fetch attempts failed for: ${slug}`);
+    fbStatus[pageUrl] = { failed: true, error: "All fetch attempts failed" };
     return [];
   }
 
-  if (typeof html !== "string" || html.length < 500) {
-    console.warn(`  Facebook returned insufficient content (${typeof html === "string" ? html.length : 0} chars)`);
-    fbStatus[pageUrl] = { failed: true, error: "Insufficient content returned" };
-    return [];
-  }
-
-  console.log(`  Received ${html.length} chars of HTML`);
-
-  // Convert HTML to readable text for LLM extraction
-  const text = htmlToText(html);
-
-  if (text.length < 100) {
-    console.warn(`  Extracted text too short after HTML stripping (${text.length} chars)`);
-    fbStatus[pageUrl] = { failed: true, error: "Text content too short after parsing" };
-    return [];
-  }
+  const text = htmlToText(result.html);
 
   // Log a preview so we can see what the LLM is working with
   console.log(`  Text preview (first 500 chars):\n${text.slice(0, 500)}`);
 
   // Truncate to ~15k chars to stay within LLM context limits
   const truncated = text.slice(0, 15000);
-  console.log(`  Extracted ${text.length} chars of text (using first ${truncated.length})`);
+  console.log(`  Using ${truncated.length} of ${text.length} chars for extraction`);
 
   const currentYear = new Date().getFullYear();
 
@@ -137,7 +186,7 @@ export async function fetchFacebookEvents(
     );
 
     fbStatus[pageUrl] = { failed: false };
-    console.log(`  Extracted ${events.length} events from Facebook feed`);
+    console.log(`  Extracted ${events.length} events from Facebook feed (via ${result.source})`);
     return events;
   } catch (err: any) {
     const errorMsg = err?.message || String(err);
