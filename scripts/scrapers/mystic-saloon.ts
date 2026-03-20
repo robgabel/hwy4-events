@@ -2,8 +2,9 @@ import FirecrawlApp from "@mendable/firecrawl-js";
 import { extractEvents } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 
-// Try dedicated event pages first, then fall back to homepage
+// Primary: Facebook events (actively maintained); Fallbacks: website pages
 const EVENTS_URLS = [
+  "https://www.facebook.com/HowardsMysticSaloon/events",
   "https://www.mysticsaloon.com/events",
   "https://www.mysticsaloon.com/calendar",
   "https://www.mysticsaloon.com/shows",
@@ -18,10 +19,11 @@ async function fetchMarkdown(
   url: string
 ): Promise<string | null> {
   console.log(`  Trying: ${url}`);
+  const isFacebook = url.includes("facebook.com");
   try {
     const result = await firecrawl.scrapeUrl(url, {
       formats: ["markdown"],
-      waitFor: 10000,
+      waitFor: isFacebook ? 10000 : 10000,
       onlyMainContent: false,
       timeout: 30000,
     });
@@ -42,6 +44,12 @@ async function fetchMarkdown(
     const lower = markdown.toLowerCase();
     if (lower.includes("page not found") || lower.includes("404 not found")) {
       console.warn(`  Got a 404 page for ${url}`);
+      return null;
+    }
+
+    // Detect Facebook login wall
+    if (isFacebook && (lower.includes("you must log in") || lower.includes("log in to facebook"))) {
+      console.warn(`  Facebook login wall detected for ${url}`);
       return null;
     }
 
@@ -87,8 +95,13 @@ export async function scrapeMysticSaloon(): Promise<void> {
   const currentYear = new Date().getFullYear();
   const today = new Date().toISOString().slice(0, 10);
 
+  const isFacebookSource = sourceUrl.includes("facebook.com");
+  const pageTitle = isFacebookSource
+    ? "Howard's Mystic Saloon Facebook Events"
+    : "Howard's Mystic Saloon Events";
+
   const events = await extractEvents(
-    "Howard's Mystic Saloon Events",
+    pageTitle,
     sourceUrl,
     markdown,
     currentYear,
