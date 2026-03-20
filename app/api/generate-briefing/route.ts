@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const SYSTEM_PROMPT = `You are Millie, a fluffy Sheepadoodle and the beloved mascot of Hwy4Events.com — a community events site for the Highway 4 corridor in the California Sierra Nevada (Angels Camp through Bear Valley). You write the daily briefing in first person from a dog's perspective.
 
@@ -109,21 +109,36 @@ async function generateBriefing(events: Record<string, unknown>[]) {
       ? restOfWeekEvents.map(formatEvent).join("\n")
       : "No events listed for the rest of the week.";
 
-  const message = await anthropic.messages.create({
-    model: "claude-opus-4-20250514",
-    max_tokens: 400,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `Today is ${dayOfWeek}, ${dateStr}. Write the daily briefing for Hwy4Events.com.\n\nTODAY'S EVENTS:\n${todaySummary}\n\nTOMORROW'S EVENTS:\n${tomorrowSummary}\n\nREST OF THE WEEK:\n${restOfWeekSummary}`,
-      },
-    ],
-  });
+  // Retry up to 3 times with exponential backoff
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const message = await anthropic.messages.create({
+        model: "claude-opus-4-6",
+        max_tokens: 400,
+        system: SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Today is ${dayOfWeek}, ${dateStr}. Write the daily briefing for Hwy4Events.com.\n\nTODAY'S EVENTS:\n${todaySummary}\n\nTOMORROW'S EVENTS:\n${tomorrowSummary}\n\nREST OF THE WEEK:\n${restOfWeekSummary}`,
+          },
+        ],
+      });
 
-  const block = message.content[0];
-  if (block.type !== "text") throw new Error("Unexpected response type");
-  return block.text;
+      const block = message.content[0];
+      if (block.type !== "text") throw new Error("Unexpected response type");
+      return block.text;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(
+        `[generate-briefing] Anthropic API attempt ${attempt}/3 failed: ${lastError.message}`
+      );
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 2000 * attempt));
+      }
+    }
+  }
+  throw lastError ?? new Error("Briefing generation failed after 3 attempts");
 }
 
 async function saveBriefing(text: string) {
@@ -179,9 +194,10 @@ export async function GET(request: Request) {
       eventCount: events.length,
     });
   } catch (err) {
-    console.error("Briefing generation failed:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Briefing generation failed:", message, err);
     return NextResponse.json(
-      { error: "Failed to generate briefing" },
+      { error: "Failed to generate briefing", detail: message },
       { status: 500 }
     );
   }
