@@ -1,7 +1,9 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { extractEvents } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import { fetchFacebookEvents } from "../lib/facebook.js";
 
+const FACEBOOK_PAGE_URL = "https://www.facebook.com/mysticsaloon/";
 // Try dedicated event pages first, then fall back to homepage
 const EVENTS_URLS = [
   "https://www.mysticsaloon.com/events",
@@ -52,65 +54,73 @@ async function fetchMarkdown(
   }
 }
 
+const VENUE_CONTEXT = {
+  defaultVenue: "Howard's Mystic Saloon",
+  defaultTown: "Avery",
+  defaultAddress: "4529 Hwy 4, Avery, CA 95224",
+};
+
 export async function scrapeMysticSaloon(): Promise<void> {
   console.log("=== Howard's Mystic Saloon Scraper ===");
 
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing FIRECRAWL_API_KEY environment variable");
-  }
-
-  const firecrawl = new FirecrawlApp({ apiKey });
-
-  // Try each URL until we get usable content
-  let markdown: string | null = null;
-  let sourceUrl = EVENTS_URLS[0];
-  for (const url of EVENTS_URLS) {
-    markdown = await fetchMarkdown(firecrawl, url);
-    if (markdown) {
-      sourceUrl = url;
-      break;
-    }
-  }
-
-  if (!markdown) {
-    console.warn(
-      "No usable content from any Mystic Saloon URL. " +
-      "Events may only be posted on Facebook (facebook.com/mysticsaloon/) or Instagram."
-    );
-    return;
-  }
-
-  console.log(`Using content from: ${sourceUrl}`);
-  console.log(`\nMarkdown preview (first 1000 chars):\n${markdown.slice(0, 1000)}`);
-
   const currentYear = new Date().getFullYear();
   const today = new Date().toISOString().slice(0, 10);
+  let allEvents: import("../lib/extract.js").ExtractedEvent[] = [];
+  let sourceUrl = FACEBOOK_PAGE_URL;
 
-  const events = await extractEvents(
-    "Howard's Mystic Saloon Events",
-    sourceUrl,
-    markdown,
-    currentYear,
-    {
-      defaultVenue: "Howard's Mystic Saloon",
-      defaultTown: "Avery",
-      defaultAddress: "4529 Hwy 4, Avery, CA 95224",
+  // 1. Try Facebook first
+  console.log("Phase 1: Facebook events");
+  const fbEvents = await fetchFacebookEvents(FACEBOOK_PAGE_URL, VENUE_CONTEXT);
+  allEvents.push(...fbEvents);
+
+  // 2. Fall back to website if Facebook returned nothing
+  if (allEvents.length === 0) {
+    console.log("Phase 2: Website fallback");
+
+    const apiKey = process.env.FIRECRAWL_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing FIRECRAWL_API_KEY environment variable");
     }
-  );
 
-  if (events.length === 0) {
-    console.warn(
-      "0 events extracted. Events may only be on Facebook/Instagram. " +
-      "Full markdown dump for debugging:"
+    const firecrawl = new FirecrawlApp({ apiKey });
+
+    let markdown: string | null = null;
+    for (const url of EVENTS_URLS) {
+      markdown = await fetchMarkdown(firecrawl, url);
+      if (markdown) {
+        sourceUrl = url;
+        break;
+      }
+    }
+
+    if (!markdown) {
+      console.warn("No usable content from any Mystic Saloon URL or Facebook.");
+      return;
+    }
+
+    console.log(`Using content from: ${sourceUrl}`);
+    console.log(`\nMarkdown preview (first 1000 chars):\n${markdown.slice(0, 1000)}`);
+
+    const events = await extractEvents(
+      "Howard's Mystic Saloon Events",
+      sourceUrl,
+      markdown,
+      currentYear,
+      VENUE_CONTEXT
     );
-    console.warn(markdown.slice(0, 3000));
+
+    if (events.length === 0) {
+      console.warn("0 events extracted from website. Full markdown dump for debugging:");
+      console.warn(markdown.slice(0, 3000));
+    }
+
+    allEvents.push(...events);
   }
 
-  const futureEvents = events.filter((e) => e.date >= today);
-  console.log(`Extracted ${events.length} events, ${futureEvents.length} future`);
+  const futureEvents = allEvents.filter((e) => e.date >= today);
+  console.log(`Extracted ${allEvents.length} events, ${futureEvents.length} future`);
 
-  for (const e of events) {
+  for (const e of allEvents) {
     console.log(`  - ${e.name} | ${e.date} | ${e.category}`);
   }
 

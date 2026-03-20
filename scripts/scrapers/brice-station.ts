@@ -1,7 +1,9 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { extractEvents } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import { fetchFacebookEvents } from "../lib/facebook.js";
 
+const FACEBOOK_PAGE_URL = "https://www.facebook.com/bricestation/";
 // Shopify site works; Square ticketing as fallback
 const EVENTS_URLS = [
   "https://www.bricestation.com/collections/events",
@@ -49,61 +51,75 @@ async function fetchMarkdown(
   }
 }
 
+const VENUE_CONTEXT = {
+  defaultVenue: "Brice Station Vineyards",
+  defaultTown: "Murphys",
+};
+
 export async function scrapeBriceStation(): Promise<void> {
   console.log("=== Brice Station Scraper ===");
 
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing FIRECRAWL_API_KEY environment variable");
-  }
-
-  const firecrawl = new FirecrawlApp({ apiKey });
-
-  // Try each URL until we get usable content
-  let markdown: string | null = null;
-  let sourceUrl = EVENTS_URLS[0];
-  for (const url of EVENTS_URLS) {
-    markdown = await fetchMarkdown(firecrawl, url);
-    if (markdown) {
-      sourceUrl = url;
-      break;
-    }
-  }
-
-  if (!markdown) {
-    console.warn(
-      "No usable content from any Brice Station URL. " +
-      "Note: Hilltop Concert Series runs May–September; page may be empty off-season."
-    );
-    return;
-  }
-
-  console.log(`Using content from: ${sourceUrl}`);
-  console.log(`\nMarkdown preview (first 1000 chars):\n${markdown.slice(0, 1000)}`);
-
   const currentYear = new Date().getFullYear();
   const today = new Date().toISOString().slice(0, 10);
+  let allEvents: import("../lib/extract.js").ExtractedEvent[] = [];
+  let sourceUrl = FACEBOOK_PAGE_URL;
 
-  const events = await extractEvents(
-    "Brice Station Events",
-    sourceUrl,
-    markdown,
-    currentYear,
-    {
-      defaultVenue: "Brice Station Vineyards",
-      defaultTown: "Murphys",
+  // 1. Try Facebook first
+  console.log("Phase 1: Facebook events");
+  const fbEvents = await fetchFacebookEvents(FACEBOOK_PAGE_URL, VENUE_CONTEXT);
+  allEvents.push(...fbEvents);
+
+  // 2. Fall back to website if Facebook returned nothing
+  if (allEvents.length === 0) {
+    console.log("Phase 2: Website fallback");
+
+    const apiKey = process.env.FIRECRAWL_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing FIRECRAWL_API_KEY environment variable");
     }
-  );
 
-  if (events.length === 0) {
-    console.warn("0 events extracted. Full markdown dump for debugging:");
-    console.warn(markdown.slice(0, 3000));
+    const firecrawl = new FirecrawlApp({ apiKey });
+
+    let markdown: string | null = null;
+    for (const url of EVENTS_URLS) {
+      markdown = await fetchMarkdown(firecrawl, url);
+      if (markdown) {
+        sourceUrl = url;
+        break;
+      }
+    }
+
+    if (!markdown) {
+      console.warn(
+        "No usable content from any Brice Station URL. " +
+        "Note: Hilltop Concert Series runs May–September; page may be empty off-season."
+      );
+      return;
+    }
+
+    console.log(`Using content from: ${sourceUrl}`);
+    console.log(`\nMarkdown preview (first 1000 chars):\n${markdown.slice(0, 1000)}`);
+
+    const events = await extractEvents(
+      "Brice Station Events",
+      sourceUrl,
+      markdown,
+      currentYear,
+      VENUE_CONTEXT
+    );
+
+    if (events.length === 0) {
+      console.warn("0 events extracted. Full markdown dump for debugging:");
+      console.warn(markdown.slice(0, 3000));
+    }
+
+    allEvents.push(...events);
   }
 
-  const futureEvents = events.filter((e) => e.date >= today);
-  console.log(`Extracted ${events.length} events, ${futureEvents.length} future`);
+  const futureEvents = allEvents.filter((e) => e.date >= today);
+  console.log(`Extracted ${allEvents.length} events, ${futureEvents.length} future`);
 
-  for (const e of events) {
+  for (const e of allEvents) {
     console.log(`  - ${e.name} | ${e.date} | ${e.category}`);
   }
 
