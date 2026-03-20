@@ -12,24 +12,12 @@ export function getFacebookStatus(): Record<string, { failed: boolean; error?: s
   return { ...fbStatus };
 }
 
-/**
- * Same headers used by facebook-event-scraper — needed to get full page content
- * from Facebook's noscript renderer.
- */
+/** Headers mimicking a basic mobile browser. */
 const FB_HEADERS = {
-  accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-  "accept-encoding": "gzip, deflate, br",
-  "accept-language": "en-US,en;q=0.6",
-  "cache-control": "max-age=0",
-  "sec-fetch-dest": "document",
-  "sec-fetch-mode": "navigate",
-  "sec-fetch-site": "same-origin",
-  "sec-fetch-user": "?1",
-  "sec-gpc": "1",
-  "upgrade-insecure-requests": "1",
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
   "user-agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
 };
 
 /**
@@ -40,8 +28,11 @@ function htmlToText(html: string): string {
   return (
     html
       // Add newlines before block elements so content doesn't run together
-      .replace(/<\/(div|p|li|h[1-6]|article|section|tr)>/gi, "\n")
+      .replace(/<\/(div|p|li|h[1-6]|article|section|tr|span)>/gi, "\n")
       .replace(/<br\s*\/?>/gi, "\n")
+      // Remove script and style blocks entirely
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
       // Remove all remaining HTML tags
       .replace(/<[^>]+>/g, " ")
       // Decode common HTML entities
@@ -62,10 +53,18 @@ function htmlToText(html: string): string {
 }
 
 /**
+ * Extract the page slug from a Facebook URL.
+ * e.g. "https://www.facebook.com/mysticsaloon/" -> "mysticsaloon"
+ */
+function getPageSlug(url: string): string {
+  return url.replace(/\/+$/, "").split("/").pop() || "";
+}
+
+/**
  * Fetch a Facebook Page's feed as text and extract events using the LLM.
  *
- * This works for pages that post events as regular posts ("created an event")
- * or in Featured sections, rather than using Facebook's formal Events system.
+ * Uses mbasic.facebook.com which serves server-rendered HTML with actual
+ * post content (unlike www.facebook.com which requires JavaScript).
  *
  * @param pageUrl - Facebook page URL (e.g. "https://www.facebook.com/mysticsaloon")
  * @param venue  - Default venue context
@@ -75,16 +74,24 @@ export async function fetchFacebookEvents(
   pageUrl: string,
   venue: VenueContext
 ): Promise<ExtractedEvent[]> {
-  // Normalize URL: strip trailing slash, append noscript param
-  const normalizedUrl = pageUrl.replace(/\/+$/, "");
-  const fetchUrl = `${normalizedUrl}?_fb_noscript=1`;
-  console.log(`  Fetching Facebook feed from: ${fetchUrl}`);
+  const slug = getPageSlug(pageUrl);
+  if (!slug) {
+    console.warn(`  Could not extract page slug from: ${pageUrl}`);
+    fbStatus[pageUrl] = { failed: true, error: "Invalid page URL" };
+    return [];
+  }
+
+  // Use mbasic.facebook.com — serves actual HTML content without JavaScript
+  const mbasicUrl = `https://mbasic.facebook.com/${slug}`;
+  console.log(`  Fetching Facebook feed from: ${mbasicUrl}`);
 
   let html: string;
   try {
-    const response = await axios.get(fetchUrl, {
+    const response = await axios.get(mbasicUrl, {
       headers: FB_HEADERS,
       timeout: 15000,
+      // Follow redirects (Facebook may redirect)
+      maxRedirects: 3,
     });
     html = response.data;
   } catch (err: any) {
@@ -111,6 +118,9 @@ export async function fetchFacebookEvents(
     return [];
   }
 
+  // Log a preview so we can see what the LLM is working with
+  console.log(`  Text preview (first 500 chars):\n${text.slice(0, 500)}`);
+
   // Truncate to ~15k chars to stay within LLM context limits
   const truncated = text.slice(0, 15000);
   console.log(`  Extracted ${text.length} chars of text (using first ${truncated.length})`);
@@ -120,7 +130,7 @@ export async function fetchFacebookEvents(
   try {
     const events = await extractEvents(
       "Facebook Page Events",
-      normalizedUrl,
+      pageUrl,
       truncated,
       currentYear,
       venue
