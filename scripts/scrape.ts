@@ -10,6 +10,7 @@ import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeWateringHole } from "./scrapers/watering-hole.js";
 import { validateEventUrls } from "./lib/validate-urls.js";
+import { runHealthCheck } from "./lib/health.js";
 
 async function checkAnthropicCredits(): Promise<void> {
   const client = new Anthropic();
@@ -89,6 +90,16 @@ async function main() {
       await validateEventUrls();
     } catch (err) {
       console.error("URL validation failed:", err);
+    }
+  }
+
+  // Post-scrape health report
+  const skipHealth = args.includes("--skip-health");
+  if (!skipHealth) {
+    try {
+      await runHealthCheck(sources);
+    } catch (err) {
+      console.error("Health check failed:", err);
     }
   }
 

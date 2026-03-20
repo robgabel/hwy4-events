@@ -13,7 +13,7 @@
     "@anthropic-ai/sdk": "^0.52.0",
     "@mendable/firecrawl-js": "^1.15.0",
     "@supabase/supabase-js": "^2.98.0",
-    "facebook-event-scraper": "^0.2.6"
+    "facebook-event-scraper": "0.2.6"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

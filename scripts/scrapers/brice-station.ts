@@ -71,7 +71,7 @@ export async function scrapeBriceStation(): Promise<void> {
 
   // 2. Fall back to website if Facebook returned nothing
   if (allEvents.length === 0) {
-    console.log("Phase 2: Website fallback");
+    console.log("Phase 2: Website fallback (Facebook returned 0 events)");
 
     const apiKey = process.env.FIRECRAWL_API_KEY;
     if (!apiKey) {
