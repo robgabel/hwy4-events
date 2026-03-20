@@ -28,7 +28,7 @@ interface ApifyPostResult {
  */
 async function fetchApifyPosts(
   pageUrl: string,
-  maxPosts: number = 20
+  maxPosts: number = 50
 ): Promise<ApifyPostResult[]> {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) {
@@ -68,19 +68,66 @@ async function fetchApifyPosts(
 }
 
 /**
+ * Keywords that suggest a post is about an event rather than casual content.
+ */
+const EVENT_KEYWORDS = [
+  "event", "created an event", "live music", "concert", "show",
+  "comedy", "karaoke", "open mic", "dj", "band", "performing",
+  "tickets", "cover charge", "doors open", "starts at",
+  "this saturday", "this friday", "this sunday", "this weekend",
+  "next saturday", "next friday", "next sunday",
+  "pm", "am", // time indicators
+  "march", "april", "may", "june", "july", "august",
+  "september", "october", "november", "december",
+  "january", "february",
+  "feast", "celebration", "special", "happy hour",
+  "food", "menu", "drink specials",
+];
+
+/**
+ * Check if a post likely contains event information.
+ */
+function isEventLikePost(text: string): boolean {
+  const lower = text.toLowerCase();
+  // Must have at least 2 event keywords or be longer than 100 chars with 1 keyword
+  const matchCount = EVENT_KEYWORDS.filter((kw) => lower.includes(kw)).length;
+  return matchCount >= 2 || (matchCount >= 1 && text.length > 100);
+}
+
+/**
+ * Convert a Unix timestamp to a readable date string.
+ */
+function formatTimestamp(ts: string | number | undefined): string {
+  if (!ts) return "unknown date";
+  const num = typeof ts === "string" ? parseInt(ts, 10) : ts;
+  if (isNaN(num) || num < 1000000000) return String(ts);
+  return new Date(num * 1000).toLocaleDateString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
  * Convert Apify post results into a text blob for LLM extraction.
- * Each post becomes a text block with its content and metadata.
+ * Filters to event-like posts and formats timestamps as readable dates.
  */
 function postsToText(posts: ApifyPostResult[]): string {
-  return posts
+  const eventPosts = posts.filter((post) => {
+    const text = post.text || post.postText || "";
+    return text.trim().length > 0 && isEventLikePost(text);
+  });
+
+  console.log(`  Filtered to ${eventPosts.length} event-like posts (of ${posts.length} total)`);
+
+  return eventPosts
     .map((post, i) => {
       const text = post.text || post.postText || "";
-      const timestamp = post.timestamp || "";
+      const dateStr = formatTimestamp(post.timestamp);
       const url = post.url || "";
-      if (!text.trim()) return "";
-      return `--- Post ${i + 1} (${timestamp}) ---\n${text}\n${url ? `Link: ${url}` : ""}`;
+      return `--- Post ${i + 1} (posted ${dateStr}) ---\n${text}\n${url ? `Link: ${url}` : ""}`;
     })
-    .filter(Boolean)
     .join("\n\n");
 }
 
