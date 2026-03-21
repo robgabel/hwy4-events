@@ -99,6 +99,7 @@ export default function EventCard({
   const accentColor = CATEGORY_ACCENT_COLORS[event.category];
 
   return (
+    <Link href={`/events/${slug}`} className="block">
     <article
       className={`card-warm group relative flex gap-4 overflow-hidden rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 sm:p-5 ${
         isUpNext
@@ -109,12 +110,6 @@ export default function EventCard({
       }`}
       style={{ borderLeftWidth: "4px", borderLeftColor: accentColor }}
     >
-      {/* Full-card clickable overlay for mobile tap targets */}
-      <Link
-        href={`/events/${slug}`}
-        className="absolute inset-0 z-10"
-        aria-label={event.name}
-      />
       {/* Date block */}
       <div
         className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-lg py-2.5 ${
@@ -181,9 +176,7 @@ export default function EventCard({
               isUpNext ? "text-lg text-forest" : "text-forest"
             }`}
           >
-            <Link href={`/events/${slug}`} className="relative z-20 hover:underline">
-              {event.name}
-            </Link>
+            {event.name}
           </h3>
           <span
             className={`badge-${event.category} inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}
@@ -331,5 +324,6 @@ export default function EventCard({
         </div>
       </div>
     </article>
+    </Link>
   );
 }
