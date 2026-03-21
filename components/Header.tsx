@@ -25,10 +25,10 @@ export default function Header({ greeting }: { greeting?: string | null }) {
           <svg aria-hidden="true" className="h-8 w-8 sm:h-10 sm:w-10 text-sage-light/80" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8 8h2L6 14h2.5L5 20h14l-3.5-6H18l-4-6h2L12 2z"/></svg>
         </h1>
 
-        <p className="mt-3 font-display text-lg text-sage-light/90">
+        <p className="mt-3 font-display text-lg text-white/90 drop-shadow-sm">
           From the Frog Jump to the Grizzly Chair
         </p>
-        <p className="mt-1 text-sm text-sage-light/60">
+        <p className="mt-1 text-sm font-medium text-white/70 tracking-wide">
           Angels Camp &middot; Murphys &middot; Arnold &middot; Bear Valley
         </p>
 

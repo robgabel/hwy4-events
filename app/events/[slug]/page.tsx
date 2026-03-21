@@ -199,7 +199,16 @@ export default async function EventPage({ params }: PageProps) {
               </span>
             )}
           </div>
-          <h1 className="font-display text-3xl font-bold text-forest">{event.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="font-display text-3xl font-bold text-forest">{event.name}</h1>
+            <div className="shrink-0 pt-1">
+              <ShareButton
+                url={`${SITE_URL}/events/${slug}`}
+                title={event.name}
+                text={`${event.name} at ${event.venue_name} in ${event.town}`}
+              />
+            </div>
+          </div>
         </header>
 
         <dl className="grid gap-3 sm:grid-cols-2 mb-6 text-sm">
@@ -312,11 +321,6 @@ export default async function EventPage({ params }: PageProps) {
               </svg>
             </a>
           )}
-          <ShareButton
-            url={`${SITE_URL}/events/${slug}`}
-            title={event.name}
-            text={`${event.name} at ${event.venue_name} in ${event.town}`}
-          />
         </div>
       </article>
 

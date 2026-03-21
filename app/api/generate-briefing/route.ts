@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { generateEventSlug } from "@/lib/slugs";
+import { SITE_URL } from "@/lib/constants";
 
 export const maxDuration = 60;
 
@@ -13,7 +15,7 @@ Rules:
 - 2-3 short paragraphs. Total length: 60-100 words. Be tight.
 - P1: TODAY's highlights. If nothing, say so.
 - P2: TOMORROW. Skip if nothing notable.
-- P3 (optional): rest-of-week highlights.
+- P3 (optional): brief midweek highlights only. Do NOT mention next weekend — there's a separate weekend briefing for that.
 - Say "Today" and "tomorrow" — for later days use day names, never dates like "March 21".
 - Name-drop specific events and venues. Be honest if it's dead.
 - No corporate language, no emojis in body text.
@@ -88,6 +90,8 @@ async function generateBriefing(
   });
 
   const formatEvent = (e: Record<string, unknown>) => {
+    const slug = generateEventSlug(e.name as string, e.date as string, e.town as string);
+    const internalUrl = `${SITE_URL}/events/${slug}`;
     const parts = [
       `${e.name} at ${e.venue_name} (${e.town})`,
       `on ${e.date}`,
@@ -96,7 +100,7 @@ async function generateBriefing(
       e.price ? `${e.price}` : "",
       e.robs_pick ? "[ROB'S PICK]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
-      e.event_url ? `URL: ${e.event_url}` : "",
+      `URL: ${internalUrl}`,
     ].filter(Boolean);
     return parts.join(" — ");
   };

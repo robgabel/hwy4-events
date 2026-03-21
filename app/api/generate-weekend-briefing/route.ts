@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { generateEventSlug } from "@/lib/slugs";
+import { SITE_URL } from "@/lib/constants";
 
 export const maxDuration = 60;
 
@@ -111,6 +113,8 @@ async function generateWeekendBriefing(
   const { friday, sunday, label } = getUpcomingWeekend();
 
   const formatEvent = (e: Record<string, unknown>) => {
+    const slug = generateEventSlug(e.name as string, e.date as string, e.town as string);
+    const internalUrl = `${SITE_URL}/events/${slug}`;
     const parts = [
       `${e.name} at ${e.venue_name} (${e.town})`,
       `on ${e.date}`,
@@ -119,7 +123,7 @@ async function generateWeekendBriefing(
       e.price ? `${e.price}` : "",
       e.robs_pick ? "[ROB'S PICK]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
-      e.event_url ? `URL: ${e.event_url}` : "",
+      `URL: ${internalUrl}`,
     ].filter(Boolean);
     return parts.join(" — ");
   };

@@ -191,20 +191,15 @@ export default async function Home() {
         <section aria-label="What events are happening along Highway 4?">
           <div className="mb-6 text-center text-stone">
             <p>
-              I built {SITE_NAME} because even after 11 years of cabin weekends,
-              I kept missing live music at the Lube Room.
-            </p>
-            <p className="mt-3">
-              I hope you find it as useful as I do.{" "}
+              We built {SITE_NAME} for our family, but hope you find it useful too.{" "}
               <a
                 href="mailto:rob@gabel.ai"
                 className="font-medium text-pine hover:underline"
               >
-                Email me
+                Email us
               </a>{" "}
-              if I&apos;m missing something!
+              if we&apos;re missing something!
             </p>
-            <p className="mt-3">— Rob (and Millie 🐾)</p>
           </div>
           {briefing.text && (
             <WeeklyBriefing
