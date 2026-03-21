@@ -20,7 +20,7 @@ Rules:
 - Name-drop specific events and venues. Be honest if it's dead.
 - No corporate language, no emojis in body text.
 - FRESHNESS: Never reuse jokes, openers, closers, or structures from recent briefings below.
-- End with: — Millie 🐾
+- Do NOT include any signature or sign-off line. No "— Millie" or similar. Just end the narrative naturally.
 - LINKS: Link event mentions as [event text](url). Keep natural — don't link every event or venue names.`;
 
 async function getEventsForBriefing() {
