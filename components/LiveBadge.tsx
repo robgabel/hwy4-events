@@ -27,19 +27,22 @@ export default function LiveBadge({
 
   if (!status) return null;
 
-  if (status === "live") {
+  if (status.type === "live") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-red-600">
         <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse-dot" />
-        Live
+        Happening Now
       </span>
     );
   }
 
+  const mins = status.minutesUntil;
+  const label = mins <= 1 ? "Starting now" : `Starts in ${mins} min`;
+
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-700">
       <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse-dot" />
-      Starting Soon
+      {label}
     </span>
   );
 }

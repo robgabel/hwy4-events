@@ -1,8 +1,15 @@
-export type LiveStatus = "live" | "starting-soon" | null;
+export type LiveStatus =
+  | { type: "live" }
+  | { type: "starting-soon"; minutesUntil: number }
+  | null;
 
 /**
  * Get the live status of an event based on current time in Pacific time.
- * Returns "live" if event is in progress, "starting-soon" if within 90 min, null otherwise.
+ * Returns "live" if event is in progress, "starting-soon" with minutes if within 90 min, null otherwise.
+ *
+ * This runs client-side (browser), so we compare the browser's local clock
+ * against event times that are stored in Pacific time. We use Intl to get
+ * the current Pacific time, then build both dates in the same frame.
  */
 export function getEventLiveStatus(
   eventDate: string, // "2026-03-20"
@@ -11,36 +18,67 @@ export function getEventLiveStatus(
 ): LiveStatus {
   if (!startTime) return null;
 
+  // Get current time expressed as Pacific wall-clock values
   const now = new Date();
+  const pacificParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
 
-  // Get current time in Pacific
-  const pacificNow = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-  );
+  const get = (type: string) =>
+    parseInt(pacificParts.find((p) => p.type === type)?.value || "0", 10);
 
-  const startDate = parseEventDateTime(eventDate, startTime);
-  if (!startDate) return null;
+  const nowMinutes =
+    get("year") * 525960 +
+    (get("month") - 1) * 43830 +
+    get("day") * 1440 +
+    get("hour") * 60 +
+    get("minute");
 
-  const endDate = endTime
-    ? parseEventDateTime(eventDate, endTime)
-    : new Date(startDate.getTime() + 4 * 60 * 60 * 1000); // default 4 hours
+  // Parse event start as Pacific wall-clock minutes
+  const startMinutes = toAbsoluteMinutes(eventDate, startTime);
+  if (startMinutes === null) return null;
 
-  if (!endDate) return null;
+  const endMinutes = endTime
+    ? toAbsoluteMinutes(eventDate, endTime)
+    : startMinutes + 240; // default 4 hours
 
-  const msUntilStart = startDate.getTime() - pacificNow.getTime();
-  const msUntilEnd = endDate.getTime() - pacificNow.getTime();
+  if (endMinutes === null) return null;
+
+  const minutesUntilStart = startMinutes - nowMinutes;
+  const minutesUntilEnd = endMinutes - nowMinutes;
 
   // Currently live: past start, before end
-  if (msUntilStart <= 0 && msUntilEnd > 0) {
-    return "live";
+  if (minutesUntilStart <= 0 && minutesUntilEnd > 0) {
+    return { type: "live" };
   }
 
   // Starting soon: within 90 minutes before start
-  if (msUntilStart > 0 && msUntilStart <= 90 * 60 * 1000) {
-    return "starting-soon";
+  if (minutesUntilStart > 0 && minutesUntilStart <= 90) {
+    return { type: "starting-soon", minutesUntil: minutesUntilStart };
   }
 
   return null;
+}
+
+/**
+ * Convert a date + time string into absolute minutes for comparison.
+ * Uses the same year*525960 + month*43830 + day*1440 scheme — not
+ * astronomically precise, but consistent for same-day comparisons.
+ */
+function toAbsoluteMinutes(dateStr: string, timeStr: string): number | null {
+  const time24 = to24Hour(timeStr.trim());
+  if (!time24) return null;
+
+  const [hours, minutes] = time24.split(":").map(Number);
+  const [year, month, day] = dateStr.split("-").map(Number);
+
+  return year * 525960 + (month - 1) * 43830 + day * 1440 + hours * 60 + minutes;
 }
 
 function parseEventDateTime(
