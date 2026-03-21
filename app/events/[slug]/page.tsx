@@ -7,6 +7,8 @@ import { TOWN_INFO } from "@/lib/towns";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapWrapper";
+import LiveBadge from "@/components/LiveBadge";
+import ShareButton from "@/components/ShareButton";
 
 export const revalidate = 3600;
 
@@ -181,6 +183,11 @@ export default async function EventPage({ params }: PageProps) {
       <article>
         <header className="mb-6">
           <div className="flex flex-wrap items-center gap-2 mb-2">
+            <LiveBadge
+              eventDate={event.date}
+              startTime={event.start_time}
+              endTime={event.end_time}
+            />
             <span
               className={`badge-${event.category} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}
             >
@@ -281,8 +288,8 @@ export default async function EventPage({ params }: PageProps) {
           </section>
         )}
 
-        {event.event_url && (
-          <div className="mb-6">
+        <div className="mb-6 flex flex-wrap gap-3">
+          {event.event_url && (
             <a
               href={event.event_url}
               target="_blank"
@@ -304,8 +311,13 @@ export default async function EventPage({ params }: PageProps) {
                 />
               </svg>
             </a>
-          </div>
-        )}
+          )}
+          <ShareButton
+            url={`${SITE_URL}/events/${slug}`}
+            title={event.name}
+            text={`${event.name} at ${event.venue_name} in ${event.town}`}
+          />
+        </div>
       </article>
 
       <div className="mt-8 border-t border-stone-light/30 pt-6">

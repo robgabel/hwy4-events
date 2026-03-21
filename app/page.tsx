@@ -76,6 +76,36 @@ async function getBriefing(): Promise<{
   };
 }
 
+async function getWeekendBriefing(): Promise<{
+  text: string | null;
+  date: string | null;
+  label: string | null;
+}> {
+  const { data: textData } = await supabase
+    .from("site_config")
+    .select("value")
+    .eq("key", "weekend_briefing")
+    .single();
+
+  const { data: dateData } = await supabase
+    .from("site_config")
+    .select("value")
+    .eq("key", "weekend_briefing_date")
+    .single();
+
+  const { data: labelData } = await supabase
+    .from("site_config")
+    .select("value")
+    .eq("key", "weekend_briefing_label")
+    .single();
+
+  return {
+    text: textData?.value || null,
+    date: dateData?.value || null,
+    label: labelData?.value || null,
+  };
+}
+
 async function getOrgs(): Promise<Hwy4Org[]> {
   const { data, error } = await supabase
     .from("hwy4_orgs")
@@ -145,11 +175,12 @@ function ItemListSchema({ events }: { events: Hwy4Event[] }) {
 }
 
 export default async function Home() {
-  const [events, orgs, greeting, briefing] = await Promise.all([
+  const [events, orgs, greeting, briefing, weekendBriefing] = await Promise.all([
     getEvents(),
     getOrgs(),
     getGreeting(),
     getBriefing(),
+    getWeekendBriefing(),
   ]);
 
   return (
@@ -179,6 +210,9 @@ export default async function Home() {
             <WeeklyBriefing
               briefing={briefing.text}
               generatedAt={briefing.date}
+              weekendBriefing={weekendBriefing.text}
+              weekendGeneratedAt={weekendBriefing.date}
+              weekendLabel={weekendBriefing.label}
             />
           )}
           <EventList initialEvents={events} orgs={orgs} />

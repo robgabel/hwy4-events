@@ -106,6 +106,14 @@ body {
   animation: fadeIn 0.3s ease-out both;
 }
 
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.animate-pulse-dot {
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
 /* Map overrides — blend Leaflet controls with mountain palette */
 .leaflet-container {
   font-family: var(--font-sans);

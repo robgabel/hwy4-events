@@ -141,7 +141,7 @@ export default function RootLayout({
               </svg>
               <span className="text-stone">Know about an event?</span>
               <a
-                href="mailto:rob@gabel.ai?subject=Event%20Submission"
+                href="/submit"
                 className="font-medium text-pine hover:underline"
               >
                 Submit it here

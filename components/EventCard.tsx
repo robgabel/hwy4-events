@@ -3,6 +3,7 @@ import { generateEventSlug } from "@/lib/slugs";
 import { format, parseISO } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
+import LiveBadge from "@/components/LiveBadge";
 
 function formatTime(time: string | null): string | null {
   if (!time) return null;
@@ -147,6 +148,11 @@ export default function EventCard({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-start gap-2">
+          <LiveBadge
+            eventDate={event.date}
+            startTime={event.start_time}
+            endTime={event.end_time}
+          />
           {isUpNext && (
             <span className="font-display inline-flex items-center gap-1 rounded-full bg-earth/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-earth">
               Up Next

@@ -107,7 +107,7 @@ export async function scrapeBriceStation(): Promise<void> {
     console.log(`  - ${e.name} | ${e.date} | ${e.category}`);
   }
 
-  let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0 };
+  let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
 
   if (futureEvents.length > 0) {
     totalResult = await upsertEvents(futureEvents, SOURCE_NAME, ORG_SLUG, sourceUrl);

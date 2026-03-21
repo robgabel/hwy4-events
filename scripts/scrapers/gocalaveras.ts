@@ -170,7 +170,7 @@ export async function scrapeGoCalaveras(): Promise<void> {
   // Step 5: Cross-source dedup
   const deduped = await crossSourceDedup(futureEvents);
 
-  let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0 };
+  let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
 
   if (deduped.length > 0) {
     totalResult = await upsertEvents(deduped, SOURCE_NAME, ORG_SLUG, EVENTS_URL);

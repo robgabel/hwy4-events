@@ -1,8 +1,13 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 
 interface WeeklyBriefingProps {
   briefing: string;
   generatedAt: string | null;
+  weekendBriefing?: string | null;
+  weekendGeneratedAt?: string | null;
+  weekendLabel?: string | null;
 }
 
 /**
@@ -46,14 +51,27 @@ function renderWithLinks(text: string): React.ReactNode[] {
 export default function WeeklyBriefing({
   briefing,
   generatedAt,
+  weekendBriefing,
+  weekendGeneratedAt,
+  weekendLabel,
 }: WeeklyBriefingProps) {
-  const dateLabel = generatedAt
-    ? new Date(generatedAt).toLocaleDateString("en-US", {
+  const hasWeekend = !!weekendBriefing;
+  const [activeTab, setActiveTab] = useState<"today" | "weekend">("today");
+
+  const isWeekend = activeTab === "weekend" && hasWeekend;
+  const activeBriefing = isWeekend ? weekendBriefing! : briefing;
+  const activeGeneratedAt = isWeekend ? weekendGeneratedAt : generatedAt;
+
+  const dateLabel = activeGeneratedAt
+    ? new Date(activeGeneratedAt).toLocaleDateString("en-US", {
         weekday: "long",
         month: "short",
         day: "numeric",
       })
     : null;
+
+  const title = isWeekend ? "This Weekend on the 4" : "Today on the 4";
+  const subtitle = isWeekend && weekendLabel ? weekendLabel : null;
 
   return (
     <div className="mb-8 rounded-xl border border-stone-light/30 bg-white px-6 py-5 shadow-sm">
@@ -66,13 +84,42 @@ export default function WeeklyBriefing({
           aria-hidden="true"
         />
         <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-earth">
-          Today on the 4
+          {title}
         </h2>
-        {dateLabel && (
+        {subtitle && (
+          <span className="text-xs text-stone-light">{subtitle}</span>
+        )}
+        {dateLabel && !subtitle && (
           <span className="ml-auto text-xs text-stone-light">{dateLabel}</span>
         )}
       </div>
-      {briefing.split("\n\n").map((paragraph, i) => (
+
+      {hasWeekend && (
+        <div className="mb-3 flex gap-1 rounded-lg bg-cream p-1">
+          <button
+            onClick={() => setActiveTab("today")}
+            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeTab === "today"
+                ? "bg-white text-forest shadow-sm"
+                : "text-stone hover:text-forest"
+            }`}
+          >
+            Today
+          </button>
+          <button
+            onClick={() => setActiveTab("weekend")}
+            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeTab === "weekend"
+                ? "bg-white text-forest shadow-sm"
+                : "text-stone hover:text-forest"
+            }`}
+          >
+            This Weekend
+          </button>
+        </div>
+      )}
+
+      {activeBriefing.split("\n\n").map((paragraph, i) => (
         <p key={i} className={`leading-relaxed text-stone-800${i > 0 ? " mt-3" : ""}`}>
           {renderWithLinks(paragraph)}
         </p>
