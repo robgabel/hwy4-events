@@ -70,7 +70,15 @@ export default function WeeklyBriefing({
       })
     : null;
 
-  const title = isWeekend ? "This Weekend on the 4" : "Today on the 4";
+  // Smart "This/Next Weekend" — if today is Fri/Sat/Sun, the weekend briefing
+  // covers NEXT weekend, so label accordingly. Mon-Thu it's "This Weekend".
+  const todayDay = new Date().getDay(); // 0=Sun, 5=Fri, 6=Sat
+  const isCurrentlyWeekend = todayDay === 0 || todayDay === 5 || todayDay === 6;
+  const weekendTabLabel = isCurrentlyWeekend ? "Next Weekend" : "This Weekend";
+
+  const title = isWeekend
+    ? `${weekendTabLabel.replace("Weekend", "Weekend on the 4")}`
+    : "Today on the 4";
   const subtitle = isWeekend && weekendLabel ? weekendLabel : null;
 
   return (
@@ -114,7 +122,7 @@ export default function WeeklyBriefing({
                 : "text-stone hover:text-forest"
             }`}
           >
-            This Weekend
+            {weekendTabLabel}
           </button>
         </div>
       )}
