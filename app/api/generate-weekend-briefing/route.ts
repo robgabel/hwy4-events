@@ -114,7 +114,9 @@ async function generateWeekendBriefing(
   events: Record<string, unknown>[],
   recentBriefings: { briefing_date: string; text: string }[]
 ) {
-  const anthropic = new Anthropic();
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
   const { friday, sunday, label } = getUpcomingWeekend();
 
   const formatEvent = (e: Record<string, unknown>) => {

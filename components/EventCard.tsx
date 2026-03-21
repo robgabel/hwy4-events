@@ -109,6 +109,12 @@ export default function EventCard({
       }`}
       style={{ borderLeftWidth: "4px", borderLeftColor: accentColor }}
     >
+      {/* Full-card clickable overlay for mobile tap targets */}
+      <Link
+        href={`/events/${slug}`}
+        className="absolute inset-0 z-10"
+        aria-label={event.name}
+      />
       {/* Date block */}
       <div
         className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-lg py-2.5 ${
@@ -175,7 +181,7 @@ export default function EventCard({
               isUpNext ? "text-lg text-forest" : "text-forest"
             }`}
           >
-            <Link href={`/events/${slug}`} className="hover:underline">
+            <Link href={`/events/${slug}`} className="relative z-20 hover:underline">
               {event.name}
             </Link>
           </h3>
