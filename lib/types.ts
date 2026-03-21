@@ -69,6 +69,7 @@ export interface CollapsedEvent extends Hwy4Event {
 
 export const TOWNS = [
   "Angels Camp",
+  "Copperopolis",
   "Murphys",
   "Arnold",
   "Avery",

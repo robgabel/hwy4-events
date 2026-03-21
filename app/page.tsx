@@ -5,6 +5,7 @@ import { generateEventSlug } from "@/lib/slugs";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
 import WeeklyBriefing from "@/components/WeeklyBriefing";
+import ShareSiteLink from "@/components/ShareSiteLink";
 
 export const revalidate = 3600; // revalidate every hour
 
@@ -198,7 +199,8 @@ export default async function Home() {
               >
                 Email us
               </a>{" "}
-              if we&apos;re missing something!
+              if we&apos;re missing something!{" "}
+              <ShareSiteLink />
             </p>
           </div>
           {briefing.text && (
