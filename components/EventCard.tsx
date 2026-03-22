@@ -320,6 +320,7 @@ export default function EventCard({
             fill
             className="object-cover"
             sizes="80px"
+            loading="lazy"
           />
         </div>
       </div>

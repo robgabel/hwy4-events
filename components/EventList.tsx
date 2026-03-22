@@ -8,6 +8,7 @@ import {
   CollapsedEvent,
   TOWNS,
 } from "@/lib/types";
+import Image from "next/image";
 import EventCard from "./EventCard";
 import FilterBar from "./FilterBar";
 import NewsletterSignup from "./NewsletterSignup";
@@ -280,11 +281,12 @@ export default function EventList({
       <div className="mt-2 space-y-6">
         {groups.length === 0 ? (
           <div className="animate-fadeIn rounded-xl border border-stone-light/30 bg-white px-6 py-12 text-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/millie-happy.svg"
               alt="Millie the sheepadoodle"
-              className="mx-auto h-20 w-20 opacity-40"
+              width={80}
+              height={80}
+              className="mx-auto opacity-40"
             />
             <p className="mt-3 text-stone">
               Nothing matching those filters. Millie&apos;s bored too.
