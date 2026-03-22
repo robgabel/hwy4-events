@@ -193,21 +193,13 @@ export default async function Home() {
         <section aria-label="What events are happening along Highway 4?">
           <div className="mb-6 text-center text-stone">
             <p>
-              Live music, festivals, and community events from Angels Camp to Bear Valley — updated daily.{" "}
-              <Link
-                href="/about"
-                className="font-medium text-pine hover:underline"
-              >
-                About us
-              </Link>{" "}
-              ·{" "}
-              <Link
-                href="/submit"
-                className="font-medium text-pine hover:underline"
-              >
-                Submit an event
-              </Link>{" "}
-              ·{" "}
+              Live music, festivals, and community events from Angels Camp to Bear Valley — updated daily.
+            </p>
+            <p className="mt-2 text-sm">
+              <Link href="/about" className="font-medium text-pine hover:underline">About us</Link>
+              {" · "}
+              <Link href="/submit" className="font-medium text-pine hover:underline">Submit an event</Link>
+              {" · "}
               <ShareSiteLink />
             </p>
           </div>
