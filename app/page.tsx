@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import EventList from "@/components/EventList";
 import WeeklyBriefing from "@/components/WeeklyBriefing";
 import ShareSiteLink from "@/components/ShareSiteLink";
+import NewsletterSignup from "@/components/NewsletterSignup";
 
 export const revalidate = 3600; // revalidate every hour
 
@@ -212,6 +213,7 @@ export default async function Home() {
               weekendLabel={weekendBriefing.label}
             />
           )}
+          <NewsletterSignup />
           <EventList initialEvents={events} orgs={orgs} />
         </section>
       </div>
