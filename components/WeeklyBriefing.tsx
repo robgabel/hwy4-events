@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
+import Image from "next/image";
 
 interface WeeklyBriefingProps {
   briefing: string;
@@ -76,6 +77,11 @@ export default function WeeklyBriefing({
   const isCurrentlyWeekend = todayDay === 0 || todayDay === 5 || todayDay === 6;
   const weekendTabLabel = isCurrentlyWeekend ? "Next Weekend" : "This Weekend";
 
+  const parsedParagraphs = useMemo(
+    () => activeBriefing.split("\n\n").map((p) => renderWithLinks(p)),
+    [activeBriefing]
+  );
+
   const title = isWeekend
     ? `${weekendTabLabel.replace("Weekend", "Weekend on the 4")}`
     : "Today on the 4";
@@ -84,11 +90,11 @@ export default function WeeklyBriefing({
   return (
     <div className="mb-8 rounded-xl border border-stone-light/30 bg-white px-6 py-5 shadow-sm">
       <div className="mb-2 flex items-center gap-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src="/millie-happy.svg"
           alt=""
-          className="h-6 w-6"
+          width={24}
+          height={24}
           aria-hidden="true"
         />
         <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-earth">
@@ -127,9 +133,9 @@ export default function WeeklyBriefing({
         </div>
       )}
 
-      {activeBriefing.split("\n\n").map((paragraph, i) => (
+      {parsedParagraphs.map((nodes, i) => (
         <p key={i} className={`leading-relaxed text-stone-800${i > 0 ? " mt-3" : ""}`}>
-          {renderWithLinks(paragraph)}
+          {nodes}
         </p>
       ))}
     </div>
