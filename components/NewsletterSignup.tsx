@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 
-export default function NewsletterSignup() {
+export default function NewsletterSignup({
+  variant = "default",
+}: {
+  variant?: "default" | "inline";
+}) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -31,6 +35,44 @@ export default function NewsletterSignup() {
       setStatus("error");
       setMessage("Something went wrong. Please try again.");
     }
+  }
+
+  if (variant === "inline") {
+    return (
+      <div className="mb-6 rounded-xl border border-pine/20 bg-pine/5 px-5 py-4">
+        {status === "success" ? (
+          <p className="text-sm text-pine font-medium text-center">{message}</p>
+        ) : (
+          <div className="sm:flex sm:items-center sm:gap-4">
+            <div className="mb-3 sm:mb-0 sm:flex-1">
+              <p className="text-sm font-medium text-forest">
+                Like what you see? Get this in your inbox every Thursday.
+              </p>
+            </div>
+            <form onSubmit={handleSubmit} className="flex gap-2 sm:flex-shrink-0">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                required
+                className="w-full rounded-lg border border-stone-light/40 bg-white px-3 py-1.5 text-sm text-stone-800 placeholder:text-stone-light/60 focus:border-pine focus:outline-none focus:ring-1 focus:ring-pine sm:w-48"
+              />
+              <button
+                type="submit"
+                disabled={status === "loading"}
+                className="rounded-lg bg-pine px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
+              >
+                {status === "loading" ? "..." : "Subscribe"}
+              </button>
+            </form>
+          </div>
+        )}
+        {status === "error" && (
+          <p className="mt-2 text-sm text-red-600">{message}</p>
+        )}
+      </div>
+    );
   }
 
   return (
