@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SITE_URL } from "@/lib/constants";
+import Image from "next/image";
+import { SITE_URL, SITE_NAME } from "@/lib/constants";
+import { CORRIDOR_TOWNS } from "@/lib/towns";
+import FeedbackForm from "@/components/FeedbackForm";
 
 export const metadata: Metadata = {
-  title: "About the Highway 4 Corridor",
+  title: "About Hwy 4 Events",
   description:
-    "Learn about the Highway 4 corridor through California's Sierra Nevada foothills — Angels Camp, Murphys, Arnold, Bear Valley, and the towns of Calaveras County.",
+    "Learn about Hwy 4 Events — a free, community-focused event listing for the Highway 4 corridor from Angels Camp to Bear Valley in the California Sierra.",
   alternates: { canonical: "/about" },
 };
 
@@ -37,42 +40,21 @@ function BreadcrumbSchema() {
   );
 }
 
-const towns = [
-  {
-    name: "Angels Camp",
-    description:
-      "A historic Gold Rush town at the western gateway to the Highway 4 corridor. Famous for the Calaveras County Fair & Jumping Frog Jubilee — inspired by Mark Twain's short story — Angels Camp offers live music venues, local breweries, and community events year-round.",
-  },
-  {
-    name: "Murphys",
-    description:
-      "Known as the 'Queen of the Sierra,' Murphys is a charming Gold Rush–era village with over 20 wine tasting rooms along Main Street. The town hosts popular events like Murphys Irish Day, outdoor concerts, and seasonal art walks that draw visitors from across California.",
-  },
-  {
-    name: "Arnold",
-    description:
-      "A mountain community nestled among towering pines at about 4,000 feet elevation. Arnold serves as a gateway to Calaveras Big Trees State Park and offers a mix of community events, local restaurants, and outdoor recreation throughout the year.",
-  },
-  {
-    name: "Avery",
-    description:
-      "A small, tight-knit community between Arnold and Murphys. Avery is home to local gathering spots and community organizations that host regular events for residents and visitors.",
-  },
-  {
-    name: "Dorrington",
-    description:
-      "A quiet mountain hamlet surrounded by Sierra Nevada forest. Dorrington's historic hotel and surrounding area host seasonal events and serve as a peaceful stop along the Highway 4 corridor.",
-  },
-  {
-    name: "Bear Valley",
-    description:
-      "A four-season mountain resort at over 7,000 feet elevation. Bear Valley is best known for skiing and snowboarding in winter, but summer brings music festivals, mountain biking events, hiking gatherings, and family-friendly outdoor activities.",
-  },
-  {
-    name: "White Pines",
-    description:
-      "A residential community between Arnold and Avery with community events centered around local parks and gathering spaces.",
-  },
+const venues = [
+  { name: "Ironstone Vineyards", town: "Murphys" },
+  { name: "Murphys Hotel", town: "Murphys" },
+  { name: "Murphys Irish Pub", town: "Murphys" },
+  { name: "Brice Station Vineyards", town: "Murphys" },
+  { name: "The Watering Hole", town: "Arnold" },
+  { name: "Branding Iron Saloon", town: "Arnold" },
+  { name: "The Lube Room Saloon", town: "Arnold" },
+  { name: "Howard's Mystic Saloon", town: "Arnold" },
+  { name: "Camp Connell General Store", town: "Camp Connell" },
+  { name: "Sequoia Woods Country Club", town: "Arnold" },
+  { name: "Bear Valley Mountain Resort", town: "Bear Valley" },
+  { name: "Calaveras County Fairgrounds", town: "Angels Camp" },
+  { name: "Greenhorn Creek Resort", town: "Angels Camp" },
+  { name: "Moose Lodge", town: "Angels Camp" },
 ];
 
 export default function AboutPage() {
@@ -92,52 +74,129 @@ export default function AboutPage() {
         </ol>
       </nav>
 
-      <h1 className="font-display mb-2 text-3xl font-bold text-forest">
-        About the Highway 4 Corridor
-      </h1>
-      <p className="mb-8 text-lg leading-relaxed text-stone">
-        California State Route 4 climbs from the Central Valley through the
-        Sierra Nevada foothills of Calaveras County, connecting a string of
-        historic Gold Rush towns, mountain communities, and alpine resorts. The
-        Highway 4 corridor is home to live music, festivals, wine tasting,
-        outdoor adventure, and community events year-round.
-      </p>
+      {/* Header with Millie */}
+      <div className="mb-8 flex items-start gap-5">
+        <div className="flex-1">
+          <h1 className="font-display mb-3 text-3xl font-bold text-forest">
+            About {SITE_NAME}
+          </h1>
+          <p className="text-lg leading-relaxed text-stone">
+            {SITE_NAME} is a free, community-focused event listing for the
+            Highway 4 corridor in Calaveras County, California. We check 20+
+            venues daily so you always know what&apos;s happening — from live music
+            in Murphys to ski events at Bear Valley.
+          </p>
+        </div>
+        <Image
+          src="/millie-happy.svg"
+          alt="Millie the sheepadoodle, our mascot"
+          width={80}
+          height={80}
+          className="hidden shrink-0 opacity-60 sm:block"
+        />
+      </div>
 
-      <section className="mb-10">
-        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
-          What is Hwy 4 Events?
-        </h2>
+      {/* Personal note */}
+      <div className="mb-10 rounded-xl border border-stone-light/30 bg-warm-white px-6 py-5">
         <p className="leading-relaxed text-stone">
-          Hwy 4 Events is a free, community-focused event listing for the
-          Highway 4 corridor. We aggregate live music, festivals, civic
-          gatherings, resort activities, and community events from Angels Camp to
-          Bear Valley — updated daily so you never miss what&apos;s happening in the
-          Sierra foothills.
+          We built {SITE_NAME} for our family — we have a cabin in Arnold and got
+          tired of missing things because events were scattered across a dozen
+          websites and Facebook pages. We figured our neighbors might find it
+          useful too. It&apos;s a labor of love, not a business. If you notice
+          something missing or wrong,{" "}
+          <a
+            href="mailto:rob@gabel.ai"
+            className="font-medium text-pine hover:underline"
+          >
+            let us know
+          </a>
+          .
         </p>
-      </section>
+      </div>
 
+      {/* Towns */}
       <section className="mb-10">
-        <h2 className="mb-4 text-xl font-semibold text-forest">
-          Towns Along Highway 4
+        <h2 className="font-display mb-4 text-xl font-semibold text-forest">
+          Towns we cover
         </h2>
-        <div className="space-y-4">
-          {towns.map((town) => (
+        <p className="mb-4 text-sm text-stone">
+          We track events along the full Highway 4 corridor, from the Central
+          Valley foothills up to the Sierra summit — west to east by elevation.
+        </p>
+        <div className="space-y-3">
+          {CORRIDOR_TOWNS.map((town) => (
             <div
               key={town.name}
-              className="rounded-xl border border-stone-light/30 bg-white p-5 shadow-sm"
+              className="flex items-baseline justify-between rounded-lg border border-stone-light/20 bg-white px-4 py-3"
             >
-              <h3 className="mb-1.5 text-lg font-semibold text-forest">
-                {town.name}
-              </h3>
-              <p className="leading-relaxed text-stone">{town.description}</p>
+              <div>
+                <Link
+                  href={`/?town=${encodeURIComponent(town.name)}`}
+                  className="font-semibold text-forest hover:text-pine hover:underline"
+                >
+                  {town.name}
+                </Link>
+                <span className="ml-2 text-sm text-stone">
+                  {town.tagline}
+                </span>
+              </div>
+              <span className="shrink-0 text-xs text-stone-light">
+                {town.elevation.toLocaleString()} ft
+              </span>
             </div>
           ))}
         </div>
       </section>
 
+      {/* Venues */}
+      <section className="mb-10">
+        <h2 className="font-display mb-4 text-xl font-semibold text-forest">
+          Venues we track
+        </h2>
+        <p className="mb-4 text-sm text-stone">
+          We automatically check these venues for new events. Know a venue we
+          should add?{" "}
+          <Link href="/submit" className="font-medium text-pine hover:underline">
+            Submit it
+          </Link>
+          .
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {venues.map((v) => (
+            <div
+              key={v.name}
+              className="flex items-center justify-between rounded-lg border border-stone-light/20 bg-white px-4 py-2.5"
+            >
+              <span className="text-sm font-medium text-forest">{v.name}</span>
+              <span className="text-xs text-stone-light">{v.town}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Private / member events */}
       <section className="mb-10">
         <h2 className="font-display mb-2 text-xl font-semibold text-forest">
-          What kinds of events can I find here?
+          Private & member events
+        </h2>
+        <p className="leading-relaxed text-stone">
+          Some venues — like Sequoia Woods Country Club and the Moose Lodge — host
+          events that are only open to members and their guests. These events
+          aren&apos;t shown by default, but you can opt in to see them using the{" "}
+          <strong>Clubs</strong> filter on the{" "}
+          <Link href="/" className="font-medium text-pine hover:underline">
+            main page
+          </Link>
+          . Look for the lock icon in the filter bar, toggle on the clubs
+          you&apos;re interested in, and their events will appear alongside
+          everything else.
+        </p>
+      </section>
+
+      {/* Event categories */}
+      <section className="mb-10">
+        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
+          What kinds of events?
         </h2>
         <ul className="ml-4 list-disc space-y-1.5 text-stone">
           <li>
@@ -158,26 +217,37 @@ export default function AboutPage() {
           </li>
           <li>
             <strong>Lodge Events</strong> — member-only events from local
-            organizations like the Moose Lodge
+            organizations (see above)
           </li>
         </ul>
       </section>
 
-      <section>
+      {/* Getting here */}
+      <section className="mb-10">
         <h2 className="font-display mb-2 text-xl font-semibold text-forest">
-          How to get to the Highway 4 corridor
+          Getting here
         </h2>
         <p className="leading-relaxed text-stone">
-          The Highway 4 corridor is located in Calaveras County in the central
-          Sierra Nevada foothills of California. Angels Camp is approximately 2
-          hours east of the San Francisco Bay Area via Highway 4 and about 1.5
-          hours southeast of Sacramento via Highway 49. Bear Valley is about 30
-          miles further east along Highway 4, rising to over 7,000 feet in the
-          Sierra Nevada mountains.
+          The Highway 4 corridor is in Calaveras County in the central Sierra
+          Nevada foothills. Angels Camp is about 2 hours east of the Bay Area and
+          1.5 hours southeast of Sacramento. Bear Valley is another 30 miles
+          further east, rising to over 7,000 feet.
         </p>
       </section>
 
-      <div className="mt-10 border-t border-stone-light/30 pt-6">
+      {/* Anonymous feedback */}
+      <section className="mb-8">
+        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
+          Send us a note
+        </h2>
+        <p className="mb-4 text-stone">
+          Have feedback, a suggestion, or just want to say hi? We read every
+          message. No email required.
+        </p>
+        <FeedbackForm />
+      </section>
+
+      <div className="border-t border-stone-light/30 pt-6">
         <Link
           href="/"
           className="text-sm font-medium text-pine hover:underline"

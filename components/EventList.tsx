@@ -10,7 +10,8 @@ import {
 } from "@/lib/types";
 import EventCard from "./EventCard";
 import FilterBar from "./FilterBar";
-import { format, parseISO, isToday, isTomorrow, isThisWeek, differenceInCalendarDays } from "date-fns";
+import NewsletterSignup from "./NewsletterSignup";
+import { format, parseISO, isToday, isTomorrow, isThisWeek, differenceInCalendarDays, nextFriday, nextSunday, isFriday, isSaturday, isSunday, startOfDay } from "date-fns";
 
 const ALL_CATEGORIES: EventCategory[] = [
   "civic",
@@ -114,6 +115,42 @@ function groupEventsByDate(events: CollapsedEvent[]) {
   return groups;
 }
 
+function getThisWeekendRange(): { start: string; end: string } | null {
+  const today = startOfDay(new Date());
+  const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+
+  let fri: Date;
+  let sun: Date;
+
+  if (dayOfWeek === 5) {
+    // Friday
+    fri = today;
+    sun = new Date(today);
+    sun.setDate(sun.getDate() + 2);
+  } else if (dayOfWeek === 6) {
+    // Saturday
+    fri = new Date(today);
+    fri.setDate(fri.getDate() - 1);
+    sun = new Date(today);
+    sun.setDate(sun.getDate() + 1);
+  } else if (dayOfWeek === 0) {
+    // Sunday
+    fri = new Date(today);
+    fri.setDate(fri.getDate() - 2);
+    sun = today;
+  } else {
+    // Mon-Thu: next weekend
+    fri = nextFriday(today);
+    sun = new Date(fri);
+    sun.setDate(sun.getDate() + 2);
+  }
+
+  return {
+    start: format(fri, "yyyy-MM-dd"),
+    end: format(sun, "yyyy-MM-dd"),
+  };
+}
+
 export default function EventList({
   initialEvents,
   orgs,
@@ -129,8 +166,23 @@ export default function EventList({
   );
   const [showWeekly, setShowWeekly] = useState(true);
   const [enabledOrgs, setEnabledOrgs] = useState<Set<string>>(new Set());
+  const [weekendOnly, setWeekendOnly] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const [filterHeight, setFilterHeight] = useState(0);
+
+  // URL-based town filtering: ?town=Avery or ?town=Avery&town=Arnold
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const townParams = params.getAll("town");
+    if (townParams.length > 0) {
+      const validTowns = townParams.filter((t) =>
+        (TOWNS as readonly string[]).includes(t)
+      );
+      if (validTowns.length > 0) {
+        setSelectedTowns(new Set(validTowns));
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const el = filterRef.current;
@@ -154,6 +206,8 @@ export default function EventList({
     });
   }, []);
 
+  const weekendRange = useMemo(() => getThisWeekendRange(), []);
+
   const filtered = useMemo(() => {
     const visible = initialEvents.filter((e) => {
       if (e.visibility === "private") {
@@ -162,10 +216,13 @@ export default function EventList({
       if (!selectedCategories.has(e.category)) return false;
       if (!selectedTowns.has(e.town)) return false;
       if (e.is_weekly && !showWeekly) return false;
+      if (weekendOnly && weekendRange) {
+        if (e.date < weekendRange.start || e.date > weekendRange.end) return false;
+      }
       return true;
     });
     return collapseMultiDayEvents(visible);
-  }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs]);
+  }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange]);
 
   const groups = useMemo(() => groupEventsByDate(filtered), [filtered]);
 
@@ -184,6 +241,27 @@ export default function EventList({
         ref={filterRef}
         className="sticky top-0 z-20 -mx-4 border-b border-stone-light/0 bg-cream/90 px-4 pb-4 pt-1 backdrop-blur-md [&:not(:first-child)]:border-stone-light/20"
       >
+        {/* Quick filter: This Weekend */}
+        <div className="mb-2 flex items-center gap-2">
+          <button
+            onClick={() => setWeekendOnly(!weekendOnly)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              weekendOnly
+                ? "border-pine bg-pine text-white"
+                : "border-stone-light/40 bg-white text-stone hover:border-pine hover:text-pine"
+            }`}
+          >
+            This Weekend
+          </button>
+          {weekendOnly && (
+            <button
+              onClick={() => setWeekendOnly(false)}
+              className="text-xs text-stone hover:text-pine"
+            >
+              Show all dates
+            </button>
+          )}
+        </div>
         <FilterBar
           selectedCategories={selectedCategories}
           onCategoriesChange={setSelectedCategories}
@@ -225,32 +303,35 @@ export default function EventList({
           </div>
         ) : (
           groups.map((group, groupIndex) => (
-            <section
-              key={group.date}
-              className="animate-fadeIn"
-              style={{ animationDelay: `${groupIndex * 50}ms` }}
-            >
-              {/* Sticky date header */}
-              <div
-                className="sticky z-10 -mx-4 mb-3 bg-cream/95 px-4 py-2 backdrop-blur-sm"
-                style={{ top: `${filterHeight}px` }}
+            <div key={group.date}>
+              {/* Inline newsletter signup between day 2 and day 3 */}
+              {groupIndex === 2 && <NewsletterSignup variant="inline" />}
+              <section
+                className="animate-fadeIn"
+                style={{ animationDelay: `${groupIndex * 50}ms` }}
               >
-                <h2 className="font-display flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-earth">
-                  <span className="h-px flex-1 bg-stone-light/40" />
-                  {group.label}
-                  <span className="h-px flex-1 bg-stone-light/40" />
-                </h2>
-              </div>
-              <div className="space-y-3">
-                {group.events.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    isUpNext={event.id === upNextId}
-                  />
-                ))}
-              </div>
-            </section>
+                {/* Sticky date header */}
+                <div
+                  className="sticky z-10 -mx-4 mb-3 bg-cream/95 px-4 py-2 backdrop-blur-sm"
+                  style={{ top: `${filterHeight}px` }}
+                >
+                  <h2 className="font-display flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-earth">
+                    <span className="h-px flex-1 bg-stone-light/40" />
+                    {group.label}
+                    <span className="h-px flex-1 bg-stone-light/40" />
+                  </h2>
+                </div>
+                <div className="space-y-3">
+                  {group.events.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      isUpNext={event.id === upNextId}
+                    />
+                  ))}
+                </div>
+              </section>
+            </div>
           ))
         )}
       </div>

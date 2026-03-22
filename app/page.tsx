@@ -6,7 +6,7 @@ import Header from "@/components/Header";
 import EventList from "@/components/EventList";
 import WeeklyBriefing from "@/components/WeeklyBriefing";
 import ShareSiteLink from "@/components/ShareSiteLink";
-import NewsletterSignup from "@/components/NewsletterSignup";
+import Link from "next/link";
 
 export const revalidate = 3600; // revalidate every hour
 
@@ -193,14 +193,21 @@ export default async function Home() {
         <section aria-label="What events are happening along Highway 4?">
           <div className="mb-6 text-center text-stone">
             <p>
-              We built {SITE_NAME} for our family, but hope you find it useful too.{" "}
-              <a
-                href="mailto:rob@gabel.ai"
+              Live music, festivals, and community events from Angels Camp to Bear Valley — updated daily.{" "}
+              <Link
+                href="/about"
                 className="font-medium text-pine hover:underline"
               >
-                Email us
-              </a>{" "}
-              if we&apos;re missing something!{" "}
+                About us
+              </Link>{" "}
+              ·{" "}
+              <Link
+                href="/submit"
+                className="font-medium text-pine hover:underline"
+              >
+                Submit an event
+              </Link>{" "}
+              ·{" "}
               <ShareSiteLink />
             </p>
           </div>
@@ -213,7 +220,6 @@ export default async function Home() {
               weekendLabel={weekendBriefing.label}
             />
           )}
-          <NewsletterSignup />
           <EventList initialEvents={events} orgs={orgs} />
         </section>
       </div>

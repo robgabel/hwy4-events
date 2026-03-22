@@ -159,7 +159,7 @@ export default function RootLayout({
             </Suspense>
             <nav className="mt-3 flex flex-wrap justify-center gap-4 text-xs text-stone-light">
               <a href="/about" className="hover:text-pine hover:underline">
-                About the Hwy 4 Corridor
+                About Hwy 4 Events
               </a>
               <a href="/faq" className="hover:text-pine hover:underline">
                 FAQ
