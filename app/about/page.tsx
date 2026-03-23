@@ -8,7 +8,7 @@ import FeedbackForm from "@/components/FeedbackForm";
 export const metadata: Metadata = {
   title: "About Hwy 4 Events",
   description:
-    "Learn about Hwy 4 Events — a free, community-focused event listing for the Highway 4 corridor from Angels Camp to Bear Valley in the California Sierra.",
+    "Your neighbor's guide to what's happening on the Highway 4 corridor, from Angels Camp to Bear Valley. Free community event listings, updated daily.",
   alternates: { canonical: "/about" },
 };
 
@@ -40,22 +40,48 @@ function BreadcrumbSchema() {
   );
 }
 
-const venues = [
-  { name: "Ironstone Vineyards", town: "Murphys" },
-  { name: "Murphys Hotel", town: "Murphys" },
-  { name: "Murphys Irish Pub", town: "Murphys" },
-  { name: "Brice Station Vineyards", town: "Murphys" },
-  { name: "The Watering Hole", town: "Arnold" },
-  { name: "Branding Iron Saloon", town: "Arnold" },
-  { name: "The Lube Room Saloon", town: "Arnold" },
-  { name: "Howard's Mystic Saloon", town: "Arnold" },
-  { name: "Camp Connell General Store", town: "Camp Connell" },
-  { name: "Sequoia Woods Country Club", town: "Arnold" },
-  { name: "Bear Valley Mountain Resort", town: "Bear Valley" },
-  { name: "Calaveras County Fairgrounds", town: "Angels Camp" },
-  { name: "Greenhorn Creek Resort", town: "Angels Camp" },
-  { name: "Moose Lodge", town: "Angels Camp" },
+const venuesByTown: { town: string; venues: string[] }[] = [
+  {
+    town: "Angels Camp",
+    venues: [
+      "Calaveras County Fairgrounds",
+      "Greenhorn Creek Resort",
+      "Moose Lodge",
+    ],
+  },
+  {
+    town: "Murphys",
+    venues: [
+      "Ironstone Vineyards",
+      "Murphys Hotel",
+      "Murphys Irish Pub",
+      "Brice Station Vineyards",
+    ],
+  },
+  {
+    town: "Arnold",
+    venues: [
+      "The Watering Hole",
+      "Branding Iron Saloon",
+      "The Lube Room Saloon",
+      "Howard's Mystic Saloon",
+      "Sequoia Woods Country Club",
+    ],
+  },
+  {
+    town: "Camp Connell",
+    venues: ["Camp Connell General Store"],
+  },
+  {
+    town: "Bear Valley",
+    venues: ["Bear Valley Mountain Resort"],
+  },
 ];
+
+const totalVenues = venuesByTown.reduce(
+  (sum, group) => sum + group.venues.length,
+  0
+);
 
 export default function AboutPage() {
   return (
@@ -74,45 +100,163 @@ export default function AboutPage() {
         </ol>
       </nav>
 
-      {/* Header with Millie */}
-      <div className="mb-8 flex items-start gap-5">
-        <div className="flex-1">
-          <h1 className="font-display mb-3 text-3xl font-bold text-forest">
-            About {SITE_NAME}
-          </h1>
-          <p className="text-lg leading-relaxed text-stone">
-            {SITE_NAME} is a free, community-focused event listing for the
-            Highway 4 corridor in Calaveras County, California. We check 20+
-            venues daily so you always know what&apos;s happening — from live music
-            in Murphys to ski events at Bear Valley.
-          </p>
-        </div>
+      {/* ============================================ */}
+      {/* TOP ZONE                                     */}
+      {/* ============================================ */}
+
+      {/* Hero */}
+      <div className="mb-8 flex flex-col items-center gap-5 sm:flex-row sm:items-start">
         <Image
           src="/millie-happy.svg"
           alt="Millie the sheepadoodle, our mascot"
-          width={80}
-          height={80}
-          className="hidden shrink-0 opacity-60 sm:block"
+          width={100}
+          height={100}
+          className="shrink-0"
+          priority
         />
+        <div>
+          <h1 className="font-display mb-3 text-center text-3xl font-bold text-forest sm:text-left">
+            Your neighbor&apos;s guide to what&apos;s happening on the 4
+          </h1>
+          <p className="text-center text-lg leading-relaxed text-stone sm:text-left">
+            A free community event listing for the Highway 4 corridor, from
+            Angels Camp to Bear Valley.
+          </p>
+        </div>
       </div>
 
       {/* Personal note */}
       <div className="mb-10 rounded-xl border border-stone-light/30 bg-warm-white px-6 py-5">
         <p className="leading-relaxed text-stone">
-          We built {SITE_NAME} for our family — we have a cabin in Arnold and got
-          tired of missing things because events were scattered across a dozen
-          websites and Facebook pages. We figured our neighbors might find it
-          useful too. It&apos;s a labor of love, not a business. If you notice
-          something missing or wrong,{" "}
+          I&apos;m Rob. My family has had a place on Thunderbolt in Arnold
+          since 2015. We kept missing things because events were scattered
+          across a dozen websites, Facebook groups, and flyers at the Lube
+          Room. So I built this. First for us, then for our neighbors. It&apos;s a labor of love, not a
+          business. If you notice something missing or wrong,{" "}
           <a
             href="mailto:rob@gabel.ai"
             className="font-medium text-pine hover:underline"
           >
-            let us know
+            drop me a line
           </a>
           .
         </p>
       </div>
+
+      {/* Three value props */}
+      <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-xl border border-stone-light/20 bg-white px-5 py-4 text-center">
+          <div className="mb-2 text-2xl">&#x1F50D;</div>
+          <h3 className="font-display mb-1 font-semibold text-forest">
+            Updated every morning
+          </h3>
+          <p className="text-sm leading-relaxed text-stone">
+            We check 20+ venues daily so you don&apos;t have to. If it&apos;s
+            happening on the 4, it&apos;s here.
+          </p>
+        </div>
+        <div className="rounded-xl border border-stone-light/20 bg-white px-5 py-4 text-center">
+          <div className="mb-2 text-2xl">&#x1F4DD;</div>
+          <h3 className="font-display mb-1 font-semibold text-forest">
+            This Week on the 4
+          </h3>
+          <p className="text-sm leading-relaxed text-stone">
+            Every day, a fresh briefing of what&apos;s coming up. Written to
+            sound like a neighbor, not a robot.
+          </p>
+        </div>
+        <div className="rounded-xl border border-stone-light/20 bg-white px-5 py-4 text-center">
+          <div className="mb-2 text-2xl">&#x2B50;</div>
+          <h3 className="font-display mb-1 font-semibold text-forest">
+            Hand-picked highlights
+          </h3>
+          <p className="text-sm leading-relaxed text-stone">
+            Not everything is worth your Saturday. I flag the ones that are
+            actually worth going to.
+          </p>
+        </div>
+      </div>
+
+      {/* Who this is for */}
+      <section className="mb-10">
+        <h2 className="font-display mb-4 text-xl font-semibold text-forest">
+          This is for you if...
+        </h2>
+        <ul className="space-y-2.5 text-stone">
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0 text-pine">&#x2192;</span>
+            <span>
+              You live up here and want one place to check instead of five
+              Facebook groups
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0 text-pine">&#x2192;</span>
+            <span>
+              You&apos;re a BLS, Sequoia Woods, or Moose Lodge member looking
+              for member events alongside public ones
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0 text-pine">&#x2192;</span>
+            <span>
+              You&apos;ve got kids and want to know what&apos;s family-friendly
+              this weekend
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0 text-pine">&#x2192;</span>
+            <span>
+              You own a vacation rental and want to tell guests what&apos;s
+              happening during their stay
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0 text-pine">&#x2192;</span>
+            <span>
+              You&apos;re in Stockton or the Bay Area thinking about driving up
+              and wondering if it&apos;s worth the trip
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0 text-pine">&#x2192;</span>
+            <span>
+              You already know everyone at Bistro Espresso but still want to
+              make sure you&apos;re not missing anything
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      {/* Primary CTA */}
+      <div className="mb-16 text-center">
+        <Link
+          href="/"
+          className="inline-block rounded-lg bg-pine px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-forest"
+        >
+          See what&apos;s happening this weekend &rarr;
+        </Link>
+      </div>
+
+      {/* ============================================ */}
+      {/* VISUAL BREAK                                 */}
+      {/* ============================================ */}
+
+      <div className="mb-12 flex items-center gap-4">
+        <div className="h-px flex-1 bg-stone-light/30" />
+        <Image
+          src="/paw-print.svg"
+          alt=""
+          width={20}
+          height={20}
+          className="opacity-30"
+        />
+        <div className="h-px flex-1 bg-stone-light/30" />
+      </div>
+
+      {/* ============================================ */}
+      {/* BOTTOM ZONE                                  */}
+      {/* ============================================ */}
 
       {/* Towns */}
       <section className="mb-10">
@@ -120,8 +264,8 @@ export default function AboutPage() {
           Towns we cover
         </h2>
         <p className="mb-4 text-sm text-stone">
-          We track events along the full Highway 4 corridor, from the Central
-          Valley foothills up to the Sierra summit — west to east by elevation.
+          9 towns along 50 miles of Highway 4, from the Gold Country foothills
+          to the Sierra summit. Listed west to east by elevation.
         </p>
         <div className="space-y-3">
           {CORRIDOR_TOWNS.map((town) => (
@@ -148,49 +292,66 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Venues */}
+      {/* Venues grouped by town */}
       <section className="mb-10">
         <h2 className="font-display mb-4 text-xl font-semibold text-forest">
           Venues we track
         </h2>
         <p className="mb-4 text-sm text-stone">
-          We automatically check these venues for new events. Know a venue we
-          should add?{" "}
+          We automatically check {totalVenues} venues for new events. Know a
+          venue we should add?{" "}
           <Link href="/submit" className="font-medium text-pine hover:underline">
             Submit it
           </Link>
           .
         </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {venues.map((v) => (
-            <div
-              key={v.name}
-              className="flex items-center justify-between rounded-lg border border-stone-light/20 bg-white px-4 py-2.5"
-            >
-              <span className="text-sm font-medium text-forest">{v.name}</span>
-              <span className="text-xs text-stone-light">{v.town}</span>
+        <div className="space-y-4">
+          {venuesByTown.map((group) => (
+            <div key={group.town}>
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-light">
+                {group.town}
+              </h3>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {group.venues.map((name) => (
+                  <div
+                    key={name}
+                    className="rounded-lg border border-stone-light/20 bg-white px-4 py-2.5"
+                  >
+                    <span className="text-sm font-medium text-forest">
+                      {name}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Private / member events */}
+      {/* Families & members */}
       <section className="mb-10">
-        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
-          Private & member events
+        <h2 className="font-display mb-3 text-xl font-semibold text-forest">
+          Families & members welcome
         </h2>
-        <p className="leading-relaxed text-stone">
-          Some venues — like Sequoia Woods Country Club and the Moose Lodge — host
-          events that are only open to members and their guests. These events
-          aren&apos;t shown by default, but you can opt in to see them using the{" "}
-          <strong>Clubs</strong> filter on the{" "}
-          <Link href="/" className="font-medium text-pine hover:underline">
-            main page
-          </Link>
-          . Look for the lock icon in the filter bar, toggle on the clubs
-          you&apos;re interested in, and their events will appear alongside
-          everything else.
-        </p>
+        <div className="space-y-4 leading-relaxed text-stone">
+          <p>
+            Plenty of events on the 4 are great for kids, from the playground
+            at White Pines Lake to summer movies at Blue Lake Springs.
+            Community events and resort activities are your best bet for
+            family-friendly outings.
+          </p>
+          <p>
+            Blue Lake Springs, Sequoia Woods Country Club, and the Moose Lodge
+            host events that are only open to members and their guests. These
+            aren&apos;t shown by default, but you can opt in using the{" "}
+            <strong>Clubs</strong> filter on the{" "}
+            <Link href="/" className="font-medium text-pine hover:underline">
+              main page
+            </Link>
+            . Look for the lock icon, toggle on the clubs you belong to, and
+            their events will appear alongside everything else.
+          </p>
+        </div>
       </section>
 
       {/* Event categories */}
@@ -200,59 +361,53 @@ export default function AboutPage() {
         </h2>
         <ul className="ml-4 list-disc space-y-1.5 text-stone">
           <li>
-            <strong>Live Music</strong> — bands, singer-songwriters, and open
+            <strong>Live Music</strong>: bands, singer-songwriters, and open
             mic nights at venues from Angels Camp to Bear Valley
           </li>
           <li>
-            <strong>Festivals</strong> — the Jumping Frog Jubilee, Murphys Irish
+            <strong>Festivals</strong>: the Jumping Frog Jubilee, Murphys Irish
             Day, wine festivals, and seasonal celebrations
           </li>
           <li>
-            <strong>Community Events</strong> — civic meetings, farmers markets,
+            <strong>Community Events</strong>: civic meetings, farmers markets,
             holiday parades, and volunteer gatherings
           </li>
           <li>
-            <strong>Resort Activities</strong> — Bear Valley skiing, summer
+            <strong>Resort Activities</strong>: Bear Valley skiing, summer
             concerts, mountain biking events, and outdoor adventures
           </li>
           <li>
-            <strong>Lodge Events</strong> — member-only events from local
+            <strong>Lodge Events</strong>: member-only events from local
             organizations (see above)
           </li>
         </ul>
       </section>
 
-      {/* Getting here */}
-      <section className="mb-10">
-        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
-          Getting here
-        </h2>
-        <p className="leading-relaxed text-stone">
-          The Highway 4 corridor is in Calaveras County in the central Sierra
-          Nevada foothills. Angels Camp is about 2 hours east of the Bay Area and
-          1.5 hours southeast of Sacramento. Bear Valley is another 30 miles
-          further east, rising to over 7,000 feet.
-        </p>
-      </section>
-
-      {/* Anonymous feedback */}
+      {/* Feedback form */}
       <section className="mb-8">
         <h2 className="font-display mb-2 text-xl font-semibold text-forest">
-          Send us a note
+          Send me a note
         </h2>
         <p className="mb-4 text-stone">
-          Have feedback, a suggestion, or just want to say hi? We read every
+          Have feedback, a suggestion, or just want to say hi? I read every
           message. No email required.
         </p>
         <FeedbackForm />
       </section>
 
-      <div className="border-t border-stone-light/30 pt-6">
+      {/* Footer CTA + back link */}
+      <div className="flex items-center justify-between border-t border-stone-light/30 pt-6">
         <Link
           href="/"
           className="text-sm font-medium text-pine hover:underline"
         >
           &larr; Back to events
+        </Link>
+        <Link
+          href="/"
+          className="rounded-lg bg-pine px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-forest"
+        >
+          See this weekend&apos;s events &rarr;
         </Link>
       </div>
     </main>
