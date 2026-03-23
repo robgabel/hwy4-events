@@ -1,7 +1,6 @@
-"use client";
-
-import React, { useState, useMemo } from "react";
+import React from "react";
 import Image from "next/image";
+import WeeklyBriefingTabs from "./WeeklyBriefingTabs";
 
 interface WeeklyBriefingProps {
   briefing: string;
@@ -22,11 +21,9 @@ function renderWithLinks(text: string): React.ReactNode[] {
   let match;
 
   while ((match = linkRegex.exec(text)) !== null) {
-    // Add text before the link
     if (match.index > lastIndex) {
       parts.push(text.slice(lastIndex, match.index));
     }
-    // Add the link
     parts.push(
       <a
         key={match.index}
@@ -41,12 +38,33 @@ function renderWithLinks(text: string): React.ReactNode[] {
     lastIndex = match.index + match[0].length;
   }
 
-  // Add remaining text
   if (lastIndex < text.length) {
     parts.push(text.slice(lastIndex));
   }
 
   return parts.length > 0 ? parts : [text];
+}
+
+function BriefingContent({
+  text,
+  generatedAt,
+}: {
+  text: string;
+  generatedAt: string | null;
+}) {
+  const paragraphs = text.split("\n\n").map((p) => renderWithLinks(p));
+  return (
+    <>
+      {paragraphs.map((nodes, i) => (
+        <p
+          key={i}
+          className={`leading-relaxed text-stone-800${i > 0 ? " mt-3" : ""}`}
+        >
+          {nodes}
+        </p>
+      ))}
+    </>
+  );
 }
 
 export default function WeeklyBriefing({
@@ -57,35 +75,21 @@ export default function WeeklyBriefing({
   weekendLabel,
 }: WeeklyBriefingProps) {
   const hasWeekend = !!weekendBriefing;
-  const [activeTab, setActiveTab] = useState<"today" | "weekend">("today");
 
-  const isWeekend = activeTab === "weekend" && hasWeekend;
-  const activeBriefing = isWeekend ? weekendBriefing! : briefing;
-  const activeGeneratedAt = isWeekend ? weekendGeneratedAt : generatedAt;
+  // Smart "This/Next Weekend" — computed at render time (server)
+  const todayDay = new Date().getDay();
+  const isCurrentlyWeekend = todayDay === 0 || todayDay === 5 || todayDay === 6;
+  const weekendTabLabel = isCurrentlyWeekend ? "Next Weekend" : "This Weekend";
 
-  const dateLabel = activeGeneratedAt
-    ? new Date(activeGeneratedAt).toLocaleDateString("en-US", {
+  const todayDateLabel = generatedAt
+    ? new Date(generatedAt).toLocaleDateString("en-US", {
         weekday: "long",
         month: "short",
         day: "numeric",
       })
     : null;
 
-  // Smart "This/Next Weekend" — if today is Fri/Sat/Sun, the weekend briefing
-  // covers NEXT weekend, so label accordingly. Mon-Thu it's "This Weekend".
-  const todayDay = new Date().getDay(); // 0=Sun, 5=Fri, 6=Sat
-  const isCurrentlyWeekend = todayDay === 0 || todayDay === 5 || todayDay === 6;
-  const weekendTabLabel = isCurrentlyWeekend ? "Next Weekend" : "This Weekend";
-
-  const parsedParagraphs = useMemo(
-    () => activeBriefing.split("\n\n").map((p) => renderWithLinks(p)),
-    [activeBriefing]
-  );
-
-  const title = isWeekend
-    ? `${weekendTabLabel.replace("Weekend", "Weekend on the 4")}`
-    : "Today on the 4";
-  const subtitle = isWeekend && weekendLabel ? weekendLabel : null;
+  const title = "Today on the 4";
 
   return (
     <div className="mb-8 rounded-xl border border-stone-light/30 bg-white px-6 py-5 shadow-sm">
@@ -100,44 +104,29 @@ export default function WeeklyBriefing({
         <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-earth">
           {title}
         </h2>
-        {subtitle && (
-          <span className="text-xs text-stone-light">{subtitle}</span>
-        )}
-        {dateLabel && !subtitle && (
-          <span className="ml-auto text-xs text-stone-light">{dateLabel}</span>
+        {todayDateLabel && (
+          <span className="ml-auto text-xs text-stone-light">
+            {todayDateLabel}
+          </span>
         )}
       </div>
 
-      {hasWeekend && (
-        <div className="mb-3 flex gap-1 rounded-lg bg-cream p-1">
-          <button
-            onClick={() => setActiveTab("today")}
-            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === "today"
-                ? "bg-white text-forest shadow-sm"
-                : "text-stone hover:text-forest"
-            }`}
-          >
-            Today
-          </button>
-          <button
-            onClick={() => setActiveTab("weekend")}
-            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === "weekend"
-                ? "bg-white text-forest shadow-sm"
-                : "text-stone hover:text-forest"
-            }`}
-          >
-            {weekendTabLabel}
-          </button>
-        </div>
+      {hasWeekend ? (
+        <WeeklyBriefingTabs
+          weekendTabLabel={weekendTabLabel}
+          todayContent={
+            <BriefingContent text={briefing} generatedAt={generatedAt} />
+          }
+          weekendContent={
+            <BriefingContent
+              text={weekendBriefing!}
+              generatedAt={weekendGeneratedAt ?? null}
+            />
+          }
+        />
+      ) : (
+        <BriefingContent text={briefing} generatedAt={generatedAt} />
       )}
-
-      {parsedParagraphs.map((nodes, i) => (
-        <p key={i} className={`leading-relaxed text-stone-800${i > 0 ? " mt-3" : ""}`}>
-          {nodes}
-        </p>
-      ))}
     </div>
   );
 }

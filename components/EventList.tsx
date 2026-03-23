@@ -9,10 +9,27 @@ import {
   TOWNS,
 } from "@/lib/types";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import EventCard from "./EventCard";
-import FilterBar from "./FilterBar";
-import NewsletterSignup from "./NewsletterSignup";
-import { format, parseISO, isToday, isTomorrow, isThisWeek, differenceInCalendarDays, nextFriday, nextSunday, isFriday, isSaturday, isSunday, startOfDay } from "date-fns";
+import {
+  parseDate,
+  isToday,
+  isTomorrow,
+  isThisWeek,
+  differenceInCalendarDays,
+  startOfDay,
+  getNextFriday,
+  formatFullDate,
+  formatLongWeekday,
+  formatLongMonthDay,
+  formatISODate,
+} from "@/lib/date-utils";
+
+// Lazy-load non-critical components so they don't block hydration
+const FilterBar = dynamic(() => import("./FilterBar"), { ssr: true });
+const NewsletterSignup = dynamic(() => import("./NewsletterSignup"), {
+  ssr: false,
+});
 
 const ALL_CATEGORIES: EventCategory[] = [
   "civic",
@@ -47,13 +64,11 @@ function collapseMultiDayEvents(events: Hwy4Event[]): CollapsedEvent[] {
 
   for (const [baseName, groupEvents] of baseNameMap) {
     if (groupEvents.length > 1) {
-      // Only collapse if dates span a short, consecutive range (not weekly recurrences)
-      const dates = groupEvents.map((e) => parseISO(e.date));
+      const dates = groupEvents.map((e) => parseDate(e.date));
       const minDate = dates.reduce((a, b) => (a < b ? a : b));
       const maxDate = dates.reduce((a, b) => (a > b ? a : b));
       const span = differenceInCalendarDays(maxDate, minDate);
 
-      // Only collapse if the date span is <= 7 days (multi-day event, not weekly)
       if (span <= 7) {
         collapsedGroups.set(baseName, groupEvents);
         for (const e of groupEvents) {
@@ -100,13 +115,13 @@ function groupEventsByDate(events: CollapsedEvent[]) {
   for (const event of events) {
     if (event.date !== currentDate) {
       currentDate = event.date;
-      const dateObj = parseISO(event.date);
-      let label = format(dateObj, "EEEE, MMMM d, yyyy");
-      if (isToday(dateObj)) label = `Today — ${format(dateObj, "MMMM d")}`;
+      const dateObj = parseDate(event.date);
+      let label = formatFullDate(dateObj);
+      if (isToday(dateObj)) label = `Today — ${formatLongMonthDay(dateObj)}`;
       else if (isTomorrow(dateObj))
-        label = `Tomorrow — ${format(dateObj, "MMMM d")}`;
+        label = `Tomorrow — ${formatLongMonthDay(dateObj)}`;
       else if (isThisWeek(dateObj))
-        label = `This ${format(dateObj, "EEEE")} — ${format(dateObj, "MMMM d")}`;
+        label = `This ${formatLongWeekday(dateObj)} — ${formatLongMonthDay(dateObj)}`;
 
       groups.push({ label, date: event.date, events: [] });
     }
@@ -141,14 +156,14 @@ function getThisWeekendRange(): { start: string; end: string } | null {
     sun = today;
   } else {
     // Mon-Thu: next weekend
-    fri = nextFriday(today);
+    fri = getNextFriday(today);
     sun = new Date(fri);
     sun.setDate(sun.getDate() + 2);
   }
 
   return {
-    start: format(fri, "yyyy-MM-dd"),
-    end: format(sun, "yyyy-MM-dd"),
+    start: formatISODate(fri),
+    end: formatISODate(sun),
   };
 }
 

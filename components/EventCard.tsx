@@ -1,9 +1,22 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
 import { generateEventSlug } from "@/lib/slugs";
-import { format, parseISO } from "date-fns";
+import {
+  parseDate,
+  formatShortWeekday,
+  formatDayOfMonth,
+  formatShortMonth,
+  formatShortMonthDay,
+} from "@/lib/date-utils";
 import Image from "next/image";
 import Link from "next/link";
-import LiveBadge from "@/components/LiveBadge";
+import dynamic from "next/dynamic";
+
+// Lazy-load LiveBadge: it's in every card, sets up intervals, and isn't
+// needed for the initial render. Loading it async prevents it from blocking
+// hydration of the event links above it.
+const LiveBadge = dynamic(() => import("@/components/LiveBadge"), {
+  ssr: false,
+});
 
 function formatTime(time: string | null): string | null {
   if (!time) return null;
@@ -79,8 +92,8 @@ export default function EventCard({
   isUpNext?: boolean;
 }) {
   const isPrivate = event.visibility === "private";
-  const dateObj = parseISO(event.date);
-  const dayOfWeek = format(dateObj, "EEE");
+  const dateObj = parseDate(event.date);
+  const dayOfWeek = formatShortWeekday(dateObj);
   const slug = generateEventSlug(event.name, event.date, event.town);
 
   const startTime = formatTime(event.start_time);
@@ -92,9 +105,9 @@ export default function EventCard({
     : null;
 
   const hasDateRange = event.isCollapsed && event.endDate;
-  const endDateObj = hasDateRange ? parseISO(event.endDate!) : null;
+  const endDateObj = hasDateRange ? parseDate(event.endDate!) : null;
   const sameMonth =
-    endDateObj && format(dateObj, "MMM") === format(endDateObj, "MMM");
+    endDateObj && formatShortMonth(dateObj) === formatShortMonth(endDateObj);
 
   const accentColor = CATEGORY_ACCENT_COLORS[event.category];
 
@@ -119,13 +132,13 @@ export default function EventCard({
         {hasDateRange ? (
           <>
             <span className="text-[11px] font-semibold text-pine">
-              {format(dateObj, "MMM d")}
+              {formatShortMonthDay(dateObj)}
             </span>
             <span className="text-[10px] leading-tight text-stone">—</span>
             <span className="text-[11px] font-semibold text-pine">
               {sameMonth
-                ? format(endDateObj!, "d")
-                : format(endDateObj!, "MMM d")}
+                ? formatDayOfMonth(endDateObj!)
+                : formatShortMonthDay(endDateObj!)}
             </span>
             <span className="mt-1 rounded-full bg-forest/10 px-1.5 py-0.5 text-[9px] font-medium text-forest">
               {event.dayCount}d
@@ -137,10 +150,10 @@ export default function EventCard({
               {dayOfWeek}
             </span>
             <span className="font-display text-lg font-bold text-forest">
-              {format(dateObj, "d")}
+              {formatDayOfMonth(dateObj)}
             </span>
             <span className="text-xs text-stone">
-              {format(dateObj, "MMM")}
+              {formatShortMonth(dateObj)}
             </span>
           </>
         )}
