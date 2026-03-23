@@ -61,12 +61,17 @@ const venuesByTown: { town: string; venues: string[] }[] = [
   {
     town: "Arnold",
     venues: [
+      "Bistro Espresso",
+      "Cameo Plaza",
       "The Watering Hole",
       "Branding Iron Saloon",
-      "The Lube Room Saloon",
       "Howard's Mystic Saloon",
       "Sequoia Woods Country Club",
     ],
+  },
+  {
+    town: "Dorrington",
+    venues: ["The Lube Room Saloon"],
   },
   {
     town: "Camp Connell",
@@ -139,7 +144,17 @@ export default function AboutPage() {
           >
             drop me a line
           </a>
-          .
+          . That&apos;s Millie, who came into our lives through{" "}
+          <a
+            href="https://www.californiadoodlerescue.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-pine hover:underline"
+          >
+            California Doodle Rescue
+          </a>
+          . She comes with us every trip and has strong opinions about which
+          events involve food.
         </p>
       </div>
 
