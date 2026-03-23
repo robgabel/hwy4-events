@@ -81,6 +81,12 @@ lib/
   - `PRD-bear-valley-events.md` — Bear Valley events coverage expansion
   - `PLAN-seo-aeo.md` — SEO and answer-engine optimization plan
 
+## UI Standards
+
+- **Cursor:** Every `<button>` and clickable non-`<a>`/non-`<Link>` element MUST include `cursor-pointer` in its Tailwind classes. Tailwind v4 does not set `cursor: pointer` on buttons by default — the browser shows an arrow, which makes buttons look non-interactive.
+- **Client bundle weight:** Avoid importing heavy libraries (date-fns, lodash, etc.) in `"use client"` components. Use `lib/date-utils.ts` for date formatting on the client. Heavy/non-critical components should be lazy-loaded with `next/dynamic`.
+- **Hydration budget:** Links and navigation must work within 1–2s on mobile. Keep the client component tree shallow; prefer server components with small client wrappers (see `WeeklyBriefing.tsx` + `WeeklyBriefingTabs.tsx` pattern).
+
 ## Content & Brand Rules
 
 - **Voice:** local, human, slightly wry — never corporate or AI-sounding

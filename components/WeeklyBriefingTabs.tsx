@@ -22,7 +22,7 @@ export default function WeeklyBriefingTabs({
       <div className="mb-3 flex gap-1 rounded-lg bg-cream p-1">
         <button
           onClick={() => setActiveTab("today")}
-          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+          className={`flex-1 cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
             activeTab === "today"
               ? "bg-white text-forest shadow-sm"
               : "text-stone hover:text-forest"
@@ -32,7 +32,7 @@ export default function WeeklyBriefingTabs({
         </button>
         <button
           onClick={() => setActiveTab("weekend")}
-          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+          className={`flex-1 cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
             activeTab === "weekend"
               ? "bg-white text-forest shadow-sm"
               : "text-stone hover:text-forest"

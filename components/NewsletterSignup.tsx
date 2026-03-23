@@ -61,7 +61,7 @@ export default function NewsletterSignup({
               <button
                 type="submit"
                 disabled={status === "loading"}
-                className="rounded-lg bg-pine px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
+                className="cursor-pointer rounded-lg bg-pine px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
               >
                 {status === "loading" ? "..." : "Subscribe"}
               </button>
@@ -98,7 +98,7 @@ export default function NewsletterSignup({
           <button
             type="submit"
             disabled={status === "loading"}
-            className="rounded-lg bg-pine px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
+            className="cursor-pointer rounded-lg bg-pine px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
           >
             {status === "loading" ? "..." : "Subscribe"}
           </button>

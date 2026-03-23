@@ -144,7 +144,7 @@ export default function FilterBar({
       {/* Summary bar — always visible */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-warm-white/50 sm:px-5 sm:py-3"
+        className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-warm-white/50 sm:px-5 sm:py-3"
       >
         {/* Filter icon */}
         <svg
