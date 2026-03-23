@@ -247,6 +247,54 @@ export default function EventList({
       ? groups[0].events[0].id
       : null;
 
+  // Progressive rendering: only hydrate a small initial batch, then load more
+  // as the user scrolls. This keeps hydration fast (<2s) even with 200+ events.
+  const INITIAL_EVENTS = 15;
+  const BATCH_SIZE = 20;
+  const totalEvents = filtered.length;
+  const [visibleCount, setVisibleCount] = useState(INITIAL_EVENTS);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when filters change (show initial batch of new results)
+  const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}`;
+  useEffect(() => {
+    setVisibleCount(INITIAL_EVENTS);
+  }, [filteredKey]);
+
+  // IntersectionObserver to auto-load more events on scroll
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || visibleCount >= totalEvents) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + BATCH_SIZE, totalEvents));
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visibleCount, totalEvents]);
+
+  // Slice groups to only include the visible event count
+  const visibleGroups = useMemo(() => {
+    let count = 0;
+    const result: typeof groups = [];
+    for (const group of groups) {
+      if (count >= visibleCount) break;
+      const remaining = visibleCount - count;
+      if (group.events.length <= remaining) {
+        result.push(group);
+        count += group.events.length;
+      } else {
+        result.push({ ...group, events: group.events.slice(0, remaining) });
+        count += remaining;
+      }
+    }
+    return result;
+  }, [groups, visibleCount]);
+
   const MEMBER_ORG_SLUGS = new Set(["moose-lodge", "sequoia-woods"]);
   const memberOrgs = orgs.filter((o) => MEMBER_ORG_SLUGS.has(o.slug));
 
@@ -319,37 +367,45 @@ export default function EventList({
             </button>
           </div>
         ) : (
-          groups.map((group, groupIndex) => (
-            <div key={group.date}>
-              {/* Inline newsletter signup between day 2 and day 3 */}
-              {groupIndex === 2 && <NewsletterSignup variant="inline" />}
-              <section
-                className="animate-fadeIn"
-                style={{ animationDelay: `${groupIndex * 50}ms` }}
-              >
-                {/* Sticky date header */}
-                <div
-                  className="sticky z-10 -mx-4 mb-3 bg-cream/95 px-4 py-2 backdrop-blur-sm"
-                  style={{ top: `${filterHeight}px` }}
+          <>
+            {visibleGroups.map((group, groupIndex) => (
+              <div key={group.date}>
+                {/* Inline newsletter signup between day 2 and day 3 */}
+                {groupIndex === 2 && <NewsletterSignup variant="inline" />}
+                <section
+                  className="animate-fadeIn"
+                  style={{ animationDelay: `${groupIndex * 50}ms` }}
                 >
-                  <h2 className="font-display flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-earth">
-                    <span className="h-px flex-1 bg-stone-light/40" />
-                    {group.label}
-                    <span className="h-px flex-1 bg-stone-light/40" />
-                  </h2>
-                </div>
-                <div className="space-y-3">
-                  {group.events.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      isUpNext={event.id === upNextId}
-                    />
-                  ))}
-                </div>
-              </section>
-            </div>
-          ))
+                  {/* Sticky date header */}
+                  <div
+                    className="sticky z-10 -mx-4 mb-3 bg-cream/95 px-4 py-2 backdrop-blur-sm"
+                    style={{ top: `${filterHeight}px` }}
+                  >
+                    <h2 className="font-display flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-earth">
+                      <span className="h-px flex-1 bg-stone-light/40" />
+                      {group.label}
+                      <span className="h-px flex-1 bg-stone-light/40" />
+                    </h2>
+                  </div>
+                  <div className="space-y-3">
+                    {group.events.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        isUpNext={event.id === upNextId}
+                      />
+                    ))}
+                  </div>
+                </section>
+              </div>
+            ))}
+            {/* Scroll sentinel — triggers loading more events */}
+            {visibleCount < totalEvents && (
+              <div ref={sentinelRef} className="py-4 text-center text-sm text-stone">
+                Loading more events…
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
