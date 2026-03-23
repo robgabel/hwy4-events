@@ -279,30 +279,23 @@ export default function AboutPage() {
           Towns we cover
         </h2>
         <p className="mb-4 text-sm text-stone">
-          9 towns along 50 miles of Highway 4, from the Gold Country foothills
-          to the Sierra summit. Listed west to east by elevation.
+          9 towns along 50 miles of Highway 4, from the foothills to the
+          summit.
         </p>
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {CORRIDOR_TOWNS.map((town) => (
-            <div
+            <Link
               key={town.name}
-              className="flex items-baseline justify-between rounded-lg border border-stone-light/20 bg-white px-4 py-3"
+              href={`/?town=${encodeURIComponent(town.name)}`}
+              className="rounded-lg border border-stone-light/20 bg-white px-3 py-2 transition-colors hover:border-pine/30"
             >
-              <div>
-                <Link
-                  href={`/?town=${encodeURIComponent(town.name)}`}
-                  className="font-semibold text-forest hover:text-pine hover:underline"
-                >
-                  {town.name}
-                </Link>
-                <span className="ml-2 text-sm text-stone">
-                  {town.tagline}
-                </span>
-              </div>
-              <span className="shrink-0 text-xs text-stone-light">
+              <span className="text-sm font-semibold text-forest">
+                {town.name}
+              </span>
+              <span className="block text-xs text-stone-light">
                 {town.elevation.toLocaleString()} ft
               </span>
-            </div>
+            </Link>
           ))}
         </div>
       </section>
