@@ -261,7 +261,7 @@ export default function EventList({
         <div className="mb-2 flex items-center gap-2">
           <button
             onClick={() => setWeekendOnly(!weekendOnly)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+            className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
               weekendOnly
                 ? "border-pine bg-pine text-white"
                 : "border-stone-light/40 bg-white text-stone hover:border-pine hover:text-pine"
@@ -272,7 +272,7 @@ export default function EventList({
           {weekendOnly && (
             <button
               onClick={() => setWeekendOnly(false)}
-              className="text-xs text-stone hover:text-pine"
+              className="cursor-pointer text-xs text-stone hover:text-pine"
             >
               Show all dates
             </button>
@@ -313,7 +313,7 @@ export default function EventList({
                 setShowWeekly(true);
                 setEnabledOrgs(new Set());
               }}
-              className="mt-2 text-sm font-medium text-pine hover:underline"
+              className="mt-2 cursor-pointer text-sm font-medium text-pine hover:underline"
             >
               Clear filters
             </button>

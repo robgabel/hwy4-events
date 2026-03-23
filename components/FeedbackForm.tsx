@@ -38,7 +38,7 @@ export default function FeedbackForm() {
         <p className="font-medium text-pine">Thanks for your feedback!</p>
         <button
           onClick={() => setStatus("idle")}
-          className="mt-2 text-sm text-stone hover:text-pine"
+          className="mt-2 cursor-pointer text-sm text-stone hover:text-pine"
         >
           Send another
         </button>
@@ -61,7 +61,7 @@ export default function FeedbackForm() {
         <button
           type="submit"
           disabled={status === "loading" || !message.trim()}
-          className="rounded-lg bg-pine px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
+          className="cursor-pointer rounded-lg bg-pine px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
         >
           {status === "loading" ? "Sending..." : "Send feedback"}
         </button>
