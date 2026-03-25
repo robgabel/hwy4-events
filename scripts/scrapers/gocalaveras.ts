@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
+import { applyVenueDetection } from "../lib/venue-matcher.js";
 
 const EVENTS_URL = "https://www.gocalaveras.com/events/";
 const AJAX_URL = "https://www.gocalaveras.com/wp-admin/admin-ajax.php";
@@ -273,6 +274,17 @@ async function fetchMonth(
   // Use LLM to classify categories and map towns for events that need it
   if (events.length > 0) {
     await classifyEvents(events);
+  }
+
+  // Post-extraction venue detection: resolve generic/unknown venue names
+  let venueFixed = 0;
+  for (const event of events) {
+    if (applyVenueDetection(event)) {
+      venueFixed++;
+    }
+  }
+  if (venueFixed > 0) {
+    console.log(`  Venue detection: resolved ${venueFixed}/${events.length} generic venues`);
   }
 
   return events;
