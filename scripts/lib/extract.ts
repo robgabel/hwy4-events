@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { applyVenueDetection } from "./venue-matcher.js";
 
 export interface ExtractedEvent {
   name: string;
@@ -125,7 +126,14 @@ ${content}`;
     const jsonStr = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     const parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed)) return [];
-    return (parsed as ExtractedEvent[]).map(decodeEventFields);
+    const decoded = (parsed as ExtractedEvent[]).map(decodeEventFields);
+    // Post-extraction venue detection: resolve generic venue names
+    for (const event of decoded) {
+      if (applyVenueDetection(event)) {
+        console.log(`  Venue detected: "${event.venue_name}" from "${event.name}"`);
+      }
+    }
+    return decoded;
   } catch {
     console.warn(`Failed to parse LLM response for "${title}":`, text.slice(0, 200));
     return [];
