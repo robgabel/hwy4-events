@@ -21,20 +21,20 @@ Rules:
 - No corporate language, no emojis in body text.
 - FRESHNESS: Never reuse jokes, openers, closers, or structures from recent briefings below.
 - End with: — Millie 🐾
-- LINKS: Link event mentions as [event text](url). Keep natural — don't link every event or venue names.`;
+- LINKS: Link event mentions as [event text](url). Keep natural — don't link every event or venue names.
+- Events marked [MEMBERS ONLY] are for private clubs (like Blue Lake Springs). Mention them naturally but note they're for members/guests. Example: "Over at Blue Lake Springs, members can catch..."
+- Do NOT link members-only events — they don't have public event pages.`;
 
 function getUpcomingWeekend(): { friday: string; sunday: string; label: string } {
   const now = new Date();
   const day = now.getDay(); // 0=Sun, 5=Fri, 6=Sat
 
-  // Find next Friday (or today if it's Friday)
-  let daysUntilFriday = (5 - day + 7) % 7;
-  if (daysUntilFriday === 0 && day === 5) daysUntilFriday = 0; // Today is Friday
-  if (day === 6) daysUntilFriday = 6; // Saturday → next Friday
-  if (day === 0) daysUntilFriday = 5; // Sunday → next Friday
+  // Always target NEXT Friday (7 days out), not this Friday.
+  // The cron runs on Fridays and generates a preview for the following weekend.
+  const daysUntilNextFriday = ((5 - day + 7) % 7) || 7; // 0 becomes 7 (next week)
 
   const friday = new Date(now);
-  friday.setDate(now.getDate() + daysUntilFriday);
+  friday.setDate(now.getDate() + daysUntilNextFriday);
   const sunday = new Date(friday);
   sunday.setDate(friday.getDate() + 2);
 
@@ -62,12 +62,11 @@ async function getWeekendEvents() {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url"
+      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url, visibility"
     )
     .gte("date", friday)
     .lte("date", sunday)
     .neq("status", "cancelled")
-    .eq("visibility", "public")
     .order("date", { ascending: true })
     .order("start_time", { ascending: true });
 
@@ -122,8 +121,9 @@ async function generateWeekendBriefing(
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
       e.robs_pick ? "[ROB'S PICK]" : "",
+      e.visibility === "private" ? "[MEMBERS ONLY]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
-      `URL: ${internalUrl}`,
+      e.visibility !== "private" ? `URL: ${internalUrl}` : "",
     ].filter(Boolean);
     return parts.join(" — ");
   };
