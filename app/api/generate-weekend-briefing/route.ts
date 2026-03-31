@@ -195,7 +195,7 @@ async function generateWeekendBriefing(
 
   const message = await anthropic.messages.create({
     model: "claude-opus-4-20250514",
-    max_tokens: 400,
+    max_tokens: 600,
     system: WEEKEND_SYSTEM_PROMPT,
     messages: [
       {
