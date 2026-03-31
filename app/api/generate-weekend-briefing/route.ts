@@ -74,6 +74,25 @@ async function getWeekendEvents() {
   return data || [];
 }
 
+async function getCancelledWeekendEvents() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return [];
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const { friday, sunday } = getUpcomingWeekend();
+
+  const { data } = await supabase
+    .from("hwy4_events")
+    .select("name, date, venue_name, town")
+    .gte("date", friday)
+    .lte("date", sunday)
+    .eq("status", "cancelled")
+    .order("date", { ascending: true });
+
+  return data || [];
+}
+
 async function getRecentBriefings() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -104,7 +123,8 @@ async function getRecentBriefings() {
 
 async function generateWeekendBriefing(
   events: Record<string, unknown>[],
-  recentBriefings: { briefing_date: string; text: string }[]
+  recentBriefings: { briefing_date: string; text: string }[],
+  cancelledEvents: { name: string; date: string; venue_name: string; town: string }[] = []
 ) {
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
@@ -165,6 +185,14 @@ async function generateWeekendBriefing(
     historySection = `\n\nRECENT BRIEFINGS (for freshness — do NOT repeat jokes, phrases, or structural patterns):\n\n${entries}`;
   }
 
+  let cancelledSection = "";
+  if (cancelledEvents.length > 0) {
+    const cancelledList = cancelledEvents
+      .map((e) => `- ${e.name} at ${e.venue_name} (${e.town}) on ${e.date}`)
+      .join("\n");
+    cancelledSection = `\n\nCANCELLED EVENTS (mention briefly so locals know — one sentence max):\n${cancelledList}`;
+  }
+
   const message = await anthropic.messages.create({
     model: "claude-opus-4-20250514",
     max_tokens: 400,
@@ -172,7 +200,7 @@ async function generateWeekendBriefing(
     messages: [
       {
         role: "user",
-        content: `Write the weekend preview for Hwy4Events.com. This covers ${label}.\n\nFRIDAY EVENTS:\n${fridaySummary}\n\nSATURDAY EVENTS:\n${saturdaySummary}\n\nSUNDAY EVENTS:\n${sundaySummary}${historySection}`,
+        content: `Write the weekend preview for Hwy4Events.com. This covers ${label}.\n\nFRIDAY EVENTS:\n${fridaySummary}\n\nSATURDAY EVENTS:\n${saturdaySummary}\n\nSUNDAY EVENTS:\n${sundaySummary}${cancelledSection}${historySection}`,
       },
     ],
   });
@@ -236,11 +264,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [events, recentBriefings] = await Promise.all([
+    const [events, recentBriefings, cancelledEvents] = await Promise.all([
       getWeekendEvents(),
       getRecentBriefings(),
+      getCancelledWeekendEvents(),
     ]);
-    const briefing = await generateWeekendBriefing(events, recentBriefings);
+    const briefing = await generateWeekendBriefing(events, recentBriefings, cancelledEvents);
     await saveWeekendBriefing(briefing, events.length);
 
     revalidatePath("/");
