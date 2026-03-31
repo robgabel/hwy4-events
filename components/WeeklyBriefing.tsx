@@ -90,6 +90,9 @@ export default function WeeklyBriefing({
       })
     : null;
 
+  // weekendLabel comes from the API (e.g. "Fri, Apr 3 – Sun, Apr 5")
+  const weekendDateLabel = weekendLabel ?? null;
+
   const title = "Today on the 4";
 
   return (
@@ -105,7 +108,8 @@ export default function WeeklyBriefing({
         <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-earth">
           {title}
         </h2>
-        {todayDateLabel && (
+        {/* Date label shown in header only when there's no tab switcher */}
+        {!hasWeekend && todayDateLabel && (
           <span className="ml-auto text-xs text-stone-light">
             {todayDateLabel}
           </span>
@@ -115,6 +119,8 @@ export default function WeeklyBriefing({
       {hasWeekend ? (
         <WeeklyBriefingTabs
           weekendTabLabel={weekendTabLabel}
+          todayDateLabel={todayDateLabel}
+          weekendDateLabel={weekendDateLabel}
           todayContent={
             <BriefingContent text={briefing} generatedAt={generatedAt} />
           }

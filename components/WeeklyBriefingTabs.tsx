@@ -8,17 +8,28 @@ import { useState } from "react";
  */
 export default function WeeklyBriefingTabs({
   weekendTabLabel,
+  todayDateLabel,
+  weekendDateLabel,
   todayContent,
   weekendContent,
 }: {
   weekendTabLabel: string;
+  todayDateLabel: string | null;
+  weekendDateLabel: string | null;
   todayContent: React.ReactNode;
   weekendContent: React.ReactNode;
 }) {
   const [activeTab, setActiveTab] = useState<"today" | "weekend">("today");
 
+  const dateLabel = activeTab === "today" ? todayDateLabel : weekendDateLabel;
+
   return (
     <>
+      {dateLabel && (
+        <span className="mb-2 block text-right text-xs text-stone-light">
+          {dateLabel}
+        </span>
+      )}
       <div className="mb-3 flex gap-1 rounded-lg bg-cream p-1">
         <button
           onClick={() => setActiveTab("today")}
