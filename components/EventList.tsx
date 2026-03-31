@@ -295,7 +295,7 @@ export default function EventList({
     return result;
   }, [groups, visibleCount]);
 
-  const MEMBER_ORG_SLUGS = new Set(["moose-lodge", "sequoia-woods"]);
+  const MEMBER_ORG_SLUGS = new Set(["moose-lodge", "sequoia-woods", "blue-lake-springs"]);
   const memberOrgs = orgs.filter((o) => MEMBER_ORG_SLUGS.has(o.slug));
 
   return (

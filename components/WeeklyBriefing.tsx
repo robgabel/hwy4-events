@@ -74,12 +74,11 @@ export default function WeeklyBriefing({
   weekendGeneratedAt,
   weekendLabel,
 }: WeeklyBriefingProps) {
-  const hasWeekend = !!weekendBriefing;
-
-  // Smart "This/Next Weekend" — computed at render time (server)
-  const todayDay = new Date().getDay();
-  const isCurrentlyWeekend = todayDay === 0 || todayDay === 5 || todayDay === 6;
-  const weekendTabLabel = isCurrentlyWeekend ? "Next Weekend" : "This Weekend";
+  // Only show weekend briefing Fri-Sun when it's current; hide Mon-Thu when it's stale
+  const todayDay = new Date().getDay(); // 0=Sun, 5=Fri, 6=Sat
+  const isWeekendWindow = todayDay === 0 || todayDay === 5 || todayDay === 6;
+  const hasWeekend = !!weekendBriefing && isWeekendWindow;
+  const weekendTabLabel = "This Weekend";
 
   const todayDateLabel = generatedAt
     ? new Date(generatedAt).toLocaleDateString("en-US", {
