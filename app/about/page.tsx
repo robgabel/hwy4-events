@@ -67,6 +67,7 @@ const venuesByTown: { town: string; venues: string[] }[] = [
       "Branding Iron Saloon",
       "Howard's Mystic Saloon",
       "Sequoia Woods Country Club",
+      "Blue Lake Springs (Members)",
     ],
   },
   {

@@ -31,6 +31,7 @@ const ORG_LABELS: Record<string, string> = {
   "moose-lodge": "Moose Lodge",
   "sequoia-woods": "Sequoia Woods",
   "bear-valley": "Bear Valley",
+  "blue-lake-springs": "Blue Lake Springs",
   "watering-hole": "The Watering Hole",
   "gocalaveras": "GoCalaveras",
   "visit-murphys": "Visit Murphys",
@@ -66,6 +67,7 @@ function getEventImage(event: CollapsedEvent): string {
   if (venueLower.includes("moose lodge")) return "/images/lodge.jpg";
   if (venueLower.includes("fairgrounds")) return "/images/fairgrounds.jpg";
   if (venueLower.includes("watering hole")) return "/images/brewery.svg";
+  if (venueLower.includes("snowflake") || venueLower.includes("blue lake bistro") || venueLower.includes("bls ")) return "/images/lodge.jpg";
 
   // 3. Event name keyword matching for community events
   const nameLower = event.name.toLowerCase();

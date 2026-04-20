@@ -25,6 +25,7 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 | `/api/generate-briefing` | Daily 2pm UTC | Generate daily briefing via Opus |
 | `/api/check-briefing` | Daily 5pm UTC | Verify briefing was generated |
 | `/api/generate-weekend-briefing` | Fridays 2pm UTC | Weekend-specific briefing |
+| `/api/scrape-bls` | Mondays 1pm UTC | Scrape Blue Lake Springs flyer images via Vision AI |
 
 All cron routes require `CRON_SECRET` as a bearer token.
 
@@ -80,6 +81,7 @@ lib/
   - `PRD-event-visibility.md` — Event discovery and visibility improvements
   - `PRD-bear-valley-events.md` — Bear Valley events coverage expansion
   - `PLAN-seo-aeo.md` — SEO and answer-engine optimization plan
+  - `PRD-blue-lake-springs.md` — Blue Lake Springs HOA integration: members-only club events, Vision AI scraping of flyer images, `club` category, "Members & Guests" badge
 
 ## UI Standards
 
