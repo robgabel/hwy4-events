@@ -148,7 +148,7 @@ async function generateNewsletter(
   }
 
   const message = await anthropic.messages.create({
-    model: "claude-opus-4-20250514",
+    model: "claude-opus-4-7",
     max_tokens: 600,
     system: NEWSLETTER_SYSTEM_PROMPT,
     messages: [

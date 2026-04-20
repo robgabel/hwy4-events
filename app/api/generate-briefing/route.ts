@@ -21,7 +21,9 @@ Rules:
 - No corporate language, no emojis in body text.
 - FRESHNESS: Never reuse jokes, openers, closers, or structures from recent briefings below.
 - Do NOT include any signature or sign-off line. No "— Millie" or similar. Just end the narrative naturally.
-- LINKS: Link event mentions as [event text](url). Keep natural — don't link every event or venue names.`;
+- LINKS: Link event mentions as [event text](url). Keep natural — don't link every event or venue names.
+- Events marked [MEMBERS ONLY] are for private clubs (like Blue Lake Springs). Mention them naturally but note they're for members/guests. Example: "Over at Blue Lake Springs, members can catch..."
+- Do NOT link members-only events — they don't have public event pages.`;
 
 async function getEventsForBriefing() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -40,12 +42,11 @@ async function getEventsForBriefing() {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url"
+      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url, visibility"
     )
     .gte("date", today)
     .lte("date", nextWeek)
     .neq("status", "cancelled")
-    .eq("visibility", "public")
     .order("date", { ascending: true })
     .order("start_time", { ascending: true });
 
@@ -99,8 +100,9 @@ async function generateBriefing(
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
       e.robs_pick ? "[ROB'S PICK]" : "",
+      e.visibility === "private" ? "[MEMBERS ONLY]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
-      `URL: ${internalUrl}`,
+      e.visibility !== "private" ? `URL: ${internalUrl}` : "",
     ].filter(Boolean);
     return parts.join(" — ");
   };
@@ -146,7 +148,7 @@ async function generateBriefing(
   }
 
   const message = await anthropic.messages.create({
-    model: "claude-opus-4-20250514",
+    model: "claude-opus-4-7",
     max_tokens: 400,
     system: SYSTEM_PROMPT,
     messages: [
