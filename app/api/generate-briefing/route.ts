@@ -149,7 +149,7 @@ async function generateBriefing(
 
   const message = await anthropic.messages.create({
     model: "claude-opus-4-7",
-    max_tokens: 400,
+    max_tokens: 1024,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -158,6 +158,12 @@ async function generateBriefing(
       },
     ],
   });
+
+  if (message.stop_reason === "max_tokens") {
+    throw new Error(
+      `Daily briefing truncated: hit max_tokens (${message.usage.output_tokens} output tokens)`
+    );
+  }
 
   const block = message.content[0];
   if (block.type !== "text") throw new Error("Unexpected response type");
