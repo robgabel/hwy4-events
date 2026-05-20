@@ -9,6 +9,7 @@ import { scrapeMurphysIrishPub } from "./scrapers/murphys-irish-pub.js";
 import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeWateringHole } from "./scrapers/watering-hole.js";
+import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
 import { validateEventUrls } from "./lib/validate-urls.js";
 import { runHealthCheck } from "./lib/health.js";
 
@@ -33,6 +34,7 @@ const SCRAPERS: Record<string, () => Promise<void>> = {
   "mystic-saloon": scrapeMysticSaloon,
   "visit-murphys": scrapeVisitMurphys,
   "watering-hole": scrapeWateringHole,
+  "hwy4-fb-discover": scrapeHwy4FbDiscover,
 };
 
 async function main() {
