@@ -140,10 +140,10 @@ export default function AboutPage() {
           Room. So I built this. First for us, then for our neighbors. It&apos;s a labor of love, not a
           business. If you notice something missing or wrong,{" "}
           <a
-            href="mailto:rob@gabel.ai"
+            href="#feedback"
             className="font-medium text-pine hover:underline"
           >
-            drop me a line
+            send me a note
           </a>
           . That&apos;s Millie, who came into our lives through{" "}
           <a
@@ -393,7 +393,7 @@ export default function AboutPage() {
       </section>
 
       {/* Feedback form */}
-      <section className="mb-8">
+      <section id="feedback" className="mb-8 scroll-mt-20">
         <h2 className="font-display mb-2 text-xl font-semibold text-forest">
           Send me a note
         </h2>
