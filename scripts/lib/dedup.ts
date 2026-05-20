@@ -106,7 +106,9 @@ export async function upsertEvents(
     // Check for existing event with this dedup key
     const { data: existing } = await supabaseAdmin
       .from("hwy4_events")
-      .select("id, name, venue_name, description, start_time, end_time, price, event_url")
+      .select(
+        "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url"
+      )
       .eq("dedup_key", dedupKey)
       .maybeSingle();
 
@@ -121,7 +123,10 @@ export async function upsertEvents(
         existing.start_time !== event.start_time ||
         existing.end_time !== event.end_time ||
         existing.price !== event.price ||
-        existing.event_url !== event.event_url;
+        existing.event_url !== event.event_url ||
+        existing.address !== event.address ||
+        existing.town !== event.town ||
+        existing.image_url !== (event.image_url ?? null);
 
       if (changed) {
         await supabaseAdmin
@@ -134,6 +139,9 @@ export async function upsertEvents(
             end_time: event.end_time,
             price: event.price,
             event_url: event.event_url,
+            address: event.address,
+            town: event.town,
+            image_url: event.image_url ?? null,
             last_scraped_at: now,
           })
           .eq("id", existing.id);
@@ -189,6 +197,7 @@ export async function upsertEvents(
         is_past: false,
         price: event.price,
         event_url: event.event_url,
+        image_url: event.image_url ?? null,
         source_url: sourceUrl,
         source_name: sourceName,
         visibility: "public",

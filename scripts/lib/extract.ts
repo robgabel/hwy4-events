@@ -14,6 +14,7 @@ export interface ExtractedEvent {
   price: string | null;
   artists: string[] | null;
   event_url: string | null;
+  image_url?: string | null;
 }
 
 const client = new Anthropic();

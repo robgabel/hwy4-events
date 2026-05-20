@@ -271,6 +271,12 @@ async function fetchMonth(
   // Parse structured event data directly from JSON and decode HTML entities
   const events = parseEventONEvents(data.json, year, urlMap).map(decodeEventFields);
 
+  // Enrich each event from its detail page — fills full description, image,
+  // and merges organizer city into the address when location is street-only.
+  if (events.length > 0) {
+    await enrichEvents(events);
+  }
+
   // Use LLM to classify categories and map towns for events that need it
   if (events.length > 0) {
     await classifyEvents(events);
@@ -406,7 +412,7 @@ function parseEventONEvents(
 
       results.push({
         name: ev.event_title,
-        description: pmv.evcal_description?.[0]?.slice(0, 200) || null,
+        description: pmv.evcal_description?.[0] || null,
         date: startDate.toISOString().slice(0, 10),
         start_time: startTime !== "00:00" ? startTime : null,
         end_time: endTime !== "00:00" ? endTime : null,
@@ -417,6 +423,7 @@ function parseEventONEvents(
         price: price ? `$${price}` : null,
         artists: null, // Will be classified by LLM if applicable
         event_url: finalEventUrl,
+        image_url: null,
       });
     } catch (err) {
       console.warn(`  Failed to parse event ${ev.event_id}: ${err}`);
@@ -424,6 +431,202 @@ function parseEventONEvents(
   }
 
   return results;
+}
+
+// ---------- Event detail page enrichment ----------
+
+const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.5",
+  "Accept-Encoding": "gzip, deflate, br",
+};
+
+export interface EnrichedDetails {
+  description: string | null;
+  locationName: string | null;
+  locationAddress: string | null;
+  organizerAddress: string | null;
+  imageUrl: string | null;
+  /** Final merged address with city/state where derivable. */
+  mergedAddress: string | null;
+  /** Town parsed from the merged address (one of HWY4_TOWN_LIST), or null. */
+  mergedTown: string | null;
+}
+
+/** Strip inline HTML tags, decode common entities, collapse whitespace. */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&#8217;/g, "’")
+    .replace(/&#8216;/g, "‘")
+    .replace(/&#8220;/g, "“")
+    .replace(/&#8221;/g, "”")
+    .replace(/&#8211;/g, "–")
+    .replace(/&#8212;/g, "—")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Parse "1208 South Main Street, Angels Camp, CA 95222" into segments.
+ * Returns null if the string doesn't look like a full street+city address.
+ */
+function parseAddress(
+  addr: string
+): { street: string; city: string; state: string; zip: string | null } | null {
+  // Expect at least: street, city, state[ zip]
+  const parts = addr.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 3) return null;
+  const street = parts[0];
+  const city = parts[1];
+  const stateZip = parts[2];
+  const m = stateZip.match(/^([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/);
+  if (!m) return null;
+  return { street, city, state: m[1], zip: m[2] || null };
+}
+
+/** Normalize a street string for comparison (lowercase, collapse whitespace, strip trailing dot). */
+function normStreet(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").replace(/\.$/, "").trim();
+}
+
+/** Match parsed town string against HWY4_TOWN_LIST. */
+function matchCorridorTown(city: string | null): string | null {
+  if (!city) return null;
+  const cityLower = city.toLowerCase().trim();
+  for (const t of HWY4_TOWN_LIST) {
+    if (t.toLowerCase() === cityLower) return t;
+  }
+  return null;
+}
+
+/**
+ * Fetch an EventON event page and extract the fields that the AJAX calendar feed leaves out:
+ * full description, full address, organizer address, image.
+ *
+ * City-merge rule: if the location address has only a street (no city) but the organizer
+ * address has both AND their street segments match, use the organizer's city/state.
+ */
+export async function fetchEventDetails(
+  eventUrl: string
+): Promise<EnrichedDetails | null> {
+  let html: string;
+  try {
+    const resp = await fetch(eventUrl, { headers: BROWSER_HEADERS });
+    if (!resp.ok) {
+      console.warn(`  enrich: ${eventUrl} returned ${resp.status}`);
+      return null;
+    }
+    html = await resp.text();
+  } catch (err) {
+    console.warn(`  enrich fetch failed for ${eventUrl}:`, err);
+    return null;
+  }
+
+  // Description: <div class='eventon_desc_in' itemprop='description'>…</div>
+  const descMatch = html.match(
+    /class=['"]eventon_desc_in['"][^>]*itemprop=['"]description['"][^>]*>([\s\S]*?)<\/div>/
+  );
+  const description = descMatch ? htmlToText(descMatch[1]) || null : null;
+
+  const locName = html.match(
+    /class=['"]evo_location_name['"][^>]*>([^<]+)</
+  )?.[1]?.trim() || null;
+  const locAddr = html.match(
+    /class=['"]evo_location_address['"][^>]*>([^<]+)</
+  )?.[1]?.trim() || null;
+  const orgAddr = html.match(
+    /class=['"]evo_card_organizer_address['"][^>]*>([^<]+)</
+  )?.[1]?.trim() || null;
+  const imgMatch = html.match(
+    /class=['"]evo_event_main_img['"][^>]*src=['"]([^'"]+)['"]/
+  );
+  let imageUrl = imgMatch?.[1] || null;
+  if (imageUrl && imageUrl.startsWith("/")) {
+    imageUrl = `https://www.gocalaveras.com${imageUrl}`;
+  }
+
+  // Compute merged address + town
+  let mergedAddress: string | null = locAddr;
+  let mergedTown: string | null = null;
+
+  const orgParsed = orgAddr ? parseAddress(orgAddr) : null;
+  const locParsed = locAddr ? parseAddress(locAddr) : null;
+
+  if (locParsed) {
+    // Location already has city
+    mergedAddress = locAddr;
+    mergedTown = matchCorridorTown(locParsed.city);
+  } else if (locAddr && orgParsed && normStreet(locAddr) === normStreet(orgParsed.street)) {
+    // Street matches; borrow city/state from organizer
+    mergedAddress = orgParsed.zip
+      ? `${orgParsed.street}, ${orgParsed.city}, ${orgParsed.state} ${orgParsed.zip}`
+      : `${orgParsed.street}, ${orgParsed.city}, ${orgParsed.state}`;
+    mergedTown = matchCorridorTown(orgParsed.city);
+  } else if (orgParsed && !locAddr) {
+    // No location address at all — fall back to organizer
+    mergedAddress = orgAddr;
+    mergedTown = matchCorridorTown(orgParsed.city);
+  }
+
+  return {
+    description,
+    locationName: locName,
+    locationAddress: locAddr,
+    organizerAddress: orgAddr,
+    imageUrl,
+    mergedAddress,
+    mergedTown,
+  };
+}
+
+/** Enrich a single event in place from its detail page. */
+async function enrichEventDetails(event: ExtractedEvent): Promise<void> {
+  if (!event.event_url || !event.event_url.includes("gocalaveras.com")) return;
+  const details = await fetchEventDetails(event.event_url);
+  if (!details) return;
+
+  if (details.description && details.description.length > (event.description?.length || 0)) {
+    event.description = details.description;
+  }
+  if (details.locationName && event.venue_name === "Unknown Venue") {
+    event.venue_name = details.locationName;
+  }
+  if (details.mergedAddress) {
+    event.address = details.mergedAddress;
+  }
+  // mergedTown comes from a parsed "street, city, ST zip" — high-confidence,
+  // so override even when current town is set (the original scraper's
+  // fallback comma-split sometimes picks the wrong town).
+  if (details.mergedTown) {
+    event.town = details.mergedTown;
+  }
+  if (details.imageUrl) {
+    event.image_url = details.imageUrl;
+  }
+}
+
+/** Enrich a batch of events with simple throttling (~3 req/sec). */
+async function enrichEvents(events: ExtractedEvent[]): Promise<void> {
+  let enriched = 0;
+  for (const e of events) {
+    if (!e.event_url) continue;
+    await enrichEventDetails(e);
+    enriched++;
+    await new Promise((r) => setTimeout(r, 350));
+  }
+  if (enriched > 0) {
+    console.log(`  Enriched ${enriched}/${events.length} events from detail pages`);
+  }
 }
 
 // ---------- LLM-based category classification ----------
