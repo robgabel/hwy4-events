@@ -247,6 +247,58 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     ],
     town: "Copperopolis",
   },
+  "big-trees-state-park": {
+    canonical: "Calaveras Big Trees State Park",
+    aliases: [
+      "big trees state park",
+      "calaveras big trees state park",
+      "calaveras big trees",
+      "big trees",
+      "cbtsp",
+    ],
+    town: "Arnold",
+    address: "1170 East Highway 4, Arnold, CA 95223",
+  },
+  "murphys-creek-theatre": {
+    canonical: "Murphys Creek Theatre",
+    aliases: [
+      "murphys creek theatre",
+      "murphys creek theater",
+      "murphy's creek theatre",
+      "mct",
+    ],
+    town: "Murphys",
+  },
+  "meadowmont-lodge": {
+    canonical: "Meadowmont Lodge",
+    aliases: [
+      "meadowmont lodge",
+      "arnold meadowmont lodge",
+      "meadowmont lodge arnold",
+      "meadowmont lodge, arnold",
+      "the lodge arnold",
+    ],
+    town: "Arnold",
+    address: "2011 Highway 4, Arnold, CA 95223",
+  },
+  "trails-of-49": {
+    canonical: "Trails of 49",
+    aliases: [
+      "trails of 49",
+      "trails of '49",
+      "trails of forty nine",
+    ],
+    town: "Arnold",
+  },
+  "pour-house": {
+    canonical: "The Pour House",
+    aliases: [
+      "the pour house",
+      "pour house",
+      "murphys pour house",
+    ],
+    town: "Murphys",
+  },
 };
 
 /**

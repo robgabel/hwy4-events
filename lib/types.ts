@@ -35,6 +35,15 @@ export interface Hwy4Event {
   image_url: string | null;
   robs_pick: boolean;
   is_weekly: boolean;
+  source_event_id: string | null;
+  sources: EventSourceEntry[];
+}
+
+export interface EventSourceEntry {
+  source_name: string;
+  source_url: string | null;
+  source_event_id: string | null;
+  last_seen_at: string;
 }
 
 export interface Hwy4Org {

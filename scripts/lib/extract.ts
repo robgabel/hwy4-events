@@ -14,6 +14,9 @@ export interface ExtractedEvent {
   price: string | null;
   artists: string[] | null;
   event_url: string | null;
+  /** Upstream id (FB event id, gocalaveras slug, etc.) — used as a stable
+   *  idempotency key when the same scraper revisits the same source row. */
+  source_event_id?: string | null;
 }
 
 const client = new Anthropic();

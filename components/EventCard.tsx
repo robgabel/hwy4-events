@@ -323,6 +323,28 @@ export default function EventCard({
               {event.price}
             </span>
           )}
+
+          {Array.isArray(event.sources) && event.sources.length > 1 && (
+            <span
+              className="group/src relative flex cursor-help items-center gap-1 rounded-full bg-forest/8 px-2 py-0.5 text-[11px] font-medium text-forest"
+              title={event.sources.map((s) => s.source_name).join(" + ")}
+            >
+              <svg
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              {event.sources.length} sources
+              <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden w-48 -translate-x-1/2 rounded-lg bg-forest px-3 py-2 text-center text-[11px] leading-snug font-normal text-white shadow-lg group-hover/src:block">
+                Cross-verified by {event.sources.map((s) => s.source_name).join(" + ")}
+                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-forest" />
+              </span>
+            </span>
+          )}
         </div>
       </div>
 

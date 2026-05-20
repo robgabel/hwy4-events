@@ -339,6 +339,7 @@ function mapApifyEvent(
     price: inferPrice(e),
     artists: null,
     event_url: eventUrl,
+    source_event_id: pickString(e.id) ?? null,
   };
 }
 

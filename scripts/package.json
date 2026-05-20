@@ -7,7 +7,8 @@
     "scrape": "tsx scrape.ts",
     "scrape:bear-valley": "tsx scrape.ts --source bear-valley",
     "scrape:gocalaveras": "tsx scrape.ts --source gocalaveras",
-    "tag-weekly": "tsx tag-weekly.ts"
+    "tag-weekly": "tsx tag-weekly.ts",
+    "test": "SUPABASE_URL=${SUPABASE_URL:-http://localhost/test} SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-test-key} tsx --test lib/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
