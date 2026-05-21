@@ -321,69 +321,103 @@ async function upsertEventsBatched(
     }
 
     if (fuzzyUpdates.length > 0) {
-      // Re-key matched rows in one bulk upsert by id.
-      const { error } = await supabaseAdmin.from("hwy4_events").upsert(
-        fuzzyUpdates.map((f) => ({
-          id: f.id,
-          dedup_key: f.dedupKey,
-          last_scraped_at: now,
-        })),
-        { onConflict: "id" }
+      // Re-key matched rows. Can't use Supabase upsert(..., onConflict: "id")
+      // here — Postgres evaluates NOT NULL constraints at INSERT-attempt time
+      // before ON CONFLICT routing, so a payload of just (id, dedup_key,
+      // last_scraped_at) trips the NOT NULL constraint on `name` etc. Use
+      // per-row UPDATEs in parallel — N round trips but concurrent, so
+      // wall-clock cost is one round trip + slack.
+      const updates = await Promise.all(
+        fuzzyUpdates.map((f) =>
+          supabaseAdmin
+            .from("hwy4_events")
+            .update({ dedup_key: f.dedupKey, last_scraped_at: now })
+            .eq("id", f.id)
+        )
       );
-      if (error) {
-        console.error("Bulk fuzzy re-key failed:", error.message);
-      } else {
-        result.skippedFuzzy += fuzzyUpdates.length;
-        for (const f of fuzzyUpdates) {
+      let fuzzyErrCount = 0;
+      for (const { error } of updates) {
+        if (error) fuzzyErrCount++;
+      }
+      if (fuzzyErrCount > 0) {
+        console.error(`Bulk fuzzy re-key: ${fuzzyErrCount}/${fuzzyUpdates.length} failed`);
+      }
+      const fuzzyOkCount = fuzzyUpdates.length - fuzzyErrCount;
+      result.skippedFuzzy += fuzzyOkCount;
+      for (let i = 0; i < fuzzyUpdates.length; i++) {
+        if (!updates[i].error) {
+          const f = fuzzyUpdates[i];
           console.log(`  Fuzzy dedup: "${f.eventName}" matched existing "${f.existingName}"`);
         }
       }
     }
   }
 
-  // Bulk UPDATE for matched rows via upsert by id.
+  // Matched rows: changed → full payload update; unchanged → touch
+  // last_scraped_at (+ source_event_id backfill) only. Same NOT NULL trap
+  // applies to upsert here, so fan out as parallel per-row UPDATEs.
   if (matched.length > 0) {
-    const updatePayloads = matched.map(({ event, existing, dedupKey, changed }) => {
-      if (changed) {
-        return {
-          id: existing.id,
-          name: event.name,
-          venue_name: event.venue_name,
-          description: event.description,
-          start_time: event.start_time,
-          end_time: event.end_time,
-          price: event.price,
-          event_url: event.event_url,
-          address: event.address,
-          town: event.town,
-          image_url: event.image_url ?? null,
-          dedup_key: dedupKey,
-          ...(event.source_event_id && { source_event_id: event.source_event_id }),
-          last_scraped_at: now,
-        };
+    const updates = await Promise.all(
+      matched.map(({ event, existing, dedupKey, changed }) => {
+        const payload = changed
+          ? {
+              name: event.name,
+              venue_name: event.venue_name,
+              description: event.description,
+              start_time: event.start_time,
+              end_time: event.end_time,
+              price: event.price,
+              event_url: event.event_url,
+              address: event.address,
+              town: event.town,
+              image_url: event.image_url ?? null,
+              dedup_key: dedupKey,
+              ...(event.source_event_id && { source_event_id: event.source_event_id }),
+              last_scraped_at: now,
+            }
+          : {
+              last_scraped_at: now,
+              ...(event.source_event_id && { source_event_id: event.source_event_id }),
+            };
+        return supabaseAdmin.from("hwy4_events").update(payload).eq("id", existing.id);
+      })
+    );
+    let updateErrCount = 0;
+    for (let i = 0; i < matched.length; i++) {
+      if (updates[i].error) {
+        updateErrCount++;
+        console.error(`Update failed for "${matched[i].event.name}":`, updates[i].error?.message);
+      } else if (matched[i].changed) {
+        result.updated++;
+      } else {
+        result.unchanged++;
       }
-      // Unchanged: just touch last_scraped_at (+ opportunistically backfill source_event_id)
-      return {
-        id: existing.id,
-        last_scraped_at: now,
-        ...(event.source_event_id && { source_event_id: event.source_event_id }),
-      };
-    });
-    const { error } = await supabaseAdmin
-      .from("hwy4_events")
-      .upsert(updatePayloads, { onConflict: "id" });
-    if (error) {
-      console.error("Bulk update failed:", error.message);
-    } else {
-      for (const m of matched) {
-        if (m.changed) result.updated++;
-        else result.unchanged++;
-      }
+    }
+    if (updateErrCount > 0) {
+      console.warn(`${updateErrCount}/${matched.length} matched-row updates failed`);
     }
   }
 
   // Bulk INSERT for events that didn't match anything (exact or fuzzy).
-  const toInsert = unmatched.filter((u) => !fuzzyMatched.has(u.dedupKey));
+  // First, dedupe by dedup_key within the input batch — two scraped events
+  // can compute the same key after normalization (rare, but happens when a
+  // source emits near-duplicate entries). The unique constraint on dedup_key
+  // would atomically abort the whole insert otherwise. Keep the first one,
+  // log the dropped names so the underlying data issue is visible.
+  const toInsertAll = unmatched.filter((u) => !fuzzyMatched.has(u.dedupKey));
+  const seenKeys = new Set<string>();
+  const toInsert: typeof toInsertAll = [];
+  for (const u of toInsertAll) {
+    if (seenKeys.has(u.dedupKey)) {
+      console.warn(
+        `  Dropped in-batch duplicate (same dedup_key): "${u.event.name}" | ${u.event.date} | ${u.event.town}`
+      );
+      continue;
+    }
+    seenKeys.add(u.dedupKey);
+    toInsert.push(u);
+  }
+
   if (toInsert.length > 0) {
     const insertPayloads = toInsert.map(({ event, dedupKey }) => ({
       name: event.name,
