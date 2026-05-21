@@ -1,6 +1,61 @@
 import { createHash } from "node:crypto";
 import { supabaseAdmin } from "./supabase-admin.js";
 import type { ExtractedEvent } from "./extract.js";
+import { KNOWN_VENUES } from "./venues.js";
+
+/**
+ * Heuristic: does a string look like a street address?
+ * Matches "1276 S. Main St", "48B Copper Cove Dr", "3353 East Highway 4 …".
+ * Used to recover from scrapers that wrote the address into the venue_name
+ * field (e.g. GoCalaveras for the Arnold Spring Peddlers Faire row).
+ */
+function looksLikeStreetAddress(s: string | null | undefined): boolean {
+  if (!s) return false;
+  const trimmed = s.trim();
+  // Starts with house number (with optional letter suffix like "48B"),
+  // followed by at least one word character.
+  return /^\d+[A-Z]?\s+[A-Za-z]/.test(trimmed);
+}
+
+/**
+ * Look up a venue's registered address by matching venue_name or any alias
+ * against KNOWN_VENUES.
+ */
+function findRegisteredAddress(venueName: string | null | undefined): string | null {
+  if (!venueName) return null;
+  const target = venueName.toLowerCase().trim();
+  for (const v of Object.values(KNOWN_VENUES)) {
+    if (v.canonical.toLowerCase() === target) return v.address ?? null;
+    for (const a of v.aliases) {
+      if (a === target) return v.address ?? null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Three-tier scrape-time address resolution:
+ *
+ *   1. Event's own address (if it looks real).
+ *   2. Venue-registry address (when venue_name matches a registered venue).
+ *   3. (Town defaults are render-time only — keep DB nullable so we can tell
+ *      "we don't actually know" from "this is the town centroid".)
+ *
+ * Also: if venue_name *itself* is a street address and event.address is null,
+ * swap them (recover from scrapers that crossed wires).
+ */
+export function normalizeEventLocation(event: ExtractedEvent): void {
+  // Address-in-venue-name recovery
+  if (!event.address && looksLikeStreetAddress(event.venue_name)) {
+    event.address = event.venue_name;
+    event.venue_name = "Unknown Venue";
+  }
+  // Registry fill-in
+  if (!event.address) {
+    const registered = findRegisteredAddress(event.venue_name);
+    if (registered) event.address = registered;
+  }
+}
 
 export interface UpsertResult {
   inserted: number;
@@ -101,6 +156,11 @@ export async function upsertEvents(
   const result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
 
   for (const event of events) {
+    // Normalize location fields before keying / writing — recovers from
+    // scrapers that crossed venue_name with address, and back-fills address
+    // from the venue registry where possible.
+    normalizeEventLocation(event);
+
     const dedupKey = generateDedupKey(event.name, event.date, event.town);
 
     // Check for existing event with this dedup key

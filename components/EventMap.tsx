@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { TOWN_INFO } from "@/lib/towns";
+import { resolveDisplayAddress } from "@/lib/address";
 
 interface EventMapProps {
   town: string;
@@ -26,8 +27,12 @@ export default function EventMap({ town, venueName, address }: EventMapProps) {
   const townData = TOWN_INFO[town];
   if (!townData?.lat || !townData?.lng) return null;
 
-  const directionsUrl = address
-    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address + ", " + town + ", CA")}`
+  // Three-tier cascade: event address → town default → venue name as text.
+  // We prefer a real street string in the directions URL so Google Maps lands
+  // the user at the right place rather than a town centroid.
+  const resolvedAddress = resolveDisplayAddress(address, town);
+  const directionsUrl = resolvedAddress
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(resolvedAddress + ", " + town + ", CA")}`
     : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venueName + ", " + town + ", CA")}`;
 
   return (
@@ -50,7 +55,7 @@ export default function EventMap({ town, venueName, address }: EventMapProps) {
               <strong className="text-forest">{venueName}</strong>
               <br />
               <span className="text-stone text-xs">
-                {address && <>{address}<br /></>}
+                {resolvedAddress && <>{resolvedAddress}<br /></>}
                 {town}, California
               </span>
             </Popup>

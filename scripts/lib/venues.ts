@@ -172,6 +172,7 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "brice station vineyards",
     ],
     town: "Murphys",
+    address: "3353 East Highway 4, Murphys, CA 95247",
   },
   "murphys-hotel": {
     canonical: "Murphys Historic Hotel",
@@ -246,6 +247,39 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "town square copperopolis",
     ],
     town: "Copperopolis",
+  },
+  "miners-lounge": {
+    canonical: "The Miners Lounge",
+    aliases: [
+      "miners lounge",
+      "miner's lounge",
+      "the miners lounge",
+      "the miner's lounge",
+    ],
+    town: "Angels Camp",
+    address: "1276 S. Main St, Angels Camp, CA 95222",
+  },
+  "the-pour-house": {
+    canonical: "The Pour House",
+    aliases: [
+      "the pour house",
+      "pour house",
+      "murphys pourhouse",
+      "the pourhouse",
+    ],
+    town: "Copperopolis",
+    address: "48B Copper Cove Dr, Copperopolis, CA 95228",
+  },
+  "big-trees-state-park": {
+    canonical: "Calaveras Big Trees State Park",
+    aliases: [
+      "big trees state park",
+      "calaveras big trees state park",
+      "calaveras big trees",
+      "big trees",
+    ],
+    town: "Arnold",
+    address: "1170 CA-4, Arnold, CA 95223",
   },
 };
 
