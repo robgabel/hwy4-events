@@ -1,31 +1,33 @@
-import { scrapeBearValley } from "./scrapers/bear-valley.js";
 import { scrapeBistroEspresso } from "./scrapers/bistro-espresso.js";
-import { scrapeBriceStation } from "./scrapers/brice-station.js";
-import { scrapeBrandingIron } from "./scrapers/branding-iron.js";
-import { scrapeCampConnellGeneralStore } from "./scrapers/camp-connell-general-store.js";
 import { scrapeGoCalaveras } from "./scrapers/gocalaveras.js";
-import { scrapeLubeRoom } from "./scrapers/lube-room.js";
-import { scrapeMurphysIrishPub } from "./scrapers/murphys-irish-pub.js";
 import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
-import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
-import { scrapeWateringHole } from "./scrapers/watering-hole.js";
 import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
+import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
+import { FIRECRAWL_SOURCES } from "./scrapers/firecrawl-sources.js";
 import { validateEventUrls } from "./lib/validate-urls.js";
 import { runHealthCheck } from "./lib/health.js";
 
-const SCRAPERS: Record<string, () => Promise<void>> = {
-  "bear-valley": scrapeBearValley,
+/**
+ * Sources whose scraping shape is unique enough to keep their own file:
+ *   - bistro-espresso: parses an embedded JS bundle array
+ *   - gocalaveras: EventON AJAX with nonce extraction
+ *   - mystic-saloon: Facebook primary + multi-URL website fallback
+ *   - hwy4-fb-discover: Apify Facebook events scraper
+ *
+ * Everything else goes through the config-driven generic Firecrawl runner.
+ */
+const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   "bistro-espresso": scrapeBistroEspresso,
-  "brice-station": scrapeBriceStation,
-  "branding-iron": scrapeBrandingIron,
-  "camp-connell-general-store": scrapeCampConnellGeneralStore,
   "gocalaveras": scrapeGoCalaveras,
-  "lube-room": scrapeLubeRoom,
-  "murphys-irish-pub": scrapeMurphysIrishPub,
   "mystic-saloon": scrapeMysticSaloon,
-  "visit-murphys": scrapeVisitMurphys,
-  "watering-hole": scrapeWateringHole,
   "hwy4-fb-discover": scrapeHwy4FbDiscover,
+};
+
+const SCRAPERS: Record<string, () => Promise<void>> = {
+  ...SPECIAL_SCRAPERS,
+  ...Object.fromEntries(
+    FIRECRAWL_SOURCES.map((s) => [s.slug, () => scrapeFirecrawlSource(s)])
+  ),
 };
 
 async function main() {
