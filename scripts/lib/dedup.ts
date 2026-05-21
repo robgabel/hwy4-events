@@ -163,14 +163,44 @@ export async function upsertEvents(
 
     const dedupKey = generateDedupKey(event.name, event.date, event.town);
 
-    // Check for existing event with this dedup key
-    const { data: existing } = await supabaseAdmin
-      .from("hwy4_events")
-      .select(
-        "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url"
-      )
-      .eq("dedup_key", dedupKey)
-      .maybeSingle();
+    // Prefer the source-side stable id when the scraper provided one — this
+    // survives town/venue/name changes so re-scrapes can update in place.
+    // Falls back to dedup_key for sources that don't have a stable id.
+    let existing: {
+      id: string;
+      name: string;
+      venue_name: string;
+      description: string | null;
+      start_time: string | null;
+      end_time: string | null;
+      price: string | null;
+      event_url: string | null;
+      address: string | null;
+      town: string;
+      image_url: string | null;
+    } | null = null;
+
+    if (event.source_event_id) {
+      const { data } = await supabaseAdmin
+        .from("hwy4_events")
+        .select(
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url"
+        )
+        .eq("source_name", sourceName)
+        .eq("source_event_id", event.source_event_id)
+        .maybeSingle();
+      existing = data ?? null;
+    }
+    if (!existing) {
+      const { data } = await supabaseAdmin
+        .from("hwy4_events")
+        .select(
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url"
+        )
+        .eq("dedup_key", dedupKey)
+        .maybeSingle();
+      existing = data ?? null;
+    }
 
     const now = new Date().toISOString();
 
@@ -202,15 +232,29 @@ export async function upsertEvents(
             address: event.address,
             town: event.town,
             image_url: event.image_url ?? null,
+            // Keep dedup_key in sync with the (possibly-changed) town so
+            // dedup_key lookups still find this row if source_event_id
+            // ever disappears.
+            dedup_key: dedupKey,
+            ...(event.source_event_id && {
+              source_event_id: event.source_event_id,
+            }),
             last_scraped_at: now,
           })
           .eq("id", existing.id);
         result.updated++;
       } else {
-        // Just touch last_scraped_at
+        // Just touch last_scraped_at — but also opportunistically backfill
+        // source_event_id on pre-existing rows that pre-date this column
+        // being populated.
         await supabaseAdmin
           .from("hwy4_events")
-          .update({ last_scraped_at: now })
+          .update({
+            last_scraped_at: now,
+            ...(event.source_event_id && {
+              source_event_id: event.source_event_id,
+            }),
+          })
           .eq("id", existing.id);
         result.unchanged++;
       }
@@ -263,6 +307,7 @@ export async function upsertEvents(
         visibility: "public",
         org_slug: orgSlug,
         dedup_key: dedupKey,
+        source_event_id: event.source_event_id ?? null,
         last_scraped_at: now,
       });
 

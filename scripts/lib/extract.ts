@@ -15,6 +15,13 @@ export interface ExtractedEvent {
   artists: string[] | null;
   event_url: string | null;
   image_url?: string | null;
+  /**
+   * Source-side stable id for this event (e.g. EventON event_id for
+   * GoCalaveras). When present, the upsert path prefers this over the
+   * computed dedup_key — so subsequent re-scrapes can update town/venue
+   * changes in place rather than creating a duplicate.
+   */
+  source_event_id?: string | null;
 }
 
 const client = new Anthropic();
