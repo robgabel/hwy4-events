@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedEvent } from "./extract.js";
 import { decodeEventFields } from "./extract.js";
 import { applyVenueDetection } from "./venue-matcher.js";
+import { TOWNS, TOWN_ADDRESS_ALIASES } from "../../lib/towns.js";
 
 /**
  * Facebook Events Discover scraper.
@@ -271,18 +272,7 @@ function resolveTown(e: ApifyEvent, defaultTown: string): string {
     .join(" | ")
     .toLowerCase();
   if (!haystack) return defaultTown;
-  const HWY4_TOWNS = [
-    "Angels Camp",
-    "Copperopolis",
-    "Murphys",
-    "Arnold",
-    "Avery",
-    "Camp Connell",
-    "Bear Valley",
-    "Dorrington",
-    "White Pines",
-    "Hathaway Pines",
-  ];
+  const HWY4_TOWNS = [...TOWNS, ...TOWN_ADDRESS_ALIASES];
   for (const town of HWY4_TOWNS) {
     if (haystack.includes(town.toLowerCase())) return town;
   }

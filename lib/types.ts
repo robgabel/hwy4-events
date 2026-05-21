@@ -67,14 +67,4 @@ export interface CollapsedEvent extends Hwy4Event {
   isCollapsed?: boolean;
 }
 
-export const TOWNS = [
-  "Angels Camp",
-  "Copperopolis",
-  "Murphys",
-  "Arnold",
-  "Avery",
-  "Camp Connell",
-  "Bear Valley",
-  "Dorrington",
-  "White Pines",
-] as const;
+export { TOWNS } from "./towns";

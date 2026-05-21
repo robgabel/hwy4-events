@@ -10,30 +10,12 @@ const SOURCE_NAME = "GoCalaveras.com";
 const ORG_SLUG = "gocalaveras";
 const MONTHS_TO_SCRAPE = 6;
 
-/** Towns along the Hwy 4 corridor that we care about */
-const HWY4_TOWNS = new Set([
-  "copperopolis",
-  "angels camp",
-  "murphys",
-  "avery",
-  "white pines",
-  "arnold",
-  "dorrington",
-  "camp connell",
-  "bear valley",
-]);
+import { TOWNS } from "../../lib/towns.js";
 
-const HWY4_TOWN_LIST = [
-  "Copperopolis",
-  "Angels Camp",
-  "Murphys",
-  "Avery",
-  "White Pines",
-  "Arnold",
-  "Dorrington",
-  "Camp Connell",
-  "Bear Valley",
-];
+/** Towns along the Hwy 4 corridor that we care about */
+const HWY4_TOWNS = new Set(TOWNS.map((t) => t.toLowerCase()));
+
+const HWY4_TOWN_LIST = TOWNS;
 
 const anthropic = new Anthropic();
 
