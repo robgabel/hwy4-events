@@ -105,9 +105,13 @@ export function normalizeName(name: string): string {
     .replace(/\s+/g, " ")
     // Remove leading "the " (sometimes appears/disappears)
     .replace(/^the\s+/, "")
-    // Normalize common punctuation
-    .replace(/['']/g, "'")
-    .replace(/[""]/g, '"');
+    // Normalize curly quotes / typographic punctuation to ASCII.
+    // Source pages render the same apostrophe as ASCII `'` or curly `’`
+    // (and double quotes as `“`/`”`) depending on the CMS / template.
+    // Without this, two scrapes of the same event produce different dedup
+    // keys and the bulk SELECT misses, forcing fuzzy fallback.
+    .replace(/[‘’ʼ′]/g, "'")
+    .replace(/[“”″]/g, '"');
 }
 
 /**
