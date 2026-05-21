@@ -1,0 +1,23 @@
+import { TOWN_INFO } from "@/lib/towns";
+
+/**
+ * Three-tier address cascade used to drive the map pin, directions URL,
+ * structured data, and the Location dd on the event detail page:
+ *
+ *   1. The event's own address, if present.
+ *   2. (Future: venue-registry address — added in PR #3 when the registry
+ *      is wired into the Next.js bundle.)
+ *   3. The town's defaultAddress (e.g. Arnold → "961 Highway 4, Arnold CA").
+ *
+ * Returns null when no tier resolves. The Location display falls back to
+ * "<town>, California" in that case, which is still safe.
+ */
+export function resolveDisplayAddress(
+  address: string | null,
+  town: string
+): string | null {
+  if (address && address.trim()) return address.trim();
+  const townDefault = TOWN_INFO[town]?.defaultAddress;
+  if (townDefault) return townDefault;
+  return null;
+}

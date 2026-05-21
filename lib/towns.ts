@@ -7,6 +7,13 @@ export interface TownInfo {
   driveFromArnold: string; // approximate drive time from Arnold
   lat: number;
   lng: number;
+  /**
+   * Default street address used when an event has no specific address.
+   * Drives the map popup, directions URL, and structured data so the map
+   * pin is useful rather than centered on a town centroid with no signal.
+   * Optional — only set for towns where there's a sensible town-square anchor.
+   */
+  defaultAddress?: string;
 }
 
 export const CORRIDOR_TOWNS: TownInfo[] = [
@@ -57,6 +64,7 @@ export const CORRIDOR_TOWNS: TownInfo[] = [
     driveFromArnold: "You're here",
     lat: 38.2144,
     lng: -120.3510,
+    defaultAddress: "961 Highway 4, Arnold CA",
   },
   {
     name: "Dorrington",

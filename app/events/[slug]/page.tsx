@@ -4,6 +4,7 @@ import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
+import { resolveDisplayAddress } from "@/lib/address";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapWrapper";
@@ -93,6 +94,7 @@ export async function generateMetadata({
 }
 
 function EventJsonLd({ event, slug }: { event: Hwy4Event; slug: string }) {
+  const displayAddress = resolveDisplayAddress(event.address, event.town);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -107,7 +109,7 @@ function EventJsonLd({ event, slug }: { event: Hwy4Event; slug: string }) {
       name: event.venue_name,
       address: {
         "@type": "PostalAddress",
-        ...(event.address && { streetAddress: event.address }),
+        ...(displayAddress && { streetAddress: displayAddress }),
         addressLocality: event.town,
         addressRegion: "CA",
         addressCountry: "US",
@@ -163,6 +165,7 @@ export default async function EventPage({ params }: PageProps) {
       ? `${startTime} – ${endTime}`
       : startTime
     : null;
+  const displayAddress = resolveDisplayAddress(event.address, event.town);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -240,9 +243,9 @@ export default async function EventPage({ params }: PageProps) {
             </dt>
             <dd className="mt-0.5 font-medium text-forest">
               {event.town}, California
-              {event.address && (
+              {displayAddress && (
                 <span className="block text-xs text-stone">
-                  {event.address}
+                  {displayAddress}
                 </span>
               )}
               {TOWN_INFO[event.town] && (
