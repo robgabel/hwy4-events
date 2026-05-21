@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./supabase-admin.js";
 import { getFacebookStatus } from "./facebook.js";
+import { isGenericVenue } from "./venue-matcher.js";
 
 interface SourceHealth {
   org_slug: string;
@@ -143,5 +144,62 @@ export async function runHealthCheck(
     console.log("\nAll sources healthy.");
   }
 
+  await reportDataQualityIndex(today);
+
   console.log("");
+}
+
+/**
+ * "Idiot index" pass: counts the size of the two failure piles (generic
+ * venue, missing address) and prints the top offenders so the next hour
+ * of registry work is obvious. Print-only — does not fail the build.
+ */
+async function reportDataQualityIndex(today: string): Promise<void> {
+  const { data: rows } = await supabaseAdmin
+    .from("hwy4_events")
+    .select("venue_name, address, source_name, town, name, date")
+    .gte("date", today);
+
+  if (!rows || rows.length === 0) return;
+
+  const unresolved = rows.filter((r) => isGenericVenue(r.venue_name ?? ""));
+  const noAddress = rows.filter(
+    (r) => !r.address || r.address.trim().length === 0
+  );
+
+  console.log("\n=== Data Quality Index ===");
+  console.log(`Future events:            ${rows.length}`);
+  console.log(`Generic venue_name:       ${unresolved.length}`);
+  console.log(`Missing address:          ${noAddress.length}`);
+
+  if (unresolved.length > 0) {
+    console.log("\nTop unresolved by source:");
+    const bySource = groupAndCount(unresolved, (r) => r.source_name ?? "(none)");
+    for (const [src, n] of bySource.slice(0, 10)) {
+      console.log(`  ${String(n).padStart(3)}  ${src}`);
+    }
+    console.log("\nUnresolved sample (first 5):");
+    for (const r of unresolved.slice(0, 5)) {
+      console.log(
+        `  ${r.date} | ${r.name} | town=${r.town} | addr="${r.address ?? ""}"`
+      );
+    }
+  }
+
+  if (noAddress.length > 0) {
+    console.log("\nTop missing-address by source:");
+    const bySource = groupAndCount(noAddress, (r) => r.source_name ?? "(none)");
+    for (const [src, n] of bySource.slice(0, 10)) {
+      console.log(`  ${String(n).padStart(3)}  ${src}`);
+    }
+  }
+}
+
+function groupAndCount<T>(rows: T[], key: (r: T) => string): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const k = key(r);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }

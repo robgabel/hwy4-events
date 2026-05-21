@@ -2,6 +2,33 @@ import { createHash } from "node:crypto";
 import { supabaseAdmin } from "./supabase-admin.js";
 import type { ExtractedEvent } from "./extract.js";
 import { KNOWN_VENUES } from "./venues.js";
+import { isGenericVenue } from "./venue-matcher.js";
+
+/**
+ * Emit one structured log line per data-quality failure at write time.
+ * Cheaper than QA-ing rows after they ship: caught at the source, while
+ * the scraper still has full context in the surrounding output.
+ */
+function emitDataQualitySignal(
+  event: ExtractedEvent,
+  sourceName: string,
+  orgSlug: string
+): void {
+  if (isGenericVenue(event.venue_name)) {
+    console.warn(
+      `  UNRESOLVED_VENUE source=${orgSlug} venue="${event.venue_name}" ` +
+      `date=${event.date} town="${event.town}" name="${event.name}" ` +
+      `addr="${event.address ?? ""}" url=${event.event_url ?? "—"}`
+    );
+  }
+  if (!event.address || event.address.trim().length === 0) {
+    console.warn(
+      `  MISSING_ADDRESS source=${orgSlug} venue="${event.venue_name}" ` +
+      `date=${event.date} town="${event.town}" name="${event.name}"`
+    );
+  }
+  void sourceName;
+}
 
 /**
  * Heuristic: does a string look like a street address?
@@ -160,6 +187,10 @@ export async function upsertEvents(
     // scrapers that crossed venue_name with address, and back-fills address
     // from the venue registry where possible.
     normalizeEventLocation(event);
+
+    // Last-chance data-quality signal: anything still generic / address-less
+    // at this point is a real gap the matcher + registry couldn't close.
+    emitDataQualitySignal(event, sourceName, orgSlug);
 
     const dedupKey = generateDedupKey(event.name, event.date, event.town);
 
