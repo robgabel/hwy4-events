@@ -3,6 +3,7 @@ import {
   type TownLocationConfig,
 } from "../lib/facebook-events.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import { isManuallyManagedEvent } from "../lib/manual-sources.js";
 
 /**
  * Hwy 4 Facebook Events Discover scraper.
@@ -62,7 +63,16 @@ export async function scrapeHwy4FbDiscover(): Promise<void> {
       continue;
     }
 
-    const futureEvents = events.filter((e) => e.date >= today);
+    const manualSkipped = events.filter(isManuallyManagedEvent);
+    const scrapable = events.filter((e) => !isManuallyManagedEvent(e));
+    if (manualSkipped.length > 0) {
+      console.log(
+        `  Skipping ${manualSkipped.length} manually-managed event(s): ${manualSkipped
+          .map((e) => `${e.name} @ ${e.venue_name}`)
+          .join("; ")}`
+      );
+    }
+    const futureEvents = scrapable.filter((e) => e.date >= today);
     console.log(
       `  Extracted ${events.length} events, ${futureEvents.length} future`
     );
