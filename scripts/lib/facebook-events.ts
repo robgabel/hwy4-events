@@ -1,9 +1,9 @@
-import axios from "axios";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedEvent } from "./extract.js";
 import { decodeEventFields } from "./extract.js";
 import { applyVenueDetection } from "./venue-matcher.js";
 import { TOWNS, TOWN_ADDRESS_ALIASES } from "../../lib/towns.js";
+import { runApifyActorSync } from "./apify-client.js";
 
 /**
  * Facebook Events Discover scraper.
@@ -17,8 +17,7 @@ import { TOWNS, TOWN_ADDRESS_ALIASES } from "../../lib/towns.js";
  * already track individually.
  */
 
-const APIFY_ENDPOINT =
-  "https://api.apify.com/v2/acts/apify~facebook-events-scraper/run-sync-get-dataset-items";
+const APIFY_ACTOR = "apify~facebook-events-scraper";
 
 const VALID_CATEGORIES = [
   "live_music",
@@ -110,36 +109,13 @@ async function callApify(
   config: TownLocationConfig,
   maxEvents: number
 ): Promise<ApifyEvent[]> {
-  const token = process.env.APIFY_API_TOKEN;
-  if (!token) {
-    throw new Error("Missing APIFY_API_TOKEN environment variable");
-  }
-
   const startUrl = buildExploreUrl(config);
   console.log(`  Apify input: ${startUrl}`);
-
-  const response = await axios.post(
-    APIFY_ENDPOINT,
-    {
-      startUrls: [startUrl],
-      maxEvents,
-    },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      // Apify sync runs can take a while when crawling FB
-      timeout: 180000,
-    }
-  );
-
-  if (!Array.isArray(response.data)) {
-    console.warn(`  Apify returned unexpected response type: ${typeof response.data}`);
-    return [];
-  }
-
-  return response.data as ApifyEvent[];
+  return runApifyActorSync<ApifyEvent>({
+    actor: APIFY_ACTOR,
+    input: { startUrls: [startUrl], maxEvents },
+    timeoutMs: 180000,
+  });
 }
 
 /**

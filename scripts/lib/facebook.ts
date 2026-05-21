@@ -1,6 +1,6 @@
-import axios from "axios";
 import { extractEvents, type VenueContext, type ExtractedEvent } from "./extract.js";
 import { supabaseAdmin } from "./supabase-admin.js";
+import { getApifyToken, runApifyActorSync } from "./apify-client.js";
 
 /** Track Facebook scraper outcomes per page across a single scrape run. */
 const fbStatus: Record<string, { failed: boolean; error?: string }> = {};
@@ -47,23 +47,15 @@ async function getLastScrapeDate(orgSlug: string): Promise<string | null> {
 
 /**
  * Fetch recent posts from a Facebook Page via Apify's Facebook Posts Scraper.
- * Uses the synchronous run endpoint to get results in a single API call.
  *
  * Only fetches posts since the last scrape to minimize Apify costs.
  * First run: fetches last 14 days. Subsequent runs: only new posts.
- *
- * Requires APIFY_API_TOKEN environment variable.
  */
 async function fetchApifyPosts(
   pageUrl: string,
   orgSlug: string,
   maxPosts: number = 20
 ): Promise<ApifyPostResult[]> {
-  const token = process.env.APIFY_API_TOKEN;
-  if (!token) {
-    throw new Error("Missing APIFY_API_TOKEN environment variable");
-  }
-
   // Determine date window: since last scrape, or last 14 days for first run
   const lastScrape = await getLastScrapeDate(orgSlug);
   const dateFrom = lastScrape || (() => {
@@ -74,33 +66,15 @@ async function fetchApifyPosts(
 
   console.log(`  Fetching posts since: ${dateFrom}${lastScrape ? " (last scrape)" : " (first run, 14-day window)"}`);
 
-  // Use the sync endpoint to run and get results in one call
-  const endpoint =
-    "https://api.apify.com/v2/acts/apify~facebook-posts-scraper/run-sync-get-dataset-items";
-
-  const response = await axios.post(
-    endpoint,
-    {
+  return runApifyActorSync<ApifyPostResult>({
+    actor: "apify~facebook-posts-scraper",
+    input: {
       startUrls: [{ url: pageUrl }],
       resultsLimit: maxPosts,
       onlyPostsNewerThan: dateFrom,
     },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      // Apify sync runs can take a while
-      timeout: 120000,
-    }
-  );
-
-  if (!Array.isArray(response.data)) {
-    console.warn(`  Apify returned unexpected response type: ${typeof response.data}`);
-    return [];
-  }
-
-  return response.data as ApifyPostResult[];
+    timeoutMs: 120000,
+  });
 }
 
 /**
@@ -179,8 +153,7 @@ export async function fetchFacebookEvents(
   venue: VenueContext,
   orgSlug: string = ""
 ): Promise<ExtractedEvent[]> {
-  const token = process.env.APIFY_API_TOKEN;
-  if (!token) {
+  if (!getApifyToken()) {
     console.log("  Skipping Facebook (no APIFY_API_TOKEN set)");
     fbStatus[pageUrl] = { failed: false, error: "No API token configured" };
     return [];
