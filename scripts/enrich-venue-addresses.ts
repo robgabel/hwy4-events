@@ -25,10 +25,7 @@ import path from "node:path";
 
 const STAGING_FILE = path.join(import.meta.dirname ?? ".", "venue-addresses-staged.json");
 
-const HWY4_TOWNS = [
-  "Copperopolis", "Angels Camp", "Murphys", "Avery", "White Pines",
-  "Arnold", "Dorrington", "Camp Connell", "Bear Valley",
-];
+import { TOWNS as HWY4_TOWNS } from "../lib/towns.js";
 
 interface Candidate {
   source: "registry-missing-address" | "db-unknown-venue";

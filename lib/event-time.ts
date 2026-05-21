@@ -81,25 +81,6 @@ function toAbsoluteMinutes(dateStr: string, timeStr: string): number | null {
   return year * 525960 + (month - 1) * 43830 + day * 1440 + hours * 60 + minutes;
 }
 
-function parseEventDateTime(
-  dateStr: string,
-  timeStr: string
-): Date | null {
-  try {
-    // Normalize time to 24h format
-    const time24 = to24Hour(timeStr.trim());
-    if (!time24) return null;
-
-    const [hours, minutes] = time24.split(":").map(Number);
-    const [year, month, day] = dateStr.split("-").map(Number);
-
-    const date = new Date(year, month - 1, day, hours, minutes);
-    return isNaN(date.getTime()) ? null : date;
-  } catch {
-    return null;
-  }
-}
-
 function to24Hour(time: string): string | null {
   // Already 24h format like "19:00"
   if (/^\d{1,2}:\d{2}$/.test(time)) return time;

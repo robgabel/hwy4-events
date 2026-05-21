@@ -1,26 +1,36 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { extractEvents } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import type { FirecrawlSource } from "./firecrawl-sources.js";
 
-// Shopify site works; Square ticketing as fallback
-const EVENTS_URLS = [
-  "https://www.bricestation.com/collections/events",
-  "https://bricestation-582296.square.site/",
-];
-const SOURCE_NAME = "Brice Station";
-const ORG_SLUG = "brice-station";
+interface FirecrawlOpts {
+  waitFor: number;
+  onlyMainContent: boolean;
+  timeout: number;
+}
 
+const DEFAULT_FIRECRAWL_OPTS: FirecrawlOpts = {
+  waitFor: 5000,
+  onlyMainContent: true,
+  timeout: 30000,
+};
+
+/**
+ * Generic Firecrawl-driven scraper. Replaces seven near-identical
+ * per-venue files. The per-source quirks live in `FIRECRAWL_SOURCES`
+ * configuration (URL, default venue/town/address, optional retry URLs,
+ * Firecrawl options); the orchestration is identical.
+ */
 async function fetchMarkdown(
   firecrawl: FirecrawlApp,
-  url: string
+  url: string,
+  opts: FirecrawlOpts
 ): Promise<string | null> {
   console.log(`  Trying: ${url}`);
   try {
     const result = await firecrawl.scrapeUrl(url, {
       formats: ["markdown"],
-      waitFor: 8000,
-      onlyMainContent: false,
-      timeout: 30000,
+      ...opts,
     });
 
     if (!result.success) {
@@ -29,19 +39,10 @@ async function fetchMarkdown(
     }
 
     const markdown = result.markdown || "";
-    console.log(`  Markdown length: ${markdown.length} chars`);
-
     if (markdown.length < 100) {
       console.warn(`  Content too short for ${url} (${markdown.length} chars)`);
       return null;
     }
-
-    const lower = markdown.toLowerCase();
-    if (lower.includes("page not found") || lower.includes("404 not found")) {
-      console.warn(`  Got a 404 page for ${url}`);
-      return null;
-    }
-
     return markdown;
   } catch (err) {
     console.warn(`  Error fetching ${url}:`, err);
@@ -49,8 +50,8 @@ async function fetchMarkdown(
   }
 }
 
-export async function scrapeBriceStation(): Promise<void> {
-  console.log("=== Brice Station Scraper ===");
+export async function scrapeFirecrawlSource(source: FirecrawlSource): Promise<void> {
+  console.log(`=== ${source.name} Scraper ===`);
 
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey) {
@@ -58,12 +59,19 @@ export async function scrapeBriceStation(): Promise<void> {
   }
 
   const firecrawl = new FirecrawlApp({ apiKey });
+  const opts = { ...DEFAULT_FIRECRAWL_OPTS, ...(source.firecrawl ?? {}) };
 
-  // Try each URL until we get usable content
+  // Resolve URL list: single URL or ordered fallback.
+  const urls = source.urls ?? (source.url ? [source.url] : []);
+  if (urls.length === 0) {
+    console.error(`No URLs configured for ${source.slug}`);
+    return;
+  }
+
   let markdown: string | null = null;
-  let sourceUrl = EVENTS_URLS[0];
-  for (const url of EVENTS_URLS) {
-    markdown = await fetchMarkdown(firecrawl, url);
+  let sourceUrl = urls[0];
+  for (const url of urls) {
+    markdown = await fetchMarkdown(firecrawl, url, opts);
     if (markdown) {
       sourceUrl = url;
       break;
@@ -71,31 +79,30 @@ export async function scrapeBriceStation(): Promise<void> {
   }
 
   if (!markdown) {
-    console.warn(
-      "No usable content from any Brice Station URL. " +
-      "Note: Hilltop Concert Series runs May–September; page may be empty off-season."
-    );
+    console.warn(`No usable content from any ${source.name} URL.`);
     return;
   }
 
-  console.log(`Using content from: ${sourceUrl}`);
-  console.log(`\nMarkdown preview (first 1000 chars):\n${markdown.slice(0, 1000)}`);
+  if (urls.length > 1) {
+    console.log(`Using content from: ${sourceUrl}`);
+  }
 
   const currentYear = new Date().getFullYear();
   const today = new Date().toISOString().slice(0, 10);
 
   const events = await extractEvents(
-    "Brice Station Events",
+    source.pageTitle,
     sourceUrl,
     markdown,
     currentYear,
     {
-      defaultVenue: "Brice Station Vineyards",
-      defaultTown: "Murphys",
+      defaultVenue: source.defaultVenue,
+      defaultTown: source.defaultTown,
+      defaultAddress: source.defaultAddress,
     }
   );
 
-  if (events.length === 0) {
+  if (events.length === 0 && source.dumpOnEmpty) {
     console.warn("0 events extracted. Full markdown dump for debugging:");
     console.warn(markdown.slice(0, 3000));
   }
@@ -108,12 +115,11 @@ export async function scrapeBriceStation(): Promise<void> {
   }
 
   let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
-
   if (futureEvents.length > 0) {
-    totalResult = await upsertEvents(futureEvents, SOURCE_NAME, ORG_SLUG, sourceUrl);
+    totalResult = await upsertEvents(futureEvents, source.name, source.slug, sourceUrl);
   }
 
-  console.log("\n=== Brice Station Summary ===");
+  console.log(`\n=== ${source.name} Summary ===`);
   console.log(`Events inserted: ${totalResult.inserted}`);
   console.log(`Events updated: ${totalResult.updated}`);
   console.log(`Events unchanged: ${totalResult.unchanged}`);

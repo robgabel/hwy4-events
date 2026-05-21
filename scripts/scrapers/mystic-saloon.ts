@@ -34,7 +34,6 @@ async function fetchMarkdown(
     }
 
     const markdown = result.markdown || "";
-    console.log(`  Markdown length: ${markdown.length} chars`);
 
     if (markdown.length < 100) {
       console.warn(`  Content too short for ${url} (${markdown.length} chars)`);
@@ -99,7 +98,6 @@ export async function scrapeMysticSaloon(): Promise<void> {
     }
 
     console.log(`Using content from: ${sourceUrl}`);
-    console.log(`\nMarkdown preview (first 1000 chars):\n${markdown.slice(0, 1000)}`);
 
     const events = await extractEvents(
       "Howard's Mystic Saloon Events",

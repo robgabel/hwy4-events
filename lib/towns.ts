@@ -96,3 +96,13 @@ export const CORRIDOR_TOWNS: TownInfo[] = [
 export const TOWN_INFO: Record<string, TownInfo> = Object.fromEntries(
   CORRIDOR_TOWNS.map((t) => [t.name, t])
 );
+
+/** Canonical town names. Derived from CORRIDOR_TOWNS — single source of truth. */
+export const TOWNS: readonly string[] = CORRIDOR_TOWNS.map((t) => t.name);
+
+/**
+ * Address-only town aliases — names that appear in scraped addresses but
+ * aren't canonical TOWNS (e.g. Hathaway Pines is treated as Arnold in dedup,
+ * but FB events sometimes tag it as a distinct location).
+ */
+export const TOWN_ADDRESS_ALIASES: readonly string[] = ["Hathaway Pines"];
