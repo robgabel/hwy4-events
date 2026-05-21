@@ -282,18 +282,55 @@ async function fetchMonth(
     await classifyEvents(events);
   }
 
+  // Address-driven town validation (authoritative): if the resolved address
+  // contains a corridor town that disagrees with the current town, override
+  // — the address is the ground truth, the prior town value was either an
+  // LLM guess or a stale AJAX-side default.
+  let townFixedFromAddr = 0;
+  for (const event of events) {
+    if (!event.address) continue;
+    const addrTown = findCorridorTownInString(event.address);
+    if (addrTown && addrTown !== event.town) {
+      event.town = addrTown;
+      townFixedFromAddr++;
+    }
+  }
+  if (townFixedFromAddr > 0) {
+    console.log(`  Town validation: corrected ${townFixedFromAddr} town(s) from address`);
+  }
+
+  // Drop events whose address is clearly outside the Hwy 4 corridor.
+  // Without this, an LLM that guessed a corridor town for a non-corridor venue
+  // (e.g. Renegade Winery in Mokelumne Hill → labeled "Copperopolis") leaks
+  // through the HWY4_TOWNS filter in scrapeGoCalaveras().
+  const dropped: ExtractedEvent[] = [];
+  const kept: ExtractedEvent[] = [];
+  for (const event of events) {
+    if (isNonCorridorAddress(event.address)) {
+      dropped.push(event);
+    } else {
+      kept.push(event);
+    }
+  }
+  if (dropped.length > 0) {
+    console.log(`  Dropped ${dropped.length} non-corridor event(s):`);
+    for (const e of dropped) {
+      console.log(`    ✕ ${e.name} | ${e.date} | ${e.address}`);
+    }
+  }
+
   // Post-extraction venue detection: resolve generic/unknown venue names
   let venueFixed = 0;
-  for (const event of events) {
+  for (const event of kept) {
     if (applyVenueDetection(event)) {
       venueFixed++;
     }
   }
   if (venueFixed > 0) {
-    console.log(`  Venue detection: resolved ${venueFixed}/${events.length} generic venues`);
+    console.log(`  Venue detection: resolved ${venueFixed}/${kept.length} generic venues`);
   }
 
-  return events;
+  return kept;
 }
 
 // ---------- HTML URL extraction ----------
@@ -363,9 +400,11 @@ function parseEventONEvents(
 
       const pmv = ev.event_pmv || {};
 
-      // Extract location info from PMV metadata
-      const subtitle = pmv.evcal_subtitle?.[0] || "";
-      const locationName = pmv.evcal_location_name?.[0] || subtitle || "";
+      // Extract location info from PMV metadata.
+      // NOTE: do NOT fall back to evcal_subtitle for venue — on GoCalaveras
+      // the subtitle is artist/host info ("Featuring …", "Hosted by …"), not a venue.
+      // Using it as venue_name poisons downstream display + dedup.
+      const locationName = pmv.evcal_location_name?.[0] || "";
       const locationAddress = pmv.evcal_location_address?.[0] || pmv.evcal_location?.[0] || null;
       const eventUrl = pmv._evcal_exlink?.[0] || null;
 
@@ -510,6 +549,60 @@ function matchCorridorTown(city: string | null): string | null {
 }
 
 /**
+ * Scan an arbitrary string (address, venue text, anything) for a Hwy 4 corridor
+ * town name. Used as the LAST-RESORT town signal when structured parsing fails.
+ * Returns the canonical-cased town name if found, else null.
+ */
+function findCorridorTownInString(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  for (const t of HWY4_TOWN_LIST) {
+    if (lower.includes(t.toLowerCase())) return t;
+  }
+  return null;
+}
+
+/**
+ * Known nearby cities that are NOT in the Hwy 4 corridor — events located in
+ * these cities should be filtered out, even if the scraper/LLM tagged them
+ * with a corridor town.
+ *
+ * Order matters: longer/more specific names first so e.g. "San Andreas" is
+ * matched before any "Andreas" substring confusion.
+ */
+const NON_CORRIDOR_CITIES = [
+  "mokelumne hill",
+  "san andreas",
+  "valley springs",
+  "wallace",
+  "rail road flat",
+  "railroad flat",
+  "west point",
+  "mountain ranch",
+  "burson",
+  "campo seco",
+  "glencoe",
+  "jackson",
+  "sutter creek",
+  "pioneer",
+  "stockton",
+  "lodi",
+  "sonora",
+  "columbia",
+  "jamestown",
+];
+
+/** Returns true if the address text mentions a known non-corridor city. */
+function isNonCorridorAddress(addr: string | null | undefined): boolean {
+  if (!addr) return false;
+  const lower = addr.toLowerCase();
+  for (const c of NON_CORRIDOR_CITIES) {
+    if (lower.includes(c)) return true;
+  }
+  return false;
+}
+
+/**
  * Fetch an EventON event page and extract the fields that the AJAX calendar feed leaves out:
  * full description, full address, organizer address, image.
  *
@@ -576,6 +669,17 @@ export async function fetchEventDetails(
     // No location address at all — fall back to organizer
     mergedAddress = orgAddr;
     mergedTown = matchCorridorTown(orgParsed.city);
+  }
+
+  // Last-resort town signal: if parseAddress failed (e.g. GoCalaveras writes
+  // "1276 S. Main St Angels Camp, 95222" — only two comma-separated parts,
+  // no state, no clean "street, city, ST zip" structure), still scan the raw
+  // address text for a corridor town substring. Without this, an address that
+  // clearly says "Angels Camp" can be ignored and the LLM's hallucinated town
+  // (often "Murphys") wins downstream.
+  if (!mergedTown) {
+    mergedTown =
+      findCorridorTownInString(locAddr) ?? findCorridorTownInString(orgAddr);
   }
 
   return {
