@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { scrapeBearValley } from "./scrapers/bear-valley.js";
+import { scrapeBistroEspresso } from "./scrapers/bistro-espresso.js";
 import { scrapeBriceStation } from "./scrapers/brice-station.js";
 import { scrapeBrandingIron } from "./scrapers/branding-iron.js";
 import { scrapeCampConnellGeneralStore } from "./scrapers/camp-connell-general-store.js";
@@ -25,6 +26,7 @@ async function checkAnthropicCredits(): Promise<void> {
 
 const SCRAPERS: Record<string, () => Promise<void>> = {
   "bear-valley": scrapeBearValley,
+  "bistro-espresso": scrapeBistroEspresso,
   "brice-station": scrapeBriceStation,
   "branding-iron": scrapeBrandingIron,
   "camp-connell-general-store": scrapeCampConnellGeneralStore,

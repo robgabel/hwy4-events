@@ -145,6 +145,16 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     ],
     town: "Arnold",
   },
+  "bistro-espresso": {
+    canonical: "Bistro Espresso",
+    aliases: [
+      "bistro espresso",
+      "the bistro espresso",
+      "bistro",
+    ],
+    town: "Arnold",
+    address: "1218 CA-4, Arnold, CA 95223",
+  },
   "moose-lodge": {
     canonical: "Moose Lodge",
     aliases: [
