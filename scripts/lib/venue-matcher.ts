@@ -32,10 +32,30 @@ function normalize(text: string): string {
 }
 
 /**
+ * Patterns that indicate the venue_name was poisoned by scraper-side
+ * artist/host text rather than an actual venue. Treat as generic so the
+ * matcher can still resolve a real venue from the event title.
+ *
+ * GoCalaveras's evcal_subtitle field used to leak into venue_name with values
+ * like "Featuring James Michael Day" or "Hosted by KJ Johnny Rocksmith".
+ * Those are not venues; we'd rather let the title-scan override.
+ */
+const POISONED_VENUE_PREFIXES = /^(featuring|hosted by|with|feat\.?|w\/)\b/;
+
+/**
  * Check if a venue_name is generic (i.e. a scraper default we should override).
+ *
+ * "Generic" means the matcher is allowed to overwrite this venue when it
+ * finds a known venue alias in the title/description. This covers:
+ *   - explicit generic names ("Downtown Murphys", "Unknown Venue")
+ *   - bare town names that the scraper used as a venue fallback
+ *   - scraper-polluted strings like "Featuring …" / "Hosted by …"
  */
 export function isGenericVenue(venueName: string): boolean {
-  return GENERIC_VENUE_NAMES.has(normalize(venueName));
+  const n = normalize(venueName);
+  if (GENERIC_VENUE_NAMES.has(n)) return true;
+  if (POISONED_VENUE_PREFIXES.test(n)) return true;
+  return false;
 }
 
 /**
