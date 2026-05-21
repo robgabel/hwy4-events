@@ -1,0 +1,389 @@
+[
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Murphys Wine & Beer Garden",
+    "town": "Murphys",
+    "event_count": 0,
+    "proposed_address": "472 Main Street, Murphys, CA 95247",
+    "validates": true,
+    "rationale": "Address confirmed by official venue website (murphyswinebar.com), local tourism directory (visitmurphys.com), and Yelp listing."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Howard's Mystic Saloon",
+    "town": "Avery",
+    "event_count": 0,
+    "proposed_address": "4529 Highway 4, Avery, CA 95224",
+    "validates": true,
+    "rationale": "Official address confirmed across multiple authoritative sources including the venue's Facebook page, official website, and event listing platforms."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Bear Valley Mountain Resort",
+    "town": "Bear Valley",
+    "event_count": 0,
+    "proposed_address": "2280 State Route 207, Bear Valley, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed by multiple authoritative sources including the California Ski Industry Association website, SkiCentral.com, Yelp, and LodgingLookup."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Bear Valley Lodge",
+    "town": "Bear Valley",
+    "event_count": 0,
+    "proposed_address": "265 Bear Valley Rd, Bear Valley, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed by Yelp (updated February 2026) and Dog Trekker directory, both authoritative sources."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Sequoia Woods Country Club",
+    "town": "Arnold",
+    "event_count": 0,
+    "proposed_address": "1000 Cypress Point Drive, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Confirmed by the venue's official website contact page and verified across multiple authoritative sources including Yelp, GolfPass, and PGA of America."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Moose Lodge",
+    "town": "Angels Camp",
+    "event_count": 0,
+    "proposed_address": null,
+    "validates": false,
+    "rationale": "Web searches identified Ebbetts Pass Moose Lodge in Arnold (Highway 4 area) but not a specific Moose Lodge in Angels Camp itself; authoritative street address for Angels Camp venue could not be confirmed."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Alchemy Murphys",
+    "town": "Murphys",
+    "event_count": 0,
+    "proposed_address": "191 Main Street, Murphys, CA 95247",
+    "validates": true,
+    "rationale": "Address confirmed by multiple authoritative sources including Yelp, the Calaveras Visitors Bureau (local directory), the venue's official website, and Google Maps results."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Newsome Harlow Winery",
+    "town": "Murphys",
+    "event_count": 0,
+    "proposed_address": "403 Main Street, Murphys, CA 95247",
+    "validates": true,
+    "rationale": "Official venue website (nhvino.com) confirms the address, corroborated by Yelp and multiple other authoritative sources."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Twisted Oak Winery",
+    "town": "Murphys",
+    "event_count": 0,
+    "proposed_address": "4280 Red Hill Road, Vallecito, CA 95252",
+    "validates": false,
+    "rationale": "Official address confirmed from Yelp, Visit Murphys (local directory), and Facebook; main winery location on Hwy 4 near Murphys (previous downtown Murphys tasting room at 363 Main St is now closed)"
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Murphys Community Park",
+    "town": "Murphys",
+    "event_count": 0,
+    "proposed_address": "505 Algiers Street, Murphys, CA 95247",
+    "validates": true,
+    "rationale": "Multiple authoritative sources including the official Murphys Community Club/Park website (murphyspark.com), Yelp, GoCalaveras.com (Calaveras County tourism), and the Murphys Park Farmers Market Facebook page all confirm this address."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Utica Park",
+    "town": "Angels Camp",
+    "event_count": 0,
+    "proposed_address": "1075 Utica Lane, Angels Camp, CA 95222",
+    "validates": true,
+    "rationale": "Official City of Angels Camp website (angelscamp.gov) confirms this address for Utica Park."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Angels Camp Museum",
+    "town": "Angels Camp",
+    "event_count": 0,
+    "proposed_address": "753 S Main St, Angels Camp, CA 95222",
+    "validates": true,
+    "rationale": "Address confirmed by multiple authoritative sources including Yelp, AAA.com, the official Angels Camp Museum Foundation website, and local California tourism directory."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Greenhorn Creek Resort",
+    "town": "Angels Camp",
+    "event_count": 0,
+    "proposed_address": "711 McCauley Ranch Rd, Angels Camp, CA 95222",
+    "validates": true,
+    "rationale": "Official venue website (greenhorncreek.com), Google Maps/Yelp, and Calaveras County visitor directory all confirm the same address."
+  },
+  {
+    "source": "registry-missing-address",
+    "venue_name": "Copperopolis Town Square",
+    "town": "Copperopolis",
+    "event_count": 0,
+    "proposed_address": "100 Town Square Rd, Copperopolis, CA 95228",
+    "validates": true,
+    "rationale": "Address confirmed across multiple authoritative sources including Yelp, local Calaveras Visitors Bureau directory, and official Copper Valley website."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Perry Walther Community Center",
+    "town": "Bear Valley",
+    "event_count": 40,
+    "proposed_address": null,
+    "validates": false,
+    "rationale": "Venue confirmed in Alpine County official sources and news articles, but specific street address not found in any authoritative directory or official website."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Murphys Creek Theatre",
+    "town": "Murphys",
+    "event_count": 28,
+    "proposed_address": "580 S. Algiers Street, Murphys, CA 95247",
+    "validates": true,
+    "rationale": "Address confirmed across multiple authoritative sources including the official Murphys Creek Theatre website, Google Maps via Yelp, Facebook, and local tourism directory."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Murphys Wine Bar &amp; Beer Garden",
+    "town": "Murphys",
+    "event_count": 17,
+    "proposed_address": "472 Main Street, Murphys, CA 95247",
+    "validates": true,
+    "rationale": "Address confirmed by multiple authoritative sources: the venue's official website (murphyswinebar.com), Visit Murphys directory, and Yelp."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Ebbetts Pass Moose Lodge",
+    "town": "Arnold",
+    "event_count": 15,
+    "proposed_address": "1965 Blagen Rd, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed by multiple authoritative sources including Moose International official website, Yelp, and local Calaveras County directories."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Bistro Espresso",
+    "town": "Arnold",
+    "event_count": 12,
+    "proposed_address": "1225 Oak Cir, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed by multiple authoritative sources including Yelp, Facebook, and the venue's official website thebistroespresso.com"
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Murphys Creek Theater",
+    "town": "Murphys",
+    "event_count": 12,
+    "proposed_address": "580 S. Algiers Street, Murphys, CA 95247",
+    "validates": true,
+    "rationale": "Address confirmed across multiple authoritative sources including the venue's official website, Facebook page, Yelp, TripAdvisor, and local directories."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Utica Park, Angels Camp",
+    "town": "Angels Camp",
+    "event_count": 8,
+    "proposed_address": "1075 Utica Lane, Angels Camp, CA 95222",
+    "validates": true,
+    "rationale": "Confirmed by official City of Angels website (angelscamp.gov), Yelp, Waze, and myMotherLode.com; one source lists 1064 Utica Ln and another lists 1000 Utica Lane, but 1075 Utica Lane appears most frequently across authoritative sources."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "BLS Beach",
+    "town": "Arnold",
+    "event_count": 6,
+    "proposed_address": "335 Blue Lake Springs Dr, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Official address from the Blue Lake Springs Homeowners Association website for the Snowflake Lodge, Pool and Lodge Lake (the beach/recreation area)."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "ART Trailhead – Valley View Dr.",
+    "town": "Arnold",
+    "event_count": 6,
+    "proposed_address": null,
+    "validates": false,
+    "rationale": "ART Trailhead – Valley View Dr. is a Forest Service trailhead parking area (not a street-addressed venue) located on Valley View Drive in Arnold, CA 95223; sources describe directional access only, not a specific street address."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Snowflake Lodge",
+    "town": "Arnold",
+    "event_count": 3,
+    "proposed_address": "335 Blue Lake Springs Dr, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed by multiple authoritative sources including Blue Lake Springs Homeowners Association official website, Yelp, and local event directories."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Laughton Ranch Event Center",
+    "town": "Angels Camp",
+    "event_count": 3,
+    "proposed_address": "90 Clinton Road, Jackson, CA 95642",
+    "validates": false,
+    "rationale": "Multiple authoritative sources (official Facebook page, ticket vendor TicketStripe, and event listing sites) confirm the address is 90 Clinton Road in Jackson, CA 95642, not Angels Camp; the venue is in Amador County, near the Highway 4 corridor."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Sierra Nevada Logging Museum",
+    "town": "Arnold",
+    "event_count": 2,
+    "proposed_address": "2148 Dunbar Road, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed by multiple authoritative sources including Yelp, AAA.com, myMotherLode.com, and local directories."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "My Bar",
+    "town": "Angels Camp",
+    "event_count": 2,
+    "proposed_address": "1208 S Main St, Angels Camp, CA 95222",
+    "validates": true,
+    "rationale": "Address confirmed across multiple authoritative sources including Yelp, the venue's official Facebook page, and the Instagram account."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Bear Valley Music Festival Tent",
+    "town": "Bear Valley",
+    "event_count": 2,
+    "proposed_address": "Creekside Drive, Bear Valley, CA 95223",
+    "validates": false,
+    "rationale": "Confirmed by multiple ticket vendor websites (SimpleTix) and travel listings (Trip.com) listing the official venue address for Bear Valley Music Festival."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "BLS Amphitheater",
+    "town": "Arnold",
+    "event_count": 2,
+    "proposed_address": "335 Blue Lake Springs Drive, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed from official Blue Lake Springs Homeowners Association website and multiple venue directory sources (Tock, GuideStar)"
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Historic Downtown Murphys",
+    "town": "Murphys",
+    "event_count": 1,
+    "proposed_address": null,
+    "validates": false,
+    "rationale": "No venue officially named 'Historic Downtown Murphys' with a single street address exists; 'historic downtown Murphys' refers to the general Main Street area with multiple separate businesses."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Cameo Plaza",
+    "town": "Arnold",
+    "event_count": 1,
+    "proposed_address": "1004 Highway 4, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Official venue website (cameoplaza.net) confirms the address."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Black Bart Playhouse (aka Murphys Creek Theater)",
+    "town": "Murphys",
+    "event_count": 1,
+    "proposed_address": "580 S Algiers St, Murphys, CA 95223",
+    "validates": true,
+    "rationale": "Confirmed by Yelp, venue website (murphyscreektheatre.org), Nextdoor, GoCalaveras.com, Songkick, and local news sources."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "BLS Pool",
+    "town": "Arnold",
+    "event_count": 1,
+    "proposed_address": "335 Blue Lake Springs Dr, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed from official Blue Lake Springs Homeowners Association website contact page listing the pool location."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Meadowmont Lodge, Arnold",
+    "town": "Arnold",
+    "event_count": 1,
+    "proposed_address": "2011 Highway 4, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed on multiple authoritative sources: the venue's official website footer and Yelp listing."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Bear Valley Meadow",
+    "town": "Bear Valley",
+    "event_count": 1,
+    "proposed_address": null,
+    "validates": false,
+    "rationale": "No authoritative source found listing an official venue specifically named 'Bear Valley Meadow' with a confirmed street address despite searching multiple local directories and venue databases."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Marisolio Tasting Bar, Murphys",
+    "town": "Murphys",
+    "event_count": 1,
+    "proposed_address": "488 Main St, Suite 101, Murphys, CA 95247",
+    "validates": false,
+    "rationale": "Address confirmed across multiple authoritative sources including the venue's official website (marisolio.com), Yelp, Google Maps via Visit Murphys local directory, and Calaveras Visitors Bureau."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "White Pines Lake: White Pines, CA",
+    "town": "White Pines",
+    "event_count": 1,
+    "proposed_address": "1965 Blagen Rd, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Yelp (updated April 2026) lists the venue as White Pines Park & Lake at this address; confirmed by multiple sources including the official Yelp listing and gocalaveras.com directory."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Arnold Shotokan",
+    "town": "Arnold",
+    "event_count": 1,
+    "proposed_address": "2704 Highway 4, Suite 2-D, Arnold, CA 95223",
+    "validates": false,
+    "rationale": "Address confirmed from Arnold Shotokan's official website (arnold.ska.org) contact page and multiple internal pages."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Main Street Murphys",
+    "town": "Murphys",
+    "event_count": 1,
+    "proposed_address": "202 Main Street, Murphys, CA 95247",
+    "validates": true,
+    "rationale": "Confirmed via Yelp and Nextdoor as the address for Murphys Main Street Backyard, an event venue on Main Street in Murphys."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Big White Tent, Bear Valley",
+    "town": "Bear Valley",
+    "event_count": 1,
+    "proposed_address": "39 No Name Rd #34, Bear Valley, CA 95223",
+    "validates": true,
+    "rationale": "Address from the official Bear Valley Music Festival website directions page; the festival is held in a large white tent at Bear Valley Resort off Highway 4 in Calaveras County."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Arnold Rim Trail",
+    "town": "Avery",
+    "event_count": 1,
+    "proposed_address": null,
+    "validates": false,
+    "rationale": "Official USDA Forest Service and Arnold Rim Trail official websites provide only directional guidance and GPS coordinates (38.197020, -120.399907), not a formal street address for the Avery parking area."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "SmallTownCollectables",
+    "town": "Arnold",
+    "event_count": 1,
+    "proposed_address": "2182 California Highway 4, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Confirmed via Nextdoor business directory listing, which matches the context of Highway 4 location and provides coordinates."
+  },
+  {
+    "source": "db-unknown-venue",
+    "venue_name": "Cameo Plaza Merchants",
+    "town": "Arnold",
+    "event_count": 1,
+    "proposed_address": "1004 Highway 4, Arnold, CA 95223",
+    "validates": true,
+    "rationale": "Address confirmed from official venue website (cameoplaza.net) and multiple authoritative sources including local directories and event listings."
+  }
+]
