@@ -136,6 +136,7 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "bear valley mountain resort",
       "bear valley resort",
       "bear valley ski",
+      "bear valley music festival",
     ],
     town: "Bear Valley",
     address: "2280 State Route 207, Bear Valley, CA 95223",
@@ -301,7 +302,9 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       // do not alias it here. See "murphys-pourhouse" below.
       "the pour house",
       "pour house copperopolis",
+      "the pour house copperopolis",
       "the pourhouse copperopolis",
+      "pour house @ copperopolis",
     ],
     town: "Copperopolis",
     address: "48B Copper Cove Dr, Copperopolis, CA 95228",
@@ -310,11 +313,25 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     canonical: "Murphys Pourhouse",
     aliases: [
       "murphys pourhouse",
+      "murphys pour house",
       "murphy's pourhouse",
+      "murphy's pour house",
+      "the murphys pourhouse",
       "the pourhouse murphys",
     ],
     town: "Murphys",
-    // TODO: address pending — flagged for next enrichment run.
+    address: "350 Main St, Murphys, CA 95247",
+  },
+  "stevenot": {
+    canonical: "Stevenot Winery",
+    aliases: [
+      "stevenot",
+      "stevenot winery",
+      "stevenot winery tasting room",
+      "stevenot tasting room",
+    ],
+    town: "Murphys",
+    address: "2849 Batten Rd, Vallecito, CA 95251",
   },
   "big-trees-state-park": {
     canonical: "Calaveras Big Trees State Park",

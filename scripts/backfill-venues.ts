@@ -19,7 +19,7 @@ async function backfillVenues() {
   const today = new Date().toISOString().slice(0, 10);
   const { data: events, error } = await supabaseAdmin
     .from("hwy4_events")
-    .select("id, name, description, venue_name, town, address, date")
+    .select("id, name, description, venue_name, town, address, date, event_url")
     .gte("date", today)
     .order("date", { ascending: true });
 
@@ -40,11 +40,20 @@ async function backfillVenues() {
   let unfixable = 0;
 
   for (const event of events) {
-    const match = matchVenue(event.name, event.description, event.venue_name);
+    const match = matchVenue(
+      event.name,
+      event.description,
+      event.venue_name,
+      event.address ?? null,
+      event.event_url ?? null
+    );
 
     if (!match) {
       if (isGenericVenue(event.venue_name)) {
         unfixable++;
+        console.log(
+          `  [SKIP] "${event.name}" (${event.date}, ${event.town}) — no registry match; address=${event.address ?? "—"}`
+        );
       } else {
         alreadyGood++;
       }
