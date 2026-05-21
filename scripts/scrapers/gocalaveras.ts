@@ -463,6 +463,9 @@ function parseEventONEvents(
         artists: null, // Will be classified by LLM if applicable
         event_url: finalEventUrl,
         image_url: null,
+        // EventON gives us a stable event_id — write it so the upsert path
+        // can re-find this row across runs even when name/town/venue change.
+        source_event_id: String(ev.event_id),
       });
     } catch (err) {
       console.warn(`  Failed to parse event ${ev.event_id}: ${err}`);
