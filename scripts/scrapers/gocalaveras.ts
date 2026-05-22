@@ -3,6 +3,7 @@ import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
+import { isManuallyManagedEvent } from "../lib/manual-sources.js";
 
 const EVENTS_URL = "https://www.gocalaveras.com/events/";
 const AJAX_URL = "https://www.gocalaveras.com/wp-admin/admin-ajax.php";
@@ -125,7 +126,16 @@ export async function scrapeGoCalaveras(): Promise<void> {
   const corridorEvents = allEvents.filter((e) =>
     HWY4_TOWNS.has(e.town.toLowerCase().trim())
   );
-  const futureEvents = corridorEvents.filter((e) => e.date >= today);
+  const manualSkipped = corridorEvents.filter(isManuallyManagedEvent);
+  const scrapableEvents = corridorEvents.filter((e) => !isManuallyManagedEvent(e));
+  if (manualSkipped.length > 0) {
+    console.log(
+      `Skipping ${manualSkipped.length} manually-managed event(s): ${manualSkipped
+        .map((e) => `${e.name} @ ${e.venue_name}`)
+        .join("; ")}`
+    );
+  }
+  const futureEvents = scrapableEvents.filter((e) => e.date >= today);
 
   console.log(
     `\nTotal: ${allEvents.length} events, ${corridorEvents.length} in corridor, ${futureEvents.length} future`
