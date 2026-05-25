@@ -203,15 +203,24 @@ export async function GET(request: Request) {
     }
 
     // 2. Extract event data from each image using Vision AI
+    // Run with bounded concurrency — sequential blew past Vercel's 120s timeout
+    // once BLS started posting ~40+ flyers (broken since 2026-04-27).
     const extractedEvents: ExtractedEvent[] = [];
     const imageToEvent = new Map<string, ExtractedEvent>();
+    const CONCURRENCY = 5;
 
-    // Process images sequentially to avoid rate limits
-    for (const imageUrl of imageUrls) {
-      const event = await extractEventFromImage(anthropic, imageUrl);
-      if (event) {
-        extractedEvents.push(event);
-        imageToEvent.set(imageUrl, event);
+    for (let i = 0; i < imageUrls.length; i += CONCURRENCY) {
+      const batch = imageUrls.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map((url) =>
+          extractEventFromImage(anthropic, url).then((event) => ({ url, event }))
+        )
+      );
+      for (const { url, event } of results) {
+        if (event) {
+          extractedEvents.push(event);
+          imageToEvent.set(url, event);
+        }
       }
     }
 
