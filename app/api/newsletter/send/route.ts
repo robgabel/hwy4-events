@@ -25,9 +25,11 @@ Rules:
 - FRESHNESS: Never reuse jokes, openers, closers, structural patterns, OR closing invitations from recent briefings below.
 - LINKS: Include event links as [event text](url). Keep natural — don't link every single event.
 
-OUTPUT FORMAT: Return ONLY a JSON object — no code fences, no preamble, no trailing commentary. Exactly two keys:
-- "subject": ≤55 characters. Names one concrete specific thing happening this week. No trailing period. No emojis. Examples: "Bluegrass at Murphys Saturday, plus 8 more" / "Pickleball returns and Bear Valley opens" / "A quiet week, but Friday at the Lube is worth it"
-- "body": the newsletter text (plain text with markdown-style [text](url) links, no HTML, paragraphs separated by blank lines).`;
+OUTPUT FORMAT: Output exactly two sections separated by a line containing only three dashes. No code fences, no preamble, no trailing commentary.
+
+SUBJECT: <≤55 chars, one concrete specific thing happening this week, no trailing period, no emojis. Examples: "Ultra runners, Big Trees walks, and SourFest" / "Pickleball returns and Bear Valley opens" / "A quiet week, but Friday at the Lube is worth it">
+---
+<newsletter body — plain text with markdown-style [text](url) links, paragraphs separated by ONE blank line (real newlines, not escape sequences)>`;
 
 async function getUpcomingEvents() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -152,7 +154,7 @@ async function generateNewsletter(
 
   const message = await anthropic.messages.create({
     model: "claude-opus-4-7",
-    max_tokens: 800,
+    max_tokens: 1500,
     system: NEWSLETTER_SYSTEM_PROMPT,
     messages: [
       {
@@ -170,17 +172,22 @@ async function generateNewsletter(
 function parseNewsletterResponse(raw: string): { subject: string | null; body: string } {
   const stripped = raw
     .trim()
-    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/^```(?:json|text)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
 
+  // Primary path: SUBJECT/---/body delimiter format
+  const delimMatch = stripped.match(/^SUBJECT:\s*(.+?)\s*\n+---\s*\n+([\s\S]+)$/i);
+  if (delimMatch) {
+    const subject = delimMatch[1].trim().slice(0, 78);
+    const body = delimMatch[2].trim();
+    if (subject && body) return { subject, body };
+  }
+
+  // Backstop 1: legacy JSON format (in case the LLM falls back to old habits)
   try {
     const parsed = JSON.parse(stripped);
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof parsed.body === "string"
-    ) {
+    if (parsed && typeof parsed === "object" && typeof parsed.body === "string") {
       const subject =
         typeof parsed.subject === "string" && parsed.subject.trim().length > 0
           ? parsed.subject.trim().slice(0, 78)
@@ -188,9 +195,23 @@ function parseNewsletterResponse(raw: string): { subject: string | null; body: s
       return { subject, body: parsed.body.trim() };
     }
   } catch {
-    // fall through to plain-text fallback
+    // fall through
   }
-  return { subject: null, body: raw.trim() };
+
+  // Backstop 2: looks-like-JSON-but-truncated — extract body via regex so we don't leak raw JSON
+  if (stripped.startsWith("{") && /"body"\s*:/i.test(stripped)) {
+    const subjectMatch = stripped.match(/"subject"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    const bodyMatch = stripped.match(/"body"\s*:\s*"((?:[^"\\]|\\.)*)"?/);
+    if (bodyMatch) {
+      const decode = (s: string) =>
+        s.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+      const subject = subjectMatch ? decode(subjectMatch[1]).trim().slice(0, 78) : null;
+      return { subject, body: decode(bodyMatch[1]).trim() };
+    }
+  }
+
+  // Final fallback: treat the whole thing as the body
+  return { subject: null, body: stripped };
 }
 
 function withUtm(url: string, content: string): string {
