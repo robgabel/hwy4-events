@@ -24,12 +24,7 @@ Rules:
 - No corporate language, no emojis in body text (sign-off paw print is the only exception).
 - FRESHNESS: Never reuse jokes, openers, closers, structural patterns, OR closing invitations from recent briefings below.
 - LINKS: Include event links as [event text](url). Keep natural — don't link every single event.
-
-OUTPUT FORMAT: Output exactly two sections separated by a line containing only three dashes. No code fences, no preamble, no trailing commentary.
-
-SUBJECT: <≤55 chars, one concrete specific thing happening this week, no trailing period, no emojis. Examples: "Ultra runners, Big Trees walks, and SourFest" / "Pickleball returns and Bear Valley opens" / "A quiet week, but Friday at the Lube is worth it">
----
-<newsletter body — plain text with markdown-style [text](url) links, paragraphs separated by ONE blank line (real newlines, not escape sequences)>`;
+- FORMAT: Output plain text with markdown-style links. No HTML tags. No JSON. No code fences. No preamble. Paragraphs separated by ONE blank line. Just the newsletter body — nothing else.`;
 
 async function getUpcomingEvents() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -166,52 +161,44 @@ async function generateNewsletter(
 
   const block = message.content[0];
   if (block.type !== "text") throw new Error("Unexpected response type");
-  return parseNewsletterResponse(block.text);
+
+  // Defensive: if the LLM accidentally returns a JSON wrapper, unwrap it so we
+  // never leak raw JSON into the email body. Otherwise return text as-is.
+  return unwrapAccidentalJson(block.text);
 }
 
-function parseNewsletterResponse(raw: string): { subject: string | null; body: string } {
+function unwrapAccidentalJson(raw: string): string {
   const stripped = raw
     .trim()
     .replace(/^```(?:json|text)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
 
-  // Primary path: SUBJECT/---/body delimiter format
-  const delimMatch = stripped.match(/^SUBJECT:\s*(.+?)\s*\n+---\s*\n+([\s\S]+)$/i);
-  if (delimMatch) {
-    const subject = delimMatch[1].trim().slice(0, 78);
-    const body = delimMatch[2].trim();
-    if (subject && body) return { subject, body };
+  if (!stripped.startsWith("{") || !/"body"\s*:/i.test(stripped)) {
+    return stripped;
   }
 
-  // Backstop 1: legacy JSON format (in case the LLM falls back to old habits)
+  // Try strict JSON.parse first
   try {
     const parsed = JSON.parse(stripped);
     if (parsed && typeof parsed === "object" && typeof parsed.body === "string") {
-      const subject =
-        typeof parsed.subject === "string" && parsed.subject.trim().length > 0
-          ? parsed.subject.trim().slice(0, 78)
-          : null;
-      return { subject, body: parsed.body.trim() };
+      return parsed.body.trim();
     }
   } catch {
-    // fall through
+    // fall through to regex extraction
   }
 
-  // Backstop 2: looks-like-JSON-but-truncated — extract body via regex so we don't leak raw JSON
-  if (stripped.startsWith("{") && /"body"\s*:/i.test(stripped)) {
-    const subjectMatch = stripped.match(/"subject"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-    const bodyMatch = stripped.match(/"body"\s*:\s*"((?:[^"\\]|\\.)*)"?/);
-    if (bodyMatch) {
-      const decode = (s: string) =>
-        s.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
-      const subject = subjectMatch ? decode(subjectMatch[1]).trim().slice(0, 78) : null;
-      return { subject, body: decode(bodyMatch[1]).trim() };
-    }
+  // Truncated JSON — extract whatever's after "body":"  and decode common escapes
+  const bodyMatch = stripped.match(/"body"\s*:\s*"((?:[^"\\]|\\.)*)/);
+  if (bodyMatch) {
+    const decoded = bodyMatch[1]
+      .replace(/\\n/g, "\n")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\");
+    return decoded.trim();
   }
 
-  // Final fallback: treat the whole thing as the body
-  return { subject: null, body: stripped };
+  return stripped;
 }
 
 function withUtm(url: string, content: string): string {
@@ -360,18 +347,14 @@ Forward this to the buddy who always asks what's happening up here.
       return NextResponse.json({ ok: true, message: "No active subscribers", sent: 0 });
     }
 
-    const { subject: llmSubject, body: content } = await generateNewsletter(
-      events,
-      recentBriefings
-    );
+    const content = await generateNewsletter(events, recentBriefings);
     const resend = new Resend(resendApiKey);
 
     const today = new Date();
-    const fallbackSubject = `What's happening on the 4 — ${today.toLocaleDateString(
+    const subject = `What's happening on the 4 — ${today.toLocaleDateString(
       "en-US",
       { month: "short", day: "numeric" }
     )}`;
-    const subject = llmSubject || fallbackSubject;
 
     let sent = 0;
     const errors: string[] = [];
@@ -417,7 +400,6 @@ Forward this to the buddy who always asks what's happening up here.
       sent,
       total: subscribers.length,
       subject,
-      llmSubjectUsed: Boolean(llmSubject),
       test: Boolean(testEmail),
       errors: errors.length > 0 ? errors : undefined,
       eventCount: events.length,
