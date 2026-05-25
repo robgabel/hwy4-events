@@ -18,13 +18,16 @@ Rules:
 - P2: Saturday/Sunday specifics. Name-drop venues and artists.
 - P3: Next week preview — anything notable coming up Mon-Thu.
 - P4 (optional): Rob's Picks or standout events.
-- P5: Sign-off. End with: — Millie 🐾
+- P5: One-line invitation in Millie's voice, then the sign-off on its own line. Vary the invitation each week — examples (do NOT copy verbatim): "Forward this to the buddy who always asks what's happening up here." / "If we missed something you know about, hit reply or use the submit form." / "Send this to the friend coming up next weekend." End with: — Millie 🐾
 - Use day names with dates on first mention: "Friday, March 27" or "Saturday the 28th". After that, just day names.
 - Name-drop specific events and venues. Be honest if it's a quiet week.
 - No corporate language, no emojis in body text (sign-off paw print is the only exception).
-- FRESHNESS: Never reuse jokes, openers, closers, or structures from recent briefings below.
+- FRESHNESS: Never reuse jokes, openers, closers, structural patterns, OR closing invitations from recent briefings below.
 - LINKS: Include event links as [event text](url). Keep natural — don't link every single event.
-- FORMAT: Output plain text with markdown-style links. No HTML tags.`;
+
+OUTPUT FORMAT: Return ONLY a JSON object — no code fences, no preamble, no trailing commentary. Exactly two keys:
+- "subject": ≤55 characters. Names one concrete specific thing happening this week. No trailing period. No emojis. Examples: "Bluegrass at Murphys Saturday, plus 8 more" / "Pickleball returns and Bear Valley opens" / "A quiet week, but Friday at the Lube is worth it"
+- "body": the newsletter text (plain text with markdown-style [text](url) links, no HTML, paragraphs separated by blank lines).`;
 
 async function getUpcomingEvents() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -149,7 +152,7 @@ async function generateNewsletter(
 
   const message = await anthropic.messages.create({
     model: "claude-opus-4-7",
-    max_tokens: 600,
+    max_tokens: 800,
     system: NEWSLETTER_SYSTEM_PROMPT,
     messages: [
       {
@@ -161,14 +164,63 @@ async function generateNewsletter(
 
   const block = message.content[0];
   if (block.type !== "text") throw new Error("Unexpected response type");
-  return block.text;
+  return parseNewsletterResponse(block.text);
+}
+
+function parseNewsletterResponse(raw: string): { subject: string | null; body: string } {
+  const stripped = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
+  try {
+    const parsed = JSON.parse(stripped);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.body === "string"
+    ) {
+      const subject =
+        typeof parsed.subject === "string" && parsed.subject.trim().length > 0
+          ? parsed.subject.trim().slice(0, 78)
+          : null;
+      return { subject, body: parsed.body.trim() };
+    }
+  } catch {
+    // fall through to plain-text fallback
+  }
+  return { subject: null, body: raw.trim() };
+}
+
+function withUtm(url: string, content: string): string {
+  try {
+    const u = new URL(url);
+    if (!/(^|\.)hwy4events\.com$/i.test(u.hostname)) return url;
+    if (u.searchParams.has("utm_source")) return u.toString();
+    u.searchParams.set("utm_source", "newsletter");
+    u.searchParams.set("utm_medium", "email");
+    u.searchParams.set("utm_campaign", "weekly");
+    u.searchParams.set("utm_content", content);
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
 
 function markdownLinksToHtml(text: string): string {
-  return text.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" style="color: #2d5016; text-decoration: underline;">$1</a>'
-  );
+  return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
+    let utmContent = "body_link";
+    try {
+      const u = new URL(url);
+      const parts = u.pathname.split("/").filter(Boolean);
+      if (parts.length > 0) utmContent = parts[parts.length - 1];
+    } catch {
+      // ignore — keep default
+    }
+    const tagged = withUtm(url, utmContent);
+    return `<a href="${tagged}" style="color: #2d5016; text-decoration: underline;">${label}</a>`;
+  });
 }
 
 function buildEmailHtml(content: string, unsubscribeUrl: string): string {
@@ -176,6 +228,28 @@ function buildEmailHtml(content: string, unsubscribeUrl: string): string {
     .split("\n\n")
     .map((p) => `<p style="color: #333; line-height: 1.7; margin: 0 0 16px;">${p}</p>`)
     .join("");
+
+  const primaryHref = withUtm(SITE_URL, "primary_cta");
+  const submitHref = withUtm(`${SITE_URL}/submit`, "submit_cta");
+  const subscribeHref = withUtm(`${SITE_URL}/?subscribe=1`, "resubscribe");
+
+  const forwardSubject = encodeURIComponent("Thought you'd like this");
+  const forwardBody = encodeURIComponent(
+    `Found this — it's the Hwy 4 events roundup (Angels Camp to Bear Valley). Worth a look:\n\n${SITE_URL}`
+  );
+  const forwardHref = `mailto:?subject=${forwardSubject}&body=${forwardBody}`;
+
+  const smsBody = encodeURIComponent(
+    `Found this — it's the Hwy 4 events roundup. ${SITE_URL}`
+  );
+  const smsHref = `sms:?&body=${smsBody}`;
+
+  const secondaryBtn = (href: string, label: string) => `
+        <tr>
+          <td style="padding: 0 0 10px;">
+            <a href="${href}" style="display: block; box-sizing: border-box; width: 100%; padding: 14px 16px; background: #faf9f6; color: #2d5016; text-decoration: none; text-align: center; border: 1px solid #2d5016; border-radius: 8px; font-size: 15px; font-weight: 500;">${label}</a>
+          </td>
+        </tr>`;
 
   return `<!DOCTYPE html>
 <html>
@@ -189,9 +263,22 @@ function buildEmailHtml(content: string, unsubscribeUrl: string): string {
     <div style="background: white; border-radius: 12px; padding: 28px 24px; border: 1px solid #e8e4de;">
       ${htmlContent}
     </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 20px;">
+      <tr>
+        <td style="padding: 0 0 12px;">
+          <a href="${primaryHref}" style="display: block; box-sizing: border-box; width: 100%; padding: 16px 18px; background: #2d5016; color: #ffffff; text-decoration: none; text-align: center; border-radius: 8px; font-size: 16px; font-weight: 600;">Open this week on hwy4events.com →</a>
+        </td>
+      </tr>
+      ${secondaryBtn(forwardHref, "📩  Forward to a friend")}
+      ${secondaryBtn(smsHref, "💬  Text it to someone")}
+      ${secondaryBtn(submitHref, "📅  Submit an event we missed")}
+    </table>
+    <p style="color: #666; font-size: 13px; line-height: 1.5; text-align: center; margin: 18px 0 0;">
+      Got this forwarded? <a href="${subscribeHref}" style="color: #2d5016; font-weight: 500;">Subscribe yourself →</a>
+    </p>
     <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8e4de;">
       <p style="color: #888; font-size: 12px; margin: 0 0 8px;">
-        <a href="${SITE_URL}" style="color: #2d5016;">hwy4events.com</a> · Angels Camp to Bear Valley, CA
+        <a href="${withUtm(SITE_URL, "footer")}" style="color: #2d5016;">hwy4events.com</a> · Angels Camp to Bear Valley, CA
       </p>
       <p style="color: #aaa; font-size: 11px; margin: 0;">
         <a href="${unsubscribeUrl}" style="color: #aaa;">Unsubscribe</a>
@@ -210,6 +297,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const url = new URL(request.url);
+  const testEmail = url.searchParams.get("test_email");
+  const preview = url.searchParams.get("preview") === "1";
+
+  if (preview) {
+    const sampleBody = `Quick hello from the corridor — it's shaping up to be a busy weekend.
+
+Friday, March 27 brings bluegrass to [the Lube in Murphys](https://hwy4events.com/events/example-event-murphys) at 7pm. Saturday is the big one: Bear Valley's opening day plus a packed slate at the Resort. Sunday slows down — perfect for a coffee at Aria and a stroll through downtown Arnold.
+
+Next week is quieter. Watch for Tuesday trivia at the Black Bear and a community potluck Wednesday in Avery.
+
+Forward this to the buddy who always asks what's happening up here.
+
+— Millie 🐾`;
+    return new NextResponse(buildEmailHtml(sampleBody, `${SITE_URL}/api/newsletter/unsubscribe?token=preview`), {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
+
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) {
     return NextResponse.json(
@@ -219,21 +325,32 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [events, recentBriefings, subscribers] = await Promise.all([
+    const [events, recentBriefings, realSubscribers] = await Promise.all([
       getUpcomingEvents(),
       getRecentBriefings(),
       getActiveSubscribers(),
     ]);
 
+    const subscribers = testEmail
+      ? [{ email: testEmail, unsubscribe_token: "test-token" }]
+      : realSubscribers;
+
     if (subscribers.length === 0) {
       return NextResponse.json({ ok: true, message: "No active subscribers", sent: 0 });
     }
 
-    const content = await generateNewsletter(events, recentBriefings);
+    const { subject: llmSubject, body: content } = await generateNewsletter(
+      events,
+      recentBriefings
+    );
     const resend = new Resend(resendApiKey);
 
     const today = new Date();
-    const subject = `What's happening on the 4 — ${today.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    const fallbackSubject = `What's happening on the 4 — ${today.toLocaleDateString(
+      "en-US",
+      { month: "short", day: "numeric" }
+    )}`;
+    const subject = llmSubject || fallbackSubject;
 
     let sent = 0;
     const errors: string[] = [];
@@ -257,25 +374,30 @@ export async function GET(request: Request) {
       }
     }
 
-    // Archive the newsletter content
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (supabaseUrl && serviceKey) {
-      const supabase = createClient(supabaseUrl, serviceKey);
-      await supabase.from("site_config").upsert(
-        { key: "latest_newsletter", value: content },
-        { onConflict: "key" }
-      );
-      await supabase.from("site_config").upsert(
-        { key: "latest_newsletter_date", value: new Date().toISOString() },
-        { onConflict: "key" }
-      );
+    // Archive the newsletter content (skip for test sends so we don't pollute history)
+    if (!testEmail) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (supabaseUrl && serviceKey) {
+        const supabase = createClient(supabaseUrl, serviceKey);
+        await supabase.from("site_config").upsert(
+          { key: "latest_newsletter", value: content },
+          { onConflict: "key" }
+        );
+        await supabase.from("site_config").upsert(
+          { key: "latest_newsletter_date", value: new Date().toISOString() },
+          { onConflict: "key" }
+        );
+      }
     }
 
     return NextResponse.json({
       ok: true,
       sent,
       total: subscribers.length,
+      subject,
+      llmSubjectUsed: Boolean(llmSubject),
+      test: Boolean(testEmail),
       errors: errors.length > 0 ? errors : undefined,
       eventCount: events.length,
     });
