@@ -3,19 +3,8 @@ import Image from "next/image";
 export default function Header({ greeting }: { greeting?: string | null }) {
   return (
     <header className="hero-photo relative">
-      {/* Photo background */}
-      <div className="absolute inset-0">
-        <Image
-          src="/images/bear_valley.jpg"
-          alt="Highway 4 corridor through the Sierra Nevada pines"
-          fill
-          className="object-cover"
-          priority
-          sizes="(max-width: 768px) 100vw, 1200px"
-        />
-        {/* Dark overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-forest/70 via-forest/50 to-forest/80" />
-      </div>
+      {/* Solid gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-b from-forest via-forest to-forest/90" />
 
       {/* Content */}
       <div className="relative z-10 mx-auto max-w-5xl px-4 pb-20 pt-10 text-center sm:pb-24 sm:pt-12">

@@ -4,11 +4,17 @@ export type EventCategory =
   | "civic"
   | "resort"
   | "lodge"
+  | "club"
   | "other";
 
 export type EventStatus = "confirmed" | "tentative" | "cancelled";
 export type EventVisibility = "public" | "private";
 export type EventImportance = "major" | "minor";
+export type EventVerificationStatus =
+  | "unchecked"
+  | "verified"
+  | "needs_verification"
+  | "dismissed";
 
 export interface Hwy4Event {
   id: string;
@@ -35,6 +41,7 @@ export interface Hwy4Event {
   image_url: string | null;
   robs_pick: boolean;
   is_weekly: boolean;
+  verification_status?: EventVerificationStatus;
 }
 
 export interface Hwy4Org {
@@ -49,6 +56,7 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
   civic: "Community",
   resort: "Resort",
   lodge: "Lodge",
+  club: "Club",
   other: "Other",
 };
 
@@ -58,6 +66,7 @@ export const CATEGORY_ICONS: Record<EventCategory, string> = {
   civic: "M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3",
   resort: "M3 21l3.75-9L12 3l5.25 9L21 21H3z",
   lodge: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
+  club: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
   other: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
 };
 

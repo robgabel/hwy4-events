@@ -38,7 +38,7 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "irish pub murphys",
     ],
     town: "Murphys",
-    address: "464 Main St, Murphys, CA 95247",
+    address: "415 Main St, Murphys, CA 95247",
   },
   "poor-house": {
     canonical: "The Poor House",
@@ -353,11 +353,14 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Arnold",
     address: "1965 Blagen Rd, Arnold, CA 95223",
   },
-  "bls-beach": {
-    canonical: "Blue Lake Springs Beach",
+  "lodge-lake": {
+    canonical: "Lodge Lake",
     aliases: [
+      "lodge lake",
       "bls beach",
       "blue lake springs beach",
+      "blue lake springs lake",
+      "bls lake",
     ],
     town: "Arnold",
     address: "335 Blue Lake Springs Dr, Arnold, CA 95223",

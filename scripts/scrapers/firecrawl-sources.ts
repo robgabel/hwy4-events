@@ -105,14 +105,6 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
     defaultAddress: "415 Main St, Murphys, CA 95247",
   },
   {
-    slug: "visit-murphys",
-    name: "Visit Murphys",
-    pageTitle: "Visit Murphys Community Events",
-    url: "https://visitmurphys.com/events/",
-    defaultVenue: "Downtown Murphys",
-    defaultTown: "Murphys",
-  },
-  {
     slug: "watering-hole",
     name: "The Watering Hole",
     pageTitle: "The Watering Hole Events",

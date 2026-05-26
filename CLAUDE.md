@@ -26,14 +26,31 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 | `/api/check-briefing` | Daily 5pm UTC | Verify briefing was generated |
 | `/api/generate-weekend-briefing` | Fridays 2pm UTC | Weekend-specific briefing |
 | `/api/scrape-bls` | Mondays 1pm UTC | Scrape Blue Lake Springs flyer images via Vision AI |
+| `/api/verify-events` | Daily 3pm UTC | Cross-check upcoming events against organizers' canonical sites; flag mismatches as `needs_verification` |
+| `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
 
 All cron routes require `CRON_SECRET` as a bearer token.
+
+## Event Verification
+
+Aggregator scrapers (e.g., GoCalaveras) occasionally get event dates wrong. For organizers we trust as canonical (e.g., Arnold Rim Trail), we cross-check scraped data against the organizer's own events page.
+
+- `hwy4_orgs.canonical_url` — official events URL for the org
+- `hwy4_orgs.canonical_check_enabled` — opt-in flag (default false)
+- `hwy4_orgs.match_patterns` — substrings to identify the org's events when `org_slug` points at an aggregator
+- `hwy4_events.verification_status` — `unchecked | verified | needs_verification | dismissed`
+- `/api/verify-events` runs daily; fetches each canonical URL once, asks Haiku to confirm each event's date appears on the page
+- Flagged events show a subtle "Date unconfirmed" badge on the public site and queue up at `/admin/verification` for manual review (confirm / dismiss / hide / delete)
+
+Currently enabled: **Arnold Rim Trail** (`arnoldrimtrail.org/events/`). Add more orgs by setting `canonical_url` + `canonical_check_enabled=true` (plus `match_patterns` if upstream scrapers tag the org's events with an aggregator's `org_slug`).
 
 ## Environment Variables
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `ANTHROPIC_API_KEY`
 - `CRON_SECRET`
+- `NEXT_PUBLIC_CF_BEACON_TOKEN` (optional) — Cloudflare Web Analytics beacon token. When set, `app/layout.tsx` injects the Cloudflare RUM script. Get it from https://dash.cloudflare.com/?to=/:account/web-analytics.
+- `SLACK_WEBHOOK_URL` (optional — enables `/api/check-events` to post audit issues to Slack)
 
 ## Dev Workflow
 

@@ -19,6 +19,14 @@
     {
       "path": "/api/scrape-bls",
       "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/verify-events",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/check-events",
+      "schedule": "0 18 * * *"
     }
   ]
 }

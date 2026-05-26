@@ -11,6 +11,7 @@ import { TOWN_INFO } from "@/lib/towns";
 import LastChecked from "@/components/LastChecked";
 import Image from "next/image";
 import Link from "next/link";
+import Script from "next/script";
 import { Suspense } from "react";
 import { Bitter, DM_Sans } from "next/font/google";
 import "./globals.css";
@@ -108,11 +109,21 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const cfBeaconToken = process.env.NEXT_PUBLIC_CF_BEACON_TOKEN;
+
   return (
     <html lang="en" className={`${bitter.variable} ${dmSans.variable}`}>
       <body className="min-h-screen bg-cream font-sans antialiased">
         <JsonLd data={buildWebSite()} />
         <JsonLd data={buildOrganization()} />
+        {cfBeaconToken && (
+          <Script
+            defer
+            src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon={`{"token": "${cfBeaconToken}"}`}
+            strategy="afterInteractive"
+          />
+        )}
         {children}
         <footer className="border-t border-stone-light/50 bg-warm-white py-10 text-center">
           <div className="mx-auto max-w-5xl px-4">
