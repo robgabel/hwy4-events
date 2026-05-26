@@ -4,7 +4,35 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 120; // Vision API calls can be slow
 
-const VISION_PROMPT = `Extract event details from this flyer image. Return ONLY valid JSON, no markdown fences.
+interface PageContext {
+  allowedVenues: string[];
+  note: string;
+}
+
+const PAGE_CONTEXT: Record<string, PageContext> = {
+  "https://blsha.com/events/": {
+    allowedVenues: [
+      "Snowflake Lodge",
+      "Blue Lake Bistro",
+      "BLS Amphitheater",
+      "BLS Pool",
+      "Lodge Lake",
+    ],
+    note: "Most events are at Snowflake Lodge.",
+  },
+  "https://blsha.com/recreation/": {
+    allowedVenues: ["Snowflake Lodge", "Lodge Lake"],
+    note: "All events on this page are at Snowflake Lodge or Lodge Lake (335 Blue Lake Springs Dr, Arnold, CA 95223). The Pool is part of the Snowflake Lodge complex — use Snowflake Lodge for pool events.",
+  },
+};
+
+const BLS_PAGES = Object.keys(PAGE_CONTEXT);
+
+function buildVisionPrompt(ctx: PageContext): string {
+  const venueList = ctx.allowedVenues.map((v) => `"${v}"`).join(", ");
+  return `Extract event details from this flyer image. Return ONLY valid JSON, no markdown fences.
+
+Page context: ${ctx.note}
 
 If this is an event flyer with a determinable date, return:
 {
@@ -13,7 +41,7 @@ If this is an event flyer with a determinable date, return:
   "start_time": "HH:MM" (24hr) or null,
   "end_time": "HH:MM" or null,
   "description": "1-2 sentence description of what the event is",
-  "venue_hint": "specific location/venue mentioned on flyer, or null",
+  "venue_hint": one of: ${venueList}, or null if truly indeterminate,
   "category_hint": "live_music|festival|civic|resort|lodge|other"
 }
 
@@ -28,11 +56,7 @@ If this is NOT an event flyer, or you cannot determine a specific date (just a g
 {"skip": true, "reason": "brief explanation"}
 
 The current year is 2026 unless the flyer clearly states otherwise.`;
-
-const BLS_PAGES = [
-  "https://blsha.com/events/",
-  "https://blsha.com/recreation/",
-];
+}
 
 interface ExtractedEvent {
   name: string;
@@ -47,6 +71,11 @@ interface ExtractedEvent {
 interface SkipResult {
   skip: true;
   reason: string;
+}
+
+interface PageImage {
+  url: string;
+  page: string;
 }
 
 function slugify(text: string): string {
@@ -64,14 +93,15 @@ function resolveVenue(hint: string | null): string {
   const lower = hint.toLowerCase();
   if (lower.includes("bistro")) return "Blue Lake Bistro";
   if (lower.includes("amphitheater") || lower.includes("amphitheatre")) return "BLS Amphitheater";
-  if (lower.includes("beach") || lower.includes("lake")) return "BLS Beach";
+  if (lower.includes("lake") || lower.includes("beach")) return "Lodge Lake";
   if (lower.includes("pool")) return "BLS Pool";
   if (lower.includes("lodge") || lower.includes("snowflake")) return "Snowflake Lodge";
   return "Snowflake Lodge";
 }
 
-async function fetchImageUrls(): Promise<string[]> {
-  const allUrls: string[] = [];
+async function fetchImageUrls(): Promise<PageImage[]> {
+  const seen = new Set<string>();
+  const results: PageImage[] = [];
 
   for (const pageUrl of BLS_PAGES) {
     try {
@@ -86,25 +116,25 @@ async function fetchImageUrls(): Promise<string[]> {
       const imgRegex = /https?:\/\/blsha\.com\/wp-content\/uploads\/\d{4}\/\d{2}\/[^"'\s)]+\.(?:jpe?g|png)/gi;
       const matches = html.match(imgRegex) || [];
 
-      // Deduplicate and filter to likely event flyers (skip tiny thumbnails)
-      const unique = [...new Set(matches)].filter((url) => {
+      for (const url of matches) {
+        if (seen.has(url)) continue;
         // Skip thumbnail sizes (usually contain dimensions like -150x150)
-        if (/-\d{2,3}x\d{2,3}\.\w+$/.test(url)) return false;
-        return true;
-      });
-
-      allUrls.push(...unique);
+        if (/-\d{2,3}x\d{2,3}\.\w+$/.test(url)) continue;
+        seen.add(url);
+        results.push({ url, page: pageUrl });
+      }
     } catch (err) {
       console.error(`[scrape-bls] Error fetching ${pageUrl}:`, err);
     }
   }
 
-  return [...new Set(allUrls)];
+  return results;
 }
 
 async function extractEventFromImage(
   anthropic: Anthropic,
-  imageUrl: string
+  imageUrl: string,
+  pageContext: PageContext
 ): Promise<ExtractedEvent | null> {
   try {
     const message = await anthropic.messages.create({
@@ -123,7 +153,7 @@ async function extractEventFromImage(
             },
             {
               type: "text",
-              text: VISION_PROMPT,
+              text: buildVisionPrompt(pageContext),
             },
           ],
         },
@@ -191,10 +221,10 @@ export async function GET(request: Request) {
 
   try {
     // 1. Fetch all flyer image URLs from BLS pages
-    const imageUrls = await fetchImageUrls();
-    console.log(`[scrape-bls] Found ${imageUrls.length} flyer images`);
+    const pageImages = await fetchImageUrls();
+    console.log(`[scrape-bls] Found ${pageImages.length} flyer images`);
 
-    if (imageUrls.length === 0) {
+    if (pageImages.length === 0) {
       return NextResponse.json({
         ok: true,
         message: "No flyer images found",
@@ -205,35 +235,37 @@ export async function GET(request: Request) {
     // 2. Extract event data from each image using Vision AI
     // Run with bounded concurrency — sequential blew past Vercel's 120s timeout
     // once BLS started posting ~40+ flyers (broken since 2026-04-27).
-    const extractedEvents: ExtractedEvent[] = [];
-    const imageToEvent = new Map<string, ExtractedEvent>();
+    const extractedEvents: { event: ExtractedEvent; url: string; page: string }[] = [];
     const CONCURRENCY = 5;
 
-    for (let i = 0; i < imageUrls.length; i += CONCURRENCY) {
-      const batch = imageUrls.slice(i, i + CONCURRENCY);
+    for (let i = 0; i < pageImages.length; i += CONCURRENCY) {
+      const batch = pageImages.slice(i, i + CONCURRENCY);
       const results = await Promise.all(
-        batch.map((url) =>
-          extractEventFromImage(anthropic, url).then((event) => ({ url, event }))
+        batch.map(({ url, page }) =>
+          extractEventFromImage(anthropic, url, PAGE_CONTEXT[page]).then((event) => ({
+            url,
+            page,
+            event,
+          }))
         )
       );
-      for (const { url, event } of results) {
+      for (const { url, page, event } of results) {
         if (event) {
-          extractedEvents.push(event);
-          imageToEvent.set(url, event);
+          extractedEvents.push({ event, url, page });
         }
       }
     }
 
-    console.log(`[scrape-bls] Extracted ${extractedEvents.length} events from ${imageUrls.length} images`);
+    console.log(`[scrape-bls] Extracted ${extractedEvents.length} events from ${pageImages.length} images`);
 
     // 3. Filter out past events
     const today = new Date().toISOString().split("T")[0];
-    const futureEvents = extractedEvents.filter((e) => e.date >= today);
+    const futureEvents = extractedEvents.filter((e) => e.event.date >= today);
     console.log(`[scrape-bls] ${futureEvents.length} future events after date filter`);
 
     // 4. Check for existing events (dedup)
     const dedupKeys = futureEvents.map(
-      (e) => `bls-${e.date}-${slugify(e.name)}`
+      ({ event }) => `bls-${event.date}-${slugify(event.name)}`
     );
 
     const { data: existing } = await supabase
@@ -244,30 +276,17 @@ export async function GET(request: Request) {
     const existingKeys = new Set((existing || []).map((e) => e.dedup_key));
 
     // 5. Insert new events
-    const newEvents = futureEvents.filter((e) => {
-      const key = `bls-${e.date}-${slugify(e.name)}`;
+    const newEvents = futureEvents.filter(({ event }) => {
+      const key = `bls-${event.date}-${slugify(event.name)}`;
       return !existingKeys.has(key);
     });
 
     let insertedCount = 0;
     const errors: string[] = [];
 
-    for (const event of newEvents) {
+    for (const { event, url, page } of newEvents) {
       const dedupKey = `bls-${event.date}-${slugify(event.name)}`;
       const venue = resolveVenue(event.venue_hint);
-      const validCategories = ["live_music", "festival", "civic", "resort", "lodge", "other"];
-      const category = validCategories.includes(event.category_hint)
-        ? event.category_hint
-        : "civic";
-
-      // Find the image URL for this event (for image_url field)
-      let eventImageUrl: string | null = null;
-      for (const [imgUrl, evt] of imageToEvent.entries()) {
-        if (evt === event) {
-          eventImageUrl = imgUrl;
-          break;
-        }
-      }
 
       const { error } = await supabase.from("hwy4_events").insert({
         name: event.name,
@@ -277,15 +296,15 @@ export async function GET(request: Request) {
         description: event.description,
         venue_name: venue,
         town: "Arnold",
-        category,
+        category: "club",
         status: "confirmed",
-        visibility: "private",
+        visibility: "public",
         org_slug: "blue-lake-springs",
-        source_url: "https://blsha.com/events/",
+        source_url: page,
         source_name: "Blue Lake Springs HOA",
         dedup_key: dedupKey,
         last_scraped_at: new Date().toISOString(),
-        image_url: eventImageUrl,
+        image_url: url,
         robs_pick: false,
         is_weekly: false,
       });
@@ -300,7 +319,7 @@ export async function GET(request: Request) {
     }
 
     const stats = {
-      images: imageUrls.length,
+      images: pageImages.length,
       extracted: extractedEvents.length,
       future: futureEvents.length,
       duplicates: futureEvents.length - newEvents.length,
@@ -314,10 +333,11 @@ export async function GET(request: Request) {
       ok: true,
       stats,
       ...(errors.length > 0 && { errors }),
-      events: newEvents.map((e) => ({
-        name: e.name,
-        date: e.date,
-        venue: resolveVenue(e.venue_hint),
+      events: newEvents.map(({ event, page }) => ({
+        name: event.name,
+        date: event.date,
+        venue: resolveVenue(event.venue_hint),
+        source_url: page,
       })),
     });
   } catch (err) {

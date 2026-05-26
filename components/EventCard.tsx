@@ -43,6 +43,7 @@ const CATEGORY_IMAGES: Record<EventCategory, string> = {
   civic: "/images/civic.jpg",
   resort: "/images/resort.jpg",
   lodge: "/images/lodge.jpg",
+  club: "/images/lodge.jpg",
   other: "/images/other.jpg",
 };
 
@@ -52,6 +53,7 @@ const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
   civic: "#5A8FA8",
   resort: "#A09484",
   lodge: "#6B4226",
+  club: "#8B7355",
   other: "#C4B8AA",
 };
 
@@ -240,6 +242,24 @@ export default function EventCard({
                 We couldn&rsquo;t confirm this date on the organizer&rsquo;s site. Check with them before heading out.
                 <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-forest" />
               </span>
+            </span>
+          )}
+          {event.category === "club" && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-earth/10 px-2 py-0.5 text-xs font-medium text-earth">
+              <svg
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+              Members &amp; Guests
             </span>
           )}
           {isPrivate && event.org_slug && (

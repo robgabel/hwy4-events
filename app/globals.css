@@ -85,6 +85,10 @@ body {
   background-color: color-mix(in srgb, var(--color-earth) 15%, transparent);
   color: var(--color-earth);
 }
+.badge-club {
+  background-color: color-mix(in srgb, var(--color-bark) 15%, transparent);
+  color: var(--color-bark);
+}
 .badge-other {
   background-color: color-mix(in srgb, var(--color-stone) 15%, transparent);
   color: var(--color-stone);
