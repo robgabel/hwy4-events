@@ -7,6 +7,29 @@ import { SITE_URL, SITE_NAME } from "@/lib/constants";
 
 export const maxDuration = 120;
 
+const DEFAULT_ROB_NOTE = `Hey, Rob here. I built Hwy4Events because I kept missing things happening five miles from my house. Every week Millie (my sheepadoodle, our actual editor) rounds up what's on. Hope you find something worth driving to.`;
+
+async function getRobNote(): Promise<{ body: string; isOverride: boolean }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    return { body: DEFAULT_ROB_NOTE, isOverride: false };
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const today = new Date().toISOString().split("T")[0];
+  const { data } = await supabase
+    .from("newsletter_notes")
+    .select("body")
+    .lte("starts_at", today)
+    .gte("ends_at", today)
+    .limit(1);
+
+  const body = data?.[0]?.body?.trim();
+  if (!body) return { body: DEFAULT_ROB_NOTE, isOverride: false };
+  return { body, isOverride: true };
+}
+
 const NEWSLETTER_SYSTEM_PROMPT = `You write the weekly newsletter for Hwy4Events.com — a community events site for the Highway 4 corridor (Angels Camp to Bear Valley) in the California Sierra. Bylined "Millie" (a Sheepadoodle), but you write as a knowledgeable local, not a dog.
 
 Voice: Warm, opinionated, dry humor. Like a friend who lives up here. Not a tourism board. One subtle dog reference max per newsletter — most weeks skip it.
@@ -231,10 +254,15 @@ function markdownLinksToHtml(text: string): string {
   });
 }
 
-function buildEmailHtml(content: string, unsubscribeUrl: string): string {
+function buildEmailHtml(robNote: string, content: string, unsubscribeUrl: string): string {
   const htmlContent = markdownLinksToHtml(content)
     .split("\n\n")
     .map((p) => `<p style="color: #333; line-height: 1.7; margin: 0 0 16px;">${p}</p>`)
+    .join("");
+
+  const robNoteHtml = markdownLinksToHtml(robNote.trim())
+    .split("\n\n")
+    .map((p) => `<p style="color: #3a3a3a; font-size: 14px; line-height: 1.65; margin: 0 0 12px;">${p}</p>`)
     .join("");
 
   const primaryHref = withUtm(SITE_URL, "primary_cta");
@@ -268,6 +296,11 @@ function buildEmailHtml(content: string, unsubscribeUrl: string): string {
       <h1 style="color: #2d5016; font-size: 22px; margin: 0;">Hwy 4 Events</h1>
       <p style="color: #888; font-size: 13px; margin: 4px 0 0;">Weekly roundup — Angels Camp to Bear Valley</p>
     </div>
+    <div style="background: #f4efe6; border-radius: 12px; padding: 18px 20px; border: 1px solid #e0d9cb; margin-bottom: 14px;">
+      <p style="color: #2d5016; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px;">From Rob —</p>
+      ${robNoteHtml}
+      <p style="color: #555; font-size: 13px; font-style: italic; margin: 4px 0 0;">— Rob</p>
+    </div>
     <div style="background: white; border-radius: 12px; padding: 28px 24px; border: 1px solid #e8e4de;">
       ${htmlContent}
     </div>
@@ -298,30 +331,46 @@ function buildEmailHtml(content: string, unsubscribeUrl: string): string {
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const url = new URL(request.url);
   const testEmail = url.searchParams.get("test_email");
   const preview = url.searchParams.get("preview") === "1";
 
+  // preview=1 is read-only (no send, no archive) — exempt from CRON_SECRET so the
+  // admin page's "Preview email →" link works in a normal browser session.
+  if (!preview) {
+    const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   if (preview) {
-    const sampleBody = `Quick hello from the corridor — it's shaping up to be a busy weekend.
+    // Use the most recently archived newsletter body so preview reflects real content.
+    // Falls back to a placeholder if no newsletter has ever been sent (first-deploy case).
+    let body =
+      `_[Placeholder — no newsletter has been sent yet, so this is sample text. Once the first weekly send runs, this preview will show that content.]_\n\n` +
+      `Quick hello from the corridor — it's shaping up to be a busy weekend.\n\n` +
+      `Friday brings bluegrass to [the Lube in Murphys](https://hwy4events.com/events/example-event-murphys) at 7pm. Saturday is the big one: Bear Valley's opening day plus a packed slate at the Resort.\n\n` +
+      `— Millie 🐾`;
 
-Friday, March 27 brings bluegrass to [the Lube in Murphys](https://hwy4events.com/events/example-event-murphys) at 7pm. Saturday is the big one: Bear Valley's opening day plus a packed slate at the Resort. Sunday slows down — perfect for a coffee at Aria and a stroll through downtown Arnold.
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (supabaseUrl && serviceKey) {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      const { data } = await supabase
+        .from("site_config")
+        .select("value")
+        .eq("key", "latest_newsletter")
+        .maybeSingle();
+      if (data?.value) body = data.value;
+    }
 
-Next week is quieter. Watch for Tuesday trivia at the Black Bear and a community potluck Wednesday in Avery.
-
-Forward this to the buddy who always asks what's happening up here.
-
-— Millie 🐾`;
-    return new NextResponse(buildEmailHtml(sampleBody, `${SITE_URL}/api/newsletter/unsubscribe?token=preview`), {
-      headers: { "Content-Type": "text/html; charset=utf-8" },
-    });
+    const { body: robNote } = await getRobNote();
+    return new NextResponse(
+      buildEmailHtml(robNote, body, `${SITE_URL}/api/newsletter/unsubscribe?token=preview`),
+      { headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
   }
 
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -333,11 +382,13 @@ Forward this to the buddy who always asks what's happening up here.
   }
 
   try {
-    const [events, recentBriefings, realSubscribers] = await Promise.all([
+    const [events, recentBriefings, realSubscribers, robNoteResult] = await Promise.all([
       getUpcomingEvents(),
       getRecentBriefings(),
       getActiveSubscribers(),
+      getRobNote(),
     ]);
+    const robNote = robNoteResult.body;
 
     const subscribers = testEmail
       ? [{ email: testEmail, unsubscribe_token: "test-token" }]
@@ -367,7 +418,7 @@ Forward this to the buddy who always asks what's happening up here.
           from: `${SITE_NAME} <newsletter@hwy4events.com>`,
           to: sub.email,
           subject,
-          html: buildEmailHtml(content, unsubscribeUrl),
+          html: buildEmailHtml(robNote, content, unsubscribeUrl),
           headers: {
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
           },
