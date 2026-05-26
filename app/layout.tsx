@@ -5,8 +5,12 @@ import {
   SITE_DESCRIPTION,
   SITE_OG_DESCRIPTION,
 } from "@/lib/constants";
+import { JsonLd, buildWebSite, buildOrganization } from "@/lib/schema";
+import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content";
+import { TOWN_INFO } from "@/lib/towns";
 import LastChecked from "@/components/LastChecked";
 import Image from "next/image";
+import Link from "next/link";
 import { Suspense } from "react";
 import { Bitter, DM_Sans } from "next/font/google";
 import "./globals.css";
@@ -59,42 +63,43 @@ export const metadata: Metadata = {
   },
 };
 
-function WebSiteSchema() {
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: SITE_NAME,
-    url: SITE_URL,
-    description: SITE_DESCRIPTION,
-  };
+function TownFooterLinks() {
+  const slugs = getPublishedTownSlugs();
+  if (slugs.length === 0) return null;
+
+  // Order by elevation (west-to-east on the corridor) so the list reads
+  // the way locals describe the corridor: down the hill to up the hill.
+  const towns = slugs
+    .map((slug) => {
+      const content = getTownContent(slug);
+      const info = content ? TOWN_INFO[content.townName] : undefined;
+      return { slug, name: content?.townName, elevation: info?.elevation ?? 0 };
+    })
+    .filter((t): t is { slug: string; name: string; elevation: number } => !!t.name)
+    .sort((a, b) => a.elevation - b.elevation);
 
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-    />
-  );
-}
-
-function OrganizationSchema() {
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    name: SITE_NAME,
-    url: SITE_URL,
-    description:
-      "Daily event briefing and listings for the Highway 4 corridor — Angels Camp to Bear Valley in the California Sierra Nevada.",
-    areaServed: {
-      "@type": "Place",
-      name: "Highway 4 Corridor, Calaveras County, California",
-    },
-  };
-
-  return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-    />
+    <nav
+      aria-label="Town directory"
+      className="mt-5 text-xs text-stone-light"
+    >
+      <span className="mr-2 uppercase tracking-wider text-stone-light/80">
+        Browse by town
+      </span>
+      {towns.map((t, i) => (
+        <span key={t.slug}>
+          <Link
+            href={`/towns/${t.slug}`}
+            className="text-stone hover:text-pine hover:underline"
+          >
+            {t.name}
+          </Link>
+          {i < towns.length - 1 && (
+            <span className="mx-1.5 text-stone-light/50">·</span>
+          )}
+        </span>
+      ))}
+    </nav>
   );
 }
 
@@ -106,8 +111,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${bitter.variable} ${dmSans.variable}`}>
       <body className="min-h-screen bg-cream font-sans antialiased">
-        <WebSiteSchema />
-        <OrganizationSchema />
+        <JsonLd data={buildWebSite()} />
+        <JsonLd data={buildOrganization()} />
         {children}
         <footer className="border-t border-stone-light/50 bg-warm-white py-10 text-center">
           <div className="mx-auto max-w-5xl px-4">
@@ -157,6 +162,13 @@ export default function RootLayout({
             >
               <LastChecked />
             </Suspense>
+
+            {/* Town directory: only rendered for towns with published landing
+             * pages. Every published page gets a link from the footer of
+             * every page on the site, which is the single biggest internal-
+             * linking move for local SEO. */}
+            <TownFooterLinks />
+
             <nav className="mt-3 flex flex-wrap justify-center gap-4 text-xs text-stone-light">
               <a href="/about" className="hover:text-pine hover:underline">
                 About Hwy 4 Events

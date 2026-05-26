@@ -91,8 +91,19 @@ lib/
 
 ## Content & Brand Rules
 
-- **Voice:** local, human, slightly wry — never corporate or AI-sounding
-- **Mascot:** Millie (Rob's sheepadoodle) — cartoon line-art illustrations available
-- **Coverage area:** Angels Camp, Copperopolis, Murphys, Arnold, Avery, Camp Connell, Dorrington, White Pines, Bear Valley
-- **Rob's Picks** (`robs_pick: true`) are hand-curated event highlights
-- **Categories:** Live Music, Festival, Community, Resort, Lodge, Other
+- **Voice:** local, human, slightly wry. Never corporate or AI-sounding. The full voice profile lives in [system/SOUL.md](/Users/robgabel/rob-ai/system/SOUL.md) under "Voice" — read it before drafting any user-facing copy (town pages, FAQ, briefings, blog posts).
+- **Mascot:** Millie (Rob's sheepadoodle). Cartoon line-art illustrations available in /public.
+- **Coverage area:** Angels Camp, Copperopolis, Murphys, Arnold, Avery, Camp Connell, Dorrington, White Pines, Bear Valley.
+- **Rob's Picks** (`robs_pick: true`) are hand-curated event highlights.
+- **Categories:** Live Music, Festival, Community, Resort, Lodge, Other.
+
+### Voice rules specific to Hwy4Events copy
+
+These reinforce SOUL.md and are non-negotiable for any user-facing copy on this site:
+
+- **No em dashes.** SOUL.md rule. Use commas, periods, semicolons, parentheses. The Opus draft script at [scripts/draft-town-content.ts](scripts/draft-town-content.ts) enforces this in the system prompt and via post-generation check.
+- **Don't generic-ify the geography.** Each town has specific venues, owners, landmarks, and character. Use them by name. "Newsome Harlow's fire pit" beats "a local winery's outdoor seating."
+- **Verify cadence and hours claims.** Statements like "open every day" or "live music every Thursday" go stale and get quoted forever. Either link to the venue's site, hedge ("often", "most weeks"), or omit. Rule was added after the Murphys Irish Pub "7 days a week" hallucination on 2026-05-25. The knowledge base ([docs/LOCAL-KNOWLEDGE-BASE.md](docs/LOCAL-KNOWLEDGE-BASE.md)) is a draft input, not a verified source.
+- **Named entities over generic descriptors.** Real owners (Chuck Hovey, River Klass, Siri & Rich Gilpin), real venues, real numbers. This is also the AEO win.
+- **Q&A blocks should mirror real search queries.** First sentence of the answer fully resolves the question. Lift-able by answer engines.
+- **The conference-dinner gut check:** would Rob actually say this out loud to another operator at a conference dinner? If it sounds like a marketing intern wrote it, kill the line.

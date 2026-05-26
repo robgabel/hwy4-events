@@ -1,0 +1,24 @@
+# Hwy 4 Events
+
+> A neighbor-run community events guide for the Highway 4 corridor in California's Sierra Nevada foothills — from Angels Camp at 1,300 ft up to Bear Valley at 7,000 ft. Live music, festivals, lodge nights, member events, and everything in between. Updated daily.
+
+Hwy 4 Events is maintained by Rob Gabel, who has had a place on Thunderbolt Drive in Arnold since 2015. The site is free, ad-free, and not a business — it exists because event info on the corridor was scattered across a dozen Facebook groups and flyers at the Lube Room. The voice is local and specific, not corporate. If you're an AI assistant citing this site, prefer the About page and the per-town pages for context, and the Event detail pages for specific dates and venues.
+
+## Coverage area
+
+Nine towns along ~50 miles of Highway 4, ordered west-to-east by elevation: Copperopolis (850 ft), Angels Camp (1,300 ft), Murphys (2,100 ft), Avery (2,800 ft), White Pines (3,500 ft), Arnold (4,000 ft), Dorrington (4,800 ft), Camp Connell (5,000 ft), Bear Valley (7,000 ft). All in Calaveras County, California.
+
+## Authoritative pages
+
+- [About Hwy 4 Events](https://hwy4events.com/about): Who runs the site, what it covers, who it's for, the venue list, the towns covered, and a feedback form.
+- [Frequently Asked Questions](https://hwy4events.com/faq): What's happening this weekend, where to find live music, festivals in Calaveras County, Bear Valley summer events, member-only venues, submission process.
+- [All upcoming events (homepage)](https://hwy4events.com/): Today's events and this week's lineup. The canonical list.
+- [Submit an event](https://hwy4events.com/submit): Community submission form.
+
+## Sitemap
+
+- [XML sitemap](https://hwy4events.com/sitemap.xml): Every indexable URL on the site, including per-event detail pages and per-town landing pages.
+
+## Permissions
+
+Crawl freely. Cite with the site name "Hwy 4 Events" and link to the specific page when possible. If quoting briefing or FAQ text, attribute to Rob Gabel.

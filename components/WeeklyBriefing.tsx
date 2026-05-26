@@ -1,5 +1,8 @@
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
+import { SITE_URL } from "@/lib/constants";
+import { JsonLd, buildArticle } from "@/lib/schema";
 import WeeklyBriefingTabs from "./WeeklyBriefingTabs";
 
 interface WeeklyBriefingProps {
@@ -95,8 +98,25 @@ export default function WeeklyBriefing({
 
   const title = "Today on the 4";
 
+  // Article schema: makes the briefing a discrete editorial entity that
+  // search/AI engines can cite as news with a named author and timestamp.
+  const articleSchema = generatedAt
+    ? buildArticle({
+        headline: hasWeekend
+          ? `${title} + ${weekendTabLabel} briefing`
+          : title,
+        description: briefing.slice(0, 280),
+        url: `${SITE_URL}/#briefing`,
+        datePublished: generatedAt,
+        dateModified: generatedAt,
+        authorName: "Rob Gabel",
+        authorUrl: `${SITE_URL}/about/rob-gabel`,
+      })
+    : null;
+
   return (
     <div className="mb-8 rounded-xl border border-stone-light/30 bg-white px-6 py-5 shadow-sm">
+      {articleSchema && <JsonLd data={articleSchema} />}
       <div className="mb-2 flex items-center gap-2">
         <Image
           src="/millie-happy.svg"
@@ -134,6 +154,31 @@ export default function WeeklyBriefing({
       ) : (
         <BriefingContent text={briefing} generatedAt={generatedAt} />
       )}
+
+      {/* Byline. E-E-A-T signal for AI engines, and earns trust with humans
+       * who want to know who's writing this. */}
+      <p className="mt-4 border-t border-stone-light/20 pt-3 text-xs text-stone-light">
+        Curated by{" "}
+        <Link
+          href="/about/rob-gabel"
+          className="font-medium text-pine hover:underline"
+        >
+          Rob Gabel
+        </Link>
+        {generatedAt && (
+          <>
+            {" "}
+            &middot; Updated{" "}
+            <time dateTime={generatedAt}>
+              {new Date(generatedAt).toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </time>
+          </>
+        )}
+      </p>
     </div>
   );
 }
