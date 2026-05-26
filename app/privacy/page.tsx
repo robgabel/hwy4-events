@@ -92,8 +92,24 @@ export default function PrivacyPage() {
               No accounts, no tracking
             </h2>
             <p>
-              This site has no user accounts, no login, and no sign-up. You
-              don&apos;t need to give me any personal information to use it.
+              This site has no user accounts and no login. You don&apos;t need
+              to give me any personal information to browse events. The
+              newsletter (below) is the only optional sign-up.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="mb-2 text-lg font-semibold text-forest">
+              Newsletter
+            </h2>
+            <p>
+              If you sign up for the newsletter, I store your email address
+              securely in a reputable email service provider. They can&apos;t
+              share or resell it, and their business depends on staying secure.
+              But it&apos;s still just your email — there&apos;s no pixel-based
+              open tracking, no click tracking, no advertising, no sharing your
+              address with anyone else. Every email has a one-click unsubscribe
+              link at the bottom, and you can unsubscribe any time.
             </p>
           </section>
 
@@ -147,7 +163,7 @@ export default function PrivacyPage() {
           </section>
 
           <p className="text-sm text-stone-light">
-            Last updated: March 2026
+            Last updated: May 2026
           </p>
         </div>
 
