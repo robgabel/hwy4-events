@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { CORRIDOR_TOWNS } from "@/lib/towns";
+import { getSupabase } from "@/lib/supabase";
 import FeedbackForm from "@/components/FeedbackForm";
 
 export const metadata: Metadata = {
@@ -11,6 +12,50 @@ export const metadata: Metadata = {
     "Your neighbor's guide to what's happening on the Highway 4 corridor, from Angels Camp to Bear Valley. Free community event listings, updated daily.",
   alternates: { canonical: "/about" },
 };
+
+export const revalidate = 3600;
+
+async function getVenuesByTown(): Promise<{ town: string; venues: string[] }[]> {
+  const { data, error } = await getSupabase()
+    .from("hwy4_orgs")
+    .select("display_name, town")
+    .eq("show_on_about", true)
+    .order("town")
+    .order("display_name");
+
+  if (error || !data) return [];
+
+  const townOrder = CORRIDOR_TOWNS.map((t) => t.name);
+  const grouped = new Map<string, string[]>();
+  for (const row of data) {
+    if (!row.town || !row.display_name) continue;
+    const list = grouped.get(row.town) ?? [];
+    list.push(row.display_name);
+    grouped.set(row.town, list);
+  }
+
+  return [...grouped.entries()]
+    .map(([town, venues]) => ({ town, venues }))
+    .sort((a, b) => {
+      const ai = townOrder.indexOf(a.town);
+      const bi = townOrder.indexOf(b.town);
+      if (ai === -1 && bi === -1) return a.town.localeCompare(b.town);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+}
+
+// Live distinct-venue count from hwy4_events, filtered to drop obvious junk
+// (Featuring/Hosted by/leading-@, address-as-venue rows with commas, Unknown Venue).
+// Bucketed to the nearest 5 so we don't churn copy every time a new venue appears.
+async function getLiveVenueCount(): Promise<number> {
+  const { data, error } = await getSupabase().rpc("hwy4_distinct_venue_count");
+  if (error || data == null) return 80; // safe fallback
+  const n = typeof data === "number" ? data : Number(data);
+  if (!Number.isFinite(n)) return 80;
+  return Math.max(5, Math.floor(n / 5) * 5);
+}
 
 function BreadcrumbSchema() {
   const jsonLd = {
@@ -40,56 +85,12 @@ function BreadcrumbSchema() {
   );
 }
 
-const venuesByTown: { town: string; venues: string[] }[] = [
-  {
-    town: "Angels Camp",
-    venues: [
-      "Calaveras County Fairgrounds",
-      "Greenhorn Creek Resort",
-      "Moose Lodge",
-    ],
-  },
-  {
-    town: "Murphys",
-    venues: [
-      "Ironstone Vineyards",
-      "Murphys Hotel",
-      "Murphys Irish Pub",
-      "Brice Station Vineyards",
-    ],
-  },
-  {
-    town: "Arnold",
-    venues: [
-      "Bistro Espresso",
-      "Cameo Plaza",
-      "The Watering Hole",
-      "Branding Iron Saloon",
-      "Howard's Mystic Saloon",
-      "Sequoia Woods Country Club",
-      "Blue Lake Springs (Members)",
-    ],
-  },
-  {
-    town: "Dorrington",
-    venues: ["The Lube Room Saloon"],
-  },
-  {
-    town: "Camp Connell",
-    venues: ["Camp Connell General Store"],
-  },
-  {
-    town: "Bear Valley",
-    venues: ["Bear Valley Mountain Resort"],
-  },
-];
+export default async function AboutPage() {
+  const [venuesByTown, liveVenueCount] = await Promise.all([
+    getVenuesByTown(),
+    getLiveVenueCount(),
+  ]);
 
-const totalVenues = venuesByTown.reduce(
-  (sum, group) => sum + group.venues.length,
-  0
-);
-
-export default function AboutPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <BreadcrumbSchema />
@@ -167,8 +168,8 @@ export default function AboutPage() {
             Updated every morning
           </h3>
           <p className="text-sm leading-relaxed text-stone">
-            We check 20+ venues daily so you don&apos;t have to. If it&apos;s
-            happening on the 4, it&apos;s here.
+            We check {liveVenueCount}+ venues daily so you don&apos;t have to.
+            If it&apos;s happening on the 4, it&apos;s here.
           </p>
         </div>
         <div className="rounded-xl border border-stone-light/20 bg-white px-5 py-4 text-center">
@@ -307,8 +308,8 @@ export default function AboutPage() {
           Venues we track
         </h2>
         <p className="mb-4 text-sm text-stone">
-          We automatically check {totalVenues} venues for new events. Know a
-          venue we should add?{" "}
+          We pull events from {liveVenueCount}+ venues across the corridor. The
+          regulars worth knowing are below. Know one we should add?{" "}
           <Link href="/submit" className="font-medium text-pine hover:underline">
             Submit it
           </Link>
