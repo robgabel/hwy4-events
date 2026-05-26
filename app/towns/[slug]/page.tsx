@@ -202,11 +202,27 @@ export default async function TownPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Teaser: 1-2 sentence lead, always visible. Highest AEO weight since
-       * snippet engines often quote the first ~1500 chars. */}
-      <p className="speakable mb-8 rounded-xl border border-stone-light/30 bg-warm-white px-6 py-5 text-lg leading-relaxed text-stone">
-        {content.introTeaser}
-      </p>
+      {/* Lead: always-visible teaser + collapsed full intro behind a Read
+       * more toggle. The teaser carries the highest-AEO answer text above
+       * the fold; the rest is opt-in long-form for visitors who want it. */}
+      <section className="speakable mb-10 rounded-xl border border-stone-light/30 bg-warm-white px-6 py-5">
+        <p className="leading-relaxed text-stone">{content.introTeaser}</p>
+        {content.intro.length > 0 && (
+          <details className="group mt-4">
+            <summary className="cursor-pointer list-none font-medium text-pine marker:hidden hover:underline">
+              <span className="inline-block transition-transform group-open:rotate-90">
+                &rsaquo;
+              </span>{" "}
+              Read more about {town.name}
+            </summary>
+            <div className="mt-4 space-y-4 leading-relaxed text-stone">
+              {content.intro.map((para, i) => (
+                <p key={i}>{para}</p>
+              ))}
+            </div>
+          </details>
+        )}
+      </section>
 
       {/* Upcoming events: moved above the long-form intro because repeat
        * visitors want "what's tonight" first. */}
@@ -262,38 +278,14 @@ export default async function TownPage({ params }: PageProps) {
           <h2 className="font-display mb-4 text-xl font-semibold text-forest">
             Worth knowing
           </h2>
-          <ul className="speakable space-y-2 text-sm text-stone">
+          <ul className="speakable space-y-2.5 text-stone">
             {content.worthKnowing.map((fact, i) => (
-              <li key={i} className="flex items-start gap-2">
+              <li key={i} className="flex items-start gap-2 leading-relaxed">
                 <span className="mt-0.5 shrink-0 text-pine">&middot;</span>
                 <span>{linkifyPhones(fact)}</span>
               </li>
             ))}
           </ul>
-        </section>
-      )}
-
-      {/* Why visit {town}: long-form intro, collapsed by default. The teaser
-       * above stays visible for the AEO snippet. Google indexes <details>
-       * content normally per John Mueller, so no ranking impact. */}
-      {content.intro.length > 0 && (
-        <section className="mb-10">
-          <h2 className="font-display mb-4 text-xl font-semibold text-forest">
-            Why visit {town.name}
-          </h2>
-          <details className="group rounded-xl border border-stone-light/30 bg-warm-white">
-            <summary className="cursor-pointer list-none px-6 py-3 text-sm font-medium text-pine marker:hidden hover:underline">
-              <span className="inline-block transition-transform group-open:rotate-90">
-                &rsaquo;
-              </span>{" "}
-              Read more about {town.name}
-            </summary>
-            <div className="speakable space-y-4 px-6 pb-5 leading-relaxed text-stone">
-              {content.intro.map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
-            </div>
-          </details>
         </section>
       )}
 
@@ -334,7 +326,7 @@ export default async function TownPage({ params }: PageProps) {
                   </span>{" "}
                   {qa.question}
                 </summary>
-                <p className="speakable mt-2 text-sm leading-relaxed text-stone">
+                <p className="speakable mt-2 leading-relaxed text-stone">
                   {linkifyPhones(qa.answer)}
                 </p>
               </details>
