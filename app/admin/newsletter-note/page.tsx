@@ -73,15 +73,7 @@ export default async function NewsletterNoteAdminPage({
   const defaultEnd = plusDays(defaultStart, 6);
 
   return (
-    <main
-      style={{
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        background: "#faf9f6",
-        minHeight: "100vh",
-        padding: "32px 20px",
-      }}
-    >
-      <div style={{ maxWidth: 820, margin: "0 auto" }}>
+    <div style={{ maxWidth: 820, margin: "0 auto" }}>
         <h1 style={{ color: "#2d5016", fontSize: 24, margin: "0 0 4px" }}>
           Newsletter — Rob&rsquo;s Notes
         </h1>
@@ -210,7 +202,6 @@ export default async function NewsletterNoteAdminPage({
           )}
         </section>
       </div>
-    </main>
   );
 }
 
