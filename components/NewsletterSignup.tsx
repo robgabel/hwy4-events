@@ -29,7 +29,7 @@ export default function NewsletterSignup({
         return;
       }
       setStatus("success");
-      setMessage("Check your email to confirm your subscription.");
+      setMessage("Check your email to confirm your subscription (it may land in a Promotions filter).");
       setEmail("");
     } catch {
       setStatus("error");
@@ -39,13 +39,13 @@ export default function NewsletterSignup({
 
   if (variant === "inline") {
     return (
-      <div className="mb-6 rounded-xl border border-pine/20 bg-pine/5 px-5 py-4">
+      <div className="mb-6 rounded-xl border-2 border-sunset/50 bg-sunset/10 px-5 py-4 shadow-sm">
         {status === "success" ? (
-          <p className="text-sm text-pine font-medium text-center">{message}</p>
+          <p className="text-sm text-earth font-medium text-center">{message}</p>
         ) : (
           <div className="sm:flex sm:items-center sm:gap-4">
             <div className="mb-3 sm:mb-0 sm:flex-1">
-              <p className="text-sm font-medium text-forest">
+              <p className="text-sm font-semibold text-earth">
                 Like what you see? Get this in your inbox every Thursday.
               </p>
             </div>
@@ -56,12 +56,12 @@ export default function NewsletterSignup({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
                 required
-                className="w-full rounded-lg border border-stone-light/40 bg-white px-3 py-1.5 text-sm text-stone-800 placeholder:text-stone-light/60 focus:border-pine focus:outline-none focus:ring-1 focus:ring-pine sm:w-48"
+                className="w-full rounded-lg border border-stone-light/40 bg-white px-3 py-1.5 text-sm text-stone-800 placeholder:text-stone-light/60 focus:border-sunset focus:outline-none focus:ring-1 focus:ring-sunset sm:w-48"
               />
               <button
                 type="submit"
                 disabled={status === "loading"}
-                className="cursor-pointer rounded-lg bg-pine px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
+                className="cursor-pointer rounded-lg bg-sunset px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-earth disabled:opacity-50"
               >
                 {status === "loading" ? "..." : "Subscribe"}
               </button>
