@@ -257,6 +257,7 @@ export async function GET(request: Request) {
       future: futureEvents.length,
       created: 0,
       updated: 0,
+      swept: 0,
       errors: 0,
       public_count: 0,
       private_count: 0,
@@ -333,12 +334,49 @@ export async function GET(request: Request) {
       }
     }
 
+    // 7. Stale-row sweep. Any future Moose Lodge events that did not get a
+    //    fresh last_scraped_at in this run (or any earlier run within the
+    //    grace window) are no longer on the lodge's published calendar.
+    //    Delete them so the public site doesn't carry ghost events.
+    //
+    //    Grace: 14 days = 2 weekly scrapes worth of buffer, so a single
+    //    transient LLM extraction failure does not delete real events.
+    //    Past events are preserved as historical record.
+    const STALE_GRACE_DAYS = 14;
+    const staleCutoff = new Date(
+      Date.now() - STALE_GRACE_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const todayDate = new Date().toISOString().split("T")[0];
+
+    const { data: swept, error: sweepErr } = await supabase
+      .from("hwy4_events")
+      .delete()
+      .eq("org_slug", LODGE.orgSlug)
+      .gte("date", todayDate)
+      .or(`last_scraped_at.is.null,last_scraped_at.lt.${staleCutoff}`)
+      .select("id, name, date, last_scraped_at");
+
+    if (sweepErr) {
+      console.error("[scrape-moose-lodge] Stale sweep failed:", sweepErr);
+      errors.push({ name: "(sweep)", reason: sweepErr.message });
+      stats.errors++;
+    } else {
+      stats.swept = swept?.length ?? 0;
+      if (stats.swept > 0) {
+        console.log(
+          `[scrape-moose-lodge] Swept ${stats.swept} stale rows:`,
+          swept?.map((r) => `${r.date} ${r.name}`).join(", ")
+        );
+      }
+    }
+
     console.log("[scrape-moose-lodge] Complete:", stats);
 
     return NextResponse.json({
       ok: true,
       pdf_url: pdfUrl,
       stats,
+      ...(swept && swept.length > 0 && { swept }),
       ...(errors.length > 0 && { errors }),
     });
   } catch (err) {
