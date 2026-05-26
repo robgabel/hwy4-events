@@ -3,6 +3,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { CORRIDOR_TOWNS } from "@/lib/towns";
+import { townSlug } from "@/lib/slugs";
+import { getPublishedTownSlugs } from "@/app/towns/town-content";
 import { getSupabase } from "@/lib/supabase";
 import FeedbackForm from "@/components/FeedbackForm";
 
@@ -91,6 +93,11 @@ export default async function AboutPage() {
     getLiveVenueCount(),
   ]);
 
+  // Towns that have a published landing page get a direct link; others fall
+  // back to the filtered homepage view. Lets us light up town links as each
+  // page ships without going back to edit About every time.
+  const publishedTowns = new Set(getPublishedTownSlugs());
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <BreadcrumbSchema />
@@ -133,18 +140,37 @@ export default async function AboutPage() {
       </div>
 
       {/* Personal note */}
-      <div className="mb-10 rounded-xl border border-stone-light/30 bg-warm-white px-6 py-5">
+      <address
+        rel="author"
+        className="not-italic mb-10 rounded-xl border border-stone-light/30 bg-warm-white px-6 py-5"
+      >
         <p className="leading-relaxed text-stone">
-          I&apos;m Rob. My family has had a place on Thunderbolt in Arnold
-          since 2015. We kept missing things because events were scattered
-          across a dozen websites, Facebook groups, and flyers at the Lube
-          Room. So I built this. First for us, then for our neighbors. It&apos;s a labor of love, not a
-          business. If you notice something missing or wrong,{" "}
+          I&apos;m{" "}
+          <Link
+            href="/about/rob-gabel"
+            className="font-medium text-pine hover:underline"
+          >
+            Rob
+          </Link>
+          . My family has had a place on Thunderbolt in Arnold since 2015. We
+          kept missing things because events were scattered across a dozen
+          websites, Facebook groups, and flyers at the Lube Room. So I built
+          this. First for us, then for our neighbors. It&apos;s a labor of
+          love, not a business. If you notice something missing or wrong,{" "}
           <a
             href="#feedback"
             className="font-medium text-pine hover:underline"
           >
             send me a note
+          </a>{" "}
+          or find me on{" "}
+          <a
+            href="https://www.linkedin.com/in/robgabel"
+            target="_blank"
+            rel="noopener noreferrer me"
+            className="font-medium text-pine hover:underline"
+          >
+            LinkedIn
           </a>
           . That&apos;s Millie, who came into our lives through{" "}
           <a
@@ -158,7 +184,7 @@ export default async function AboutPage() {
           . She comes with us every trip and has strong opinions about which
           events involve food.
         </p>
-      </div>
+      </address>
 
       {/* Three value props */}
       <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -285,20 +311,27 @@ export default async function AboutPage() {
           summit.
         </p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {CORRIDOR_TOWNS.map((town) => (
-            <Link
-              key={town.name}
-              href={`/?town=${encodeURIComponent(town.name)}`}
-              className="rounded-lg border border-stone-light/20 bg-white px-3 py-2 transition-colors hover:border-pine/30"
-            >
-              <span className="text-sm font-semibold text-forest">
-                {town.name}
-              </span>
-              <span className="block text-xs text-stone-light">
-                {town.elevation.toLocaleString()} ft
-              </span>
-            </Link>
-          ))}
+          {CORRIDOR_TOWNS.map((town) => {
+            const slug = townSlug(town.name);
+            const hasPage = publishedTowns.has(slug);
+            const href = hasPage
+              ? `/towns/${slug}`
+              : `/?town=${encodeURIComponent(town.name)}`;
+            return (
+              <Link
+                key={town.name}
+                href={href}
+                className="rounded-lg border border-stone-light/20 bg-white px-3 py-2 transition-colors hover:border-pine/30"
+              >
+                <span className="text-sm font-semibold text-forest">
+                  {town.name}
+                </span>
+                <span className="block text-xs text-stone-light">
+                  {town.elevation.toLocaleString()} ft
+                </span>
+              </Link>
+            );
+          })}
         </div>
       </section>
 

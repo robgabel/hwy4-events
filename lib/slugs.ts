@@ -16,3 +16,14 @@ export function generateEventSlug(
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 }
+
+/**
+ * URL slug for a town name. "Bear Valley" → "bear-valley", "Murphys" → "murphys".
+ */
+export function townSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
