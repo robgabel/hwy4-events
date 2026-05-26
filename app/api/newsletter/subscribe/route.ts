@@ -32,10 +32,18 @@ export async function POST(request: Request) {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  // Rate-limit window: at most one confirmation email per email per 10 minutes.
+  // Avoids accidental or malicious loops hammering Resend and burning sender
+  // reputation. Window is enforced silently — caller always sees the same
+  // success message so we don't leak whether the email is in our DB.
+  const RESEND_COOLDOWN_MS = 10 * 60 * 1000;
+
   // Check if already subscribed
   const { data: existing } = await supabase
     .from("newsletter_subscribers")
-    .select("id, confirmed, unsubscribed_at, unsubscribe_token")
+    .select(
+      "id, confirmed, unsubscribed_at, unsubscribe_token, last_confirmation_sent_at"
+    )
     .eq("email", email)
     .single();
 
@@ -50,6 +58,13 @@ export async function POST(request: Request) {
         .update({ unsubscribed_at: null, confirmed: false, confirmed_at: null })
         .eq("id", existing.id);
     }
+    // Enforce the 10-minute cooldown silently.
+    const lastSent = existing.last_confirmation_sent_at
+      ? new Date(existing.last_confirmation_sent_at).getTime()
+      : 0;
+    if (lastSent && Date.now() - lastSent < RESEND_COOLDOWN_MS) {
+      return NextResponse.json({ ok: true, message: "Confirmation email sent" });
+    }
     // Send confirmation email
     const resend = new Resend(resendApiKey);
     const confirmUrl = `${SITE_URL}/api/newsletter/confirm?token=${existing.unsubscribe_token}`;
@@ -59,13 +74,17 @@ export async function POST(request: Request) {
       subject: `Confirm your ${SITE_NAME} newsletter subscription`,
       html: confirmationEmailHtml(confirmUrl),
     });
+    await supabase
+      .from("newsletter_subscribers")
+      .update({ last_confirmation_sent_at: new Date().toISOString() })
+      .eq("id", existing.id);
     return NextResponse.json({ ok: true, message: "Confirmation email sent" });
   }
 
   // Insert new subscriber
   const { data: newSub, error } = await supabase
     .from("newsletter_subscribers")
-    .insert({ email })
+    .insert({ email, last_confirmation_sent_at: new Date().toISOString() })
     .select("unsubscribe_token")
     .single();
 
