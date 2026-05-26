@@ -26,6 +26,7 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 | `/api/check-briefing` | Daily 5pm UTC | Verify briefing was generated |
 | `/api/generate-weekend-briefing` | Fridays 2pm UTC | Weekend-specific briefing |
 | `/api/scrape-bls` | Mondays 1pm UTC | Scrape Blue Lake Springs flyer images via Vision AI |
+| `/api/scrape-moose-lodge` | Mondays 2pm UTC | Scrape Ebbetts Pass Moose Lodge monthly PDF calendar via Claude PDF document API. Replaces the deprecated `scrape-moose-lodge` Supabase edge function (2026-05-26). |
 | `/api/verify-events` | Daily 3pm UTC | Cross-check upcoming events against organizers' canonical sites; flag mismatches as `needs_verification` |
 | `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
 

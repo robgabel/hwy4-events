@@ -21,6 +21,10 @@
       "schedule": "0 13 * * 1"
     },
     {
+      "path": "/api/scrape-moose-lodge",
+      "schedule": "0 14 * * 1"
+    },
+    {
       "path": "/api/verify-events",
       "schedule": "0 15 * * *"
     },
