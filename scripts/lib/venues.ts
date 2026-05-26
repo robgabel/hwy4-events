@@ -38,7 +38,7 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "irish pub murphys",
     ],
     town: "Murphys",
-    address: "464 Main St, Murphys, CA 95247",
+    address: "415 Main St, Murphys, CA 95247",
   },
   "poor-house": {
     canonical: "The Poor House",
