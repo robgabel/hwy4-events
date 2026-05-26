@@ -9,6 +9,11 @@ export type EventCategory =
 export type EventStatus = "confirmed" | "tentative" | "cancelled";
 export type EventVisibility = "public" | "private";
 export type EventImportance = "major" | "minor";
+export type EventVerificationStatus =
+  | "unchecked"
+  | "verified"
+  | "needs_verification"
+  | "dismissed";
 
 export interface Hwy4Event {
   id: string;
@@ -35,6 +40,7 @@ export interface Hwy4Event {
   image_url: string | null;
   robs_pick: boolean;
   is_weekly: boolean;
+  verification_status?: EventVerificationStatus;
 }
 
 export interface Hwy4Org {
