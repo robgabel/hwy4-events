@@ -93,20 +93,59 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 
 ---
 
-### Dorrington (~4,500 ft)
+### Dorrington (~4,760 ft | Mile Marker 5.2/55.8)
+
+Tiny historic-stop town between Arnold and Bear Valley. Originally **Cold Spring Ranch** (named for an ice-cold spring); property transferred to John Gardner and William A. Gibson in January 1868. Renamed when the post office was established in 1902, after **Rebekah Dorrington Gardner**, John's widow.
 
 | Name | Type | Details | Source |
 |------|------|---------|--------|
-| The Lube Room Saloon | Bar/restaurant | See Arnold listing. The social hub for Dorrington and greater Arnold area. | [theluberoom.com](https://www.theluberoom.com/) |
-| The Dorrington Hotel | Historic hotel + restaurant | Originally known as Cold Spring Ranch, built by John Gardner in 1852. Current building rebuilt in the early 1880s after the original burned. Currently operating as a historic restaurant and lodging. | [thedorringtonhotel.com](https://thedorringtonhotel.com/); [calaverashistory.org/dorrington](https://www.calaverashistory.org/dorrington) |
+| The Dorrington Hotel | Historic hotel + restaurant | 3431 Hwy 4. Built late 1880s by John Gardner after the original 1852 building burned. Operates as historic lodging (hotel + cottage, up to 12 guests) with a downstairs restaurant. Legend has it Rebekah Dorrington Gardner haunts the property. | [thedorringtonhotel.com](https://thedorringtonhotel.com/); [scenic4.org/dorrington](https://scenic4.org/the-route/points-of-interest/dorrington/); [yelp.com/biz/the-dorrington-hotel-dorrington](https://www.yelp.com/biz/the-dorrington-hotel-dorrington) |
+| The Lube Room Saloon | Bar/restaurant | 3431 Hwy 4 (next to Dorrington Hotel; postal Dorrington, often described as "Arnold area"). The social hub for Dorrington and greater Arnold area. Dog-friendly patio. Family-friendly. Originally an outdoor grease rack; switched from grease to beer in 1977 — hence "The Lube Room." | [theluberoom.com](https://www.theluberoom.com/) |
+| Dorrington Inn | Cabin rentals | Across Hwy 4 from the Dorrington Hotel. Private A-frame cabins for rent. | [scenic4.org/dorrington](https://scenic4.org/the-route/points-of-interest/dorrington/) |
+| General store | Small general store | Convenience-level: snacks, basics, traveler supplies. | [scenic4.org/dorrington](https://scenic4.org/the-route/points-of-interest/dorrington/) |
+
+**Historical role:** Served as a depot for stockmen, a toll stop on the road to Ebbetts Pass (1890s through 1910), and a summer resort for visitors heading to what is now Calaveras Big Trees State Park.
 
 ---
 
-### Camp Connell (~4,700 ft)
+### Camp Connell (~4,760 ft | Mile Marker 5.8/55.2)
+
+Single-anchor crossroads between Arnold and Bear Valley, two miles east of Dorrington. The town and its general store are essentially the same thing.
 
 | Name | Type | Details | Source |
 |------|------|---------|--------|
-| Camp Connell General Store | General store/gas/bar & grill | Founded 1928 by Jack and Noreen Connell. One of the oldest Chevron stations in California (frequently miscalled "the oldest"). Gas, groceries, camping supplies, gifts, rental cabins, campground. The Beer Garden: live music Fri (indoor, winter) & Sat (outdoor, summer). Community gathering point. | [Pine Tree](https://new.thepinetree.net/?p=33757); [scenic4.org](https://scenic4.org/the-route/points-of-interest/camp-connell/) |
+| Camp Connell General Store | General store / Chevron / cafe / Beer Garden | 4036 Old Hwy 4. (209) 795-1121. Founded 1928 by Jack and Noreen Connell (who had purchased the Dorrington Hotel property a few years earlier). The store has groceries, gifts, beer, wine, a cafe, the on-site Chevron station, and the Beer Garden out back along San Antonio Creek (~1.48 acres, stage, summer crowds up to ~300). Live music: Saturday nights in the Beer Garden during summer; Fridays indoors during the colder months. | [campconnellgeneralstore.com](https://www.campconnellgeneralstore.com/); [scenic4.org/camp-connell](https://scenic4.org/the-route/points-of-interest/camp-connell/); [gocalaveras.com/business/food-drink/camp-connell-general-store](https://www.gocalaveras.com/business/food-drink/camp-connell-general-store/) |
+
+**Highway alignment note:** Hwy 4 was realigned in the 1960s to accommodate the new Bear Valley resort and Big Trees Village development. Portions of the **old highway** remain on the store property as its two access points — that's why the store address is "Old Hwy 4."
+
+**Post office history:** Post office moved to the store in 1934 and became "Camp Connell Station." The Chevron has been operating since the store opened in 1928 — often called the oldest continuously operating Chevron in California (frequently mis-claimed as "the oldest"; "one of the oldest" is the verifiable phrasing).
+
+---
+
+### Avery (~3,389 ft | Pop 636 | ZIP 95224)
+
+CDP between Murphys and Arnold, named after **George J. Avery**, first postmaster (post office established 1885, closed 1943, re-established 1949). Sometimes called the gateway to Calaveras Big Trees State Park since it's the last stop before Arnold.
+
+| Name | Type | Details | Source |
+|------|------|---------|--------|
+| The Historic Avery Hotel | Historic hotel + events venue | (209) 517-2465. Oldest continuously operating hotel in Calaveras County. Built 1851 as a family home by Joseph & Sarah Goodell of Maine; began operating as a hotel in 1853 under Peter & Nancy Avery (also of Maine). Originally known as the **"Half Way House"** for its midway location between the Murphys gold fields and the giant sequoias now in Calaveras Big Trees. Purchased and extensively renovated by the **Gotelli family in 1992**. Today: two bars, billiards room, formal dining room, artisan wood stage, pavilion. Accommodates 23+ overnight guests and up to 150 for events. | [averyhotelca.com/about-us](https://averyhotelca.com/about-us); [en.wikipedia.org/wiki/Avery,_California](https://en.wikipedia.org/wiki/Avery,_California); [hmdb.org/m.asp?m=20626](https://www.hmdb.org/m.asp?m=20626) |
+| Howard's Mystic Saloon | Bar / live music venue | 4529 CA-4, Avery. Curt & Tana Howard lease the property of the former Avery Saloon. Skeleton/skull aesthetic year-round (not just Halloween). Live music; Instagram-friendly. | [mysticsaloon.com](https://mysticsaloon.com/); [calaverasenterprise.com — Longtime bar owners to open Mystic Saloon](https://www.calaverasenterprise.com/articles/local/longtime-bar-owners-to-open-mystic-saloon/) |
+
+**Geography note:** Avery sits on State Route 4 inside the Stanislaus National Forest gateway. About 15 minutes east of Murphys, ~10 minutes west of Arnold. The community is small (45 employees across 13 businesses per state stats) and bar/coffee-shop heavy.
+
+---
+
+### White Pines (~3,880 ft | Mile Marker 0/61 | Shares ZIP with Arnold)
+
+Not Arnold, but adjacent — "a little hamlet adjacent to the town of Arnold off of Blagen Road." Founded **1938** when Frank Blagen moved his lumber mill to the site from Calpine. The mill closed in 1962 and was dismantled in 1966. American Forest Products then dammed San Antonio Creek to create a 26-acre lake, intending to attract homebuyers to a planned subdivision that was never completed. In **1977**, the Calaveras County Water District (CCWD) acquired the lake and surrounding land for domestic water supply and recreational leasing.
+
+| Name | Type | Details | Source |
+|------|------|---------|--------|
+| White Pines Park & Lake | County park + lake | 1965 Blagen Rd, Arnold (postal). 26-acre dammed lake (former mill pond, dam built 1880). Picnic tables, BBQ pits, walking paths, playground, softball field, volleyball court, disc golf. Rainbow trout (stocked) + bass. Dog-friendly. Operated by the White Pines Park Committee under lease from CCWD. | [whitepinespark.com](https://whitepinespark.com/); [gocalaveras.com/business/outdoor-recreation/white-pines-lake](https://www.gocalaveras.com/business/outdoor-recreation/white-pines-lake/); [scenic4.org/white-pines](https://scenic4.org/the-route/points-of-interest/white-pines/) |
+| Sierra Nevada Logging Museum | Museum | On-site at White Pines Park. Tells the Blagen Mill and Sierra logging story. | [scenic4.org/white-pines](https://scenic4.org/the-route/points-of-interest/white-pines/) |
+| Arnold Rim Trail (White Pines trailhead) | Trail access | One of the main trailheads for the Arnold Rim Trail. San Antonio Falls viewpoint accessible from this stretch. | [scenic4.org/white-pines](https://scenic4.org/the-route/points-of-interest/white-pines/); [arnoldrimtrail.org](https://arnoldrimtrail.org/) |
+
+**Local character:** Originally a company town with worker housing, post office, and school. Today it functions as a residential pocket and the area's main free-recreation hub. Disambiguation: locals will correct you that "White Pines is not Arnold," even though the two share a ZIP and most directions group them together.
 
 ---
 
@@ -840,3 +879,5 @@ Arnold, Blue Lake Springs, Lake Mont Pines, Mill Woods, Meadowmont, Fly In Acres
 - **Cells marked `[unverified]`**: keep but treat as soft. Promote to verified when a source surfaces; demote to "removed" if disproven.
 
 *Last fact-checked end-to-end: 2026-05-25 via firecrawl + web search across all named businesses, events, orgs, and media.*
+
+*2026-05-26: Thin-town enrichment pass for Avery, White Pines, Camp Connell, Dorrington. Added primary-source coverage (Wikipedia, scenic4.org, averyhotelca.com, campconnellgeneralstore.com, gocalaveras.com, whitepinespark.com, mysticsaloon.com, calaverasenterprise.com, hmdb.org). Disambiguated The Historic Avery Hotel vs. Howard's Mystic Saloon (different buildings on Hwy 4 in Avery). Clarified Camp Connell store address ("Old Hwy 4" due to 1960s realignment for Bear Valley). Added founding dates, elevations, mile markers, and operating context for all four. Verify-or-omit standard: any unverifiable claim left out, not flagged-and-shipped.*
