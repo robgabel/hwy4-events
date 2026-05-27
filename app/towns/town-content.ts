@@ -199,8 +199,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
         "answer": "No. The closest Supercharger is in Copperopolis, about 15 minutes south at The Square at Copper Valley (100 Town Square Rd). 12 stalls, up to 250kW. Non-Tesla EVs need a NACS adapter. It's the only fast-charging on the corridor."
       }
     ],
-    "lastVerified": "2026-05-26",
-    "draft": true
+    "lastVerified": "2026-05-27",
+    "draft": false
   },
 
   // Arnold: drafted 2026-05-26 via scripts/draft-town-content.ts.
@@ -272,8 +272,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
         "answer": "Yes. The restaurant and lounge at Sequoia Woods (1000 Cypress Point Dr, (209) 795-1000) are open to the public, not just members. Locals' go-tos: patio lunch in summer overlooking the course, cozy lounge in winter. Monday and Tuesday pub nights run 4:30 to 7pm. Reservations after noon."
       }
     ],
-    "lastVerified": "2026-05-26",
-    "draft": true
+    "lastVerified": "2026-05-27",
+    "draft": false
   },
 
   // Avery: drafted 2026-05-26 via scripts/draft-town-content.ts.
@@ -334,8 +334,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
         "answer": "It's marketed that way because it's the last named community before Arnold, where Big Trees sits 4 miles northeast. In practice, Arnold is the actual gateway town with the lodging, groceries, and trailhead support. Avery is the stop you pass through on the way."
       }
     ],
-    "lastVerified": "2026-05-26",
-    "draft": true
+    "lastVerified": "2026-05-27",
+    "draft": false
   },
 
   // Bear Valley: drafted 2026-05-26 via scripts/draft-town-content.ts.
@@ -394,8 +394,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
         "answer": "Yes. The Music Festival in mid-July to early August is the anchor. Otherwise: hiking, mountain biking, fishing, swimming, and a scenic chairlift. Once Ebbetts Pass opens, the drive east to Markleeville is one of the best two-lane routes in California."
       }
     ],
-    "lastVerified": "2026-05-26",
-    "draft": true
+    "lastVerified": "2026-05-27",
+    "draft": false
   },
 
   // Camp Connell: drafted 2026-05-26 via scripts/draft-town-content.ts.
@@ -455,8 +455,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
         "answer": "Hwy 4 was realigned in the 1960s to accommodate the new Bear Valley resort and the Big Trees Village development. Portions of the old highway still cross the store property as its two driveways, which is why the address stayed as 4036 Old Hwy 4."
       }
     ],
-    "lastVerified": "2026-05-26",
-    "draft": true
+    "lastVerified": "2026-05-27",
+    "draft": false
   },
 
   // Copperopolis: drafted 2026-05-26 via scripts/draft-town-content.ts.
@@ -515,8 +515,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
         "answer": "Yes if you need food, gas, or an EV charge before the climb. Griff's BBQ and Gold Dust Pizza are solid casual options, and Tipsy Frog is open seven days for wine. It's not a destination wine town like Murphys, but it's a legitimate dinner stop and the Square is walkable."
       }
     ],
-    "lastVerified": "2026-05-26",
-    "draft": true
+    "lastVerified": "2026-05-27",
+    "draft": false
   },
 
   // Dorrington: drafted 2026-05-26 via scripts/draft-town-content.ts.
@@ -535,7 +535,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "The actual social life happens next door at The Lube Room Saloon. It was an outdoor grease rack until 1977, when the owners switched from grease to beer and kept the name. Skip the dive-bar assumptions: the food is real. The fish & chips is a big 11 oz filet, the chili comes with an amazing slice of cornbread, and the burgers genuinely take two hands. Big beer garden out back with a yard where kids can run around and a horseshoe pit when there's no live music. Dogs welcome on the patio. Live music runs weekends with a named summer concert series (Poison Oakies, VC3 Band, Flashback, The Delta Chicks, Earthtones). If you live up here, you've been there. If you're driving through, you should stop."
     ],
     "personaNotes": [
-      "If you've got kids in tow: the Lube Room's beer garden has a yard for them to run around in, plus horseshoes when there's no band. Food's good enough that you'll actually want to stay.",
+      "If you've got kids in tow: the Lube Room's beer garden has a yard for them to run around in, plus horseshoes when there's no band. Food's good enough that you'll actually want to stay. Bonus: it's 5 minutes up the hill from Calaveras Big Trees State Park, so pair it with the sequoias for a perfect day.",
       "If you're renting out a cabin in Dorrington, Camp Connell, or Big Trees Village, your guests want to know there's real food five minutes away (The Lube Room, fish & chips and burgers worth ordering), a historic hotel restaurant for date night (Dorrington Hotel), and gas plus groceries two miles east at Camp Connell General Store.",
       "If you work in the trades and live up here, the Lube Room is the after-work stop. No pretense, dogs welcome, two-handed burgers, and you're not going to bump into a Bay Area wine tour.",
       "If you're driving up from the Bay or the valley, Dorrington is a real detour off the Arnold-to-Bear Valley run, not a destination on its own. The Lube Room is worth the 15-minute extension for the food and the vibe.",
@@ -552,7 +552,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "Chain control on Hwy 4 typically runs from roughly a mile east of Arnold up to the Mt Reba turnoff. If R-1 or R-2 is up, Dorrington is inside the zone. Carry chains November through April.",
       "Ebbetts Pass Fire District Station 2 (5510 Meko Drive, in Big Trees Village) is the volunteer station covering Dorrington, Big Trees Village, and Camp Connell. Battalion #2 of EPFD.",
       "Closest full grocery is Big Trees Market in Arnold, about 15 minutes west. Closest urgent care is Adventist Health Rapid Care in Angels Camp, about 45 minutes down the hill.",
-      "Postally Dorrington, but a lot of listings (including the Lube Room) get tagged as Arnold area. Both are correct depending on who you ask."
+      "Postally Dorrington, but a lot of listings (including the Lube Room) get tagged as Arnold area. Both are correct depending on who you ask.",
+      "The Lube Room is 5 minutes up Hwy 4 from Calaveras Big Trees State Park. If you're already up here for the sequoias, don't drive past it without stopping."
     ],
     "faqs": [
       {
@@ -580,8 +581,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
         "answer": "Yes. The Dorrington Hotel offers the historic hotel plus a cottage, sleeping up to 12. The Dorrington Inn rents private A-frame cabins across Highway 4. Both are walking distance to The Lube Room."
       }
     ],
-    "lastVerified": "2026-05-26",
-    "draft": true
+    "lastVerified": "2026-05-27",
+    "draft": false
   },
 
   // White Pines: drafted 2026-05-26 via scripts/draft-town-content.ts.
@@ -640,8 +641,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
         "answer": "The White Pines Park Committee operates the park under a lease from the Calaveras County Water District, which has owned the lake and surrounding land since 1977."
       }
     ],
-    "lastVerified": "2026-05-26",
-    "draft": true
+    "lastVerified": "2026-05-27",
+    "draft": false
   },
 };
 
