@@ -100,6 +100,82 @@ interface ExtractedEvent {
   visibility: "public" | "private";
 }
 
+// ─── Composite-event filter ─────────────────────────────────────────────
+//
+// Defense-in-depth: even though the prompt forbids composite events
+// ("Shuffle Board & Bingo"), the model occasionally emits them anyway.
+// This filter runs after extraction and drops a composite event whenever
+// the calendar also contains its atomic components on the same date.
+//
+// Example: input contains all three of
+//   { name: "Shuffle Board",         date: "2026-05-27", start: "16:30" }
+//   { name: "Bingo",                 date: "2026-05-27", start: "18:00" }
+//   { name: "Shuffle Board & Bingo", date: "2026-05-27", start: "16:30" }
+// Output drops the composite, keeps the two atomic events.
+//
+// If a composite appears WITHOUT its atomic components, we keep it
+// (better an imperfect-but-real event than missing data). The model
+// having to split it is a separate concern handled by the prompt.
+
+function splitCompositeName(name: string): string[] {
+  // Splits on " & ", " and " (case-insensitive), " + ", " / ".
+  // Returns trimmed component names, lowercased, with empties removed.
+  return name
+    .split(/\s+(?:&|and|\+|\/)\s+/i)
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part.length > 0);
+}
+
+function isCompositeName(name: string): boolean {
+  return splitCompositeName(name).length >= 2;
+}
+
+function filterCompositeDuplicates(events: ExtractedEvent[]): {
+  kept: ExtractedEvent[];
+  dropped: Array<{ name: string; date: string; reason: string }>;
+} {
+  // Build an index of atomic event names per date so we can detect when
+  // a composite's components are already represented as separate rows.
+  const atomicByDate = new Map<string, Set<string>>();
+  for (const evt of events) {
+    if (!evt.name || !evt.date || isCompositeName(evt.name)) continue;
+    if (!atomicByDate.has(evt.date)) atomicByDate.set(evt.date, new Set());
+    atomicByDate.get(evt.date)!.add(evt.name.trim().toLowerCase());
+  }
+
+  const kept: ExtractedEvent[] = [];
+  const dropped: Array<{ name: string; date: string; reason: string }> = [];
+
+  for (const evt of events) {
+    if (!evt.name || !evt.date) {
+      kept.push(evt); // Let the downstream validation catch this.
+      continue;
+    }
+    if (!isCompositeName(evt.name)) {
+      kept.push(evt);
+      continue;
+    }
+    const components = splitCompositeName(evt.name);
+    const atomicOnDate = atomicByDate.get(evt.date) ?? new Set();
+    const allComponentsPresent = components.every((c) => atomicOnDate.has(c));
+
+    if (allComponentsPresent) {
+      dropped.push({
+        name: evt.name,
+        date: evt.date,
+        reason: `composite shadows atomic events (${components.join(", ")})`,
+      });
+    } else {
+      // Composite without atomic counterparts — keep it. Splitting
+      // requires knowing the times of each part, which the prompt
+      // failed to provide. Better to ship the composite than nothing.
+      kept.push(evt);
+    }
+  }
+
+  return { kept, dropped };
+}
+
 function buildPrompt(publicContext: string): string {
   return `You are parsing a monthly calendar PDF from Ebbetts Pass Moose Lodge #1123 in Arnold, California.
 
@@ -124,8 +200,8 @@ ${publicContext}
 ---
 
 RULES:
-1. One JSON object per distinct activity. A single day can have multiple events (e.g., a meeting at 4pm AND dinner at 6pm = two objects). PREFER SPLIT events over combined ones: if Shuffle Board is at 4:30pm and Bingo is at 6pm on the same day, emit two separate events ("Shuffle Board" at 16:30 and "Bingo" at 18:00), NOT a single combined "Shuffle Board & Bingo".
-2. Exception: when a Queen of Hearts drawing is bundled with a dinner at the same time slot, treat as ONE event.
+1. One JSON object per distinct activity. NEVER emit a composite event that joins two activities with "&", "and", "+", or "/" in the name when those activities happen at different times. If Shuffle Board is at 4:30pm and Bingo is at 6pm on the same day, you MUST emit two separate events: {"name": "Shuffle Board", "start_time": "16:30"} and {"name": "Bingo", "start_time": "18:00"}. Emitting {"name": "Shuffle Board & Bingo"} alongside the atomic events is a critical error that creates user-visible duplicates. If a single calendar cell contains multiple activities at different times, split them. One activity per object. No exceptions.
+2. Exception: a Queen of Hearts drawing bundled with a dinner at the SAME time slot is ONE event (because they happen simultaneously, not sequentially).
 3. SKIP empty days, "LODGE CLOSED", and "DINNER COOK NEEDED" placeholders with no actual event.
 4. Include breakfast events ("BREAKFAST 9-11:30am") as their own events.
 5. Use the calendar's month and year for all dates.
@@ -246,14 +322,27 @@ export async function GET(request: Request) {
     }
     console.log(`[scrape-moose-lodge] Extracted ${events.length} events`);
 
-    // 5. Filter to future events only
+    // 5a. Drop composite events ("X & Y") whose atomic components ("X" and
+    //     "Y") also appear on the same date. Defense against the model
+    //     occasionally emitting both atomic and composite forms.
+    const { kept: dedupedEvents, dropped: droppedComposites } =
+      filterCompositeDuplicates(events);
+    if (droppedComposites.length > 0) {
+      console.log(
+        `[scrape-moose-lodge] Dropped ${droppedComposites.length} composite duplicates:`,
+        droppedComposites.map((d) => `${d.date} ${d.name}`).join(", ")
+      );
+    }
+
+    // 5b. Filter to future events only
     const today = new Date().toISOString().split("T")[0];
-    const futureEvents = events.filter((e) => e.date && e.date >= today);
+    const futureEvents = dedupedEvents.filter((e) => e.date && e.date >= today);
     console.log(`[scrape-moose-lodge] ${futureEvents.length} future events`);
 
     // 6. Upsert by canonical SHA256 dedup_key
     const stats = {
       total: events.length,
+      composites_dropped: droppedComposites.length,
       future: futureEvents.length,
       created: 0,
       updated: 0,
@@ -376,6 +465,7 @@ export async function GET(request: Request) {
       ok: true,
       pdf_url: pdfUrl,
       stats,
+      ...(droppedComposites.length > 0 && { droppedComposites }),
       ...(swept && swept.length > 0 && { swept }),
       ...(errors.length > 0 && { errors }),
     });
