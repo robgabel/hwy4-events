@@ -527,35 +527,41 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     "metaTitle": "Dorrington Events & Local Guide | Hwy 4 Events",
     "metaDescription": "What's happening in Dorrington, CA on Hwy 4. The Lube Room, Dorrington Hotel, cabin rentals, and the quiet stretch between Arnold and Bear Valley.",
     "h1": "Dorrington: the quiet stretch between Arnold and Bear Valley",
-    "subhead": "A few buildings, a saloon worth the drive, and one of the oldest stops on the road to Ebbetts Pass.",
-    "introTeaser": "Dorrington is a tiny historic stop on Highway 4 at about 4,760 feet, two miles west of Camp Connell and roughly 15 minutes east of Arnold. The Lube Room Saloon and the Dorrington Hotel sit next door to each other at 3431 Hwy 4, and that's most of the town.",
+    "subhead": "A historic hotel, the Lube Room (worth the drive for the food alone), and the start of the part of the 4 that holds snow all winter.",
+    "introTeaser": "Dorrington is a tiny historic stop on Highway 4 at about 4,760 feet, two miles west of Camp Connell and directly adjacent to the Big Trees Village residential community. The Lube Room Saloon and the Dorrington Hotel sit next door to each other at 3431 Hwy 4, and that's most of the town — but the Lube Room food (11 oz fish & chips, chili with a serious cornbread, two-handed burgers) and beer garden are the actual reason to come up.",
     "intro": [
       "Dorrington started as Cold Spring Ranch in the 1850s. John Gardner and William Gibson took over the property in January 1868, and when the post office showed up in 1902 it got renamed after Rebekah Dorrington Gardner, John's widow. For decades it was a stockmen's depot, a toll stop on the road to Ebbetts Pass, and a summer waypoint for travelers heading to the giant sequoias.",
-      "It's still mostly a waypoint, just a quieter one. The Dorrington Hotel was rebuilt by John Gardner in the late 1880s after the original 1852 building burned. It runs as historic lodging with a downstairs restaurant, and locals will tell you Rebekah haunts the place. Across the highway, the Dorrington Inn rents A-frame cabins. There's a small general store for snacks and the basics, and that's the commercial district.",
-      "The social life happens next door at The Lube Room Saloon. It was an outdoor grease rack until 1977, when the owners switched from grease to beer and kept the name. Dog-friendly patio, family-friendly inside, and the de facto living room for contractors and full-timers between Arnold and Camp Connell. If you live up here, you've been there. If you're driving through, you should stop."
+      "It's still mostly a waypoint, just a quieter one. The Dorrington Hotel was rebuilt by John Gardner in the late 1880s after the original 1852 building burned. It runs as historic lodging with a downstairs restaurant, and locals will tell you Rebekah haunts the place. Across the highway, the Dorrington Inn rents A-frame cabins. There's a small general store for snacks and the basics, and that's the commercial district. Two miles east is Camp Connell. Directly adjacent is Big Trees Village, the HOA residential community at ~5,000 ft that shares the same after-work spots and fire station.",
+      "The actual social life happens next door at The Lube Room Saloon. It was an outdoor grease rack until 1977, when the owners switched from grease to beer and kept the name. Skip the dive-bar assumptions: the food is real. The fish & chips is a big 11 oz filet, the chili comes with an amazing slice of cornbread, and the burgers genuinely take two hands. Big beer garden out back with a yard where kids can run around and a horseshoe pit when there's no live music. Dogs welcome on the patio. Live music runs weekends with a named summer concert series (Poison Oakies, VC3 Band, Flashback, The Delta Chicks, Earthtones). If you live up here, you've been there. If you're driving through, you should stop."
     ],
     "personaNotes": [
-      "If you're renting out a cabin in the area, your guests want to know there's a real bar five minutes away (The Lube Room), a historic hotel restaurant for date night (Dorrington Hotel), and gas plus groceries two miles east at Camp Connell General Store.",
-      "If you work in the trades and live up here, the Lube Room is the after-work stop. No pretense, dogs welcome, and you're not going to bump into a Bay Area wine tour.",
-      "If you're driving up from the Bay or the valley, Dorrington is not a destination on its own. It's a 20-minute detour off the Arnold-to-Bear Valley run that's worth it for a beer at the Lube Room and a look at a hotel that's been operating since the 1880s.",
+      "If you've got kids in tow: the Lube Room's beer garden has a yard for them to run around in, plus horseshoes when there's no band. Food's good enough that you'll actually want to stay.",
+      "If you're renting out a cabin in Dorrington, Camp Connell, or Big Trees Village, your guests want to know there's real food five minutes away (The Lube Room, fish & chips and burgers worth ordering), a historic hotel restaurant for date night (Dorrington Hotel), and gas plus groceries two miles east at Camp Connell General Store.",
+      "If you work in the trades and live up here, the Lube Room is the after-work stop. No pretense, dogs welcome, two-handed burgers, and you're not going to bump into a Bay Area wine tour.",
+      "If you're driving up from the Bay or the valley, Dorrington is a real detour off the Arnold-to-Bear Valley run, not a destination on its own. The Lube Room is worth the 15-minute extension for the food and the vibe.",
       "If you're heading over Ebbetts Pass in summer, Dorrington is the last stretch of trees before the road climbs. The pass typically closes mid-November to May, so plan accordingly.",
-      "If you're staying overnight, the Dorrington Hotel sleeps up to 12 between the hotel and cottage, and the Dorrington Inn has private A-frames across the highway."
+      "If you're staying overnight in winter, know that Dorrington holds snow on the ground all season (1–2 inches minimum). Pack boots. The Dorrington Hotel sleeps up to 12 between the hotel and cottage, and the Dorrington Inn has private A-frames across the highway."
     ],
     "worthKnowing": [
-      "Dorrington sits at roughly 4,760 feet, about 15 minutes east of Arnold and 2 miles west of Camp Connell on Highway 4.",
+      "Dorrington sits at roughly 4,760 feet, about 15 minutes east of Arnold, 2 miles west of Camp Connell, and directly next to the Big Trees Village residential community on Highway 4.",
       "The town was originally called Cold Spring Ranch, named for an ice-cold spring on the property. The post office gave it the Dorrington name in 1902.",
+      "Snow line gradient most visitors miss: from Dorrington (4,760 ft) and above, you can count on at least 1 to 2 inches of snow on the ground throughout the winter, it accumulates and stays. At Arnold (about 4,000 ft, 1,000 ft lower), snow comes and goes between storms. Pack boots if you're staying up here in January; you might not need them if you're staying down in Arnold.",
       "The Dorrington Hotel at 3431 Hwy 4 was rebuilt by John Gardner in the late 1880s after the 1852 building burned. It still operates as a hotel with a downstairs restaurant.",
-      "The Lube Room Saloon next door was an outdoor grease rack until 1977. They switched from grease to beer and kept the name. Dog-friendly patio, family-friendly inside.",
+      "The Lube Room Saloon next door was an outdoor grease rack until 1977. They switched from grease to beer and kept the name. Now: real food (fish & chips is a big 11 oz filet, chili comes with a serious slice of cornbread, burgers need two hands), live music most weekends, a kid-friendly beer garden with horseshoes when no band is playing, dog-friendly patio.",
       "Cell service drops in and out between Dorrington and Camp Connell. Don't count on it for navigation or work calls.",
       "Chain control on Hwy 4 typically runs from roughly a mile east of Arnold up to the Mt Reba turnoff. If R-1 or R-2 is up, Dorrington is inside the zone. Carry chains November through April.",
-      "Ebbetts Pass Fire District Station 2 covers Camp Connell and Dorrington from 5510 Meko Drive. It's a volunteer district.",
-      "Closest full grocery is Big Trees Market in Arnold, about 15 minutes west. Closest urgent care is Angels Camp, about 45 minutes down the hill.",
+      "Ebbetts Pass Fire District Station 2 (5510 Meko Drive, in Big Trees Village) is the volunteer station covering Dorrington, Big Trees Village, and Camp Connell. Battalion #2 of EPFD.",
+      "Closest full grocery is Big Trees Market in Arnold, about 15 minutes west. Closest urgent care is Adventist Health Rapid Care in Angels Camp, about 45 minutes down the hill.",
       "Postally Dorrington, but a lot of listings (including the Lube Room) get tagged as Arnold area. Both are correct depending on who you ask."
     ],
     "faqs": [
       {
         "question": "What is there to do in Dorrington, CA?",
-        "answer": "Eat or drink at The Lube Room Saloon, stay or have dinner at the historic Dorrington Hotel, rent an A-frame at the Dorrington Inn, and grab basics at the small general store. For more, drive 15 minutes west to Arnold or 30 minutes east to Bear Valley."
+        "answer": "Eat at The Lube Room Saloon (the food is real: 11 oz fish & chips, chili with cornbread, two-handed burgers, live music most weekends, beer garden with horseshoes), stay or dinner at the historic Dorrington Hotel, rent an A-frame at the Dorrington Inn, and grab basics at the small general store. For more, drive 15 minutes west to Arnold or 30 minutes east to Bear Valley."
+      },
+      {
+        "question": "Does Dorrington get snow in winter?",
+        "answer": "Yes, and it tends to stay. From Dorrington (4,760 ft) and above on Hwy 4, you can expect at least 1 to 2 inches of snow on the ground throughout the winter — it accumulates rather than melting between storms. Down at Arnold (~4,000 ft, about 1,000 ft lower), snow comes and goes. If you're staying in Dorrington in January, pack snow boots."
       },
       {
         "question": "Where is Dorrington on Highway 4?",
