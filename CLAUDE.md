@@ -30,7 +30,11 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 | `/api/verify-events` | Daily 3pm UTC | Cross-check upcoming events against organizers' canonical sites; flag mismatches as `needs_verification` |
 | `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
 
-All cron routes require `CRON_SECRET` as a bearer token.
+All cron routes require `CRON_SECRET` as a bearer token. To smoke-test any cron route manually:
+
+```sh
+curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/<route>
+```
 
 ## Event Verification
 
