@@ -193,6 +193,9 @@ export default function RootLayout({
               <a href="/privacy" className="hover:text-pine hover:underline">
                 Privacy
               </a>
+              <a href="/sitemap.xml" className="hover:text-pine hover:underline">
+                Sitemap
+              </a>
             </nav>
           </div>
         </footer>
