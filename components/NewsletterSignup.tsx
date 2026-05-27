@@ -4,8 +4,15 @@ import { useState } from "react";
 
 export default function NewsletterSignup({
   variant = "default",
+  heading,
+  description,
 }: {
   variant?: "default" | "inline";
+  /** Override the default-variant heading. Falls back to "Weekly newsletter". */
+  heading?: string;
+  /** Override the default-variant description text. Falls back to the
+   *  Thursday roundup line. */
+  description?: string;
 }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -78,10 +85,11 @@ export default function NewsletterSignup({
   return (
     <div className="mb-8 rounded-xl border border-stone-light/30 bg-cream px-6 py-5">
       <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-earth mb-2">
-        Weekly newsletter
+        {heading ?? "Weekly newsletter"}
       </h3>
       <p className="text-sm text-stone mb-3">
-        Get the Thursday roundup — what&apos;s happening this weekend and next week on the 4.
+        {description ??
+          "Get the Thursday roundup. What's happening this weekend and next week on the 4."}
       </p>
       {status === "success" ? (
         <p className="text-sm text-pine font-medium">{message}</p>
