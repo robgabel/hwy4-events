@@ -142,6 +142,508 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     ],
     lastVerified: "2026-05-25",
   },
+
+  // Angels Camp: drafted 2026-05-26 via scripts/draft-town-content.ts.
+  // draft: true — banner + noindex + excluded from sitemap until Rob reviews on preview.
+  "angels-camp": {
+    "slug": "angels-camp",
+    "townName": "Angels Camp",
+    "metaTitle": "Angels Camp Events & What's On | Hwy 4 Events",
+    "metaDescription": "What's happening in Angels Camp: Frog Jubilee, Mike's Pizza, Camps Restaurant, and the practical stop on Hwy 4 with groceries, gas, and the doctor.",
+    "h1": "Angels Camp: Frogtown, supply depot, and the only city in the county",
+    "subhead": "The practical anchor of the Hwy 4 corridor at 1,300 ft, with the events to match.",
+    "introTeaser": "Angels Camp is the only incorporated city in Calaveras County (pop 3,667) and the practical hub for everyone on the 4. Save Mart, Calaveras Lumber, Adventist Health, and Mike's Pizza, all on South Main. It's also Frogtown: the Calaveras County Fair & Jumping Frog Jubilee runs the third weekend of May and has been jumping frogs since 1928.",
+    "intro": [
+      "If you live up the hill in Arnold or Murphys, you end up in Angels Camp whether you planned to or not. It's where Save Mart is. It's where the urgent care is. It's where Calaveras Lumber sits at 155 S Main, and yes, it's Do it Best, not Ace. Ace is up in Arnold.",
+      "But Angels Camp isn't just the supply depot. The Calaveras County Fair & Jumping Frog Jubilee is the single biggest event on the corridor, four days the third weekend of May, with roots back to Mark Twain's 1865 short story. Frogtown (officially the Calaveras Fairgrounds at 2465 Gunclub Rd) also hosts All Hallows Faire in late October and a steady drumbeat of smaller events the rest of the year.",
+      "Eating here is unfussy and good. Mike's Pizza on South Main has won best pizza in three counties for a decade-plus and operates as the corridor's great equalizer: contractors, retirees, ski families, everyone goes. For a nicer night, Camps Restaurant sits inside Greenhorn Creek Resort with a seasonal California menu, and Golden Frog Bistro took over the old Rodz Grill space at 730 S Main and runs date-night service with locally sourced food. The Angels Camp Museum (30,000+ sq ft, one of the largest carriage and wagon collections in the country) is worth an actual stop, not just a drive-by."
+    ],
+    "personaNotes": [
+      "If you're driving up from Stockton or the Bay for a Saturday: Angels Camp is your halfway gut check, about 90 minutes from Stockton. Gas at Nash Chevron, lunch at Mike's, then push on to Murphys for tasting rooms or Arnold for Big Trees.",
+      "If you're staying in Arnold and your guests ask where the hospital is: the answer is Mark Twain Medical Center in San Andreas, about 10 minutes north of Angels Camp on Hwy 49, run by Dignity Health. For non-emergency stuff, Angels Camp Rapid Care at 23 N Main handles same-day visits.",
+      "If you're hosting a vacation rental: send guests to the Angels Camp Museum on rainy days and Greenhorn Creek for a golf afternoon. Camps Restaurant takes lunch reservations and looks the part for out-of-towners.",
+      "If you have kids and need a break from the wine country pressure of Murphys: Frogtown during the Fair weekend is the move. Carnival, livestock, frog jumping, the works.",
+      "If you live up the hill: this is the supply run town. Save Mart for the real grocery list, Calaveras Lumber for the project, Mountain Pedaler at 352 S Main if your bike needs work."
+    ],
+    "worthKnowing": [
+      "Angels Camp is the only incorporated city in Calaveras County. Population 3,667 at the 2020 census.",
+      "Elevation is around 1,300 ft, which means no chain control, no snow planning, and a noticeably warmer climate than Arnold or Bear Valley.",
+      "The Calaveras County Fair & Jumping Frog Jubilee runs the third weekend of May. First county fair was 1893; the frog jump itself started in 1928.",
+      "Mike's Pizza Pasta and Ribs has been operating since 1993 and has won best pizza in Calaveras, Tuolumne, and Amador Counties more than 10 years running.",
+      "Calaveras Lumber at 155 S Main is a Do it Best affiliate, not Ace. Mon-Sat 7am-6pm. The Ace store is in Arnold.",
+      "Mark Twain Medical Center is in San Andreas, not Angels Camp, at 768 Mountain Ranch Rd. It's run by Dignity Health / CommonSpirit.",
+      "Greenhorn Creek Golf Resort is an 18-hole, Par 72 Robert Trent Jones II course. Camps Restaurant inside the resort is open to non-golfers.",
+      "Frogtown (Calaveras Fairgrounds, 2465 Gunclub Rd) hosts All Hallows Faire in late October, a two-day Celtic costume play event.",
+      "The Tesla Supercharger most people on the 4 use is actually in Copperopolis at the Square, about 15 minutes south of Angels Camp.",
+      "Drive times from Angels Camp: Murphys is about 10-12 minutes, Arnold is 25-30 minutes, Bear Valley is roughly an hour."
+    ],
+    "faqs": [
+      {
+        "question": "When is the Jumping Frog Jubilee in Angels Camp?",
+        "answer": "The Calaveras County Fair & Jumping Frog Jubilee runs the third weekend of May at the Calaveras Fairgrounds (Frogtown), 2465 Gunclub Rd. It's a four-day fair: frog jumping contest, livestock, carnival rides, crafts, and live entertainment. The frog jump tradition started in 1928. See frogtown.org for current dates and tickets."
+      },
+      {
+        "question": "Where's the closest hospital to Angels Camp?",
+        "answer": "Mark Twain Medical Center, about 10 minutes north in San Andreas at 768 Mountain Ranch Rd. It's a Dignity Health / CommonSpirit facility. For same-day non-emergency care, Angels Camp Rapid Care is at 23 N Main St, run by Adventist Health Sonora."
+      },
+      {
+        "question": "Where do locals eat in Angels Camp?",
+        "answer": "Mike's Pizza Pasta and Ribs on South Main is the default for everyone, open since 1993 and ten-plus years of best-pizza wins. For something nicer, Camps Restaurant at Greenhorn Creek Resort does a seasonal California menu, and Golden Frog Bistro at 730 S Main is the local date-night spot."
+      },
+      {
+        "question": "How far is Angels Camp from Murphys?",
+        "answer": "About 10 to 12 minutes, 8.3 miles up Hwy 4. Angels Camp sits at 1,300 ft, Murphys at 2,400 ft. The two towns function as a pair: Angels Camp has the groceries, lumber, and medical care; Murphys has the tasting rooms and the walkable Main Street."
+      },
+      {
+        "question": "Is there a Tesla Supercharger in Angels Camp?",
+        "answer": "No. The closest Supercharger is in Copperopolis, about 15 minutes south at The Square at Copper Valley (100 Town Square Rd). 12 stalls, up to 250kW. Non-Tesla EVs need a NACS adapter. It's the only fast-charging on the corridor."
+      }
+    ],
+    "lastVerified": "2026-05-27",
+    "draft": false
+  },
+
+  // Arnold: drafted 2026-05-26 via scripts/draft-town-content.ts.
+  // draft: true — banner + noindex + excluded from sitemap until Rob reviews on preview.
+  "arnold": {
+    "slug": "arnold",
+    "townName": "Arnold",
+    "metaTitle": "Arnold CA Events This Week | Hwy 4 Events",
+    "metaDescription": "What's happening in Arnold, California this week. Live music, festivals, community events, and BLS happenings on the Hwy 4 corridor at 4,000 ft.",
+    "h1": "Arnold, California: What's Happening This Week",
+    "subhead": "The full-time mountain town in the middle of the Hwy 4 corridor, 4,000 ft up.",
+    "introTeaser": "Arnold sits at 4,000 feet on Highway 4, four miles from Calaveras Big Trees State Park and 30 minutes below Bear Valley. It's where Hinterhaus Distilling, Giant Burger (since 1968), Bistro Espresso, and Blue Lake Springs all live, and where most of the corridor's year-round community actually is.",
+    "intro": [
+      "Arnold is the population center of the upper 4. About 3,300 people live here full-time, median age around 60, and the town stretches along Highway 4 from the Meadowmont meadow up past Blue Lake Springs. It's not Murphys. There are no tasting rooms on a walkable Main Street. The center of town is a Big Trees Market, an Ace, a Bistro Espresso, and a Giant Burger, and that's most of what you need.",
+      "What it does have, more than anywhere else on the corridor: real businesses run by people who live here. Nate and Bonnie Randall's Hinterhaus Distilling won Country Winner USA at the 2024 World Vodka Awards for their North Grove Vodka. Posterity Ciderworks opened a second tasting room in town in 2026, with ciders that show up on Michelin restaurant lists. Connor Davis runs Heart & Soul Country Kitchen for breakfast and lunch Thursday through Monday. Larry Geiger has been running Bistro Espresso since 2005, and it functions as the de facto town square.",
+      "Arnold is also the trailhead. Calaveras Big Trees is four miles east. White Pines Lake is five minutes off Highway 4 with a playground, a disc golf course, and a stocked trout lake. The Arnold Rim Trail runs along the canyon rim above town. There are three bike shops here for a reason. Most things close Monday and Tuesday. Plan accordingly."
+    ],
+    "personaNotes": [
+      "If you're renting out a place to weekenders: send guests to Hinterhaus for cocktails (ask for the three-mini-cocktail flight if it's not a busy weekend), Sarafina's or Kalamata for dinner with a reservation, and Big Trees for the morning hike. Hinterhaus and Posterity Ciderworks are the better local-tasting stops right now.",
+      "If you've got kids in tow: White Pines Lake has the playground, sandy beach, and disc golf, all free. The North Grove loop at Big Trees is a 1.5-mile flat walk that works with a stroller. El Vaquero has a deck and is genuinely kid-friendly.",
+      "If you're driving up from the Bay or the Valley: Arnold is the place to base out of, not pass through. Friday dinner at Sarafina's (Wed–Sun, 5pm, reservations), Saturday at Big Trees and Hinterhaus, Sunday brunch at Heart & Soul before you head down.",
+      "If you live in BLS: Snowflake Lodge has the Blue Lake Bistro Friday and Saturday 5–8pm year-round, BYOB, open to members and renters. Summer rec runs Memorial Day to Labor Day. The HOA office is (209) 795-2357.",
+      "If you're a retiree who already knows everyone: Bistro Espresso in the morning, Big Trees Market for groceries, Moose Lodge #1123 and Arnold Lions for the social calendar. Calaveras Enterprise still publishes in print twice a week.",
+      "If you're working a tasting room down in Murphys and want a night off: the Lube Room in Dorrington is 15 minutes up the 4, dog-friendly patio, and nobody from your tasting room will be there."
+    ],
+    "worthKnowing": [
+      "Arnold is at 3,999 feet. Chain control on Highway 4 typically starts about a mile east of town in winter and runs up to the Mt. Reba turnoff. Carry chains November through April.",
+      "Most Arnold restaurants close Monday and Tuesday. Giant Burger is Wed–Sun, Heart & Soul is Thu–Mon, Sarafina's is Wed–Sun. Kalamata is closed Tuesday. If you're planning a Monday dinner, your options narrow fast.",
+      "Hinterhaus Distilling (925 Hwy 4) and El Vaquero share the same building complex. You can taste spirits next door to a Mexican restaurant with a deck. That's a real Arnold sequence.",
+      "Wassup Dawg moved from Grizzly Plaza to the Meadowmont Pharmacy parking lot. Mon–Fri 11am until sold out, usually around 2pm. $10 combo.",
+      "Snowshoe Brewery is still here, though the energy shifted after the ownership change a few years back. For a great local pour right now, Posterity Ciderworks and Hinterhaus are the picks.",
+      "Hinterhaus has a quiet locals' move: unless it's a busy weekend, ask for the three mini-cocktails as a taster. Absolutely fantastic. The merch wall is unusually good too, both Hinterhaus-branded and unbranded gear at quality you don't expect from a tasting-room gift shop.",
+      "Arnold Ace Hardware's home section punches way above what the sign suggests. Locals come here for wall art and seasonal decor, not just for hardware and propane.",
+      "The Chevron in town (Grizzly Station, 1075 Hwy 4) makes sandwiches to order inside. Real food, not warming-tray sad. Worth a stop if you're rolling through and don't feel like sitting down.",
+      "Bistro Espresso makes its own ketchup. Larry Geiger has run the place since 2005 and the details show up everywhere: that's why it functions as the town's living room.",
+      "Local secret at Giant Burger: the breakfast burritos. Not on the marquee, but locals order them.",
+      "Best gas station on the 4 is the Rocket at 1297 Hwy 4. Open daily 5am to 11pm. Krispy Krunchy Chicken, a small wine corner, and a small selection of fishing lures. Yes, all in the same building. Yes, all of it works.",
+      "Sequoia Woods Country Club's restaurant and lounge are open to the public, not just members. Green fairways under huge pines. Patio for lunch in summer, cozy lounge in winter. (Rob: if this gets too busy, this bullet comes off the site.)",
+      "Blue Lake Springs is a private gated community of roughly 2,000 lots inside Arnold's ZIP. Mandatory HOA, two private lakes, a pool, and the Snowflake Lodge. If you're renting in BLS, the Bistro at Snowflake Lodge is open to you.",
+      "BLS isn't the only Arnold-area community with shared facilities. Big Trees Village (Camp Connell, ~5,000 ft) has an optional rec association with two pools, two tennis courts, shuffleboard, an athletic field, and a snack bar (Memorial Day to Labor Day, dues ~$150/yr). Lakemont Pines (Arnold, on Tanner Lake) has year-round lake access plus a seasonal snack shack and family summer program (Father's Day weekend through Labor Day).",
+      "The nearest hospital is Mark Twain Medical Center in San Andreas, about 40 minutes down the 4. For urgent care, Adventist Health Rapid Care in Angels Camp is closer, around 25–30 minutes.",
+      "Calaveras Big Trees State Park is four miles northeast of Arnold on Highway 4. North Grove Loop is the easy walk, South Grove is the longer one. About 129 campsites.",
+      "Arnold has three bike shops. Mountain biking and OHV are a real subculture here, not a marketing line. The Arnold Rim Trail Association maintains the rim trail.",
+      "The Labor Day Arts & Crafts Festival in Arnold has been running 45+ years. 50+ vendors, 10am–5pm. It's the town's biggest weekend."
+    ],
+    "faqs": [
+      {
+        "question": "What is there to do in Arnold, CA?",
+        "answer": "Calaveras Big Trees State Park (4 miles east), White Pines Lake with a playground and disc golf, Hinterhaus Distilling and Posterity Ciderworks tasting rooms, the Arnold Rim Trail, and Sequoia Woods Country Club golf. In winter, Bear Valley ski resort is 30 minutes east. Most visits anchor on Big Trees or Bear Valley."
+      },
+      {
+        "question": "Where should I eat in Arnold?",
+        "answer": "Breakfast: Heart & Soul Country Kitchen or Bistro Espresso. Lunch: Giant Burger (since 1968) or Wassup Dawg at the Meadowmont Pharmacy lot. Dinner: Sarafina's Italian (Wed–Sun, reservations), Kalamata Mediterranean, or El Vaquero on the deck. Most restaurants close Monday and Tuesday."
+      },
+      {
+        "question": "How far is Arnold from Murphys?",
+        "answer": "About 15 to 20 minutes on Highway 4. 12 miles. Murphys is wine country at 2,400 feet, Arnold is the mountain town at 4,000 feet. Different vibes, easy to do both in a weekend."
+      },
+      {
+        "question": "Do I need snow chains to drive to Arnold?",
+        "answer": "Not usually to Arnold itself, but east of town toward Bear Valley, yes, between roughly November and April. Caltrans posts chain control about a mile east of Arnold during storms. Carry chains in your trunk all winter if you're going up the 4."
+      },
+      {
+        "question": "What is Blue Lake Springs?",
+        "answer": "A private gated community of roughly 2,000 lots inside Arnold, with a mandatory HOA, two private lakes, an Olympic pool, tennis courts, and the Snowflake Lodge with the Blue Lake Bistro (Fri–Sat 5–8pm year-round). Open to members and their renters. HOA office: (209) 795-2357. It's the biggest community-with-facilities up here, but not the only one: Big Trees Village (Camp Connell) and Lakemont Pines (Arnold, on Tanner Lake) both have optional rec memberships with their own seasonal amenities."
+      },
+      {
+        "question": "Can non-members eat at Sequoia Woods Country Club?",
+        "answer": "Yes. The restaurant and lounge at Sequoia Woods (1000 Cypress Point Dr, (209) 795-1000) are open to the public, not just members. Locals' go-tos: patio lunch in summer overlooking the course, cozy lounge in winter. Monday and Tuesday pub nights run 4:30 to 7pm. Reservations after noon."
+      }
+    ],
+    "lastVerified": "2026-05-27",
+    "draft": false
+  },
+
+  // Avery: drafted 2026-05-26 via scripts/draft-town-content.ts.
+  // draft: true — banner + noindex + excluded from sitemap until Rob reviews on preview.
+  "avery": {
+    "slug": "avery",
+    "townName": "Avery",
+    "metaTitle": "Avery Events | Hwy 4 Events",
+    "metaDescription": "What's happening in Avery, CA on Highway 4. The Avery Hotel, Howard's Mystic Saloon, and the quiet stretch between Murphys and Arnold.",
+    "h1": "Avery: the quiet stop between Murphys and Arnold",
+    "subhead": "Historic hotel, a goth-mystic saloon, a great drive-thru coffee, and the small-engine shop the rest of the 4 actually uses.",
+    "introTeaser": "Avery sits on Highway 4 at 3,389 feet, about 10 minutes west of Arnold and 15 east of Murphys. Tiny CDP, population 636. The Historic Avery Hotel (built 1851, oldest continuously operating hotel in Calaveras County) and Howard's Mystic Saloon are the headline stops, with Day-O Espresso for the morning and JC Power Equipment quietly running the small-engine repair for the whole corridor.",
+    "intro": [
+      "Avery is a CDP, not a town in the city-hall sense. Population 636, ZIP 95224, named after George J. Avery, the first postmaster (post office opened 1885). It's the last named stop before you hit Arnold, which is why old marketing copy calls it the gateway to Calaveras Big Trees. Locals just call it the stretch with the hotel and the skull bar. There are a few more reasons to know it than that, though.",
+      "The Historic Avery Hotel started life as a family home in 1851, became a hotel in 1853 under Peter and Nancy Avery, and was known for decades as the Half Way House because it sat midway between the Murphys gold fields and the giant sequoias. The Gotelli family bought it in 1992 and renovated heavily. Today it sleeps 23+ overnight and handles events up to 150, with two bars, a billiards room, a formal dining room, and a wood stage. Call (209) 517-2465 to check what's on the calendar before you assume anything.",
+      "Howard's Mystic Saloon at 4529 CA-4 is the other anchor. Curt and Tana Howard lease the old Avery Saloon building and run it in a black goth / mystic style year-round, not just at Halloween. Skull chandeliers, themed decor, table shuffleboard, pool tables, a juke box, and occasional live music. Drinks only, no food. Worth a stop and a drink for the vibe. People behind the bar are friendlier than the decor suggests, and it photographs better than any other bar on the corridor.",
+      "Two more things people miss about Avery. Day-O Espresso at 68 Avery Hotel Rd is a drive-thru coffee hut that punches above its weight, and the fancy toasts are the real move (cinnamon toast on thick bread). And JC Power Equipment, opened January 2019 by Jim and Nancy Conway, is the small-engine repair shop the whole corridor relies on for weed eaters, snowblowers, generators, and chainsaws. They also sell ethanol-free fuel. When the power went out the first time, Jim said, people were lined up."
+    ],
+    "personaNotes": [
+      "If you're pouring wine in Murphys and your shift just ended, Howard's Mystic Saloon is 15 to 20 minutes up the 4 and worth the drive for the vibe alone. Drinks only, eat before you come.",
+      "If you're hosting a wedding, rehearsal dinner, or 40-person birthday, the Avery Hotel's pavilion and dining room handle up to 150. Call them, don't email.",
+      "If you're sending Airbnb guests up the corridor, tell them Avery is a 5-minute stop, not a destination. The Avery Hotel for history, Mystic for a drink and a photo, Day-O for a cinnamon toast on the way back down.",
+      "If you live up the hill and your weed eater, snowblower, or generator just died, JC Power Equipment on Hwy 4 in Avery is where the rest of the corridor takes them. Jim and Nancy Conway have run it since 2019.",
+      "If you live up the hill and you've never actually walked into the Avery Hotel, you're missing the oldest continuously operating hotel in the county. It's been there since 1853."
+    ],
+    "worthKnowing": [
+      "Avery's elevation is 3,389 feet, between Murphys (2,400 ft) and Arnold (3,999 ft). You're usually below the snow line but not always.",
+      "The community is tiny: state stats show 45 employees across 13 businesses. Don't expect a downtown.",
+      "The Historic Avery Hotel was built in 1851 and started operating as a hotel in 1853. It's the oldest continuously operating hotel in Calaveras County.",
+      "Howard's Mystic Saloon is goth-mystic year-round, not a Halloween pop-up. Skull chandeliers, table shuffleboard, pool tables, a juke box, drinks only (no food). Curt and Tana Howard run it.",
+      "Day-O Espresso at 68 Avery Hotel Rd is the drive-thru coffee everyone on the corridor knows. Locals' tip: the fancy toasts. Cinnamon toast on thick bread is the standout. (209) 822-3967.",
+      "Small-engine repair shop: JC Power Equipment on Hwy 4 in Avery. Jim and Nancy Conway, opened January 2019. Weed eaters, snowblowers, generators, leaf blowers, chainsaws. Also Honda generators and ethanol-free fuel. This is where the rest of the corridor goes.",
+      "Rossetti's at the 19th Hole (4462 CA-4) is CLOSED as of 2026. Some aggregator listings still show Fri to Sun hours, but those are stale. Yelp has it tagged Closed and locals confirm.",
+      "The Avery post office was established 1885, closed 1943, then re-established in 1949. That's why you'll see conflicting founding dates online.",
+      "Avery sits inside the Stanislaus National Forest gateway. Cell service is fine on Hwy 4 itself, spotty as soon as you turn off.",
+      "There's no grocery store, gas station, or pharmacy in Avery. Big Trees Market in Arnold is 10 minutes east. Sierra Hills in Murphys is 15 minutes west.",
+      "In winter, chain control on Hwy 4 typically starts about a mile east of Arnold, which means Avery is usually below the checkpoint. Usually."
+    ],
+    "faqs": [
+      {
+        "question": "What is there to do in Avery, California?",
+        "answer": "Four anchors: The Historic Avery Hotel (lodging, dining, events, 1851), Howard's Mystic Saloon (drinks and goth-mystic vibe, no food), Day-O Espresso drive-thru for coffee and the fancy toasts, and JC Power Equipment for small-engine repair. Beyond those, Avery is a pass-through. For groceries, gas, or wineries, you'll be driving 10 to 15 minutes either direction."
+      },
+      {
+        "question": "How far is Avery from Arnold and Murphys?",
+        "answer": "Avery is about 10 minutes east of Murphys on Hwy 4 and 10 minutes west of Arnold. The Avery Hotel sits roughly halfway between the two, which is exactly why it was called the Half Way House in the 1850s."
+      },
+      {
+        "question": "Can you stay overnight at the Avery Hotel?",
+        "answer": "Yes. The Historic Avery Hotel accommodates 23+ overnight guests across the property and handles events up to 150. Call (209) 517-2465 to check availability. It's the oldest continuously operating hotel in Calaveras County, renovated by the Gotelli family in 1992."
+      },
+      {
+        "question": "Is Howard's Mystic Saloon only open for Halloween?",
+        "answer": "No. The black goth / mystic decor is permanent, year-round. Skull chandeliers, table shuffleboard, pool tables, juke box, occasional live music. Drinks only, no food, so eat before you come. Curt and Tana Howard run the bar at 4529 CA-4. Check mysticsaloon.com or Instagram for show schedules."
+      },
+      {
+        "question": "Is Avery the gateway to Calaveras Big Trees State Park?",
+        "answer": "It's marketed that way because it's the last named community before Arnold, where Big Trees sits 4 miles northeast. In practice, Arnold is the actual gateway town with the lodging, groceries, and trailhead support. Avery is the stop you pass through on the way."
+      }
+    ],
+    "lastVerified": "2026-05-27",
+    "draft": false
+  },
+
+  // Bear Valley: drafted 2026-05-26 via scripts/draft-town-content.ts.
+  // draft: true — banner + noindex + excluded from sitemap until Rob reviews on preview.
+  "bear-valley": {
+    "slug": "bear-valley",
+    "townName": "Bear Valley",
+    "metaTitle": "Bear Valley Events on Hwy 4 | Hwy 4 Events",
+    "metaDescription": "What's happening at Bear Valley Mountain Resort and the Village Lodge. Ski season, summer concerts, and the Music Festival. Updated daily by a neighbor.",
+    "h1": "Bear Valley events: skiing, the Music Festival, and the Village Lodge",
+    "subhead": "The top of the 4. 6,600 to 8,500 feet, snow half the year, music in the summer.",
+    "introTeaser": "Bear Valley Mountain Resort sits at the summit of Hwy 4 with 1,680 skiable acres, 75 trails, 9 lifts, and a base elevation of 8,495 ft. Season runs late November through mid-April, and the Bear Valley Music Festival anchors the summer (2026 dates: July 17 to August 2).",
+    "intro": [
+      "Bear Valley is the last stop on the 4 before the road closes for winter. About 30 minutes up from Arnold, a different climate, a different feel. Less Tahoe, more Sierra retro.",
+      "Heads up for the 25/26 ski season: the resort consolidated most food and beverage to the Village Lodge. Sky High Pizza is open Thursday through Sunday evenings during the season, the General Store runs 9am to 5pm year-round, and Kofi Haus does mornings in winter. Monte Wolfe Saloon, Ebbetts Grill, and Basecamp Pizza are flagged for re-opening in the 26/27 season. Creekside Bistro was closed as of May 2026. Check bearvalley.com before you promise anyone a specific spot.",
+      "Summer is the underrated season. The Music Festival brings classical, jazz, and world music for about two and a half weeks in mid-July through early August. Hiking, mountain biking, fishing, and the scenic chairlift fill in the rest. Ebbetts Pass typically opens late spring to mid-summer (the date moves around with the snowpack), and when it does, the drive over the top to Markleeville is one of the best in California."
+    ],
+    "personaNotes": [
+      "If you're skiing for the weekend from the Bay Area: it's less crowded than Tahoe, the drive from Arnold is 30 minutes, and on-mountain F&B is reduced this season. Eat at the Village Lodge or come down to Arnold for dinner.",
+      "If you're a renter or Airbnb guest heading up: bring chains November through April, and don't assume every restaurant on the resort site is open. The 25/26 lineup is Sky High Pizza, Kofi Haus, and the General Store. The rest comes back 26/27.",
+      "If you're planning a summer trip and don't care about snow: aim for mid-July through early August and build the weekend around a Music Festival concert. Days are for hiking, evenings are for the festival tent.",
+      "If you live in Arnold or BLS and want a low-key date night in winter: Sky High Pizza on a Thursday is a 30-minute drive, deck views, and you'll get a table.",
+      "If you're a cross-country skier: 3,000 acres of XC terrain with four trailside huts. Way quieter than the downhill side, and the Meadow Café route is the easy intro."
+    ],
+    "worthKnowing": [
+      "Resort stats: 1,680 skiable acres, 75 trails, 9 lifts, 1,900 ft of vertical, base elevation 8,495 ft.",
+      "Snowfall: resort claims 359 inches; long-term average per onthesnow.com is about 282 inches. Either way, real snow.",
+      "Season runs late November through mid-April, weather dependent. Sky High Pizza closes for the season April 12, 2026.",
+      "Ebbetts Pass (Hwy 4 east of the resort) closes roughly mid-November to late spring. 'The pass is open' is a real local milestone, not a slogan.",
+      "Chain control is normal on Hwy 4 in winter. R-1 lets most cars through with snow tires on a drive axle; R-2 requires chains unless you're 4WD/AWD with snow tires on all four. Speed under control is 25 mph.",
+      "Snowmobiling: 70 miles of groomed trails. Some Bear Valley streets are snowmobile-only in winter.",
+      "Bear Valley Music Festival: 2026 runs July 17 to August 2. Tickets via bearvalleymusicfestival.org.",
+      "The General Store at the Village Lodge carries Joma's ice cream (the Murphys outfit) and Gold Country Roasters coffee at Kofi Haus (the Murphys roaster). Local supply chain even at 8,000 ft.",
+      "The closest full grocery is Big Trees Market in Arnold, 30 minutes back down the hill. Stock up before you head up.",
+      "Cell service at the resort is workable but spotty along stretches of Hwy 4 between Arnold and the Mt Reba turnoff."
+    ],
+    "faqs": [
+      {
+        "question": "Is Bear Valley open this winter (25/26 season)?",
+        "answer": "Yes, the mountain is open for skiing and snowboarding late November through mid-April. But on-mountain food and beverage is consolidated to the Village Lodge for the 25/26 season. Sky High Pizza, Kofi Haus, and the General Store are running. Monte Wolfe Saloon, Ebbetts Grill, and Basecamp Pizza return for 26/27. Confirm at bearvalley.com before you go."
+      },
+      {
+        "question": "When is the Bear Valley Music Festival?",
+        "answer": "The 2026 festival runs July 17 through August 2, about two and a half weeks of classical, jazz, and world music programming. Details and tickets at bearvalleymusicfestival.org."
+      },
+      {
+        "question": "How far is Bear Valley from Arnold?",
+        "answer": "About 30 minutes up Highway 4. From the Bay Area (Los Gatos) figure roughly 2.5 hours to Arnold, plus the 30 to Bear Valley. From Stockton, about 90 minutes to Murphys plus another hour up."
+      },
+      {
+        "question": "Do I need chains to drive to Bear Valley in winter?",
+        "answer": "Usually yes from November through April. Caltrans posts chain control on Hwy 4 above Arnold during storms. R-1 exempts most cars with snow tires on a drive axle; R-2 requires chains unless you have 4WD/AWD with snow tires on all four. Carry chains regardless."
+      },
+      {
+        "question": "Is there anything to do at Bear Valley in summer?",
+        "answer": "Yes. The Music Festival in mid-July to early August is the anchor. Otherwise: hiking, mountain biking, fishing, swimming, and a scenic chairlift. Once Ebbetts Pass opens, the drive east to Markleeville is one of the best two-lane routes in California."
+      }
+    ],
+    "lastVerified": "2026-05-27",
+    "draft": false
+  },
+
+  // Camp Connell: drafted 2026-05-26 via scripts/draft-town-content.ts.
+  // draft: true — banner + noindex + excluded from sitemap until Rob reviews on preview.
+  "camp-connell": {
+    "slug": "camp-connell",
+    "townName": "Camp Connell",
+    "metaTitle": "Camp Connell Events & Live Music | Hwy 4",
+    "metaDescription": "What's happening in Camp Connell, CA at 5,000 ft. Live music at the General Store Beer Garden, Saturday nights in summer. Updated daily by a neighbor.",
+    "h1": "Camp Connell: one store, one beer garden, deep in the pines",
+    "subhead": "Mile marker 5.8 on Hwy 4, between Dorrington and Bear Valley.",
+    "introTeaser": "Camp Connell is essentially the Camp Connell General Store, founded in 1928 by Jack and Noreen Connell at 4036 Old Hwy 4. It's a grocery, a Chevron, a cafe, and a 1.48-acre Beer Garden with a stage along San Antonio Creek.",
+    "intro": [
+      "Camp Connell sits at about 5,000 ft, two miles east of Dorrington and a few minutes before the road starts climbing toward Bear Valley. The town and the store are the same thing. There's no Main Street, no downtown, no second stoplight. There's the General Store, the Chevron pumps out front, and the Beer Garden out back.",
+      "The store's address is 4036 Old Hwy 4 for a reason. Hwy 4 was realigned in the 1960s to make room for the new Bear Valley resort and Big Trees Village, and the old road still runs through the property as the store's two driveways. The Chevron has been pumping gas since 1928, which makes it one of the oldest continuously operating Chevrons in California. The post office moved into the store in 1934 and became Camp Connell Station.",
+      "Summer is when the Beer Garden earns its keep. Live music on Saturday nights, crowds that can run up to a few hundred, kids in the grass, dogs under the tables, San Antonio Creek running behind the stage. In the colder months the music moves indoors on Fridays. Check campconnellgeneralstore.com for the current lineup before you make the drive, because cadence shifts with the season."
+    ],
+    "personaNotes": [
+      "If you're driving up from Arnold for the night: it's about 15 minutes east on the 4, and the Beer Garden is the destination, not a stop along the way.",
+      "If you're staying in a Dorrington or Camp Connell rental and your guests ask where the action is: this is the answer in summer, paired with The Lube Room two miles back in Dorrington.",
+      "If you're coming down from Bear Valley after a day on the mountain: the store has gas, beer, and a cafe, and it's the last real stop before Arnold.",
+      "If you're a Bay Area weekender looking for the un-Murphys version of a Saturday night: the Beer Garden is the opposite of a tasting room crawl, and that's the point.",
+      "If you've got kids in tow: outdoor Saturday shows in summer are stroller-friendly and there's room to run. Indoor winter shows are a different vibe.",
+      "If you're a contractor or local heading home: gas, propane-adjacent supplies, beer, snacks. You know the drill."
+    ],
+    "worthKnowing": [
+      "The Camp Connell General Store is at 4036 Old Hwy 4. Phone is (209) 795-1121.",
+      "The store opened in 1928, founded by Jack and Noreen Connell, who already owned the Dorrington Hotel property down the road.",
+      "The Beer Garden runs about 1.48 acres along San Antonio Creek, has a stage, and can hold a summer crowd of around 300.",
+      "Live music pattern: Saturday nights outdoors in summer, Friday nights indoors in the colder months. Verify the current lineup at campconnellgeneralstore.com before driving up.",
+      "The Chevron out front has been pumping since 1928. Often called one of the oldest continuously operating Chevrons in California.",
+      "The post office became Camp Connell Station in 1934 and still operates inside the store.",
+      "Elevation is roughly 5,000 ft. Snow line sits right around here, which means chains can be required east of Arnold from late November through April.",
+      "Mile marker 5.8 on Hwy 4, between Dorrington (5.2) and Bear Valley. About 15 minutes from Arnold, about 15 minutes below Bear Valley in summer.",
+      "Ebbetts Pass Fire District Station 2, the one covering Camp Connell and Dorrington, is at 5510 Meko Drive.",
+      "Cell service is spotty between Dorrington and Camp Connell. Download directions before you leave Arnold."
+    ],
+    "faqs": [
+      {
+        "question": "What is there to do in Camp Connell?",
+        "answer": "The Camp Connell General Store is the town. It has groceries, a Chevron station, a cafe, beer and wine, and a Beer Garden out back with a stage along San Antonio Creek. Live music runs Saturday nights outdoors in summer and Friday nights indoors in winter. Beyond that, you're either heading west to Arnold or east to Bear Valley."
+      },
+      {
+        "question": "When does the Camp Connell General Store have live music?",
+        "answer": "Saturday nights in the outdoor Beer Garden during summer, and Friday nights indoors during the colder months. Lineups change week to week, so check campconnellgeneralstore.com for the current schedule before you commit to the drive."
+      },
+      {
+        "question": "How far is Camp Connell from Arnold and Bear Valley?",
+        "answer": "About 15 minutes east of Arnold on Hwy 4, and roughly 15 minutes west of Bear Valley in summer. Two miles east of Dorrington. In winter, factor in chain control above Arnold and slower speeds."
+      },
+      {
+        "question": "Is the Chevron at Camp Connell really one of the oldest in California?",
+        "answer": "Yes. The Chevron has been operating at the General Store since the store opened in 1928. It's frequently described as one of the oldest continuously operating Chevron stations in the state. The safer phrasing is \"one of the oldest,\" not \"the oldest.\""
+      },
+      {
+        "question": "Why is the store address \"Old Hwy 4\"?",
+        "answer": "Hwy 4 was realigned in the 1960s to accommodate the new Bear Valley resort and the Big Trees Village development. Portions of the old highway still cross the store property as its two driveways, which is why the address stayed as 4036 Old Hwy 4."
+      }
+    ],
+    "lastVerified": "2026-05-27",
+    "draft": false
+  },
+
+  // Copperopolis: drafted 2026-05-26 via scripts/draft-town-content.ts.
+  // draft: true — banner + noindex + excluded from sitemap until Rob reviews on preview.
+  "copperopolis": {
+    "slug": "copperopolis",
+    "townName": "Copperopolis",
+    "metaTitle": "Copperopolis Events & Things to Do | Hwy 4 Events",
+    "metaDescription": "What's happening in Copperopolis: The Square at Copper Valley, Copper Valley golf, Tipsy Frog, Griff's BBQ. Updated daily by a Hwy 4 neighbor.",
+    "h1": "Copperopolis: Copper Country at the Base of the 4",
+    "subhead": "The foothills stop where the Square at Copper Valley is the social anchor and the Tesla Superchargers actually work.",
+    "introTeaser": "Copperopolis sits at about 1,000 ft on Highway 4, roughly 20 minutes west of Angels Camp. The Square at Copper Valley (Tipsy Frog Wine Bar, Griff's BBQ, Gold Dust Pizza & Moe's Tavern, Bandit's) is the social hub, and there are 12 Tesla Superchargers at 100 Town Square Rd, the only fast EV charging in the immediate area.",
+    "intro": [
+      "Copperopolis is the foothills, not the mountains. At ~997 ft, it's the first real stop coming up Hwy 4 from the valley, and it doesn't pretend to be Murphys or Arnold. It's a planned resort community built around golf and the Town Square, and locals up the hill will tell you it feels like its own thing.",
+      "The center of gravity is The Square at Copper Valley (100 Town Square Rd). Tipsy Frog Wine Bar, Griff's BBQ & Grill, Gold Dust Pizza with Moe's Tavern attached, and Bandit's Restaurant & Bar all sit within walking distance of each other. Copper's Java House is a block off the Square on McCarty for coffee and ice cream. Town Hall Arts on Egan Street runs a gallery, frame shop, and art classes.",
+      "Golf is the other draw. The Golf Club at Copper Valley (formerly Saddle Creek) is a Carter Morrish design that opened in 1996. It pairs with Greenhorn Creek in Angels Camp on the 'Play the Creeks' package if you want 36 holes in two days. And yes, the 12-stall Tesla Supercharger at the Square is one of the few reasons EV drivers from the Bay Area can plan a Hwy 4 trip without anxiety."
+    ],
+    "personaNotes": [
+      "If you're driving up from the Bay Area in an EV: 12 Superchargers at the Square (100 Town Square Rd, up to 250kW). Charge, grab Griff's BBQ or Gold Dust Pizza, keep going up the hill.",
+      "If you're planning a guest's stay: Copperopolis is a legitimate dinner option on arrival night. It's the first real food on Hwy 4 east of the valley.",
+      "If you golf: The Golf Club at Copper Valley plus Greenhorn Creek in Angels Camp is a real two-course weekend. Stay at the Copper Valley lodge or bungalows.",
+      "If you're a day-tripper from Stockton or Modesto: it's about an hour to the Square. Lunch, walk it off, then decide whether to push another 30 minutes up to Murphys.",
+      "If you just want a quiet wine bar that isn't on Murphys Main Street: Tipsy Frog is open seven days a week and isn't fighting tasting-room crowds."
+    ],
+    "worthKnowing": [
+      "Copperopolis sits at about 997 ft elevation. It does not get the snow that Arnold and Bear Valley get. Chain control on Hwy 4 starts much higher up.",
+      "The Square at Copper Valley is the commercial center, not the historic Copperopolis townsite. The address to plug into Maps is 100 Town Square Rd.",
+      "The Tesla Supercharger at 100 Town Square Rd has 12 stalls (V3, up to 250kW) and has been live since March 2021. Non-Tesla EVs need a NACS adapter.",
+      "The Golf Club at Copper Valley was Saddle Creek Golf Resort until July 2019. Same Carter Morrish course, new ownership and branding.",
+      "Griff's BBQ & Grill is at 304 Town Square Rd. Open Mon-Thu 11:30-8, Fri-Sun 11-8.",
+      "Tipsy Frog Wine Bar is open Mon/Wed/Thu/Sun noon to 7, Fri-Sat noon to 9. Closed Tuesday.",
+      "Copper's Java House (631 McCarty St) does coffee and ice cream in the same stop, which matters if you've got kids.",
+      "Hwy 4 between Copperopolis and Angels Camp has been in active construction (the Wagon Trail project). Build extra time into your drive.",
+      "Angels Camp is the nearest grocery (Save Mart, ~12 minutes east). Stockton is ~50 minutes west for anything bigger.",
+      "Murphys is about 25 minutes further up Hwy 4. Arnold is about 45. Worth knowing if you're using Copperopolis as a base."
+    ],
+    "faqs": [
+      {
+        "question": "What is there to do in Copperopolis, CA?",
+        "answer": "The Square at Copper Valley (100 Town Square Rd) anchors the town: Tipsy Frog Wine Bar, Griff's BBQ, Gold Dust Pizza & Moe's Tavern, Bandit's, and Copper's Java House. The Golf Club at Copper Valley is the main outdoor draw, with a Carter Morrish course that opened in 1996. Town Hall Arts on Egan Street runs a gallery and art classes."
+      },
+      {
+        "question": "Where can I charge a Tesla or EV on Highway 4?",
+        "answer": "The Tesla Supercharger at 100 Town Square Rd in Copperopolis has 12 stalls, up to 250kW, live since March 2021. It's the only fast EV charging on the Hwy 4 corridor between the valley and Bear Valley. Non-Tesla EVs need a NACS adapter."
+      },
+      {
+        "question": "Is Copperopolis the same as Saddle Creek?",
+        "answer": "Saddle Creek Golf Resort was renamed The Golf Club at Copper Valley in July 2019 after Copper Valley Development Partners bought it. It's the same Carter Morrish course, same location at 1001 Saddle Creek Drive in Copperopolis. The lodge, bungalows, and Copper Grill are still on-site."
+      },
+      {
+        "question": "How far is Copperopolis from Murphys or Arnold?",
+        "answer": "Murphys is about 25 minutes east on Hwy 4. Arnold is about 45 minutes. Angels Camp sits between them, roughly 12 minutes from the Square. Note: the Wagon Trail construction project between Copperopolis and Angels Camp can add time, especially weekdays."
+      },
+      {
+        "question": "Is Copperopolis worth a stop on the way up Highway 4?",
+        "answer": "Yes if you need food, gas, or an EV charge before the climb. Griff's BBQ and Gold Dust Pizza are solid casual options, and Tipsy Frog is open seven days for wine. It's not a destination wine town like Murphys, but it's a legitimate dinner stop and the Square is walkable."
+      }
+    ],
+    "lastVerified": "2026-05-27",
+    "draft": false
+  },
+
+  // Dorrington: drafted 2026-05-26 via scripts/draft-town-content.ts.
+  // draft: true — banner + noindex + excluded from sitemap until Rob reviews on preview.
+  "dorrington": {
+    "slug": "dorrington",
+    "townName": "Dorrington",
+    "metaTitle": "Dorrington Events & Local Guide | Hwy 4 Events",
+    "metaDescription": "What's happening in Dorrington, CA on Hwy 4. The Lube Room, Dorrington Hotel, cabin rentals, and the quiet stretch between Arnold and Bear Valley.",
+    "h1": "Dorrington: the quiet stretch between Arnold and Bear Valley",
+    "subhead": "A historic hotel, the Lube Room (worth the drive for the food alone), and the start of the part of the 4 that holds snow all winter.",
+    "introTeaser": "Dorrington is a tiny historic stop on Highway 4 at about 4,760 feet, two miles west of Camp Connell and directly adjacent to the Big Trees Village residential community. The Lube Room Saloon and the Dorrington Hotel sit next door to each other at 3431 Hwy 4, and that's most of the town — but the Lube Room food (11 oz fish & chips, chili with a serious cornbread, two-handed burgers) and beer garden are the actual reason to come up.",
+    "intro": [
+      "Dorrington started as Cold Spring Ranch in the 1850s. John Gardner and William Gibson took over the property in January 1868, and when the post office showed up in 1902 it got renamed after Rebekah Dorrington Gardner, John's widow. For decades it was a stockmen's depot, a toll stop on the road to Ebbetts Pass, and a summer waypoint for travelers heading to the giant sequoias.",
+      "It's still mostly a waypoint, just a quieter one. The Dorrington Hotel was rebuilt by John Gardner in the late 1880s after the original 1852 building burned. It runs as historic lodging with a downstairs restaurant, and locals will tell you Rebekah haunts the place. Across the highway, the Dorrington Inn rents A-frame cabins. There's a small general store for snacks and the basics, and that's the commercial district. Two miles east is Camp Connell. Directly adjacent is Big Trees Village, the HOA residential community at ~5,000 ft that shares the same after-work spots and fire station.",
+      "The actual social life happens next door at The Lube Room Saloon. It was an outdoor grease rack until 1977, when the owners switched from grease to beer and kept the name. Skip the dive-bar assumptions: the food is real. The fish & chips is a big 11 oz filet, the chili comes with an amazing slice of cornbread, and the burgers genuinely take two hands. Big beer garden out back with a yard where kids can run around and a horseshoe pit when there's no live music. Dogs welcome on the patio. Live music runs weekends with a named summer concert series (Poison Oakies, VC3 Band, Flashback, The Delta Chicks, Earthtones). If you live up here, you've been there. If you're driving through, you should stop."
+    ],
+    "personaNotes": [
+      "If you've got kids in tow: the Lube Room's beer garden has a yard for them to run around in, plus horseshoes when there's no band. Food's good enough that you'll actually want to stay. Bonus: it's 5 minutes up the hill from Calaveras Big Trees State Park, so pair it with the sequoias for a perfect day.",
+      "If you're renting out a cabin in Dorrington, Camp Connell, or Big Trees Village, your guests want to know there's real food five minutes away (The Lube Room, fish & chips and burgers worth ordering), a historic hotel restaurant for date night (Dorrington Hotel), and gas plus groceries two miles east at Camp Connell General Store.",
+      "If you work in the trades and live up here, the Lube Room is the after-work stop. No pretense, dogs welcome, two-handed burgers, and you're not going to bump into a Bay Area wine tour.",
+      "If you're driving up from the Bay or the valley, Dorrington is a real detour off the Arnold-to-Bear Valley run, not a destination on its own. The Lube Room is worth the 15-minute extension for the food and the vibe.",
+      "If you're heading over Ebbetts Pass in summer, Dorrington is the last stretch of trees before the road climbs. The pass typically closes mid-November to May, so plan accordingly.",
+      "If you're staying overnight in winter, know that Dorrington holds snow on the ground all season (1–2 inches minimum). Pack boots. The Dorrington Hotel sleeps up to 12 between the hotel and cottage, and the Dorrington Inn has private A-frames across the highway."
+    ],
+    "worthKnowing": [
+      "Dorrington sits at roughly 4,760 feet, about 15 minutes east of Arnold, 2 miles west of Camp Connell, and directly next to the Big Trees Village residential community on Highway 4.",
+      "The town was originally called Cold Spring Ranch, named for an ice-cold spring on the property. The post office gave it the Dorrington name in 1902.",
+      "Snow line gradient most visitors miss: from Dorrington (4,760 ft) and above, you can count on at least 1 to 2 inches of snow on the ground throughout the winter, it accumulates and stays. At Arnold (about 4,000 ft, 1,000 ft lower), snow comes and goes between storms. Pack boots if you're staying up here in January; you might not need them if you're staying down in Arnold.",
+      "The Dorrington Hotel at 3431 Hwy 4 was rebuilt by John Gardner in the late 1880s after the 1852 building burned. It still operates as a hotel with a downstairs restaurant.",
+      "The Lube Room Saloon next door was an outdoor grease rack until 1977. They switched from grease to beer and kept the name. Now: real food (fish & chips is a big 11 oz filet, chili comes with a serious slice of cornbread, burgers need two hands), live music most weekends, a kid-friendly beer garden with horseshoes when no band is playing, dog-friendly patio.",
+      "Cell service drops in and out between Dorrington and Camp Connell. Don't count on it for navigation or work calls.",
+      "Chain control on Hwy 4 typically runs from roughly a mile east of Arnold up to the Mt Reba turnoff. If R-1 or R-2 is up, Dorrington is inside the zone. Carry chains November through April.",
+      "Ebbetts Pass Fire District Station 2 (5510 Meko Drive, in Big Trees Village) is the volunteer station covering Dorrington, Big Trees Village, and Camp Connell. Battalion #2 of EPFD.",
+      "Closest full grocery is Big Trees Market in Arnold, about 15 minutes west. Closest urgent care is Adventist Health Rapid Care in Angels Camp, about 45 minutes down the hill.",
+      "Postally Dorrington, but a lot of listings (including the Lube Room) get tagged as Arnold area. Both are correct depending on who you ask.",
+      "The Lube Room is 5 minutes up Hwy 4 from Calaveras Big Trees State Park. If you're already up here for the sequoias, don't drive past it without stopping."
+    ],
+    "faqs": [
+      {
+        "question": "What is there to do in Dorrington, CA?",
+        "answer": "Eat at The Lube Room Saloon (the food is real: 11 oz fish & chips, chili with cornbread, two-handed burgers, live music most weekends, beer garden with horseshoes), stay or dinner at the historic Dorrington Hotel, rent an A-frame at the Dorrington Inn, and grab basics at the small general store. For more, drive 15 minutes west to Arnold or 30 minutes east to Bear Valley."
+      },
+      {
+        "question": "Does Dorrington get snow in winter?",
+        "answer": "Yes, and it tends to stay. From Dorrington (4,760 ft) and above on Hwy 4, you can expect at least 1 to 2 inches of snow on the ground throughout the winter — it accumulates rather than melting between storms. Down at Arnold (~4,000 ft, about 1,000 ft lower), snow comes and goes. If you're staying in Dorrington in January, pack snow boots."
+      },
+      {
+        "question": "Where is Dorrington on Highway 4?",
+        "answer": "Mile marker 5.2/55.8 on Hwy 4, between Arnold and Camp Connell at about 4,760 feet. Arnold is 15 minutes west, Camp Connell is 2 miles east, and Bear Valley is roughly 30 minutes further up."
+      },
+      {
+        "question": "Is The Lube Room actually in Dorrington or Arnold?",
+        "answer": "Postally Dorrington, at 3431 Hwy 4 next to the Dorrington Hotel. Plenty of listings call it the Arnold area because that's the closest town with services. Locals just call it The Lube Room."
+      },
+      {
+        "question": "How did Dorrington get its name?",
+        "answer": "The post office was established in 1902 and named after Rebekah Dorrington Gardner, the widow of John Gardner, who had taken over the property (then called Cold Spring Ranch) in 1868. Local lore says she still haunts the Dorrington Hotel."
+      },
+      {
+        "question": "Can you stay overnight in Dorrington?",
+        "answer": "Yes. The Dorrington Hotel offers the historic hotel plus a cottage, sleeping up to 12. The Dorrington Inn rents private A-frame cabins across Highway 4. Both are walking distance to The Lube Room."
+      }
+    ],
+    "lastVerified": "2026-05-27",
+    "draft": false
+  },
+
+  // White Pines: drafted 2026-05-26 via scripts/draft-town-content.ts.
+  // draft: true — banner + noindex + excluded from sitemap until Rob reviews on preview.
+  "white-pines": {
+    "slug": "white-pines",
+    "townName": "White Pines",
+    "metaTitle": "White Pines Events & Lake Guide | Hwy 4 Events",
+    "metaDescription": "What's happening at White Pines Lake, the Logging Museum, and the Arnold Rim Trail. Free events guide for the Hwy 4 corridor, updated daily.",
+    "h1": "White Pines: the lake, the mill town, and what's actually here",
+    "subhead": "Just below Arnold, off Blagen Road. Locals will correct you that it's not Arnold.",
+    "introTeaser": "White Pines is the 26-acre county lake and old Blagen Mill site off Blagen Road, sharing a ZIP with Arnold but operating as its own residential pocket and the corridor's main free-recreation hub.",
+    "intro": [
+      "White Pines started as a company town in 1938 when Frank Blagen moved his lumber mill here from Calpine. The mill closed in 1962 and was dismantled in 1966. American Forest Products dammed San Antonio Creek to make the lake, planning a subdivision that never quite happened.",
+      "The Calaveras County Water District took over the lake and land in 1977. Today the White Pines Park Committee runs the park under lease from CCWD, and the lake is the free, dog-friendly alternative to driving up to Big Trees or down to Murphys. Sandy beaches, disc golf, a playground, a softball field, and a stocked rainbow trout fishery sit on what used to be a mill pond.",
+      "Postal address says Arnold. Locals will tell you it isn't. Both things are true."
+    ],
+    "personaNotes": [
+      "If you're hosting guests at a vacation rental in Arnold and want a free, walkable spot to send them with kids: White Pines Lake has the playground and sandy beach. Pack a picnic, no entry fee.",
+      "If you're planning a day trip from the valley or the Bay and want something other than wine tasting: the Sierra Nevada Logging Museum sits right at the park and tells the Blagen Mill story. Free, low-key, kid-tolerable.",
+      "If you're a parent looking for somewhere the 4-year-old and the 9-year-old both work: disc golf for the older one, the playground and shallow beach for the younger one, all in the same parking lot.",
+      "If you're a hiker who hasn't done the Arnold Rim Trail yet: the White Pines trailhead is one of the main access points. San Antonio Falls is on this stretch.",
+      "If you're trying to figure out where to drop the dog: leashed dogs are welcome at the park. Most of Arnold's eat-and-drink spots tolerate them on patios, but the lake itself is the easy answer."
+    ],
+    "worthKnowing": [
+      "White Pines and Arnold share a ZIP code (95223) but they're different places. The hamlet sits off Blagen Road, named after Frank Blagen of the mill.",
+      "The lake is 26 acres, formed by a dam originally built in 1880 for the mill pond. Calaveras County Water District has owned it since 1977.",
+      "Fishing: rainbow trout (stocked) and bass. California fishing license required for ages 16+.",
+      "Disc golf is free and uncrowded. The course runs through the park.",
+      "Sierra Nevada Logging Museum is on-site at the park. It tells the Blagen Mill story, which is the reason this town exists at all.",
+      "The Arnold Rim Trail has one of its main trailheads here. San Antonio Falls is a viewpoint along this stretch.",
+      "The park has picnic tables, BBQ pits, a playground, a softball field, and a volleyball court. Dog-friendly on leash.",
+      "Ebbetts Pass Moose Lodge #1123 is on Blagen Road in White Pines. Dinners, fundraisers, community events.",
+      "No restaurants or coffee in White Pines proper. For food, you're going into Arnold (Heart & Soul, Giant Burger, Bistro Espresso) or Dorrington (The Lube Room).",
+      "The mill closed in 1962 and was dismantled in 1966. The planned subdivision that the lake was supposed to anchor was never completed."
+    ],
+    "faqs": [
+      {
+        "question": "Is White Pines the same as Arnold?",
+        "answer": "No. They share a ZIP code (95223) and most directions group them together, but White Pines is a separate hamlet off Blagen Road, founded in 1938 as a mill town for Frank Blagen's lumber operation. Locals will correct you on this."
+      },
+      {
+        "question": "What is there to do at White Pines Lake?",
+        "answer": "Swimming on sandy beaches, fishing for stocked rainbow trout and bass, disc golf, picnicking with BBQ pits, a playground, a softball field, and volleyball. The Arnold Rim Trail has a trailhead here, and the Sierra Nevada Logging Museum is on-site. Dogs are welcome on leash. No entry fee."
+      },
+      {
+        "question": "Do I need a fishing license at White Pines Lake?",
+        "answer": "Yes. California requires a state fishing license for anyone 16 or older. The lake is stocked with rainbow trout and also holds bass."
+      },
+      {
+        "question": "Where do I eat near White Pines?",
+        "answer": "There's nothing in White Pines itself. The closest food is in Arnold, about two minutes away: Heart & Soul Country Kitchen for breakfast, Giant Burger for a classic burger and shake, Bistro Espresso for coffee, or Sarafina's and Kalamata for dinner. The Lube Room Saloon in Dorrington is about 10 minutes east."
+      },
+      {
+        "question": "Who runs White Pines Park?",
+        "answer": "The White Pines Park Committee operates the park under a lease from the Calaveras County Water District, which has owned the lake and surrounding land since 1977."
+      }
+    ],
+    "lastVerified": "2026-05-27",
+    "draft": false
+  },
 };
 
 export function getTownContent(slug: string): TownContent | null {

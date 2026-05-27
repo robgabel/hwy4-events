@@ -146,7 +146,8 @@ interface TownContent {
   metaDescription: string; // 150-160 chars, action-oriented, hyperlocal
   h1: string;              // page H1, ~50-70 chars, can be question-form
   subhead: string;         // single line under H1
-  intro: string[];         // 2-3 paragraphs, 300-500 words TOTAL across the array
+  introTeaser: string;     // 1-2 sentences, above-the-fold, ALWAYS visible. Highest AEO weight. Snippet engines often quote the first ~1500 chars. Pack named entities + falsifiable specifics into this sentence.
+  intro: string[];         // 2-3 paragraphs, 300-500 words TOTAL across the array. Rendered inside a "Read more" toggle.
   personaNotes: string[];  // 3-6 "if you're..." bullets, persona-targeted
   worthKnowing: string[];  // 5-10 falsifiable local facts
   faqs: { question: string; answer: string }[]; // 3-5 town-specific Q&As, answers ≤ 60 words

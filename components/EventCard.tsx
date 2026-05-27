@@ -1,5 +1,6 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
-import { generateEventSlug } from "@/lib/slugs";
+import { generateEventSlug, townSlug } from "@/lib/slugs";
+import { getTownContent } from "@/app/towns/town-content";
 import {
   parseDate,
   formatShortWeekday,
@@ -115,10 +116,11 @@ export default function EventCard({
 
   const accentColor = CATEGORY_ACCENT_COLORS[event.category];
 
+  const townHasPage = getTownContent(townSlug(event.town)) !== null;
+
   return (
-    <Link href={`/events/${slug}`} className="block">
     <article
-      className={`card-warm group relative flex gap-4 overflow-hidden rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 sm:p-5 ${
+      className={`card-warm group relative flex gap-4 overflow-hidden rounded-xl border p-4 transition-all duration-200 hover:-translate-y-0.5 sm:p-5 [&_*]:pointer-events-none [&_a]:pointer-events-auto ${
         isUpNext
           ? "border-earth/20 bg-white ring-1 ring-earth/10"
           : isPrivate
@@ -127,6 +129,14 @@ export default function EventCard({
       }`}
       style={{ borderLeftWidth: "4px", borderLeftColor: accentColor }}
     >
+      <Link
+        href={`/events/${slug}`}
+        aria-label={event.name}
+        className="absolute inset-0 z-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pine"
+      >
+        <span className="sr-only">{event.name}</span>
+      </Link>
+
       {/* Date block */}
       <div
         className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-lg py-2.5 ${
@@ -325,7 +335,17 @@ export default function EventCard({
                 d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
               />
             </svg>
-            {event.venue_name}, {event.town}
+            {event.venue_name},{" "}
+            {townHasPage ? (
+              <Link
+                href={`/towns/${townSlug(event.town)}`}
+                className="relative z-20 underline decoration-stone-light/60 underline-offset-2 hover:text-pine hover:decoration-pine"
+              >
+                {event.town}
+              </Link>
+            ) : (
+              event.town
+            )}
           </span>
 
           {timeRange && (
@@ -382,6 +402,5 @@ export default function EventCard({
         </div>
       </div>
     </article>
-    </Link>
   );
 }

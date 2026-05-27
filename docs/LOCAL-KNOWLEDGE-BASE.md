@@ -31,12 +31,12 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 | Name | Type | Details | Persona Fit | Source |
 |------|------|---------|-------------|--------|
 | Heart & Soul Country Kitchen | Farm-to-table Southern comfort | Owner: Connor Davis. Thu–Mon 7am–2pm (breakfast 7–11am, lunch 11am–2pm). Closed Tue–Wed. | Gary, Rob | [facebook.com/Heart-Soul-country-kitchen](https://www.facebook.com/p/Heart-Soul-country-kitchen-100091650326693/); [calaverasenterprise.com](https://www.calaverasenterprise.com/articles/community/heart-soul-country-kitchen/) |
-| Giant Burger | Classic roadside diner | Since 1968. Wed–Sun 11am–7pm; closed Mon–Tue. Milkshakes, burgers, giant carved bear out front. Same family ownership since 2007. Local institution. | Everyone | [giantburgerarnold.com](https://giantburgerarnold.com/) |
+| Giant Burger | Classic roadside diner | Since 1968. Wed–Sun 11am–7pm; closed Mon–Tue. Milkshakes, burgers, giant carved bear out front. Same family ownership since 2007. Local institution. **Insider tip: the breakfast burritos.** Not on the marquee, but locals order them. | Everyone | [giantburgerarnold.com](https://giantburgerarnold.com/); [Rob, 2026-05-26 — breakfast burrito tip] |
 | Sarafina's Italian Kitchen | Italian | 794 Hwy 4. (209) 795-9858. Wed–Sun 5pm–9pm. Reservations recommended. | Rob, date night | [sarafinasitaliankitchen.com](https://sarafinasitaliankitchen.com/) |
 | Sierra House Pub & Eatery | Pub/sandwiches + craft beer | 1051 Hwy 4. (209) 813-7018. Hours fluctuate seasonally — check ahead. Cuban, Mushroom Reuben, kid's menu. | Dave, Rob | [sierrahouseofarnold.com](https://sierrahouseofarnold.com/) |
-| Snowshoe Brewery | Microbrewery + restaurant | Overlooks Meadowmont at 2050 Hwy 4. Apricot Wheat Ale won gold. Ownership changed in recent years (exact date unverified); locals report quality decline since. Was a community anchor; now tourists mostly. Branded as "Snowshoe Brewery" (no longer "Brewing Company"). | Was: everyone. Now: tourists mostly | [thesnowshoebrewery.com](https://thesnowshoebrewery.com/) |
+| Snowshoe Brewery | Microbrewery + restaurant | Overlooks Meadowmont at 2050 Hwy 4. Apricot Wheat Ale won gold. Ownership changed in recent years (exact date unverified); the long-time community-anchor energy has shifted, and the regulars haven't all come back. Still draws tourists. Branded as "Snowshoe Brewery" (no longer "Brewing Company"). | Tourist-leaning today | [thesnowshoebrewery.com](https://thesnowshoebrewery.com/) |
 | Posterity Ciderworks | Craft cidery (opened Arnold 2026) | 1771 Hwy 4 Suite F, Arnold. Owners: Brendan & Kris Barnard (husband-wife; Brendan is head cidermaker). Second tasting room (HQ in Mokelumne Hill). Natural ciders, meads, co-ferments — fermented dry, no added sweeteners. Locally foraged fruit + reclaimed Gold Country orchards. Featured on James Beard and Michelin Star–restaurant beverage lists. | Rob, Mia, Karen's guests | [posterityciderworks.com](https://posterityciderworks.com/pages/location); [Pine Tree](https://new.thepinetree.net/?p=198497) |
-| Hinterhaus Distilling | Craft distillery + tasting room | 925 Hwy 4, Arnold. Owners: **Nate & Bonnie Randall** (husband-wife co-founders). North Grove Vodka — Country Winner USA + Gold, 2024 World Vodka Awards. South Grove Gin — Double Gold + 95 pts + Best Gin, 2023 Sunset International Spirits Competition. Tasting room with production views. | Rob, Karen's guests | [hinterhausdistilling.com](https://www.hinterhausdistilling.com/); [craftspiritsmag.com](https://craftspiritsmag.com/2024/01/24/hinterhaus-earns-best-varietal-vodka-in-u-s-at-world-vodka-awards/) |
+| Hinterhaus Distilling | Craft distillery + tasting room | 925 Hwy 4, Arnold. Owners: **Nate & Bonnie Randall** (husband-wife co-founders). North Grove Vodka — Country Winner USA + Gold, 2024 World Vodka Awards. South Grove Gin — Double Gold + 95 pts + Best Gin, 2023 Sunset International Spirits Competition. Tasting room with production views. **Locals' tip:** unless it's a busy weekend, they serve a flight of three mini-cocktails as a taster, and they're fantastic. The merch wall is also legit, both Hinterhaus-branded and unbranded gear of unusually high quality. | Rob, Karen's guests | [hinterhausdistilling.com](https://www.hinterhausdistilling.com/); [craftspiritsmag.com](https://craftspiritsmag.com/2024/01/24/hinterhaus-earns-best-varietal-vodka-in-u-s-at-world-vodka-awards/); [Rob, 2026-05-26 — mini-cocktail flight + merch] |
 | El Vaquero Authentic Mexican | Mexican | 925 Hwy 4 (same complex as Hinterhaus). (209) 795-3303. Mon–Fri 11am–8:30pm; weekend hours vary. Deck overlooking Hwy 4. Dog-friendly. | Jen, families | [yelp.com/biz/el-vaquero-authentic-mexican-arnold](https://www.yelp.com/biz/el-vaquero-authentic-mexican-arnold) |
 | Kalamata Mediterranean | Greek/Mediterranean | 1224 Oak Circle. (209) 813-7060. Mon 4–8pm, Tue closed, Wed 4–8pm, Thu–Sat 4–9pm, **Sun 4–8pm**. Moussaka, lamb chops, flaming cheese. | Rob, date night | [kalamataarnold.com](https://www.kalamataarnold.com/) |
 | Wassup Dawg | Hot dog cart | Mon–Fri 11am until sold out (~2–2:30pm). Now at **Meadowmont Pharmacy parking lot** (front of Hwy 4) — moved from Grizzly Plaza. Owners: Jeff & Caroline. $10 combo. | Dave, quick lunch | [facebook.com/WDawggy](https://www.facebook.com/WDawggy/) |
@@ -46,7 +46,7 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 
 | Name | Type | Details | Source |
 |------|------|---------|--------|
-| Bistro Espresso | Coffee shop/bakery/community hub | Since 2005. Owner: Larry Geiger (family-owned, also runs Bistro Creamery). Organic fair-trade, homemade pastries. Live music in summer. Meadow for events. THE community gathering spot. | [calaverasenterprise.com](https://www.calaverasenterprise.com/articles/business/arnold-bistro-brews-up-more-than-coffee/) |
+| Bistro Espresso | Coffee shop/bakery/community hub | Since 2005. Owner: Larry Geiger (family-owned, also runs Bistro Creamery). Organic fair-trade, homemade pastries, **homemade ketchup**. Live music in summer. Meadow for events. THE community gathering spot. The kind of place run by people who actually care. | [calaverasenterprise.com](https://www.calaverasenterprise.com/articles/business/arnold-bistro-brews-up-more-than-coffee/); [Rob, 2026-05-26 — ketchup + care] |
 | Day-O Espresso | Drive-thru coffee hut | 10 drive-thru locations across the Sierra Foothills. Voted Best Cup of Coffee 16 years in a row. | [instagram.com/dayoespresso](https://www.instagram.com/dayoespresso/) |
 
 **Markets & Shopping**
@@ -55,8 +55,9 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 |------|------|---------|--------|
 | Big Trees Market | Full grocery | 2182 Hwy 4 #6. (209) 795-3868. Hours per Yelp: Mon–Thu 8am–7pm; Fri–Sat trend later. Excellent butcher/bakery/deli. Senior discount Tue–Wed (5%) — [unverified, recommend phone confirmation]. | [yelp.com/biz/big-trees-market](https://www.yelp.com/biz/big-trees-market) |
 | Arnold Discount Market | Discount grocery | Family-owned. Discounted name brands. [unverified — no online presence] | — |
-| Arnold Ace Home Center | Hardware | Since 1975 (founded by Kearns family; currently owned by Hauer family). Dave's spot. | [acehardware.com/store-details/11199](https://www.acehardware.com/store-details/11199); [Pine Tree](https://new.thepinetree.net/?p=192591) |
-| Grizzly Station | Gas/mini mart | 6am–9pm. Propane, lottery. [unverified — no website] | — |
+| Arnold Ace Home Center | Hardware + surprisingly good home/decor | Since 1975 (founded by Kearns family; currently owned by Hauer family). Dave's spot. **Home section is much better than you'd guess:** locals come here for wall art, seasonal decor, and gift items, not just hardware. | [acehardware.com/store-details/11199](https://www.acehardware.com/store-details/11199); [Pine Tree](https://new.thepinetree.net/?p=192591); [Rob, 2026-05-26 — home/decor section] |
+| Grizzly Station (Chevron) | Gas/mini mart | 1075 Hwy 4, Arnold. 6am–9pm. Propane, lottery. **Made-to-order sandwiches inside that are genuinely good** (not the sad warming-tray kind). | [yelp.com/biz/grizzly-station-arnold](https://www.yelp.com/biz/grizzly-station-arnold); [Rob, 2026-05-26 — sandwich tip] |
+| Rocket (76) | Gas station + convenience | 1297 Hwy 4, Arnold. Daily 5am–11pm. Krispy Krunchy Chicken, coffee, baked goods. **Locals call this the best gas station on the 4.** Has a small wine corner, and a small selection of fishing lures, both of which work better than any logic suggests. | [76.com — Rocket 5264](https://www.76.com/station/U76-ROCKET-5264-0000915283/); [Rob, 2026-05-26 — wine + lures + best-on-the-4] |
 
 **Bars**
 
@@ -68,7 +69,7 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 
 | Name | Type | Details | Source |
 |------|------|---------|--------|
-| Sequoia Woods Country Club | 18-hole golf + restaurant | Opened 1965 (Bob E. Baldock design). Par 70, 5,600 yards. Award-winning restaurant, dancing, weddings. | [sequoiawoods.com](https://www.sequoiawoods.com/) |
+| Sequoia Woods Country Club | 18-hole golf + restaurant + lounge | 1000 Cypress Point Dr, Arnold. (209) 795-1000. Opened 1965 (Bob E. Baldock design). Par 70, 5,600 yards. Green fairways among huge pines. **The restaurant and lounge are open to the public, not just members.** Mon–Tue pub nights 4:30–7pm. Locals' go-to: lunch on the patio in summer overlooking the course, cozy lounge in winter. (Rob says: if this gets too busy, he's deleting this from the site.) | [sequoiawoods.com](https://www.sequoiawoods.com/); [sequoiawoods.com/menu_and_reservations](https://www.sequoiawoods.com/menu_and_reservations); [Rob, 2026-05-26 — locals' tip] |
 | Meadowmont Golf Course | CLOSED (2011) | Property for sale. Community efforts to convert to park/nature preserve. | [mymotherlode.com](https://mymotherlode.com/news/local/3483343/push-to-turn-meadowmont-golf-course-into-nature-preserve-park.html) |
 | Calaveras Big Trees State Park | State park | 4 miles NE of Arnold. Giant sequoias publicized after Augustus T. Dowd's 1852 discovery. North Grove Loop (~1.5 mi, easy, stroller-accessible). South Grove (longer, moderate). ~129 campsites. Ranger talks in summer. | [parks.ca.gov](https://www.parks.ca.gov/?page_id=30567) |
 | White Pines Lake | High-country lake | Sandy beaches, disc golf, playground, hiking trail. Rainbow trout (stocked) + bass. Dog-friendly. (Specific acreage unverified.) | [whitepinespark.com/activities](https://whitepinespark.com/activities/) |
@@ -91,22 +92,92 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 | Website | blsha.com | [blsha.com](https://blsha.com/) |
 | Facebook | Blue Lake Springs Recreation (seasonal rec programs) | [local knowledge] |
 
----
-
-### Dorrington (~4,500 ft)
-
-| Name | Type | Details | Source |
-|------|------|---------|--------|
-| The Lube Room Saloon | Bar/restaurant | See Arnold listing. The social hub for Dorrington and greater Arnold area. | [theluberoom.com](https://www.theluberoom.com/) |
-| The Dorrington Hotel | Historic hotel + restaurant | Originally known as Cold Spring Ranch, built by John Gardner in 1852. Current building rebuilt in the early 1880s after the original burned. Currently operating as a historic restaurant and lodging. | [thedorringtonhotel.com](https://thedorringtonhotel.com/); [calaverashistory.org/dorrington](https://www.calaverashistory.org/dorrington) |
+**Note: BLS is the biggest HOA with facilities in the Arnold area, but it's not the only one.** Big Trees Village (Camp Connell, ~5,000 ft) and Lakemont Pines (Arnold, on Tanner Lake) both have optional rec memberships with their own seasonal amenities. See sections below.
 
 ---
 
-### Camp Connell (~4,700 ft)
+### Big Trees Village (HOA community, Camp Connell, ~5,000 ft)
+
+A separate gated/HOA community about 7 miles east of Arnold, at higher elevation. Despite the name, it's a Camp Connell address, not an Arnold one. Receives roughly twice the snow that Arnold does.
+
+| Fact | Detail | Source |
+|------|--------|--------|
+| Recreation Center | 1211 Sierra Pkwy, Camp Connell. Optional rec association membership for residents. | [bigtreesvillage.org](https://www.bigtreesvillage.org/); [yelp.com/biz/big-trees-village-property-owners-assn-camp-connell](https://www.yelp.com/biz/big-trees-village-property-owners-assn-camp-connell) |
+| Rec amenities | 2 swimming pools, 2 tennis courts, shuffleboard, horseshoes, athletic field, snack bar, game area, playground, picnic & BBQ areas. **Open Memorial Day to Labor Day.** | [bigtreesvillage.org/recreation-center-activity-page](https://www.bigtreesvillage.org/recreation-center-activity-page) |
+| Dues | ~$150/year (rec association, optional) | [barrywardrealty.com — Big Trees Village](https://barrywardrealty.com/about-arnold-california/communities/big-trees-village/) |
+| Elevation note | ~5,000 ft; roughly 2× the snowfall of Arnold | [barrywardrealty.com — Big Trees Village](https://barrywardrealty.com/about-arnold-california/communities/big-trees-village/) |
+
+---
+
+### Lakemont Pines (HOA community, Arnold, ~4,000 ft)
+
+Smaller HOA community in Arnold proper, centered on Tanner Lake.
+
+| Fact | Detail | Source |
+|------|--------|--------|
+| Setting | Private community on Tanner Lake, off Hwy 4 in Arnold. Year-round lake access, catch-and-release fishing outside the beach area. | [lakemontpines.org](https://www.lakemontpines.org/) |
+| Seasonal amenities | Snack shack, recreational equipment, family summer program. **Open Father's Day weekend through Labor Day.** | [lakemontpines.org](https://www.lakemontpines.org/) |
+
+---
+
+### Dorrington (~4,760 ft | Mile Marker 5.2/55.8)
+
+Tiny historic-stop town between Arnold and Bear Valley. Originally **Cold Spring Ranch** (named for an ice-cold spring); property transferred to John Gardner and William A. Gibson in January 1868. Renamed when the post office was established in 1902, after **Rebekah Dorrington Gardner**, John's widow.
 
 | Name | Type | Details | Source |
 |------|------|---------|--------|
-| Camp Connell General Store | General store/gas/bar & grill | Founded 1928 by Jack and Noreen Connell. One of the oldest Chevron stations in California (frequently miscalled "the oldest"). Gas, groceries, camping supplies, gifts, rental cabins, campground. The Beer Garden: live music Fri (indoor, winter) & Sat (outdoor, summer). Community gathering point. | [Pine Tree](https://new.thepinetree.net/?p=33757); [scenic4.org](https://scenic4.org/the-route/points-of-interest/camp-connell/) |
+| The Dorrington Hotel | Historic hotel + restaurant | 3431 Hwy 4. Built late 1880s by John Gardner after the original 1852 building burned. Operates as historic lodging (hotel + cottage, up to 12 guests) with a downstairs restaurant. Legend has it Rebekah Dorrington Gardner haunts the property. | [thedorringtonhotel.com](https://thedorringtonhotel.com/); [scenic4.org/dorrington](https://scenic4.org/the-route/points-of-interest/dorrington/); [yelp.com/biz/the-dorrington-hotel-dorrington](https://www.yelp.com/biz/the-dorrington-hotel-dorrington) |
+| The Lube Room Saloon | Bar + restaurant + live music + beer garden | 3431 Hwy 4 (next to Dorrington Hotel; postal Dorrington, often described as "Arnold area"). The social hub for Dorrington and the greater upper-corridor crowd. Dog-friendly patio. Family-friendly. Originally an outdoor grease rack; switched from grease to beer in 1977 — hence "The Lube Room." **Food is actually good, not afterthought:** fish & chips is a big 11 oz filet, chili comes with an amazing slice of cornbread, burgers require two hands. **Big beer garden with a kid-friendly yard, horseshoes when there's no live music.** Live music runs weekends with a named summer concert series (Poison Oakies, VC3 Band, Flashback, The Delta Chicks, Earthtones). Very fun vibe; worth the drive even if you live down in Murphys. | [theluberoom.com](https://www.theluberoom.com/); [Rob, 2026-05-26 — menu specifics, beer garden, horseshoes, vibe] |
+| Dorrington area context | Geography | Two miles west of **Camp Connell**, and directly adjacent to the **Big Trees Village** residential community (which is technically a Camp Connell address at ~5,000 ft). Dorrington full-timers and Big Trees Village residents share the same after-work spots, fire station, and grocery runs. | [scenic4.org/dorrington](https://scenic4.org/the-route/points-of-interest/dorrington/); [bigtreesvillage.org](https://www.bigtreesvillage.org/); [Rob, 2026-05-26 — community link] |
+| Ebbetts Pass Fire District — Station 2 | Volunteer fire station | 5510 Meko Drive (in Big Trees Village, postal Camp Connell/Dorrington). Battalion #2 of EPFD. **Volunteer staffing.** Covers Dorrington, Big Trees Village, and Camp Connell. | [epfd.org/station-2](https://www.epfd.org/station-2); [epfd.org/fire-station-locations](https://www.epfd.org/fire-station-locations) |
+| Dorrington Inn | Cabin rentals | Across Hwy 4 from the Dorrington Hotel. Private A-frame cabins for rent. | [scenic4.org/dorrington](https://scenic4.org/the-route/points-of-interest/dorrington/) |
+| General store | Small general store | Convenience-level: snacks, basics, traveler supplies. | [scenic4.org/dorrington](https://scenic4.org/the-route/points-of-interest/dorrington/) |
+
+**Historical role:** Served as a depot for stockmen, a toll stop on the road to Ebbetts Pass (1890s through 1910), and a summer resort for visitors heading to what is now Calaveras Big Trees State Park.
+
+---
+
+### Camp Connell (~4,760 ft | Mile Marker 5.8/55.2)
+
+Single-anchor crossroads between Arnold and Bear Valley, two miles east of Dorrington. The town and its general store are essentially the same thing.
+
+| Name | Type | Details | Source |
+|------|------|---------|--------|
+| Camp Connell General Store | General store / Chevron / cafe / Beer Garden | 4036 Old Hwy 4. (209) 795-1121. Founded 1928 by Jack and Noreen Connell (who had purchased the Dorrington Hotel property a few years earlier). The store has groceries, gifts, beer, wine, a cafe, the on-site Chevron station, and the Beer Garden out back along San Antonio Creek (~1.48 acres, stage, summer crowds up to ~300). Live music: Saturday nights in the Beer Garden during summer; Fridays indoors during the colder months. | [campconnellgeneralstore.com](https://www.campconnellgeneralstore.com/); [scenic4.org/camp-connell](https://scenic4.org/the-route/points-of-interest/camp-connell/); [gocalaveras.com/business/food-drink/camp-connell-general-store](https://www.gocalaveras.com/business/food-drink/camp-connell-general-store/) |
+
+**Highway alignment note:** Hwy 4 was realigned in the 1960s to accommodate the new Bear Valley resort and Big Trees Village development. Portions of the **old highway** remain on the store property as its two access points — that's why the store address is "Old Hwy 4."
+
+**Post office history:** Post office moved to the store in 1934 and became "Camp Connell Station." The Chevron has been operating since the store opened in 1928 — often called the oldest continuously operating Chevron in California (frequently mis-claimed as "the oldest"; "one of the oldest" is the verifiable phrasing).
+
+---
+
+### Avery (~3,389 ft | Pop 636 | ZIP 95224)
+
+CDP between Murphys and Arnold, named after **George J. Avery**, first postmaster (post office established 1885, closed 1943, re-established 1949). Sometimes called the gateway to Calaveras Big Trees State Park since it's the last stop before Arnold.
+
+| Name | Type | Details | Source |
+|------|------|---------|--------|
+| The Historic Avery Hotel | Historic hotel + events venue | (209) 517-2465. Oldest continuously operating hotel in Calaveras County. Built 1851 as a family home by Joseph & Sarah Goodell of Maine; began operating as a hotel in 1853 under Peter & Nancy Avery (also of Maine). Originally known as the **"Half Way House"** for its midway location between the Murphys gold fields and the giant sequoias now in Calaveras Big Trees. Purchased and extensively renovated by the **Gotelli family in 1992**. Today: two bars, billiards room, formal dining room, artisan wood stage, pavilion. Accommodates 23+ overnight guests and up to 150 for events. | [averyhotelca.com/about-us](https://averyhotelca.com/about-us); [en.wikipedia.org/wiki/Avery,_California](https://en.wikipedia.org/wiki/Avery,_California); [hmdb.org/m.asp?m=20626](https://www.hmdb.org/m.asp?m=20626) |
+| Howard's Mystic Saloon | Bar (drinks only, no food) | 4529 CA-4, Avery. Curt & Tana Howard lease the property of the former Avery Saloon. **Black goth / mystic aesthetic year-round** (not just Halloween). **Skull chandeliers** and themed decor throughout. **Table shuffleboard, pool tables, juke box.** Occasional live music. **Drinks only, no food.** Worth a stop and a drink for the vibe. | [mysticsaloon.com](https://mysticsaloon.com/); [calaverasenterprise.com — Longtime bar owners to open Mystic Saloon](https://www.calaverasenterprise.com/articles/local/longtime-bar-owners-to-open-mystic-saloon/); [Rob, 2026-05-26 — aesthetic detail, shuffleboard/pool/juke, no food] |
+| Day-O Espresso (Avery) | Drive-thru coffee + fancy toasts | 68 Avery Hotel Rd, Avery. (209) 822-3967. Drive-thru coffee, espresso, smoothies, breakfast. **Locals' tip:** the fancy toasts are the move (cinnamon toast on thick bread is the standout). One of 10 Day-O drive-thru locations across the Sierra Foothills. | [yelp.com/biz/day-o-espresso-avery](https://www.yelp.com/biz/day-o-espresso-avery); [gocalaveras.com — Day O Espresso & Smoothies](https://www.gocalaveras.com/business/food-drink/day-o-espresso-and-smoothie-2/); [dayoespresso.com](https://dayoespresso.com/); [Rob, 2026-05-26 — cinnamon toast tip] |
+| JC Power Equipment | Small-engine repair + sales | Hwy 4, Avery. Owners: **Jim & Nancy Conway**. Opened January 2019. Repairs weed eaters, snowblowers, generators, leaf blowers, chainsaws. Sells new Oregon, Briggs & Stratton, and Honda equipment + ethanol-free fuel. **This is where locals up and down the corridor take small engines for repair.** Quote from Jim: "Haven't missed a day. As a matter of fact, our biggest sales day was the first power outage. People were lined up." | [calaverasenterprise.com — JC Power Equipment brings small engine repair to Avery](https://www.calaverasenterprise.com/articles/news/jc-power-equipment-brings-small-engine-repair-to-avery/); [Rob, 2026-05-26 — go-to shop for the corridor] |
+| Rossetti's at the 19th Hole | Italian restaurant | 4462 CA-4, Avery. (209) 890-3382. Family-Italian. Opened December 2022 by Ron Sellick (Silvio Rossetti's grandson) carrying on the original Rossetti's family recipe. **CLOSED (per Yelp banner and Rob's local confirmation, May 2026).** Some aggregator listings still show Fri–Sun 3–8pm hours — those are stale. | [yelp.com/biz/rossetti-s-at-the-19th-hole-avery-2](https://www.yelp.com/biz/rossetti-s-at-the-19th-hole-avery-2) (CLOSED banner); [calaverasenterprise.com — Family legacy lives on in new Rossetti's restaurant](https://www.calaverasenterprise.com/articles/news-temp/family-legacy-lives-on-in-new-rossettis-restaurant/); [Rob, 2026-05-26 — confirmed closed locally] |
+
+**Geography note:** Avery sits on State Route 4 inside the Stanislaus National Forest gateway. About 15 minutes east of Murphys, ~10 minutes west of Arnold. The community is small (45 employees across 13 businesses per state stats) and bar/coffee-shop heavy.
+
+---
+
+### White Pines (~3,880 ft | Mile Marker 0/61 | Shares ZIP with Arnold)
+
+Not Arnold, but adjacent — "a little hamlet adjacent to the town of Arnold off of Blagen Road." Founded **1938** when Frank Blagen moved his lumber mill to the site from Calpine. The mill closed in 1962 and was dismantled in 1966. American Forest Products then dammed San Antonio Creek to create a 26-acre lake, intending to attract homebuyers to a planned subdivision that was never completed. In **1977**, the Calaveras County Water District (CCWD) acquired the lake and surrounding land for domestic water supply and recreational leasing.
+
+| Name | Type | Details | Source |
+|------|------|---------|--------|
+| White Pines Park & Lake | County park + lake | 1965 Blagen Rd, Arnold (postal). 26-acre dammed lake (former mill pond, dam built 1880). Picnic tables, BBQ pits, walking paths, playground, softball field, volleyball court, disc golf. Rainbow trout (stocked) + bass. Dog-friendly. Operated by the White Pines Park Committee under lease from CCWD. | [whitepinespark.com](https://whitepinespark.com/); [gocalaveras.com/business/outdoor-recreation/white-pines-lake](https://www.gocalaveras.com/business/outdoor-recreation/white-pines-lake/); [scenic4.org/white-pines](https://scenic4.org/the-route/points-of-interest/white-pines/) |
+| Sierra Nevada Logging Museum | Museum | On-site at White Pines Park. Tells the Blagen Mill and Sierra logging story. | [scenic4.org/white-pines](https://scenic4.org/the-route/points-of-interest/white-pines/) |
+| Arnold Rim Trail (White Pines trailhead) | Trail access | One of the main trailheads for the Arnold Rim Trail. San Antonio Falls viewpoint accessible from this stretch. | [scenic4.org/white-pines](https://scenic4.org/the-route/points-of-interest/white-pines/); [arnoldrimtrail.org](https://arnoldrimtrail.org/) |
+
+**Local character:** Originally a company town with worker housing, post office, and school. Today it functions as a residential pocket and the area's main free-recreation hub. Disambiguation: locals will correct you that "White Pines is not Arnold," even though the two share a ZIP and most directions group them together.
 
 ---
 
@@ -573,6 +644,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 - Many restaurants close Mon–Tue (reduced traffic)
 - Holiday events in December (Murphys parade, etc.)
 - Arnold quieter midweek; weekends busy with skiers
+- **Snow line gradient (important):** From roughly Dorrington (4,760 ft) and above, you can count on at least 1–2 inches of snow on the ground throughout the winter — it accumulates and stays. At Arnold (~4,000 ft, about 1,000 ft lower), snow comes and goes between storms: ground bare, storm rolls in, snowy for a few days, melts off, repeat. Pack and plan accordingly: a Dorrington or Big Trees Village stay in January means snow boots all week; an Arnold visit might mean clear sidewalks on Wednesday and chains on Friday. [Rob, 2026-05-26 — local seasonal pattern]
 
 ### Spring (April–May)
 - Ebbetts Pass reopens (variable — sometimes April, sometimes July)
@@ -840,3 +912,11 @@ Arnold, Blue Lake Springs, Lake Mont Pines, Mill Woods, Meadowmont, Fly In Acres
 - **Cells marked `[unverified]`**: keep but treat as soft. Promote to verified when a source surfaces; demote to "removed" if disproven.
 
 *Last fact-checked end-to-end: 2026-05-25 via firecrawl + web search across all named businesses, events, orgs, and media.*
+
+*2026-05-26: Thin-town enrichment pass for Avery, White Pines, Camp Connell, Dorrington. Added primary-source coverage (Wikipedia, scenic4.org, averyhotelca.com, campconnellgeneralstore.com, gocalaveras.com, whitepinespark.com, mysticsaloon.com, calaverasenterprise.com, hmdb.org). Disambiguated The Historic Avery Hotel vs. Howard's Mystic Saloon (different buildings on Hwy 4 in Avery). Clarified Camp Connell store address ("Old Hwy 4" due to 1960s realignment for Bear Valley). Added founding dates, elevations, mile markers, and operating context for all four. Verify-or-omit standard: any unverifiable claim left out, not flagged-and-shipped.*
+
+*2026-05-26 (Rob review pass): Arnold corrections from local knowledge. Added Rocket gas station (1297 Hwy 4) as a new business with wine corner + fishing lures detail; verified address via 76.com. Added Big Trees Village and Lakemont Pines HOA sections so BLS isn't the only documented community-with-facilities. Verified Sequoia Woods restaurant/lounge is open to non-members (sequoiawoods.com/menu_and_reservations). Softened Snowshoe Brewery line per Rob's request: nudge at the ownership-change quality shift rather than calling it out directly. Layered Rob-sourced detail (Hinterhaus mini-cocktail flight + merch, Ace Hardware home/decor section, Grizzly Chevron made-to-order sandwiches, Bistro Espresso homemade ketchup + care, Giant Burger breakfast burrito secret). All Rob-sourced facts tagged [Rob, 2026-05-26] in the Source column.*
+
+*2026-05-26 (Rob review pass, Avery): Expanded Howard's Mystic Saloon detail (goth-mystic aesthetic, skull chandeliers, table shuffleboard, pool tables, juke box, drinks-only / no food). Added Day-O Espresso (Avery location: 68 Avery Hotel Rd, drive-thru + fancy toasts including cinnamon toast on thick bread). Added JC Power Equipment (Jim & Nancy Conway, opened January 2019, on Hwy 4 in Avery; small-engine repair for the whole corridor) — verified via calaverasenterprise.com. Logged Rossetti's at the 19th Hole (4462 CA-4) as CLOSED per Yelp banner + Rob's local confirmation; some aggregator listings still show Fri-Sun hours but those are stale. Rob-sourced facts tagged [Rob, 2026-05-26].*
+
+*2026-05-26 (Rob review pass, Dorrington): Materially expanded The Lube Room row with real food detail (11 oz fish & chips, chili with cornbread, two-handed burgers) and the beer-garden-with-horseshoes context — corrects the original draft's "drinks and atmosphere" framing. Added Dorrington / Camp Connell / Big Trees Village proximity context (they share fire station, after-work spots, grocery runs). Verified Ebbetts Pass Fire District Station 2 at 5510 Meko Drive via epfd.org/station-2 — added as a sourced KB row. Added a Winter snow-line gradient note to Seasonal Rhythms: from Dorrington (4,760 ft) and above, ground holds 1-2+ inches all winter; Arnold (~1,000 ft lower) sees snow come and go between storms.*
