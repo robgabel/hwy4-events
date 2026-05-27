@@ -31,12 +31,12 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 | Name | Type | Details | Persona Fit | Source |
 |------|------|---------|-------------|--------|
 | Heart & Soul Country Kitchen | Farm-to-table Southern comfort | Owner: Connor Davis. Thu–Mon 7am–2pm (breakfast 7–11am, lunch 11am–2pm). Closed Tue–Wed. | Gary, Rob | [facebook.com/Heart-Soul-country-kitchen](https://www.facebook.com/p/Heart-Soul-country-kitchen-100091650326693/); [calaverasenterprise.com](https://www.calaverasenterprise.com/articles/community/heart-soul-country-kitchen/) |
-| Giant Burger | Classic roadside diner | Since 1968. Wed–Sun 11am–7pm; closed Mon–Tue. Milkshakes, burgers, giant carved bear out front. Same family ownership since 2007. Local institution. | Everyone | [giantburgerarnold.com](https://giantburgerarnold.com/) |
+| Giant Burger | Classic roadside diner | Since 1968. Wed–Sun 11am–7pm; closed Mon–Tue. Milkshakes, burgers, giant carved bear out front. Same family ownership since 2007. Local institution. **Insider tip: the breakfast burritos.** Not on the marquee, but locals order them. | Everyone | [giantburgerarnold.com](https://giantburgerarnold.com/); [Rob, 2026-05-26 — breakfast burrito tip] |
 | Sarafina's Italian Kitchen | Italian | 794 Hwy 4. (209) 795-9858. Wed–Sun 5pm–9pm. Reservations recommended. | Rob, date night | [sarafinasitaliankitchen.com](https://sarafinasitaliankitchen.com/) |
 | Sierra House Pub & Eatery | Pub/sandwiches + craft beer | 1051 Hwy 4. (209) 813-7018. Hours fluctuate seasonally — check ahead. Cuban, Mushroom Reuben, kid's menu. | Dave, Rob | [sierrahouseofarnold.com](https://sierrahouseofarnold.com/) |
-| Snowshoe Brewery | Microbrewery + restaurant | Overlooks Meadowmont at 2050 Hwy 4. Apricot Wheat Ale won gold. Ownership changed in recent years (exact date unverified); locals report quality decline since. Was a community anchor; now tourists mostly. Branded as "Snowshoe Brewery" (no longer "Brewing Company"). | Was: everyone. Now: tourists mostly | [thesnowshoebrewery.com](https://thesnowshoebrewery.com/) |
+| Snowshoe Brewery | Microbrewery + restaurant | Overlooks Meadowmont at 2050 Hwy 4. Apricot Wheat Ale won gold. Ownership changed in recent years (exact date unverified); the long-time community-anchor energy has shifted, and the regulars haven't all come back. Still draws tourists. Branded as "Snowshoe Brewery" (no longer "Brewing Company"). | Tourist-leaning today | [thesnowshoebrewery.com](https://thesnowshoebrewery.com/) |
 | Posterity Ciderworks | Craft cidery (opened Arnold 2026) | 1771 Hwy 4 Suite F, Arnold. Owners: Brendan & Kris Barnard (husband-wife; Brendan is head cidermaker). Second tasting room (HQ in Mokelumne Hill). Natural ciders, meads, co-ferments — fermented dry, no added sweeteners. Locally foraged fruit + reclaimed Gold Country orchards. Featured on James Beard and Michelin Star–restaurant beverage lists. | Rob, Mia, Karen's guests | [posterityciderworks.com](https://posterityciderworks.com/pages/location); [Pine Tree](https://new.thepinetree.net/?p=198497) |
-| Hinterhaus Distilling | Craft distillery + tasting room | 925 Hwy 4, Arnold. Owners: **Nate & Bonnie Randall** (husband-wife co-founders). North Grove Vodka — Country Winner USA + Gold, 2024 World Vodka Awards. South Grove Gin — Double Gold + 95 pts + Best Gin, 2023 Sunset International Spirits Competition. Tasting room with production views. | Rob, Karen's guests | [hinterhausdistilling.com](https://www.hinterhausdistilling.com/); [craftspiritsmag.com](https://craftspiritsmag.com/2024/01/24/hinterhaus-earns-best-varietal-vodka-in-u-s-at-world-vodka-awards/) |
+| Hinterhaus Distilling | Craft distillery + tasting room | 925 Hwy 4, Arnold. Owners: **Nate & Bonnie Randall** (husband-wife co-founders). North Grove Vodka — Country Winner USA + Gold, 2024 World Vodka Awards. South Grove Gin — Double Gold + 95 pts + Best Gin, 2023 Sunset International Spirits Competition. Tasting room with production views. **Locals' tip:** unless it's a busy weekend, they serve a flight of three mini-cocktails as a taster, and they're fantastic. The merch wall is also legit, both Hinterhaus-branded and unbranded gear of unusually high quality. | Rob, Karen's guests | [hinterhausdistilling.com](https://www.hinterhausdistilling.com/); [craftspiritsmag.com](https://craftspiritsmag.com/2024/01/24/hinterhaus-earns-best-varietal-vodka-in-u-s-at-world-vodka-awards/); [Rob, 2026-05-26 — mini-cocktail flight + merch] |
 | El Vaquero Authentic Mexican | Mexican | 925 Hwy 4 (same complex as Hinterhaus). (209) 795-3303. Mon–Fri 11am–8:30pm; weekend hours vary. Deck overlooking Hwy 4. Dog-friendly. | Jen, families | [yelp.com/biz/el-vaquero-authentic-mexican-arnold](https://www.yelp.com/biz/el-vaquero-authentic-mexican-arnold) |
 | Kalamata Mediterranean | Greek/Mediterranean | 1224 Oak Circle. (209) 813-7060. Mon 4–8pm, Tue closed, Wed 4–8pm, Thu–Sat 4–9pm, **Sun 4–8pm**. Moussaka, lamb chops, flaming cheese. | Rob, date night | [kalamataarnold.com](https://www.kalamataarnold.com/) |
 | Wassup Dawg | Hot dog cart | Mon–Fri 11am until sold out (~2–2:30pm). Now at **Meadowmont Pharmacy parking lot** (front of Hwy 4) — moved from Grizzly Plaza. Owners: Jeff & Caroline. $10 combo. | Dave, quick lunch | [facebook.com/WDawggy](https://www.facebook.com/WDawggy/) |
@@ -46,7 +46,7 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 
 | Name | Type | Details | Source |
 |------|------|---------|--------|
-| Bistro Espresso | Coffee shop/bakery/community hub | Since 2005. Owner: Larry Geiger (family-owned, also runs Bistro Creamery). Organic fair-trade, homemade pastries. Live music in summer. Meadow for events. THE community gathering spot. | [calaverasenterprise.com](https://www.calaverasenterprise.com/articles/business/arnold-bistro-brews-up-more-than-coffee/) |
+| Bistro Espresso | Coffee shop/bakery/community hub | Since 2005. Owner: Larry Geiger (family-owned, also runs Bistro Creamery). Organic fair-trade, homemade pastries, **homemade ketchup**. Live music in summer. Meadow for events. THE community gathering spot. The kind of place run by people who actually care. | [calaverasenterprise.com](https://www.calaverasenterprise.com/articles/business/arnold-bistro-brews-up-more-than-coffee/); [Rob, 2026-05-26 — ketchup + care] |
 | Day-O Espresso | Drive-thru coffee hut | 10 drive-thru locations across the Sierra Foothills. Voted Best Cup of Coffee 16 years in a row. | [instagram.com/dayoespresso](https://www.instagram.com/dayoespresso/) |
 
 **Markets & Shopping**
@@ -55,8 +55,9 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 |------|------|---------|--------|
 | Big Trees Market | Full grocery | 2182 Hwy 4 #6. (209) 795-3868. Hours per Yelp: Mon–Thu 8am–7pm; Fri–Sat trend later. Excellent butcher/bakery/deli. Senior discount Tue–Wed (5%) — [unverified, recommend phone confirmation]. | [yelp.com/biz/big-trees-market](https://www.yelp.com/biz/big-trees-market) |
 | Arnold Discount Market | Discount grocery | Family-owned. Discounted name brands. [unverified — no online presence] | — |
-| Arnold Ace Home Center | Hardware | Since 1975 (founded by Kearns family; currently owned by Hauer family). Dave's spot. | [acehardware.com/store-details/11199](https://www.acehardware.com/store-details/11199); [Pine Tree](https://new.thepinetree.net/?p=192591) |
-| Grizzly Station | Gas/mini mart | 6am–9pm. Propane, lottery. [unverified — no website] | — |
+| Arnold Ace Home Center | Hardware + surprisingly good home/decor | Since 1975 (founded by Kearns family; currently owned by Hauer family). Dave's spot. **Home section is much better than you'd guess:** locals come here for wall art, seasonal decor, and gift items, not just hardware. | [acehardware.com/store-details/11199](https://www.acehardware.com/store-details/11199); [Pine Tree](https://new.thepinetree.net/?p=192591); [Rob, 2026-05-26 — home/decor section] |
+| Grizzly Station (Chevron) | Gas/mini mart | 1075 Hwy 4, Arnold. 6am–9pm. Propane, lottery. **Made-to-order sandwiches inside that are genuinely good** (not the sad warming-tray kind). | [yelp.com/biz/grizzly-station-arnold](https://www.yelp.com/biz/grizzly-station-arnold); [Rob, 2026-05-26 — sandwich tip] |
+| Rocket (76) | Gas station + convenience | 1297 Hwy 4, Arnold. Daily 5am–11pm. Krispy Krunchy Chicken, coffee, baked goods. **Locals call this the best gas station on the 4.** Has a small wine corner, and a small selection of fishing lures, both of which work better than any logic suggests. | [76.com — Rocket 5264](https://www.76.com/station/U76-ROCKET-5264-0000915283/); [Rob, 2026-05-26 — wine + lures + best-on-the-4] |
 
 **Bars**
 
@@ -68,7 +69,7 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 
 | Name | Type | Details | Source |
 |------|------|---------|--------|
-| Sequoia Woods Country Club | 18-hole golf + restaurant | Opened 1965 (Bob E. Baldock design). Par 70, 5,600 yards. Award-winning restaurant, dancing, weddings. | [sequoiawoods.com](https://www.sequoiawoods.com/) |
+| Sequoia Woods Country Club | 18-hole golf + restaurant + lounge | 1000 Cypress Point Dr, Arnold. (209) 795-1000. Opened 1965 (Bob E. Baldock design). Par 70, 5,600 yards. Green fairways among huge pines. **The restaurant and lounge are open to the public, not just members.** Mon–Tue pub nights 4:30–7pm. Locals' go-to: lunch on the patio in summer overlooking the course, cozy lounge in winter. (Rob says: if this gets too busy, he's deleting this from the site.) | [sequoiawoods.com](https://www.sequoiawoods.com/); [sequoiawoods.com/menu_and_reservations](https://www.sequoiawoods.com/menu_and_reservations); [Rob, 2026-05-26 — locals' tip] |
 | Meadowmont Golf Course | CLOSED (2011) | Property for sale. Community efforts to convert to park/nature preserve. | [mymotherlode.com](https://mymotherlode.com/news/local/3483343/push-to-turn-meadowmont-golf-course-into-nature-preserve-park.html) |
 | Calaveras Big Trees State Park | State park | 4 miles NE of Arnold. Giant sequoias publicized after Augustus T. Dowd's 1852 discovery. North Grove Loop (~1.5 mi, easy, stroller-accessible). South Grove (longer, moderate). ~129 campsites. Ranger talks in summer. | [parks.ca.gov](https://www.parks.ca.gov/?page_id=30567) |
 | White Pines Lake | High-country lake | Sandy beaches, disc golf, playground, hiking trail. Rainbow trout (stocked) + bass. Dog-friendly. (Specific acreage unverified.) | [whitepinespark.com/activities](https://whitepinespark.com/activities/) |
@@ -90,6 +91,32 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 | HOA office | (209) 795-2357 | [blsha.com](https://blsha.com/) |
 | Website | blsha.com | [blsha.com](https://blsha.com/) |
 | Facebook | Blue Lake Springs Recreation (seasonal rec programs) | [local knowledge] |
+
+**Note: BLS is the biggest HOA with facilities in the Arnold area, but it's not the only one.** Big Trees Village (Camp Connell, ~5,000 ft) and Lakemont Pines (Arnold, on Tanner Lake) both have optional rec memberships with their own seasonal amenities. See sections below.
+
+---
+
+### Big Trees Village (HOA community, Camp Connell, ~5,000 ft)
+
+A separate gated/HOA community about 7 miles east of Arnold, at higher elevation. Despite the name, it's a Camp Connell address, not an Arnold one. Receives roughly twice the snow that Arnold does.
+
+| Fact | Detail | Source |
+|------|--------|--------|
+| Recreation Center | 1211 Sierra Pkwy, Camp Connell. Optional rec association membership for residents. | [bigtreesvillage.org](https://www.bigtreesvillage.org/); [yelp.com/biz/big-trees-village-property-owners-assn-camp-connell](https://www.yelp.com/biz/big-trees-village-property-owners-assn-camp-connell) |
+| Rec amenities | 2 swimming pools, 2 tennis courts, shuffleboard, horseshoes, athletic field, snack bar, game area, playground, picnic & BBQ areas. **Open Memorial Day to Labor Day.** | [bigtreesvillage.org/recreation-center-activity-page](https://www.bigtreesvillage.org/recreation-center-activity-page) |
+| Dues | ~$150/year (rec association, optional) | [barrywardrealty.com — Big Trees Village](https://barrywardrealty.com/about-arnold-california/communities/big-trees-village/) |
+| Elevation note | ~5,000 ft; roughly 2× the snowfall of Arnold | [barrywardrealty.com — Big Trees Village](https://barrywardrealty.com/about-arnold-california/communities/big-trees-village/) |
+
+---
+
+### Lakemont Pines (HOA community, Arnold, ~4,000 ft)
+
+Smaller HOA community in Arnold proper, centered on Tanner Lake.
+
+| Fact | Detail | Source |
+|------|--------|--------|
+| Setting | Private community on Tanner Lake, off Hwy 4 in Arnold. Year-round lake access, catch-and-release fishing outside the beach area. | [lakemontpines.org](https://www.lakemontpines.org/) |
+| Seasonal amenities | Snack shack, recreational equipment, family summer program. **Open Father's Day weekend through Labor Day.** | [lakemontpines.org](https://www.lakemontpines.org/) |
 
 ---
 
@@ -881,3 +908,5 @@ Arnold, Blue Lake Springs, Lake Mont Pines, Mill Woods, Meadowmont, Fly In Acres
 *Last fact-checked end-to-end: 2026-05-25 via firecrawl + web search across all named businesses, events, orgs, and media.*
 
 *2026-05-26: Thin-town enrichment pass for Avery, White Pines, Camp Connell, Dorrington. Added primary-source coverage (Wikipedia, scenic4.org, averyhotelca.com, campconnellgeneralstore.com, gocalaveras.com, whitepinespark.com, mysticsaloon.com, calaverasenterprise.com, hmdb.org). Disambiguated The Historic Avery Hotel vs. Howard's Mystic Saloon (different buildings on Hwy 4 in Avery). Clarified Camp Connell store address ("Old Hwy 4" due to 1960s realignment for Bear Valley). Added founding dates, elevations, mile markers, and operating context for all four. Verify-or-omit standard: any unverifiable claim left out, not flagged-and-shipped.*
+
+*2026-05-26 (Rob review pass): Arnold corrections from local knowledge. Added Rocket gas station (1297 Hwy 4) as a new business with wine corner + fishing lures detail; verified address via 76.com. Added Big Trees Village and Lakemont Pines HOA sections so BLS isn't the only documented community-with-facilities. Verified Sequoia Woods restaurant/lounge is open to non-members (sequoiawoods.com/menu_and_reservations). Softened Snowshoe Brewery line per Rob's request: nudge at the ownership-change quality shift rather than calling it out directly. Layered Rob-sourced detail (Hinterhaus mini-cocktail flight + merch, Ace Hardware home/decor section, Grizzly Chevron made-to-order sandwiches, Bistro Espresso homemade ketchup + care, Giant Burger breakfast burrito secret). All Rob-sourced facts tagged [Rob, 2026-05-26] in the Source column.*

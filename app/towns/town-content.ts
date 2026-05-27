@@ -219,7 +219,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "Arnold is also the trailhead. Calaveras Big Trees is four miles east. White Pines Lake is five minutes off Highway 4 with a playground, a disc golf course, and a stocked trout lake. The Arnold Rim Trail runs along the canyon rim above town. There are three bike shops here for a reason. Most things close Monday and Tuesday. Plan accordingly."
     ],
     "personaNotes": [
-      "If you're renting out a place to weekenders: send guests to Hinterhaus for cocktails, Sarafina's or Kalamata for dinner with a reservation, and Big Trees for the morning hike. Skip Snowshoe unless they ask, it's been off since the ownership change.",
+      "If you're renting out a place to weekenders: send guests to Hinterhaus for cocktails (ask for the three-mini-cocktail flight if it's not a busy weekend), Sarafina's or Kalamata for dinner with a reservation, and Big Trees for the morning hike. Hinterhaus and Posterity Ciderworks are the better local-tasting stops right now.",
       "If you've got kids in tow: White Pines Lake has the playground, sandy beach, and disc golf, all free. The North Grove loop at Big Trees is a 1.5-mile flat walk that works with a stroller. El Vaquero has a deck and is genuinely kid-friendly.",
       "If you're driving up from the Bay or the Valley: Arnold is the place to base out of, not pass through. Friday dinner at Sarafina's (Wed–Sun, 5pm, reservations), Saturday at Big Trees and Hinterhaus, Sunday brunch at Heart & Soul before you head down.",
       "If you live in BLS: Snowflake Lodge has the Blue Lake Bistro Friday and Saturday 5–8pm year-round, BYOB, open to members and renters. Summer rec runs Memorial Day to Labor Day. The HOA office is (209) 795-2357.",
@@ -231,8 +231,16 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "Most Arnold restaurants close Monday and Tuesday. Giant Burger is Wed–Sun, Heart & Soul is Thu–Mon, Sarafina's is Wed–Sun. Kalamata is closed Tuesday. If you're planning a Monday dinner, your options narrow fast.",
       "Hinterhaus Distilling (925 Hwy 4) and El Vaquero share the same building complex. You can taste spirits next door to a Mexican restaurant with a deck. That's a real Arnold sequence.",
       "Wassup Dawg moved from Grizzly Plaza to the Meadowmont Pharmacy parking lot. Mon–Fri 11am until sold out, usually around 2pm. $10 combo.",
-      "Snowshoe Brewery has gone downhill since an ownership change a few years back. Locals will tell you the same. Posterity Ciderworks and Hinterhaus are where the actual quality is now.",
+      "Snowshoe Brewery is still here, though the energy shifted after the ownership change a few years back. For a great local pour right now, Posterity Ciderworks and Hinterhaus are the picks.",
+      "Hinterhaus has a quiet locals' move: unless it's a busy weekend, ask for the three mini-cocktails as a taster. Absolutely fantastic. The merch wall is unusually good too, both Hinterhaus-branded and unbranded gear at quality you don't expect from a tasting-room gift shop.",
+      "Arnold Ace Hardware's home section punches way above what the sign suggests. Locals come here for wall art and seasonal decor, not just for hardware and propane.",
+      "The Chevron in town (Grizzly Station, 1075 Hwy 4) makes sandwiches to order inside. Real food, not warming-tray sad. Worth a stop if you're rolling through and don't feel like sitting down.",
+      "Bistro Espresso makes its own ketchup. Larry Geiger has run the place since 2005 and the details show up everywhere: that's why it functions as the town's living room.",
+      "Local secret at Giant Burger: the breakfast burritos. Not on the marquee, but locals order them.",
+      "Best gas station on the 4 is the Rocket at 1297 Hwy 4. Open daily 5am to 11pm. Krispy Krunchy Chicken, a small wine corner, and a small selection of fishing lures. Yes, all in the same building. Yes, all of it works.",
+      "Sequoia Woods Country Club's restaurant and lounge are open to the public, not just members. Green fairways under huge pines. Patio for lunch in summer, cozy lounge in winter. (Rob: if this gets too busy, this bullet comes off the site.)",
       "Blue Lake Springs is a private gated community of roughly 2,000 lots inside Arnold's ZIP. Mandatory HOA, two private lakes, a pool, and the Snowflake Lodge. If you're renting in BLS, the Bistro at Snowflake Lodge is open to you.",
+      "BLS isn't the only Arnold-area community with shared facilities. Big Trees Village (Camp Connell, ~5,000 ft) has an optional rec association with two pools, two tennis courts, shuffleboard, an athletic field, and a snack bar (Memorial Day to Labor Day, dues ~$150/yr). Lakemont Pines (Arnold, on Tanner Lake) has year-round lake access plus a seasonal snack shack and family summer program (Father's Day weekend through Labor Day).",
       "The nearest hospital is Mark Twain Medical Center in San Andreas, about 40 minutes down the 4. For urgent care, Adventist Health Rapid Care in Angels Camp is closer, around 25–30 minutes.",
       "Calaveras Big Trees State Park is four miles northeast of Arnold on Highway 4. North Grove Loop is the easy walk, South Grove is the longer one. About 129 campsites.",
       "Arnold has three bike shops. Mountain biking and OHV are a real subculture here, not a marketing line. The Arnold Rim Trail Association maintains the rim trail.",
@@ -257,7 +265,11 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       },
       {
         "question": "What is Blue Lake Springs?",
-        "answer": "A private gated community of roughly 2,000 lots inside Arnold, with a mandatory HOA, two private lakes, an Olympic pool, tennis courts, and the Snowflake Lodge with the Blue Lake Bistro (Fri–Sat 5–8pm year-round). Open to members and their renters. HOA office: (209) 795-2357."
+        "answer": "A private gated community of roughly 2,000 lots inside Arnold, with a mandatory HOA, two private lakes, an Olympic pool, tennis courts, and the Snowflake Lodge with the Blue Lake Bistro (Fri–Sat 5–8pm year-round). Open to members and their renters. HOA office: (209) 795-2357. It's the biggest community-with-facilities up here, but not the only one: Big Trees Village (Camp Connell) and Lakemont Pines (Arnold, on Tanner Lake) both have optional rec memberships with their own seasonal amenities."
+      },
+      {
+        "question": "Can non-members eat at Sequoia Woods Country Club?",
+        "answer": "Yes. The restaurant and lounge at Sequoia Woods (1000 Cypress Point Dr, (209) 795-1000) are open to the public, not just members. Locals' go-tos: patio lunch in summer overlooking the course, cozy lounge in winter. Monday and Tuesday pub nights run 4:30 to 7pm. Reservations after noon."
       }
     ],
     "lastVerified": "2026-05-26",
