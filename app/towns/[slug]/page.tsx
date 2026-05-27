@@ -22,6 +22,7 @@ import {
   type TownContent,
 } from "@/app/towns/town-content";
 import SimpleEventList from "@/components/SimpleEventList";
+import NewsletterSignup from "@/components/NewsletterSignup";
 import { linkifyPhones } from "@/lib/linkify";
 
 export const revalidate = 3600;
@@ -288,6 +289,16 @@ export default async function TownPage({ params }: PageProps) {
           </ul>
         </section>
       )}
+
+      {/* Newsletter signup. Sits after the high-density AEO content (Worth
+       * knowing) so a visitor who has gotten value is in the right moment
+       * to opt in. Town-specific framing keeps the value prop concrete. */}
+      <section className="mb-10">
+        <NewsletterSignup
+          heading="Want a Thursday heads-up?"
+          description={`One email Thursday morning with what's coming up in ${town.name} and the rest of the corridor. No spam, no ads.`}
+        />
+      </section>
 
       {/* Venues we track in this town */}
       {venues.length > 0 && (
