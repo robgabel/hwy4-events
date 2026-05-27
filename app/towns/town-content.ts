@@ -284,25 +284,29 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     "metaTitle": "Avery Events | Hwy 4 Events",
     "metaDescription": "What's happening in Avery, CA on Highway 4. The Avery Hotel, Howard's Mystic Saloon, and the quiet stretch between Murphys and Arnold.",
     "h1": "Avery: the quiet stop between Murphys and Arnold",
-    "subhead": "Two bars, one historic hotel, and the Stanislaus National Forest at your back.",
-    "introTeaser": "Avery sits on Highway 4 at 3,389 feet, about 10 minutes west of Arnold and 15 east of Murphys. The Historic Avery Hotel (built 1851, oldest continuously operating hotel in Calaveras County) and Howard's Mystic Saloon are the two reasons to pull over.",
+    "subhead": "Historic hotel, a goth-mystic saloon, a great drive-thru coffee, and the small-engine shop the rest of the 4 actually uses.",
+    "introTeaser": "Avery sits on Highway 4 at 3,389 feet, about 10 minutes west of Arnold and 15 east of Murphys. Tiny CDP, population 636. The Historic Avery Hotel (built 1851, oldest continuously operating hotel in Calaveras County) and Howard's Mystic Saloon are the headline stops, with Day-O Espresso for the morning and JC Power Equipment quietly running the small-engine repair for the whole corridor.",
     "intro": [
-      "Avery is a CDP, not a town in the city-hall sense. Population 636, ZIP 95224, named after George J. Avery, the first postmaster (post office opened 1885). It's the last named stop before you hit Arnold, which is why old marketing copy calls it the gateway to Calaveras Big Trees. Locals just call it the stretch with the hotel and the skull bar.",
+      "Avery is a CDP, not a town in the city-hall sense. Population 636, ZIP 95224, named after George J. Avery, the first postmaster (post office opened 1885). It's the last named stop before you hit Arnold, which is why old marketing copy calls it the gateway to Calaveras Big Trees. Locals just call it the stretch with the hotel and the skull bar. There are a few more reasons to know it than that, though.",
       "The Historic Avery Hotel started life as a family home in 1851, became a hotel in 1853 under Peter and Nancy Avery, and was known for decades as the Half Way House because it sat midway between the Murphys gold fields and the giant sequoias. The Gotelli family bought it in 1992 and renovated heavily. Today it sleeps 23+ overnight and handles events up to 150, with two bars, a billiards room, a formal dining room, and a wood stage. Call (209) 517-2465 to check what's on the calendar before you assume anything.",
-      "Howard's Mystic Saloon at 4529 CA-4 is the other anchor. Curt and Tana Howard lease the old Avery Saloon building and run it with a skeleton-and-skull aesthetic year-round, not just at Halloween. Live music shows up regularly. The vibe is darker than it sounds, the people behind the bar are friendly, and it photographs better than any other bar on the corridor."
+      "Howard's Mystic Saloon at 4529 CA-4 is the other anchor. Curt and Tana Howard lease the old Avery Saloon building and run it in a black goth / mystic style year-round, not just at Halloween. Skull chandeliers, themed decor, table shuffleboard, pool tables, a juke box, and occasional live music. Drinks only, no food. Worth a stop and a drink for the vibe. People behind the bar are friendlier than the decor suggests, and it photographs better than any other bar on the corridor.",
+      "Two more things people miss about Avery. Day-O Espresso at 68 Avery Hotel Rd is a drive-thru coffee hut that punches above its weight, and the fancy toasts are the real move (cinnamon toast on thick bread). And JC Power Equipment, opened January 2019 by Jim and Nancy Conway, is the small-engine repair shop the whole corridor relies on for weed eaters, snowblowers, generators, and chainsaws. They also sell ethanol-free fuel. When the power went out the first time, Jim said, people were lined up."
     ],
     "personaNotes": [
-      "If you're pouring wine in Murphys and your shift just ended, Howard's Mystic Saloon is 15 to 20 minutes up the 4 and worth the drive for the vibe alone.",
+      "If you're pouring wine in Murphys and your shift just ended, Howard's Mystic Saloon is 15 to 20 minutes up the 4 and worth the drive for the vibe alone. Drinks only, eat before you come.",
       "If you're hosting a wedding, rehearsal dinner, or 40-person birthday, the Avery Hotel's pavilion and dining room handle up to 150. Call them, don't email.",
-      "If you're sending Airbnb guests up the corridor, tell them Avery is a 5-minute stop, not a destination. The Avery Hotel for history, Mystic for a drink and a photo.",
-      "If you're driving up from the Bay and want a less-obvious dinner than another Murphys tasting room, the Avery Hotel dining room is the move when it's open.",
+      "If you're sending Airbnb guests up the corridor, tell them Avery is a 5-minute stop, not a destination. The Avery Hotel for history, Mystic for a drink and a photo, Day-O for a cinnamon toast on the way back down.",
+      "If you live up the hill and your weed eater, snowblower, or generator just died, JC Power Equipment on Hwy 4 in Avery is where the rest of the corridor takes them. Jim and Nancy Conway have run it since 2019.",
       "If you live up the hill and you've never actually walked into the Avery Hotel, you're missing the oldest continuously operating hotel in the county. It's been there since 1853."
     ],
     "worthKnowing": [
       "Avery's elevation is 3,389 feet, between Murphys (2,400 ft) and Arnold (3,999 ft). You're usually below the snow line but not always.",
       "The community is tiny: state stats show 45 employees across 13 businesses. Don't expect a downtown.",
       "The Historic Avery Hotel was built in 1851 and started operating as a hotel in 1853. It's the oldest continuously operating hotel in Calaveras County.",
-      "Howard's Mystic Saloon is skeleton-themed all year, not a Halloween pop-up. The owners are Curt and Tana Howard.",
+      "Howard's Mystic Saloon is goth-mystic year-round, not a Halloween pop-up. Skull chandeliers, table shuffleboard, pool tables, a juke box, drinks only (no food). Curt and Tana Howard run it.",
+      "Day-O Espresso at 68 Avery Hotel Rd is the drive-thru coffee everyone on the corridor knows. Locals' tip: the fancy toasts. Cinnamon toast on thick bread is the standout. (209) 822-3967.",
+      "Small-engine repair shop: JC Power Equipment on Hwy 4 in Avery. Jim and Nancy Conway, opened January 2019. Weed eaters, snowblowers, generators, leaf blowers, chainsaws. Also Honda generators and ethanol-free fuel. This is where the rest of the corridor goes.",
+      "Rossetti's at the 19th Hole (4462 CA-4) is CLOSED as of 2026. Some aggregator listings still show Fri to Sun hours, but those are stale. Yelp has it tagged Closed and locals confirm.",
       "The Avery post office was established 1885, closed 1943, then re-established in 1949. That's why you'll see conflicting founding dates online.",
       "Avery sits inside the Stanislaus National Forest gateway. Cell service is fine on Hwy 4 itself, spotty as soon as you turn off.",
       "There's no grocery store, gas station, or pharmacy in Avery. Big Trees Market in Arnold is 10 minutes east. Sierra Hills in Murphys is 15 minutes west.",
@@ -311,7 +315,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     "faqs": [
       {
         "question": "What is there to do in Avery, California?",
-        "answer": "Two things, primarily: The Historic Avery Hotel (lodging, dining, events) and Howard's Mystic Saloon (live music, drinks, the skull aesthetic). Beyond that, Avery is a pass-through stop between Murphys and Arnold. For groceries, gas, or wineries, you'll be driving 10 to 15 minutes either direction."
+        "answer": "Four anchors: The Historic Avery Hotel (lodging, dining, events, 1851), Howard's Mystic Saloon (drinks and goth-mystic vibe, no food), Day-O Espresso drive-thru for coffee and the fancy toasts, and JC Power Equipment for small-engine repair. Beyond those, Avery is a pass-through. For groceries, gas, or wineries, you'll be driving 10 to 15 minutes either direction."
       },
       {
         "question": "How far is Avery from Arnold and Murphys?",
@@ -323,7 +327,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       },
       {
         "question": "Is Howard's Mystic Saloon only open for Halloween?",
-        "answer": "No. The skeleton and skull decor is permanent, year-round. Curt and Tana Howard run the bar at 4529 CA-4 with live music on a regular but not nightly schedule. Check their site (mysticsaloon.com) or Instagram before driving up for a specific show."
+        "answer": "No. The black goth / mystic decor is permanent, year-round. Skull chandeliers, table shuffleboard, pool tables, juke box, occasional live music. Drinks only, no food, so eat before you come. Curt and Tana Howard run the bar at 4529 CA-4. Check mysticsaloon.com or Instagram for show schedules."
       },
       {
         "question": "Is Avery the gateway to Calaveras Big Trees State Park?",
