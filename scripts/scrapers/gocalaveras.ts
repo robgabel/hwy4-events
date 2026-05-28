@@ -746,12 +746,15 @@ async function classifyEvents(events: ExtractedEvent[]): Promise<void> {
 
 For each event, return a JSON array of objects with:
 - i: event index number
-- category: one of: live_music, festival, civic, resort, other
-  - "live_music" for concerts, music nights, DJ sets, open mic
+- category: one of: live_music, festival, civic, hike_walk, kids, wine, other
+  (categories describe WHAT the event is, not WHERE it happens)
+  - "live_music" for concerts, music nights, DJ sets, open mic, karaoke
   - "festival" for multi-day community events, fairs, seasonal celebrations
-  - "civic" for community meetings, government events, fundraisers
-  - "resort" for resort/lodge-specific activities
-  - "other" for everything else (dinners, wine events, theater, classes, etc.)
+  - "civic" for community gatherings, meetings, markets, car shows, holiday meals, fundraisers
+  - "hike_walk" for guided hikes, nature/bird walks, trail runs and fun runs
+  - "kids" for kid-focused activities and camps (day camps, creek critters, kids' contests)
+  - "wine" for wine tastings, wine blending, vineyard/winery events
+  - "other" for everything else (theater, trivia, bar games, golf, classes, etc.)
 - artists: array of performer/artist names if it's live music, else null
 - town: if the town is "Unknown", infer it from the venue name if possible. Use one of: ${HWY4_TOWN_LIST.join(", ")}. If you can't determine it, return "Unknown".
 
@@ -779,9 +782,20 @@ Return ONLY the JSON array, no other text.`;
       town?: string;
     }>;
 
+    const VALID_CATEGORIES = [
+      "live_music",
+      "festival",
+      "civic",
+      "hike_walk",
+      "kids",
+      "wine",
+      "other",
+    ];
     for (const c of classifications) {
       if (c.i >= 0 && c.i < events.length) {
-        events[c.i].category = c.category;
+        events[c.i].category = VALID_CATEGORIES.includes(c.category)
+          ? c.category
+          : "other";
         events[c.i].artists = c.artists;
         if (c.town && c.town !== "Unknown" && events[c.i].town === "Unknown") {
           events[c.i].town = c.town;

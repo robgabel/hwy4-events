@@ -6,8 +6,9 @@ const VALID_CATEGORIES = [
   "live_music",
   "festival",
   "civic",
-  "resort",
-  "lodge",
+  "hike_walk",
+  "kids",
+  "wine",
   "other",
 ];
 

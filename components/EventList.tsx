@@ -34,10 +34,11 @@ const NewsletterSignup = dynamic(() => import("./NewsletterSignup"), {
 const ALL_CATEGORIES: EventCategory[] = [
   "civic",
   "festival",
+  "hike_walk",
+  "kids",
   "live_music",
-  "lodge",
   "other",
-  "resort",
+  "wine",
 ];
 
 function getBaseName(name: string): string {
@@ -227,9 +228,13 @@ export default function EventList({
   const filtered = useMemo(() => {
     const visible = initialEvents.filter((e) => {
       if (e.visibility === "private") {
+        // Members-only (e.g. Blue Lake Springs): shown only when the org is
+        // explicitly enabled in the Clubs filter. The Event Type filter does
+        // not apply — "club" is not a selectable type.
         if (!e.org_slug || !enabledOrgs.has(e.org_slug)) return false;
+      } else if (!selectedCategories.has(e.category)) {
+        return false;
       }
-      if (!selectedCategories.has(e.category)) return false;
       if (!selectedTowns.has(e.town)) return false;
       if (e.is_weekly && !showWeekly) return false;
       if (weekendOnly && weekendRange) {

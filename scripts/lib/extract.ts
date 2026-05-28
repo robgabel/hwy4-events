@@ -101,7 +101,7 @@ For each event, return JSON with these fields:
 - venue_name: Specific venue if mentioned, else "${ctx.defaultVenue}"
 - town: "${ctx.defaultTown}"
 - address: Street address if mentioned, else ${ctx.defaultAddress ? `"${ctx.defaultAddress}"` : "null"}
-- category: One of: live_music, festival, civic, resort, other
+- category: One of: live_music, festival, civic, hike_walk, kids, wine, other (describe WHAT the event is, not where: hike_walk = guided hikes/nature walks/trail runs; kids = kid-focused activities and camps; wine = wine tastings/blending/winery events; civic = community gatherings/markets/holiday meals; other = theater, trivia, bar games, classes, etc.)
 - price: Price string (e.g., "$30", "Free") or null
 - artists: Array of performer names, or null
 - event_url: Direct link to event/tickets if mentioned, else null

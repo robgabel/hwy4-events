@@ -42,9 +42,9 @@ const CATEGORY_IMAGES: Record<EventCategory, string> = {
   live_music: "/images/live_music.jpg",
   festival: "/images/festival.jpg",
   civic: "/images/civic.jpg",
-  resort: "/images/resort.jpg",
-  lodge: "/images/lodge.jpg",
-  club: "/images/lodge.jpg",
+  hike_walk: "/images/hike_walk.svg",
+  kids: "/images/kids.svg",
+  wine: "/images/wine_glasses.jpg",
   other: "/images/other.jpg",
 };
 
@@ -52,9 +52,9 @@ const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
   live_music: "#D4855C",
   festival: "#8B9E7E",
   civic: "#5A8FA8",
-  resort: "#A09484",
-  lodge: "#6B4226",
-  club: "#8B7355",
+  hike_walk: "#6B8E4E",
+  kids: "#E0A33E",
+  wine: "#8B3A4E",
   other: "#C4B8AA",
 };
 
@@ -254,7 +254,7 @@ export default function EventCard({
               </span>
             </span>
           )}
-          {event.category === "club" && (
+          {isPrivate && (
             <span className="inline-flex items-center gap-1 rounded-full bg-earth/10 px-2 py-0.5 text-xs font-medium text-earth">
               <svg
                 className="h-3 w-3"

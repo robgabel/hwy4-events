@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3E5237"/>
+      <stop offset="100%" stop-color="#2A3826"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <!-- Sun -->
+  <circle cx="150" cy="48" r="16" fill="#E8C170" opacity="0.85"/>
+  <!-- Distant mountains -->
+  <path d="M0 122 L40 70 L75 122Z" fill="#6B8E5E" opacity="0.5"/>
+  <path d="M55 122 L100 58 L145 122Z" fill="#5A7A4E" opacity="0.65"/>
+  <path d="M120 122 L160 76 L200 122Z" fill="#6B8E5E" opacity="0.5"/>
+  <!-- Snow cap on the tallest peak -->
+  <path d="M91 74 L100 58 L109 74 L103 70 L97 72Z" fill="#F5F2E8" opacity="0.75"/>
+  <!-- Ground -->
+  <rect x="0" y="120" width="200" height="80" fill="#3A4D33"/>
+  <!-- Winding trail -->
+  <path d="M100 200 Q78 172 112 150 Q146 128 100 120" fill="none" stroke="#D8C9A8" stroke-width="7" stroke-linecap="round" opacity="0.85"/>
+  <path d="M100 200 Q78 172 112 150 Q146 128 100 120" fill="none" stroke="#EFE6D0" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="2 8" opacity="0.7"/>
+  <!-- Pines -->
+  <g>
+    <path d="M35 152 L48 110 L61 152Z" fill="#2E4326"/>
+    <path d="M38 160 L48 130 L58 160Z" fill="#37502D"/>
+    <rect x="45" y="152" width="6" height="14" fill="#4A3826"/>
+  </g>
+  <g>
+    <path d="M150 168 L166 118 L182 168Z" fill="#2E4326"/>
+    <path d="M154 176 L166 140 L178 176Z" fill="#37502D"/>
+    <rect x="162" y="168" width="8" height="16" fill="#4A3826"/>
+  </g>
+</svg>

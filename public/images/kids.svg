@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5FA8C4"/>
+      <stop offset="100%" stop-color="#3E7E99"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <!-- Sun -->
+  <circle cx="40" cy="44" r="14" fill="#F5DC78" opacity="0.85"/>
+  <!-- Clouds -->
+  <g fill="#FFFFFF" opacity="0.55">
+    <ellipse cx="152" cy="50" rx="22" ry="9"/>
+    <ellipse cx="137" cy="52" rx="12" ry="7"/>
+  </g>
+  <!-- Balloons -->
+  <g>
+    <path d="M100 152 Q96 120 84 96" stroke="#FBF4E4" stroke-width="1.2" fill="none" opacity="0.7"/>
+    <path d="M100 152 Q100 118 104 90" stroke="#FBF4E4" stroke-width="1.2" fill="none" opacity="0.7"/>
+    <path d="M100 152 Q108 122 122 100" stroke="#FBF4E4" stroke-width="1.2" fill="none" opacity="0.7"/>
+    <ellipse cx="84" cy="86" rx="15" ry="18" fill="#E0594C"/>
+    <ellipse cx="105" cy="79" rx="16" ry="19" fill="#F2B441"/>
+    <ellipse cx="124" cy="92" rx="14" ry="17" fill="#7FB069"/>
+    <ellipse cx="79" cy="80" rx="4" ry="6" fill="#FFFFFF" opacity="0.35"/>
+    <ellipse cx="100" cy="73" rx="4" ry="6" fill="#FFFFFF" opacity="0.35"/>
+    <ellipse cx="119" cy="86" rx="3.5" ry="5" fill="#FFFFFF" opacity="0.35"/>
+  </g>
+  <!-- Rolling hills -->
+  <path d="M0 200 L0 160 Q50 140 100 158 Q150 174 200 150 L200 200Z" fill="#6FA85A"/>
+  <path d="M0 200 L0 178 Q60 162 120 178 Q165 190 200 174 L200 200Z" fill="#5A9248"/>
+</svg>
