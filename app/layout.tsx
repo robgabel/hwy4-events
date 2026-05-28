@@ -109,7 +109,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cfBeaconToken = process.env.NEXT_PUBLIC_CF_BEACON_TOKEN;
+  const cfBeaconToken = process.env.NEXT_PUBLIC_CF_BEACON_TOKEN?.trim();
 
   return (
     <html lang="en" className={`${bitter.variable} ${dmSans.variable}`}>
