@@ -9,6 +9,7 @@ const VALID_CATEGORIES = [
   "hike_walk",
   "kids",
   "wine",
+  "games",
   "other",
 ];
 

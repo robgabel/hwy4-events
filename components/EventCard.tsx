@@ -45,6 +45,7 @@ const CATEGORY_IMAGES: Record<EventCategory, string> = {
   hike_walk: "/images/hike_walk.svg",
   kids: "/images/kids.svg",
   wine: "/images/wine_glasses.jpg",
+  games: "/images/games.svg",
   other: "/images/other.jpg",
 };
 
@@ -55,6 +56,7 @@ const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
   hike_walk: "#6B8E4E",
   kids: "#E0A33E",
   wine: "#8B3A4E",
+  games: "#4E6E8B",
   other: "#C4B8AA",
 };
 

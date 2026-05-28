@@ -11,6 +11,7 @@ const VALID_CATEGORIES = [
   "hike_walk",
   "kids",
   "wine",
+  "games",
   "other",
 ] as const;
 
@@ -58,7 +59,7 @@ If this is an event flyer with a determinable date, return:
   "end_time": "HH:MM" or null,
   "description": "1-2 sentence description of what the event is",
   "venue_hint": one of: ${venueList}, or null if truly indeterminate,
-  "category_hint": "live_music|festival|civic|hike_walk|kids|wine|other"
+  "category_hint": "live_music|festival|civic|hike_walk|kids|wine|games|other"
 }
 
 Category guidance (describe WHAT the event is, not where it happens):
@@ -68,7 +69,8 @@ Category guidance (describe WHAT the event is, not where it happens):
 - hike_walk: guided hikes, nature/bird walks, trail runs and fun runs
 - kids: kid-focused activities and camps (Touch A Truck, fishing derby, sandcastle/paper-airplane contests, reptile exhibits, cheer camp)
 - wine: wine tastings, wine blending, sip-and-paint, vineyard events
-- other: bar games (bingo, trivia, pool), pool parties, car shows, sports, anything else
+- games: social/pub games like bingo, trivia, pool, bocce, cribbage, card tournaments
+- other: pool parties, car shows, sports, anything else
 
 If this is NOT an event flyer, or you cannot determine a specific date (just a general schedule), return:
 {"skip": true, "reason": "brief explanation"}

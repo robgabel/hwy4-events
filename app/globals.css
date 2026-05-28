@@ -89,6 +89,10 @@ body {
   background-color: color-mix(in srgb, var(--color-bark) 18%, transparent);
   color: var(--color-bark);
 }
+.badge-games {
+  background-color: color-mix(in srgb, var(--color-sky) 18%, transparent);
+  color: var(--color-sky);
+}
 .badge-other {
   background-color: color-mix(in srgb, var(--color-stone) 15%, transparent);
   color: var(--color-stone);

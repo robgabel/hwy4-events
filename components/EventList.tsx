@@ -34,6 +34,7 @@ const NewsletterSignup = dynamic(() => import("./NewsletterSignup"), {
 const ALL_CATEGORIES: EventCategory[] = [
   "civic",
   "festival",
+  "games",
   "hike_walk",
   "kids",
   "live_music",

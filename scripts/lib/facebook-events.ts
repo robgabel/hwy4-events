@@ -26,6 +26,7 @@ const VALID_CATEGORIES = [
   "hike_walk",
   "kids",
   "wine",
+  "games",
   "other",
 ] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
@@ -333,7 +334,8 @@ async function classifyCategoriesBatch(
 - hike_walk: guided hikes, nature/bird walks, trail runs and fun runs
 - kids: kid-focused activities and camps (day camps, kids' contests, family activities for young children)
 - wine: wine tastings, wine blending, vineyard/winery events
-- other: anything else (theater, trivia, bar games, golf, sports, workshops, classes)
+- games: social/pub games like bingo, trivia, pool, bocce, cribbage, card tournaments
+- other: anything else (theater, golf, sports, workshops, classes)
 
 Return ONLY a JSON array of {i: number, category: string} — one entry per event.
 
