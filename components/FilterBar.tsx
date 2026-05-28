@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { EventCategory, CATEGORY_LABELS, TOWNS, Hwy4Org } from "@/lib/types";
 
+// Event types describe WHAT an event is. Venue buckets (lodge/club/resort) are
+// not types — members-only club events are gated by the per-org "Clubs" section.
 const ALL_CATEGORIES: EventCategory[] = [
   "civic",
-  "club",
   "festival",
+  "hike_walk",
+  "kids",
   "live_music",
-  "lodge",
   "other",
-  "resort",
+  "wine",
 ];
 
 const SORTED_TOWNS = [...TOWNS].sort();

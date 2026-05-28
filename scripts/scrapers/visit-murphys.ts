@@ -94,12 +94,21 @@ function htmlToText(html: string): string {
 // ---------- Mapper ----------
 
 function pickCategory(tribeCats: Array<{ name: string; slug: string }> | undefined, title: string): string {
+  // Categories describe WHAT the event is, not WHERE. Order matters: most
+  // specific patterns first.
   const haystack = `${title} ${(tribeCats ?? []).map((c) => c.name).join(" ")}`.toLowerCase();
   if (/\b(live music|concert|dj|open mic|trio|band|acoustic|jazz|blues|karaoke)\b/.test(haystack)) {
     return "live_music";
   }
+  if (/\b(wine|vineyard|winery|tasting|mimosa|sip & |sip and )\b/.test(haystack)) return "wine";
+  if (/\b(hike|guided walk|nature walk|bird walk|trail run|fun run|5k|trail stewardship)\b/.test(haystack)) {
+    return "hike_walk";
+  }
+  if (/\b(kids|kid|children|family|day camp|summer camp|creek critters|easter egg|story time)\b/.test(haystack)) {
+    return "kids";
+  }
   if (/\b(festival|fair|celebration|fest)\b/.test(haystack)) return "festival";
-  if (/\b(meeting|fundraiser|breakfast|luncheon|town hall|public hearing|council|board)\b/.test(haystack)) {
+  if (/\b(meeting|fundraiser|breakfast|luncheon|town hall|public hearing|council|board|farmers market|flea market|car show|car cruise)\b/.test(haystack)) {
     return "civic";
   }
   return "other";

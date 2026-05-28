@@ -4,6 +4,22 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 120; // Vision API calls can be slow
 
+const VALID_CATEGORIES = [
+  "live_music",
+  "festival",
+  "civic",
+  "hike_walk",
+  "kids",
+  "wine",
+  "other",
+] as const;
+
+function normalizeCategory(hint: string | null | undefined): string {
+  return hint && (VALID_CATEGORIES as readonly string[]).includes(hint)
+    ? hint
+    : "other";
+}
+
 interface PageContext {
   allowedVenues: string[];
   note: string;
@@ -42,15 +58,17 @@ If this is an event flyer with a determinable date, return:
   "end_time": "HH:MM" or null,
   "description": "1-2 sentence description of what the event is",
   "venue_hint": one of: ${venueList}, or null if truly indeterminate,
-  "category_hint": "live_music|festival|civic|resort|lodge|other"
+  "category_hint": "live_music|festival|civic|hike_walk|kids|wine|other"
 }
 
-Category guidance:
-- live_music: concerts, bands, DJ events, karaoke
-- festival: large community celebrations, holiday events (July 4th, Memorial Day)
-- civic: potlucks, meetings, bingo, movie nights, talent shows, classes
-- lodge: lodge-specific dining or social events
-- other: sports, recreation, camps, activities
+Category guidance (describe WHAT the event is, not where it happens):
+- live_music: concerts, bands, DJ events, karaoke, open mics
+- festival: large community celebrations, multi-activity holiday events
+- civic: potlucks, meetings, talent shows, holiday celebrations, community gatherings
+- hike_walk: guided hikes, nature/bird walks, trail runs and fun runs
+- kids: kid-focused activities and camps (Touch A Truck, fishing derby, sandcastle/paper-airplane contests, reptile exhibits, cheer camp)
+- wine: wine tastings, wine blending, sip-and-paint, vineyard events
+- other: bar games (bingo, trivia, pool), pool parties, car shows, sports, anything else
 
 If this is NOT an event flyer, or you cannot determine a specific date (just a general schedule), return:
 {"skip": true, "reason": "brief explanation"}
@@ -296,9 +314,12 @@ export async function GET(request: Request) {
         description: event.description,
         venue_name: venue,
         town: "Arnold",
-        category: "club",
+        // Category describes WHAT the event is; the members-only gating comes
+        // from visibility/org_slug below, not the category.
+        category: normalizeCategory(event.category_hint),
         status: "confirmed",
-        visibility: "public",
+        // Members-only: gated behind the Blue Lake Springs org filter on the site.
+        visibility: "private",
         org_slug: "blue-lake-springs",
         source_url: page,
         source_name: "Blue Lake Springs HOA",

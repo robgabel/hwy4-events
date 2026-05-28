@@ -98,6 +98,23 @@ interface ExtractedEvent {
   description: string | null;
   price: string | null;
   visibility: "public" | "private";
+  category: string;
+}
+
+const VALID_CATEGORIES = [
+  "live_music",
+  "festival",
+  "civic",
+  "hike_walk",
+  "kids",
+  "wine",
+  "other",
+] as const;
+
+function normalizeCategory(hint: string | null | undefined): string {
+  return hint && (VALID_CATEGORIES as readonly string[]).includes(hint)
+    ? hint
+    : "civic";
 }
 
 // ─── Composite-event filter ─────────────────────────────────────────────
@@ -187,8 +204,15 @@ Extract every distinct event into a JSON array. Each object:
   "end_time": "HH:MM" (24h format) or null,
   "description": "Brief details (menu, cooking crew, special notes). No em dashes — use commas, periods, or semicolons.",
   "price": "$XX" or null,
-  "visibility": "public" or "private"
+  "visibility": "public" or "private",
+  "category": "live_music|festival|civic|hike_walk|kids|wine|other"
 }
+
+CATEGORY (describe WHAT the event is, not where it happens):
+- live_music: live bands, karaoke, DJ events (e.g. "Flashback", "Dinner & Karaoke")
+- kids: kid-focused events (e.g. "Kids Easter Party")
+- wine: wine tastings or wine-pairing events
+- civic: everything else at the lodge — dinners, breakfasts, bingo, shuffle board, queen of hearts, meetings, workdays, crab feeds, holiday meals. This is the default.
 
 VISIBILITY CLASSIFICATION:
 - "public" = open to the general public, large community events, or matches the public events page below
@@ -375,7 +399,7 @@ export async function GET(request: Request) {
         venue_name: LODGE.venue,
         town: LODGE.town,
         address: LODGE.address,
-        category: "lodge" as const,
+        category: normalizeCategory(evt.category),
         status: "confirmed" as const,
         price: evt.price || null,
         event_url: null,

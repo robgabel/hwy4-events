@@ -23,8 +23,9 @@ const VALID_CATEGORIES = [
   "live_music",
   "festival",
   "civic",
-  "resort",
-  "lodge",
+  "hike_walk",
+  "kids",
+  "wine",
   "other",
 ] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
@@ -325,13 +326,14 @@ async function classifyCategoriesBatch(
     venue: e.venue_name,
   }));
 
-  const prompt = `Classify each event below into ONE category:
+  const prompt = `Classify each event below into ONE category (describe WHAT the event is, not WHERE it happens):
 - live_music: concerts, bands, DJs, live performances, open mics, karaoke
 - festival: multi-day or large outdoor festivals, fairs, parades
-- civic: community gatherings, meetings, charity, fundraisers, town hall, school events
-- resort: events hosted at ski/resort properties (Bear Valley Mountain Resort, etc.)
-- lodge: events at lodges, inns, or members-only clubs (Lodge, Elks, HOA, country club)
-- other: anything else (workshops, markets, sports, etc.)
+- civic: community gatherings, meetings, charity, fundraisers, markets, car shows, holiday meals, school events
+- hike_walk: guided hikes, nature/bird walks, trail runs and fun runs
+- kids: kid-focused activities and camps (day camps, kids' contests, family activities for young children)
+- wine: wine tastings, wine blending, vineyard/winery events
+- other: anything else (theater, trivia, bar games, golf, sports, workshops, classes)
 
 Return ONLY a JSON array of {i: number, category: string} — one entry per event.
 

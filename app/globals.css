@@ -77,16 +77,16 @@ body {
   background-color: color-mix(in srgb, var(--color-sky) 15%, transparent);
   color: var(--color-sky);
 }
-.badge-resort {
-  background-color: color-mix(in srgb, var(--color-stone) 20%, transparent);
-  color: var(--color-bark);
+.badge-hike_walk {
+  background-color: color-mix(in srgb, var(--color-forest) 15%, transparent);
+  color: var(--color-forest);
 }
-.badge-lodge {
-  background-color: color-mix(in srgb, var(--color-earth) 15%, transparent);
+.badge-kids {
+  background-color: color-mix(in srgb, var(--color-sunset) 22%, transparent);
   color: var(--color-earth);
 }
-.badge-club {
-  background-color: color-mix(in srgb, var(--color-bark) 15%, transparent);
+.badge-wine {
+  background-color: color-mix(in srgb, var(--color-bark) 18%, transparent);
   color: var(--color-bark);
 }
 .badge-other {
