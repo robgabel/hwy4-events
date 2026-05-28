@@ -12,7 +12,7 @@ export default async function LastChecked() {
 
   if (!data?.last_scraped_at) {
     return (
-      <p className="mt-5 text-xs text-stone-light">
+      <p className="mt-5 text-sm text-stone">
         Updated regularly. Not all events may be listed.
       </p>
     );
@@ -24,7 +24,7 @@ export default async function LastChecked() {
   const isRecent = Date.now() - date.getTime() < 2 * 24 * 60 * 60 * 1000;
 
   return (
-    <p className="mt-5 text-xs text-stone-light">
+    <p className="mt-5 text-sm text-stone">
       Last checked {isRecent ? relative : `on ${day}`}. Not all events may be
       listed.
     </p>

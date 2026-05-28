@@ -82,16 +82,16 @@ function TownFooterLinks() {
   return (
     <nav
       aria-label="Town directory"
-      className="mt-5 text-xs text-stone-light"
+      className="mt-5 text-sm text-stone"
     >
-      <span className="mr-2 uppercase tracking-wider text-stone-light/80">
+      <span className="mr-2 uppercase tracking-wider text-stone">
         Browse by town
       </span>
       {towns.map((t, i) => (
         <span key={t.slug}>
           <Link
             href={`/towns/${t.slug}`}
-            className="text-stone hover:text-pine hover:underline"
+            className="text-pine hover:underline"
           >
             {t.name}
           </Link>
@@ -166,7 +166,7 @@ export default function RootLayout({
 
             <Suspense
               fallback={
-                <p className="mt-5 text-xs text-stone-light">
+                <p className="mt-5 text-sm text-stone">
                   Updated regularly. Not all events may be listed.
                 </p>
               }
@@ -180,7 +180,7 @@ export default function RootLayout({
              * linking move for local SEO. */}
             <TownFooterLinks />
 
-            <nav className="mt-3 flex flex-wrap justify-center gap-4 text-xs text-stone-light">
+            <nav className="mt-4 flex flex-wrap justify-center gap-4 text-sm text-stone">
               <a href="/about" className="hover:text-pine hover:underline">
                 About Hwy 4 Events
               </a>
