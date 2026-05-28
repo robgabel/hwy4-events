@@ -174,15 +174,19 @@ Notes / actions for next month:
 
 ---
 
-## Part 5 — Optional automation
+## Part 5 — Automation (built)
 
 The SEO side is already automatic (GSC/Cloudflare collect continuously). Only the prompt
 audit needs a human, because the engines actively block scraping their answers.
 
-If we want a nudge, add a monthly scheduled task ("Run the Hwy4Events AEO prompt audit —
-see AEO-SEO-MEASUREMENT.md Part 3.2") on the 1st. Keep it as a reminder, not an
-automation: the value is in actually reading the AI answers, which only a human can judge
-for accuracy. Park until the manual rhythm proves worth keeping.
+The monthly **reminder** is wired: `/api/aeo-audit-reminder` (Vercel cron, `0 16 1 * *`
+= 1st of month, 8am PT) posts the 13-query checklist to Slack via `SLACK_WEBHOOK_URL`.
+It is a reminder only — it does not run the audit. A human reads the AI answers, judges
+citation accuracy, and logs results in the Part 4 template. Smoke-test anytime:
+
+```sh
+curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/aeo-audit-reminder
+```
 
 ---
 
@@ -190,5 +194,6 @@ for accuracy. Park until the manual rhythm proves worth keeping.
 - [x] Verify GSC domain property + submit sitemap (2026-05-28)
 - [x] Import to Bing Webmaster Tools (2026-05-28)
 - [x] Confirm Cloudflare Web Analytics is recording (2026-05-28 — live, site created 2026-05-26)
+- [x] Monthly prompt-audit reminder built (`/api/aeo-audit-reminder`, cron `0 16 1 * *`, 2026-05-28)
+- [ ] Confirm `SLACK_WEBHOOK_URL` posts to #hwy4 (smoke-test the route once deployed)
 - [ ] First monthly log entry after GSC has ~2 weeks of data (~mid-June 2026)
-- [ ] Decide whether to add the monthly prompt-audit reminder task
