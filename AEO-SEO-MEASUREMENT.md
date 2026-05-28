@@ -195,5 +195,5 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/aeo-audi
 - [x] Import to Bing Webmaster Tools (2026-05-28)
 - [x] Confirm Cloudflare Web Analytics is recording (2026-05-28 — live, site created 2026-05-26)
 - [x] Monthly prompt-audit reminder built (`/api/aeo-audit-reminder`, cron `0 16 1 * *`, 2026-05-28)
-- [ ] Confirm `SLACK_WEBHOOK_URL` posts to #hwy4 (smoke-test the route once deployed)
+- [x] Confirmed `SLACK_WEBHOOK_URL` posts to #hwy4 (smoke-tested 2026-05-28, message delivered)
 - [ ] First monthly log entry after GSC has ~2 weeks of data (~mid-June 2026)
