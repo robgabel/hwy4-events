@@ -1,6 +1,5 @@
 import React from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { SITE_URL } from "@/lib/constants";
 import { JsonLd, buildArticle } from "@/lib/schema";
 import WeeklyBriefingTabs from "./WeeklyBriefingTabs";
@@ -155,30 +154,18 @@ export default function WeeklyBriefing({
         <BriefingContent text={briefing} generatedAt={generatedAt} />
       )}
 
-      {/* Byline. E-E-A-T signal for AI engines, and earns trust with humans
-       * who want to know who's writing this. */}
-      <p className="mt-4 border-t border-stone-light/20 pt-3 text-xs text-stone-light">
-        Curated by{" "}
-        <Link
-          href="/about/rob-gabel"
-          className="font-medium text-pine hover:underline"
-        >
-          Rob Gabel
-        </Link>
-        {generatedAt && (
-          <>
-            {" "}
-            &middot; Updated{" "}
-            <time dateTime={generatedAt}>
-              {new Date(generatedAt).toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </time>
-          </>
-        )}
-      </p>
+      {generatedAt && (
+        <p className="mt-4 border-t border-stone-light/20 pt-3 text-xs text-stone-light">
+          Updated{" "}
+          <time dateTime={generatedAt}>
+            {new Date(generatedAt).toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </time>
+        </p>
+      )}
     </div>
   );
 }
