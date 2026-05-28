@@ -4,7 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { TOWN_INFO } from "@/lib/towns";
 import { townSlug } from "@/lib/slugs";
-import { buildDirectionsUrl } from "@/lib/address";
+import DirectionsLink from "./DirectionsLink";
 
 const EventMap = dynamic(() => import("./EventMap"), {
   ssr: false,
@@ -17,40 +17,27 @@ interface EventMapStaticProps {
   town: string;
   venueName: string;
   address: string | null;
+  /** Geocoded venue coordinates; the interactive map centers/pins here. */
+  lat?: number | null;
+  lng?: number | null;
 }
 
-const DirectionsLink = ({ href }: { href: string }) => (
-  <a
-    href={href}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-pine hover:underline"
-  >
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-    Get Directions
-  </a>
-);
-
-export default function EventMapStatic({ town, venueName, address }: EventMapStaticProps) {
+export default function EventMapStatic({ town, venueName, address, lat, lng }: EventMapStaticProps) {
   const [interactive, setInteractive] = useState(false);
   const townData = TOWN_INFO[town];
-  const directionsUrl = buildDirectionsUrl(address, town, venueName);
 
   // Unknown town: no coordinates, no static image — show directions only.
   if (!townData?.lat || !townData?.lng) {
     return (
       <section className="mb-6">
-        <DirectionsLink href={directionsUrl} />
+        <DirectionsLink address={address} town={town} venueName={venueName} />
       </section>
     );
   }
 
   if (interactive) {
     // EventMap renders its own framed map + Get Directions link.
-    return <EventMap town={town} venueName={venueName} address={address} />;
+    return <EventMap town={town} venueName={venueName} address={address} lat={lat} lng={lng} />;
   }
 
   return (
@@ -79,7 +66,7 @@ export default function EventMapStatic({ town, venueName, address }: EventMapSta
           Tap for interactive map
         </span>
       </button>
-      <DirectionsLink href={directionsUrl} />
+      <DirectionsLink address={address} town={town} venueName={venueName} />
     </section>
   );
 }

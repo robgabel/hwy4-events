@@ -4,7 +4,8 @@ import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
-import { resolveDisplayAddress } from "@/lib/address";
+import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
+import { geocodeAddress } from "@/lib/geocode";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
@@ -166,6 +167,10 @@ export default async function EventPage({ params }: PageProps) {
       : startTime
     : null;
   const displayAddress = resolveDisplayAddress(event.address, event.town);
+  // Geocode the venue so the interactive map pins the actual address rather
+  // than the town centroid. Cached weekly; falls back to town center on miss.
+  const geocodeQuery = buildGeocodeQuery(event.address, event.town);
+  const venueCoords = geocodeQuery ? await geocodeAddress(geocodeQuery) : null;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -269,6 +274,8 @@ export default async function EventPage({ params }: PageProps) {
           town={event.town}
           venueName={event.venue_name}
           address={event.address}
+          lat={venueCoords?.lat ?? null}
+          lng={venueCoords?.lng ?? null}
         />
 
         {event.description && (

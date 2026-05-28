@@ -4,12 +4,16 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { TOWN_INFO } from "@/lib/towns";
-import { resolveDisplayAddress, buildDirectionsUrl } from "@/lib/address";
+import { resolveDisplayAddress } from "@/lib/address";
+import DirectionsLink from "./DirectionsLink";
 
 interface EventMapProps {
   town: string;
   venueName: string;
   address: string | null;
+  /** Geocoded venue coordinates; falls back to the town centroid when absent. */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 const markerIcon = L.divIcon({
@@ -23,18 +27,24 @@ const markerIcon = L.divIcon({
   popupAnchor: [0, -36],
 });
 
-export default function EventMap({ town, venueName, address }: EventMapProps) {
+export default function EventMap({ town, venueName, address, lat, lng }: EventMapProps) {
   const townData = TOWN_INFO[town];
-  if (!townData?.lat || !townData?.lng) return null;
+  // Prefer the geocoded venue point; fall back to the town centroid.
+  const center: [number, number] | null =
+    lat != null && lng != null
+      ? [lat, lng]
+      : townData?.lat != null && townData?.lng != null
+        ? [townData.lat, townData.lng]
+        : null;
+  if (!center) return null;
 
   const resolvedAddress = resolveDisplayAddress(address, town);
-  const directionsUrl = buildDirectionsUrl(address, town, venueName);
 
   return (
     <section className="mb-6">
       <div className="overflow-hidden rounded-lg border border-stone-light/30 card-warm">
         <MapContainer
-          center={[townData.lat, townData.lng]}
+          center={center}
           zoom={13}
           scrollWheelZoom={false}
           className="h-[240px] sm:h-[300px] w-full z-0"
@@ -45,7 +55,7 @@ export default function EventMap({ town, venueName, address }: EventMapProps) {
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             maxZoom={19}
           />
-          <Marker position={[townData.lat, townData.lng]} icon={markerIcon}>
+          <Marker position={center} icon={markerIcon}>
             <Popup>
               <strong className="text-forest">{venueName}</strong>
               <br />
@@ -57,18 +67,7 @@ export default function EventMap({ town, venueName, address }: EventMapProps) {
           </Marker>
         </MapContainer>
       </div>
-      <a
-        href={directionsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-pine hover:underline"
-      >
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-        Get Directions
-      </a>
+      <DirectionsLink address={address} town={town} venueName={venueName} />
     </section>
   );
 }
