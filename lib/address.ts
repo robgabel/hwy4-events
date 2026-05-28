@@ -21,3 +21,20 @@ export function resolveDisplayAddress(
   if (townDefault) return townDefault;
   return null;
 }
+
+/**
+ * Build a Google Maps directions URL for an event. Prefers a real street
+ * string (via resolveDisplayAddress) so the user lands at the right place
+ * rather than a town centroid; falls back to the venue name.
+ */
+export function buildDirectionsUrl(
+  address: string | null,
+  town: string,
+  venueName: string
+): string {
+  const resolved = resolveDisplayAddress(address, town);
+  const destination = resolved
+    ? `${resolved}, ${town}, CA`
+    : `${venueName}, ${town}, CA`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+}

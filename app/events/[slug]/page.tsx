@@ -7,7 +7,7 @@ import { TOWN_INFO } from "@/lib/towns";
 import { resolveDisplayAddress } from "@/lib/address";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
-import EventMap from "@/components/EventMapWrapper";
+import EventMap from "@/components/EventMapStatic";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
 

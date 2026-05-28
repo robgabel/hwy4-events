@@ -64,6 +64,7 @@ Currently enabled: **Arnold Rim Trail** (`arnoldrimtrail.org/events/`). Add more
 - Vercel auto-deploys from `main`
 - Migrations in `supabase/migrations/` — apply via Supabase dashboard or CLI
 - No test suite currently
+- **Static town maps:** the event detail page shows a pre-generated town map thumbnail (`public/maps/<town-slug>.webp`) and only loads the interactive Leaflet map on tap. Regenerate with `cd scripts && npm run generate-town-maps` — re-run only when a town's coordinates change in `lib/towns.ts`. Maps are committed assets (9 towns, ~10kb each), stitched from CARTO Voyager tiles to match the on-tap interactive basemap.
 
 ## Project Structure
 
@@ -85,6 +86,8 @@ components/
   EventList.tsx         ← main list with filtering
   FilterBar.tsx         ← category/town filters
   WeeklyBriefing.tsx    ← "This Week on the 4" display
+  EventMapStatic.tsx    ← detail-page map entry point: static town thumbnail + Get Directions; mounts interactive Leaflet (EventMap.tsx) only on tap
+  EventMap.tsx          ← interactive Leaflet map (CARTO Voyager tiles), lazy-loaded by EventMapStatic
   Header.tsx, LiveBadge.tsx, ShareButton.tsx, etc.
 lib/
   types.ts              ← Hwy4Event, EventCategory, TOWNS, etc.

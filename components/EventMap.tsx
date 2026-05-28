@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { TOWN_INFO } from "@/lib/towns";
-import { resolveDisplayAddress } from "@/lib/address";
+import { resolveDisplayAddress, buildDirectionsUrl } from "@/lib/address";
 
 interface EventMapProps {
   town: string;
@@ -27,13 +27,8 @@ export default function EventMap({ town, venueName, address }: EventMapProps) {
   const townData = TOWN_INFO[town];
   if (!townData?.lat || !townData?.lng) return null;
 
-  // Three-tier cascade: event address → town default → venue name as text.
-  // We prefer a real street string in the directions URL so Google Maps lands
-  // the user at the right place rather than a town centroid.
   const resolvedAddress = resolveDisplayAddress(address, town);
-  const directionsUrl = resolvedAddress
-    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(resolvedAddress + ", " + town + ", CA")}`
-    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venueName + ", " + town + ", CA")}`;
+  const directionsUrl = buildDirectionsUrl(address, town, venueName);
 
   return (
     <section className="mb-6">
@@ -46,9 +41,9 @@ export default function EventMap({ town, venueName, address }: EventMapProps) {
           attributionControl={true}
         >
           <TileLayer
-            attribution='&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
-            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
-            maxZoom={17}
+            attribution='&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            maxZoom={19}
           />
           <Marker position={[townData.lat, townData.lng]} icon={markerIcon}>
             <Popup>
