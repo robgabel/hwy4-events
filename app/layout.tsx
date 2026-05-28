@@ -11,8 +11,8 @@ import { TOWN_INFO } from "@/lib/towns";
 import LastChecked from "@/components/LastChecked";
 import Image from "next/image";
 import Link from "next/link";
-import Script from "next/script";
 import { Suspense } from "react";
+import CloudflareAnalytics from "@/components/CloudflareAnalytics";
 import { Bitter, DM_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -116,14 +116,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-cream font-sans antialiased">
         <JsonLd data={buildWebSite()} />
         <JsonLd data={buildOrganization()} />
-        {cfBeaconToken && (
-          <Script
-            defer
-            src="https://static.cloudflareinsights.com/beacon.min.js"
-            data-cf-beacon={`{"token": "${cfBeaconToken}"}`}
-            strategy="afterInteractive"
-          />
-        )}
+        {cfBeaconToken && <CloudflareAnalytics token={cfBeaconToken} />}
         {children}
         <footer className="border-t border-stone-light/50 bg-warm-white py-10 text-center">
           <div className="mx-auto max-w-5xl px-4">
