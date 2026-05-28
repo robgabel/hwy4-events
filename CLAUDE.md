@@ -29,6 +29,7 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 | `/api/scrape-moose-lodge` | Mondays 2pm UTC | Scrape Ebbetts Pass Moose Lodge monthly PDF calendar via Claude PDF document API. Replaces the deprecated `scrape-moose-lodge` Supabase edge function (2026-05-26). |
 | `/api/verify-events` | Daily 3pm UTC | Cross-check upcoming events against organizers' canonical sites; flag mismatches as `needs_verification` |
 | `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
+| `/api/aeo-audit-reminder` | 1st of month, 8am PT (16:00 UTC) | Posts the monthly AEO prompt-audit checklist to Slack (`SLACK_WEBHOOK_URL`). Manual ritual — a human runs the 13-query bank against AI engines and logs results in `AEO-SEO-MEASUREMENT.md`. Read-only. |
 
 All cron routes require `CRON_SECRET` as a bearer token. To smoke-test any cron route manually:
 
@@ -55,7 +56,7 @@ Currently enabled: **Arnold Rim Trail** (`arnoldrimtrail.org/events/`). Add more
 - `ANTHROPIC_API_KEY`
 - `CRON_SECRET`
 - `NEXT_PUBLIC_CF_BEACON_TOKEN` (optional) — Cloudflare Web Analytics beacon token. When set, `app/layout.tsx` injects the Cloudflare RUM script. Get it from https://dash.cloudflare.com/?to=/:account/web-analytics.
-- `SLACK_WEBHOOK_URL` (optional — enables `/api/check-events` to post audit issues to Slack)
+- `SLACK_WEBHOOK_URL` (optional — enables `/api/check-events` to post audit issues and `/api/aeo-audit-reminder` to post the monthly AEO checklist to Slack)
 
 ## Dev Workflow
 
@@ -102,7 +103,8 @@ lib/
   - `PRD-local-authenticity.md` — Local voice and authenticity strategy
   - `PRD-event-visibility.md` — Event discovery and visibility improvements
   - `PRD-bear-valley-events.md` — Bear Valley events coverage expansion
-  - `PLAN-seo-aeo.md` — SEO and answer-engine optimization plan
+  - `PLAN-seo-aeo.md` — SEO and answer-engine optimization plan (the build)
+  - `AEO-SEO-MEASUREMENT.md` — measuring SEO/AEO success at $0: GSC + Bing setup, monthly SEO scoreboard, monthly AEO prompt-audit ritual + query bank, log template. Reminder delivered via `/api/aeo-audit-reminder` cron.
   - `PRD-blue-lake-springs.md` — Blue Lake Springs HOA integration: members-only club events, Vision AI scraping of flyer images, `club` category, "Members & Guests" badge
 
 ## UI Standards
