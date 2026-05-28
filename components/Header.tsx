@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Header({ greeting }: { greeting?: string | null }) {
   return (
@@ -18,7 +19,22 @@ export default function Header({ greeting }: { greeting?: string | null }) {
           From the Frog Jump to the Grizzly Chair
         </p>
         <p className="mt-1 text-sm font-medium text-white/70 tracking-wide">
-          Angels Camp &middot; Murphys &middot; Arnold &middot; Bear Valley
+          {[
+            { name: "Angels Camp", slug: "angels-camp" },
+            { name: "Murphys", slug: "murphys" },
+            { name: "Arnold", slug: "arnold" },
+            { name: "Bear Valley", slug: "bear-valley" },
+          ].map((town, i) => (
+            <span key={town.slug}>
+              {i > 0 && <span className="mx-1.5">&middot;</span>}
+              <Link
+                href={`/towns/${town.slug}`}
+                className="transition-colors hover:text-white hover:underline"
+              >
+                {town.name}
+              </Link>
+            </span>
+          ))}
         </p>
 
         {/* Seasonal greeting from Rob */}
