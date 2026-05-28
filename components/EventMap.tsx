@@ -1,6 +1,7 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { TOWN_INFO } from "@/lib/towns";
@@ -11,9 +12,8 @@ interface EventMapProps {
   town: string;
   venueName: string;
   address: string | null;
-  /** Geocoded venue coordinates; falls back to the town centroid when absent. */
-  lat?: number | null;
-  lng?: number | null;
+  /** Clean address string; geocoded on mount to recenter on the actual venue. */
+  geocodeQuery?: string | null;
 }
 
 const markerIcon = L.divIcon({
@@ -27,15 +27,39 @@ const markerIcon = L.divIcon({
   popupAnchor: [0, -36],
 });
 
-export default function EventMap({ town, venueName, address, lat, lng }: EventMapProps) {
+/** Pans the map to a new center whenever it changes (e.g. after geocoding). */
+function Recenter({ center }: { center: [number, number] }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center);
+  }, [map, center]);
+  return null;
+}
+
+export default function EventMap({ town, venueName, address, geocodeQuery }: EventMapProps) {
   const townData = TOWN_INFO[town];
-  // Prefer the geocoded venue point; fall back to the town centroid.
-  const center: [number, number] | null =
-    lat != null && lng != null
-      ? [lat, lng]
-      : townData?.lat != null && townData?.lng != null
-        ? [townData.lat, townData.lng]
-        : null;
+  const townCenter: [number, number] | null =
+    townData?.lat != null && townData?.lng != null ? [townData.lat, townData.lng] : null;
+
+  const [center, setCenter] = useState<[number, number] | null>(townCenter);
+
+  // Geocode the venue after mount (off the page-load path) and recenter on it.
+  useEffect(() => {
+    if (!geocodeQuery) return;
+    let cancelled = false;
+    fetch(`/api/geocode?q=${encodeURIComponent(geocodeQuery)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((coords) => {
+        if (!cancelled && coords && typeof coords.lat === "number" && typeof coords.lng === "number") {
+          setCenter([coords.lat, coords.lng]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [geocodeQuery]);
+
   if (!center) return null;
 
   const resolvedAddress = resolveDisplayAddress(address, town);
@@ -50,6 +74,7 @@ export default function EventMap({ town, venueName, address, lat, lng }: EventMa
           className="h-[240px] sm:h-[300px] w-full z-0"
           attributionControl={true}
         >
+          <Recenter center={center} />
           <TileLayer
             attribution='&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"

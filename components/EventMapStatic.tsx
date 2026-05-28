@@ -17,12 +17,11 @@ interface EventMapStaticProps {
   town: string;
   venueName: string;
   address: string | null;
-  /** Geocoded venue coordinates; the interactive map centers/pins here. */
-  lat?: number | null;
-  lng?: number | null;
+  /** Clean address string the interactive map geocodes (on tap) to pin the venue. */
+  geocodeQuery: string | null;
 }
 
-export default function EventMapStatic({ town, venueName, address, lat, lng }: EventMapStaticProps) {
+export default function EventMapStatic({ town, venueName, address, geocodeQuery }: EventMapStaticProps) {
   const [interactive, setInteractive] = useState(false);
   const townData = TOWN_INFO[town];
 
@@ -37,7 +36,7 @@ export default function EventMapStatic({ town, venueName, address, lat, lng }: E
 
   if (interactive) {
     // EventMap renders its own framed map + Get Directions link.
-    return <EventMap town={town} venueName={venueName} address={address} lat={lat} lng={lng} />;
+    return <EventMap town={town} venueName={venueName} address={address} geocodeQuery={geocodeQuery} />;
   }
 
   return (
