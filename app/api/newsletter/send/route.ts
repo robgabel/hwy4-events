@@ -41,7 +41,7 @@ Rules:
 - P2: Saturday/Sunday specifics. Name-drop venues and artists.
 - P3: Next week preview — anything notable coming up Mon-Thu.
 - P4 (optional): Rob's Picks or standout events.
-- P5: One-line invitation in Millie's voice, then the sign-off on its own line. Vary the invitation each week — examples (do NOT copy verbatim): "Forward this to the buddy who always asks what's happening up here." / "If we missed something you know about, hit reply or use the submit form." / "Send this to the friend coming up next weekend." End with: — Millie 🐾
+- P5: One-line invitation in Millie's voice, then the sign-off on its own line. Vary the invitation each week — examples (do NOT copy verbatim): "Forward this to the buddy who always asks what's happening up here." / "Got an event we missed? Email Rob at robgabel@gmail.com." / "Send this to the friend coming up next weekend." Do NOT say "hit reply" — replies aren't monitored. End with: — Millie 🐾
 - Use day names with dates on first mention: "Friday, March 27" or "Saturday the 28th". After that, just day names.
 - Name-drop specific events and venues. Be honest if it's a quiet week.
 - No corporate language, no emojis in body text (sign-off paw print is the only exception).
@@ -317,6 +317,9 @@ function buildEmailHtml(robNote: string, content: string, unsubscribeUrl: string
     <p style="color: #666; font-size: 13px; line-height: 1.5; text-align: center; margin: 18px 0 0;">
       Got this forwarded? <a href="${subscribeHref}" style="color: #2d5016; font-weight: 500;">Subscribe yourself →</a>
     </p>
+    <p style="color: #666; font-size: 13px; line-height: 1.5; text-align: center; margin: 10px 0 0;">
+      Got a tip or an event we missed? Email Rob directly at <a href="mailto:robgabel@gmail.com" style="color: #2d5016; font-weight: 500;">robgabel@gmail.com</a>
+    </p>
     <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8e4de;">
       <p style="color: #888; font-size: 12px; margin: 0 0 8px;">
         <a href="${withUtm(SITE_URL, "footer")}" style="color: #2d5016;">hwy4events.com</a> · Angels Camp to Bear Valley, CA
@@ -416,6 +419,8 @@ export async function GET(request: Request) {
       try {
         await resend.emails.send({
           from: `${SITE_NAME} <newsletter@hwy4events.com>`,
+          // Replies go to Gmail until ImprovMX forwarding for the domain is live.
+          replyTo: "robgabel@gmail.com",
           to: sub.email,
           subject,
           html: buildEmailHtml(robNote, content, unsubscribeUrl),
