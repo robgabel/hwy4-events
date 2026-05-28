@@ -107,6 +107,9 @@ function pickCategory(tribeCats: Array<{ name: string; slug: string }> | undefin
   if (/\b(kids|kid|children|family|day camp|summer camp|creek critters|easter egg|story time)\b/.test(haystack)) {
     return "kids";
   }
+  if (/\b(bingo|trivia|bocce|pool tournament|cribbage|card tournament|game night|poker)\b/.test(haystack)) {
+    return "games";
+  }
   if (/\b(festival|fair|celebration|fest)\b/.test(haystack)) return "festival";
   if (/\b(meeting|fundraiser|breakfast|luncheon|town hall|public hearing|council|board|farmers market|flea market|car show|car cruise)\b/.test(haystack)) {
     return "civic";

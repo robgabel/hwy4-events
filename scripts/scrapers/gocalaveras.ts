@@ -746,7 +746,7 @@ async function classifyEvents(events: ExtractedEvent[]): Promise<void> {
 
 For each event, return a JSON array of objects with:
 - i: event index number
-- category: one of: live_music, festival, civic, hike_walk, kids, wine, other
+- category: one of: live_music, festival, civic, hike_walk, kids, wine, games, other
   (categories describe WHAT the event is, not WHERE it happens)
   - "live_music" for concerts, music nights, DJ sets, open mic, karaoke
   - "festival" for multi-day community events, fairs, seasonal celebrations
@@ -754,7 +754,8 @@ For each event, return a JSON array of objects with:
   - "hike_walk" for guided hikes, nature/bird walks, trail runs and fun runs
   - "kids" for kid-focused activities and camps (day camps, creek critters, kids' contests)
   - "wine" for wine tastings, wine blending, vineyard/winery events
-  - "other" for everything else (theater, trivia, bar games, golf, classes, etc.)
+  - "games" for social/pub games: bingo, trivia, pool, bocce, cribbage, card tournaments
+  - "other" for everything else (theater, golf, sports, classes, etc.)
 - artists: array of performer/artist names if it's live music, else null
 - town: if the town is "Unknown", infer it from the venue name if possible. Use one of: ${HWY4_TOWN_LIST.join(", ")}. If you can't determine it, return "Unknown".
 
@@ -789,6 +790,7 @@ Return ONLY the JSON array, no other text.`;
       "hike_walk",
       "kids",
       "wine",
+      "games",
       "other",
     ];
     for (const c of classifications) {

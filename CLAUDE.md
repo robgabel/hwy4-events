@@ -119,7 +119,7 @@ lib/
 - **Mascot:** Millie (Rob's sheepadoodle). Cartoon line-art illustrations available in /public.
 - **Coverage area:** Angels Camp, Copperopolis, Murphys, Arnold, Avery, Camp Connell, Dorrington, White Pines, Bear Valley.
 - **Rob's Picks** (`robs_pick: true`) are hand-curated event highlights.
-- **Categories (event types — describe WHAT, not WHERE):** Live Music, Festival, Community, Hike & Walk, Kids, Wine, Other. Venue buckets (Lodge, Club, Resort) were retired in favor of activity types. Members-only events (Blue Lake Springs, Moose Lodge meetings) are gated by `visibility='private'` + `org_slug` (the Clubs filter), independent of category.
+- **Categories (event types — describe WHAT, not WHERE):** Live Music, Festival, Community, Hike & Walk, Kids, Wine, Games, Other. Venue buckets (Lodge, Club, Resort) were retired in favor of activity types. Members-only events (Blue Lake Springs, Moose Lodge meetings) are gated by `visibility='private'` + `org_slug` (the Clubs filter), independent of category.
 
 ### Voice rules specific to Hwy4Events copy
 

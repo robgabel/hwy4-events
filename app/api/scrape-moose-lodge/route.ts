@@ -108,6 +108,7 @@ const VALID_CATEGORIES = [
   "hike_walk",
   "kids",
   "wine",
+  "games",
   "other",
 ] as const;
 
@@ -205,14 +206,15 @@ Extract every distinct event into a JSON array. Each object:
   "description": "Brief details (menu, cooking crew, special notes). No em dashes — use commas, periods, or semicolons.",
   "price": "$XX" or null,
   "visibility": "public" or "private",
-  "category": "live_music|festival|civic|hike_walk|kids|wine|other"
+  "category": "live_music|festival|civic|hike_walk|kids|wine|games|other"
 }
 
 CATEGORY (describe WHAT the event is, not where it happens):
 - live_music: live bands, karaoke, DJ events (e.g. "Flashback", "Dinner & Karaoke")
 - kids: kid-focused events (e.g. "Kids Easter Party")
 - wine: wine tastings or wine-pairing events
-- civic: everything else at the lodge — dinners, breakfasts, bingo, shuffle board, queen of hearts, meetings, workdays, crab feeds, holiday meals. This is the default.
+- games: social/pub games (e.g. bingo, shuffle board, queen of hearts, cribbage, cards)
+- civic: everything else at the lodge — dinners, breakfasts, meetings, workdays, crab feeds, holiday meals. This is the default.
 
 VISIBILITY CLASSIFICATION:
 - "public" = open to the general public, large community events, or matches the public events page below
