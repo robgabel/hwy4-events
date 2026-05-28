@@ -198,7 +198,7 @@ export default async function TownPage({ params }: PageProps) {
             {content.subhead}
           </p>
           <p className="mt-2 text-center text-xs uppercase tracking-wide text-stone-light sm:text-left">
-            {town.elevation.toLocaleString()} ft · {town.driveFromArnold}
+            {town.elevation.toLocaleString()} ft
           </p>
         </div>
       </div>

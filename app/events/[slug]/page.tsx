@@ -251,8 +251,6 @@ export default async function EventPage({ params }: PageProps) {
               {TOWN_INFO[event.town] && (
                 <span className="mt-1 block text-xs text-stone">
                   {TOWN_INFO[event.town].elevation.toLocaleString()} ft
-                  {" · "}
-                  {TOWN_INFO[event.town].driveFromArnold}
                 </span>
               )}
             </dd>
