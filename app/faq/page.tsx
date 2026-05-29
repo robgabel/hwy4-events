@@ -13,7 +13,7 @@ const faqs = [
   {
     question: "What events are happening this weekend along Highway 4?",
     answer:
-      "Hwy 4 Events lists live music, festivals, community events, and resort activities happening in Angels Camp, Murphys, Arnold, Bear Valley, and surrounding towns. Our homepage shows all upcoming events and you can filter by category or town to find exactly what you're looking for.",
+      "Hwy 4 Events lists live music, festivals, community events, hikes and walks, kids events, wine events, and game nights happening in Angels Camp, Murphys, Arnold, Bear Valley, and surrounding towns. Our homepage shows all upcoming events and you can filter by category or town to find exactly what you're looking for.",
   },
   {
     question: "Where can I find live music near Angels Camp or Murphys?",
@@ -28,7 +28,7 @@ const faqs = [
   {
     question: "Is Bear Valley open for events in summer?",
     answer:
-      "Yes! Bear Valley hosts events year-round. While it's best known as a ski resort in winter, summer brings music festivals, outdoor adventure events, farmers markets, and community gatherings. Check our resort category filter to see upcoming Bear Valley events.",
+      "Yes! Bear Valley hosts events year-round. While it's best known as a ski resort in winter, summer brings music festivals, outdoor adventure events, farmers markets, and community gatherings. Filter by the Bear Valley town to see upcoming events there.",
   },
   {
     question: "How often is Hwy 4 Events updated?",

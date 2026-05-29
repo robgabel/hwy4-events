@@ -380,8 +380,8 @@ export default async function AboutPage() {
           <p>
             Plenty of events on the 4 are great for kids, from the playground
             at White Pines Lake to summer movies at Blue Lake Springs.
-            Community events and resort activities are your best bet for
-            family-friendly outings.
+            Community events, festivals, and anything in the Kids category are
+            your best bet for family-friendly outings.
           </p>
           <p>
             Blue Lake Springs, Sequoia Woods Country Club, and the Moose Lodge
@@ -416,12 +416,20 @@ export default async function AboutPage() {
             holiday parades, and volunteer gatherings
           </li>
           <li>
-            <strong>Resort Activities</strong>: Bear Valley skiing, summer
-            concerts, mountain biking events, and outdoor adventures
+            <strong>Hike &amp; Walk</strong>: trail hikes, nature walks, and
+            group outings like the Arnold Rim Trail
           </li>
           <li>
-            <strong>Lodge Events</strong>: member-only events from local
-            organizations (see above)
+            <strong>Kids</strong>: family events, story times, and things to do
+            with the little ones
+          </li>
+          <li>
+            <strong>Wine</strong>: tastings, winemaker dinners, and release
+            parties around Murphys
+          </li>
+          <li>
+            <strong>Games</strong>: trivia nights, bingo, and card and board
+            game meetups
           </li>
         </ul>
       </section>
