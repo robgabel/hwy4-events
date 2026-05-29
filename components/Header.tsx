@@ -1,5 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
+import { CORRIDOR_TOWNS } from "@/lib/towns";
+import { townSlug } from "@/lib/slugs";
+
+/** A Calaveras Big Trees sequoia — layered crown over a tall trunk. */
+function BigTree({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 28 40"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M12 33h4v7h-4z" />
+      <path d="M14 12 3 34h22z" />
+      <path d="M14 7 6 24h16z" />
+      <path d="M14 3 9 16h10z" />
+    </svg>
+  );
+}
 
 export default function Header({ greeting }: { greeting?: string | null }) {
   return (
@@ -9,33 +28,30 @@ export default function Header({ greeting }: { greeting?: string | null }) {
 
       {/* Content */}
       <div className="relative z-10 mx-auto max-w-5xl px-4 pb-20 pt-10 text-center sm:pb-24 sm:pt-12">
-        <h1 className="font-display text-4xl font-bold tracking-tight text-white sm:text-5xl inline-flex items-center justify-center gap-3">
-          <svg aria-hidden="true" className="h-8 w-8 sm:h-10 sm:w-10 text-sage-light/80" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8 8h2L6 14h2.5L5 20h14l-3.5-6H18l-4-6h2L12 2z"/></svg>
+        <h1 className="inline-flex items-center justify-center gap-3 font-display text-4xl font-bold tracking-tight text-white sm:gap-4 sm:text-5xl">
+          <BigTree className="h-10 w-7 shrink-0 text-sage-light/60 sm:h-12 sm:w-9" />
           Hwy 4 Events
-          <svg aria-hidden="true" className="h-8 w-8 sm:h-10 sm:w-10 text-sage-light/80" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L8 8h2L6 14h2.5L5 20h14l-3.5-6H18l-4-6h2L12 2z"/></svg>
+          <BigTree className="h-10 w-7 shrink-0 text-sage-light/60 sm:h-12 sm:w-9" />
         </h1>
 
         <p className="mt-3 font-display text-lg text-white/90 drop-shadow-sm">
           From the Frog Jump to the Grizzly Chair
         </p>
-        <p className="mt-1 text-sm font-medium text-white/70 tracking-wide">
-          {[
-            { name: "Angels Camp", slug: "angels-camp" },
-            { name: "Murphys", slug: "murphys" },
-            { name: "Arnold", slug: "arnold" },
-            { name: "Bear Valley", slug: "bear-valley" },
-          ].map((town, i) => (
-            <span key={town.slug}>
-              {i > 0 && <span className="mx-1.5">&middot;</span>}
+
+        {/* All nine towns, honestly — quiet and secondary */}
+        <div className="mx-auto mt-4 flex max-w-xl flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-xs font-medium tracking-wide text-white/55">
+          {CORRIDOR_TOWNS.map((town, i) => (
+            <span key={town.name} className="inline-flex items-center gap-x-1.5">
+              {i > 0 && <span aria-hidden="true">&middot;</span>}
               <Link
-                href={`/towns/${town.slug}`}
-                className="transition-colors hover:text-white hover:underline"
+                href={`/towns/${townSlug(town.name)}`}
+                className="whitespace-nowrap transition-colors hover:text-white hover:underline"
               >
                 {town.name}
               </Link>
             </span>
           ))}
-        </p>
+        </div>
 
         {/* Seasonal greeting from Rob */}
         {greeting && (
@@ -50,9 +66,9 @@ export default function Header({ greeting }: { greeting?: string | null }) {
         <Image
           src="/millie-happy.svg"
           alt="Millie the sheepadoodle"
-          width={64}
-          height={64}
-          className="opacity-90 drop-shadow-sm sm:h-[72px] sm:w-[72px]"
+          width={80}
+          height={80}
+          className="opacity-95 drop-shadow-sm sm:h-[88px] sm:w-[88px]"
         />
       </div>
     </header>
