@@ -19,6 +19,15 @@ export type EventVerificationStatus =
   | "needs_verification"
   | "dismissed";
 
+// Typed cost signal. The human-readable amount stays in `price`; cost_tier is
+// the handle the UI badges and the "Free only" filter key off.
+export type EventCostTier =
+  | "free"
+  | "paid"
+  | "donation"
+  | "varies"
+  | "unknown";
+
 export interface Hwy4Event {
   id: string;
   name: string;
@@ -33,6 +42,7 @@ export interface Hwy4Event {
   artists: string[] | null;
   status: EventStatus;
   price: string | null;
+  cost_tier: EventCostTier;
   event_url: string | null;
   source_url: string;
   source_name: string | null;

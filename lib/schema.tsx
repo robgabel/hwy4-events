@@ -189,10 +189,42 @@ export function buildBreadcrumbs(crumbs: Crumb[]) {
 
 // ----- events -----
 
+// Schema.org Offer requires a numeric price. Only emit one for events we can
+// state a number for: free (0) or paid with a parseable amount. donation /
+// varies / unknown omit offers entirely (the property is optional).
+export function buildEventOffer(event: Hwy4Event, url: string) {
+  if (event.cost_tier === "free") {
+    return {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+      availability: "https://schema.org/InStock",
+      url,
+    };
+  }
+  if (event.cost_tier === "paid" && event.price) {
+    const match = event.price.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+    if (match) {
+      return {
+        "@type": "Offer",
+        price: match[0],
+        priceCurrency: "USD",
+        availability: "https://schema.org/InStock",
+        url,
+      };
+    }
+  }
+  return null;
+}
+
 export function buildEvent(event: Hwy4Event, slug?: string) {
   const eventSlug =
     slug ?? generateEventSlug(event.name, event.date, event.town);
   const displayAddress = resolveDisplayAddress(event.address, event.town);
+  const offer = buildEventOffer(
+    event,
+    event.event_url || `${SITE_URL}/events/${eventSlug}`
+  );
 
   return {
     "@context": "https://schema.org",
@@ -214,15 +246,7 @@ export function buildEvent(event: Hwy4Event, slug?: string) {
         addressCountry: "US",
       },
     },
-    ...(event.price && {
-      offers: {
-        "@type": "Offer",
-        price: event.price === "Free" ? "0" : event.price,
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
-        url: event.event_url || `${SITE_URL}/events/${eventSlug}`,
-      },
-    }),
+    ...(offer && { offers: offer }),
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     eventStatus:
       event.status === "tentative"

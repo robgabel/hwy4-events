@@ -185,6 +185,7 @@ export default function EventList({
   const [showWeekly, setShowWeekly] = useState(true);
   const [enabledOrgs, setEnabledOrgs] = useState<Set<string>>(new Set());
   const [weekendOnly, setWeekendOnly] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const [filterHeight, setFilterHeight] = useState(0);
 
@@ -241,10 +242,11 @@ export default function EventList({
       if (weekendOnly && weekendRange) {
         if (e.date < weekendRange.start || e.date > weekendRange.end) return false;
       }
+      if (freeOnly && e.cost_tier !== "free") return false;
       return true;
     });
     return collapseMultiDayEvents(visible);
-  }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange]);
+  }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange, freeOnly]);
 
   const groups = useMemo(() => groupEventsByDate(filtered), [filtered]);
 
@@ -262,7 +264,7 @@ export default function EventList({
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Reset visible count when filters change (show initial batch of new results)
-  const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}`;
+  const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}-${freeOnly}`;
   useEffect(() => {
     setVisibleCount(INITIAL_EVENTS);
   }, [filteredKey]);
@@ -311,8 +313,8 @@ export default function EventList({
         ref={filterRef}
         className="sticky top-0 z-20 -mx-4 border-b border-stone-light/0 bg-cream/90 px-4 pb-4 pt-1 backdrop-blur-md [&:not(:first-child)]:border-stone-light/20"
       >
-        {/* Quick filter: This Weekend */}
-        <div className="mb-2 flex items-center gap-2">
+        {/* Quick filters: This Weekend / Free */}
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <button
             onClick={() => setWeekendOnly(!weekendOnly)}
             className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
@@ -323,12 +325,25 @@ export default function EventList({
           >
             This Weekend
           </button>
-          {weekendOnly && (
+          <button
+            onClick={() => setFreeOnly(!freeOnly)}
+            className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              freeOnly
+                ? "border-pine bg-pine text-white"
+                : "border-stone-light/40 bg-white text-stone hover:border-pine hover:text-pine"
+            }`}
+          >
+            Free
+          </button>
+          {(weekendOnly || freeOnly) && (
             <button
-              onClick={() => setWeekendOnly(false)}
+              onClick={() => {
+                setWeekendOnly(false);
+                setFreeOnly(false);
+              }}
               className="cursor-pointer text-xs text-stone hover:text-pine"
             >
-              Show all dates
+              Clear quick filters
             </button>
           )}
         </div>
@@ -366,6 +381,8 @@ export default function EventList({
                 setSelectedTowns(new Set(TOWNS));
                 setShowWeekly(true);
                 setEnabledOrgs(new Set());
+                setWeekendOnly(false);
+                setFreeOnly(false);
               }}
               className="mt-2 cursor-pointer text-sm font-medium text-pine hover:underline"
             >

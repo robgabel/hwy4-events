@@ -28,6 +28,7 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 | `/api/scrape-bls` | Mondays 1pm UTC | Scrape Blue Lake Springs flyer images via Vision AI |
 | `/api/scrape-moose-lodge` | Mondays 2pm UTC | Scrape Ebbetts Pass Moose Lodge monthly PDF calendar via Claude PDF document API. Replaces the deprecated `scrape-moose-lodge` Supabase edge function (2026-05-26). |
 | `/api/verify-events` | Daily 3pm UTC | Cross-check upcoming events against organizers' canonical sites; flag mismatches as `needs_verification` |
+| `/api/extract-prices` | Daily 1:30pm UTC | Extract explicitly-stated admission fees from event description/name into `price` + `cost_tier` via Haiku. Only lifts fees that are stated, never guesses. Processes 40/run by default; `?limit=150` for manual backfill. Stamps `price_extracted_at` so events aren't reprocessed. |
 | `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
 | `/api/aeo-audit-reminder` | 1st of month, 8am PT (16:00 UTC) | Posts the monthly AEO prompt-audit checklist to Slack (`SLACK_WEBHOOK_URL`). Manual ritual — a human runs the 13-query bank against AI engines and logs results in `AEO-SEO-MEASUREMENT.md`. Read-only. |
 
@@ -49,6 +50,17 @@ Aggregator scrapers (e.g., GoCalaveras) occasionally get event dates wrong. For 
 - Flagged events show a subtle "Date unconfirmed" badge on the public site and queue up at `/admin/verification` for manual review (confirm / dismiss / hide / delete)
 
 Currently enabled: **Arnold Rim Trail** (`arnoldrimtrail.org/events/`). Add more orgs by setting `canonical_url` + `canonical_check_enabled=true` (plus `match_patterns` if upstream scrapers tag the org's events with an aggregator's `org_slug`).
+
+## Event Pricing (cost_tier)
+
+Some events charge admission (Brice Station concerts, ticketed festivals). The fee is often present in the scraped `price` free-text or buried in the description, but free-text can't drive a badge or filter — so we derive a typed signal.
+
+- `hwy4_events.price` — human-readable amount string (`"$25"`, `"Pay what you can"`). Unchanged.
+- `hwy4_events.cost_tier` — typed enum: `free | paid | donation | varies | unknown`. The handle the UI keys off.
+- `hwy4_events.price_extracted_at` — when `/api/extract-prices` last processed the row (NULL = queue candidate).
+- `/api/extract-prices` runs daily; reads description+name and lifts **explicitly-stated** fees via Haiku. Never guesses an amount — no fee text means `cost_tier='unknown'`, not free.
+- The public site shows a green **"Free"** badge or a **"$25" / "Ticketed" / "Pay what you can"** cost badge on each event card (scan-level), plus a **"Free"** quick filter on the homepage. `unknown` shows nothing.
+- Backfill the whole upcoming queue by hitting the route repeatedly (it's idempotent via `price_extracted_at`): `curl -H "Authorization: Bearer $CRON_SECRET" "https://hwy4events.com/api/extract-prices?limit=150"`.
 
 ## Environment Variables
 

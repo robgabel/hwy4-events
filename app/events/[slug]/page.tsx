@@ -6,6 +6,7 @@ import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
+import { buildEventOffer } from "@/lib/schema";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
@@ -15,7 +16,7 @@ import ShareButton from "@/components/ShareButton";
 export const revalidate = 3600;
 
 const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick";
+  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick";
 const PAGE_SIZE = 60;
 
 const matchSlug = (events: Hwy4Event[] | null, slug: string): Hwy4Event | null =>
@@ -106,6 +107,10 @@ export async function generateMetadata({
 
 function EventJsonLd({ event, slug }: { event: Hwy4Event; slug: string }) {
   const displayAddress = resolveDisplayAddress(event.address, event.town);
+  const offer = buildEventOffer(
+    event,
+    event.event_url || `${SITE_URL}/events/${slug}`
+  );
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -126,15 +131,7 @@ function EventJsonLd({ event, slug }: { event: Hwy4Event; slug: string }) {
         addressCountry: "US",
       },
     },
-    ...(event.price && {
-      offers: {
-        "@type": "Offer",
-        price: event.price === "Free" ? "0" : event.price,
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
-        url: event.event_url || `${SITE_URL}/events/${slug}`,
-      },
-    }),
+    ...(offer && { offers: offer }),
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     eventStatus:
       event.status === "tentative"

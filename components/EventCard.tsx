@@ -28,6 +28,23 @@ function formatTime(time: string | null): string | null {
   return `${display}:${m} ${ampm}`;
 }
 
+// Scan-level cost label. `unknown` returns null (show nothing) — we never imply
+// an event is free when we just don't know.
+function costBadgeLabel(event: CollapsedEvent): string | null {
+  switch (event.cost_tier) {
+    case "free":
+      return "Free";
+    case "paid":
+      return event.price && /\$|\d/.test(event.price) ? event.price : "Ticketed";
+    case "donation":
+      return "Pay what you can";
+    case "varies":
+      return event.price && /\$/.test(event.price) ? event.price : "Ticketed";
+    default:
+      return null;
+  }
+}
+
 const ORG_LABELS: Record<string, string> = {
   "moose-lodge": "Moose Lodge",
   "sequoia-woods": "Sequoia Woods",
@@ -212,6 +229,30 @@ export default function EventCard({
           >
             {CATEGORY_LABELS[event.category]}
           </span>
+          {event.cost_tier === "free" ? (
+            <span className="inline-flex shrink-0 items-center rounded-full bg-sage/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-pine">
+              Free
+            </span>
+          ) : (
+            costBadgeLabel(event) && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-earth/10 px-2 py-0.5 text-xs font-medium text-earth">
+                <svg
+                  className="h-3 w-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                {costBadgeLabel(event)}
+              </span>
+            )
+          )}
           {event.status === "tentative" && (
             <span className="group/tip relative inline-flex items-center gap-1 rounded-full bg-sunset/10 px-2 py-0.5 text-xs font-medium text-sunset">
               Tentative
@@ -366,25 +407,6 @@ export default function EventCard({
                 />
               </svg>
               {timeRange}
-            </span>
-          )}
-
-          {event.price && (
-            <span className="flex items-center gap-1">
-              <svg
-                className="h-3.5 w-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              {event.price}
             </span>
           )}
         </div>

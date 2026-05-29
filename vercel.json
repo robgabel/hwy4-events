@@ -29,6 +29,10 @@
       "schedule": "0 15 * * *"
     },
     {
+      "path": "/api/extract-prices",
+      "schedule": "30 13 * * *"
+    },
+    {
       "path": "/api/check-events",
       "schedule": "0 18 * * *"
     },
