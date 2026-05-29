@@ -167,6 +167,28 @@ export default function RootLayout({
               <LastChecked />
             </Suspense>
 
+            {/* Time-based discovery: every page links to the evergreen
+             * temporal aggregators. Cheap, high-value internal links. */}
+            <nav
+              aria-label="Browse by time"
+              className="mt-5 text-sm text-stone"
+            >
+              <span className="mr-2 uppercase tracking-wider text-stone">
+                What&apos;s on
+              </span>
+              <Link href="/this-weekend" className="text-pine hover:underline">
+                This Weekend
+              </Link>
+              <span className="mx-1.5 text-stone-light/50">·</span>
+              <Link href="/this-week" className="text-pine hover:underline">
+                This Week
+              </Link>
+              <span className="mx-1.5 text-stone-light/50">·</span>
+              <Link href="/this-month" className="text-pine hover:underline">
+                This Month
+              </Link>
+            </nav>
+
             {/* Town directory: only rendered for towns with published landing
              * pages. Every published page gets a link from the footer of
              * every page on the site, which is the single biggest internal-
