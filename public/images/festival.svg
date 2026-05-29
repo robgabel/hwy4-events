@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7E9170"/>
+      <stop offset="100%" stop-color="#44543C"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <!-- Festoon string 1 -->
+  <path d="M0 30 Q100 58 200 30" fill="none" stroke="#EFE6D0" stroke-width="1.5" opacity="0.6"/>
+  <g>
+    <circle cx="20" cy="38" r="3.6" fill="#F2D98A"/>
+    <circle cx="50" cy="46" r="3.6" fill="#EFC56A"/>
+    <circle cx="80" cy="51" r="3.6" fill="#F2D98A"/>
+    <circle cx="110" cy="51" r="3.6" fill="#EFC56A"/>
+    <circle cx="140" cy="47" r="3.6" fill="#F2D98A"/>
+    <circle cx="170" cy="39" r="3.6" fill="#EFC56A"/>
+  </g>
+  <!-- Festoon string 2 -->
+  <path d="M0 60 Q100 84 200 60" fill="none" stroke="#EFE6D0" stroke-width="1.5" opacity="0.45"/>
+  <g opacity="0.85">
+    <circle cx="35" cy="69" r="3" fill="#F2D98A"/>
+    <circle cx="100" cy="78" r="3" fill="#EFC56A"/>
+    <circle cx="165" cy="69" r="3" fill="#F2D98A"/>
+  </g>
+  <!-- Confetti -->
+  <g opacity="0.9">
+    <rect x="46" y="92" width="5" height="5" rx="1" fill="#E0594C" transform="rotate(20 48 94)"/>
+    <rect x="128" y="98" width="5" height="5" rx="1" fill="#5FA8C4" transform="rotate(-15 130 100)"/>
+    <rect x="92" y="108" width="5" height="5" rx="1" fill="#F2B441" transform="rotate(35 94 110)"/>
+    <circle cx="156" cy="112" r="2.6" fill="#F5F2E8"/>
+    <circle cx="34" cy="116" r="2.6" fill="#F2B441"/>
+  </g>
+  <!-- Fairground tents -->
+  <rect x="0" y="150" width="200" height="50" fill="#34422E"/>
+  <g>
+    <path d="M40 150 L62 116 L84 150 Z" fill="#2C3A26"/>
+    <path d="M84 150 L110 108 L136 150 Z" fill="#28351F"/>
+    <path d="M132 150 L156 120 L180 150 Z" fill="#2C3A26"/>
+    <!-- pennants -->
+    <path d="M62 116 L62 106 L72 109 L62 112 Z" fill="#E0594C"/>
+    <path d="M110 108 L110 96 L121 99.5 L110 103 Z" fill="#F2B441"/>
+  </g>
+</svg>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6FA8C4"/>
+      <stop offset="100%" stop-color="#41809B"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <!-- Sun -->
+  <circle cx="44" cy="46" r="14" fill="#F5DC78" opacity="0.85"/>
+  <!-- Clouds -->
+  <g fill="#FFFFFF" opacity="0.5">
+    <ellipse cx="150" cy="44" rx="20" ry="8"/>
+    <ellipse cx="136" cy="46" rx="11" ry="6"/>
+  </g>
+  <!-- Ground -->
+  <rect x="0" y="150" width="200" height="50" fill="#5E8A52"/>
+  <!-- Flagpole -->
+  <line x1="158" y1="70" x2="158" y2="152" stroke="#C9BBA0" stroke-width="2.5"/>
+  <path d="M158 72 L178 78 L158 86 Z" fill="#C4493C"/>
+  <!-- Town hall -->
+  <path d="M50 110 L100 80 L150 110 Z" fill="#C97A4A"/>
+  <rect x="58" y="110" width="84" height="42" fill="#EAE3CC"/>
+  <!-- Columns -->
+  <g fill="#D8CFBE">
+    <rect x="66" y="116" width="7" height="36"/>
+    <rect x="84" y="116" width="7" height="36"/>
+    <rect x="109" y="116" width="7" height="36"/>
+    <rect x="127" y="116" width="7" height="36"/>
+  </g>
+  <!-- Door -->
+  <rect x="93" y="126" width="14" height="26" rx="1" fill="#5A8FA8"/>
+  <!-- Pine -->
+  <g>
+    <path d="M22 152 L34 118 L46 152 Z" fill="#2E4326"/>
+    <rect x="31" y="152" width="6" height="10" fill="#4A3826"/>
+  </g>
+</svg>

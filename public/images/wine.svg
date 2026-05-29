@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9A4258"/>
+      <stop offset="100%" stop-color="#5A2433"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <!-- Low sun -->
+  <circle cx="150" cy="60" r="18" fill="#E8A36A" opacity="0.8"/>
+  <!-- Hill -->
+  <path d="M0 132 Q100 116 200 132 L200 200 L0 200 Z" fill="#6E2C3D"/>
+  <!-- Vineyard rows -->
+  <g stroke="#4A1E2A" stroke-width="2" opacity="0.7" stroke-linecap="round">
+    <line x1="16" y1="200" x2="92" y2="136"/>
+    <line x1="58" y1="200" x2="96" y2="136"/>
+    <line x1="100" y1="200" x2="100" y2="136"/>
+    <line x1="142" y1="200" x2="104" y2="136"/>
+    <line x1="184" y1="200" x2="108" y2="136"/>
+  </g>
+  <!-- Wine glass -->
+  <g transform="translate(100 150)">
+    <path d="M-15 -34 C-15 -10 -8 -4 0 -4 C8 -4 15 -10 15 -34 Z" fill="#F0E6D2"/>
+    <path d="M-12 -30 C-12 -13 -6 -7 0 -7 C6 -7 12 -13 12 -30 Z" fill="#7A2235"/>
+    <rect x="-1.5" y="-4" width="3" height="24" fill="#F0E6D2"/>
+    <ellipse cx="0" cy="22" rx="12" ry="3.5" fill="#F0E6D2"/>
+  </g>
+</svg>

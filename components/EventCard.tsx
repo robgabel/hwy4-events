@@ -56,14 +56,14 @@ const ORG_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_IMAGES: Record<EventCategory, string> = {
-  live_music: "/images/live_music.jpg",
-  festival: "/images/festival.jpg",
-  civic: "/images/civic.jpg",
+  live_music: "/images/live_music.svg",
+  festival: "/images/festival.svg",
+  civic: "/images/civic.svg",
   hike_walk: "/images/hike_walk.svg",
   kids: "/images/kids.svg",
-  wine: "/images/wine_glasses.jpg",
+  wine: "/images/wine.svg",
   games: "/images/games.svg",
-  other: "/images/other.jpg",
+  other: "/images/other.svg",
 };
 
 const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
@@ -86,7 +86,10 @@ function getEventImage(event: CollapsedEvent): string {
   if (venueLower.includes("ironstone")) return "/images/ironstone.jpg";
   if (venueLower.includes("bear valley")) return "/images/bear_valley.jpg";
   if (venueLower.includes("sequoia woods")) return "/images/sequoia_woods.jpg";
-  if (venueLower.includes("moose lodge")) return "/images/lodge.jpg";
+  if (venueLower.includes("moose lodge"))
+    return event.visibility === "private"
+      ? "/images/moose_members.svg"
+      : "/images/lodge.jpg";
   if (venueLower.includes("fairgrounds")) return "/images/fairgrounds.jpg";
   if (venueLower.includes("watering hole")) return "/images/brewery.svg";
   if (venueLower.includes("snowflake") || venueLower.includes("blue lake bistro") || venueLower.includes("bls ")) return "/images/lodge.jpg";
@@ -100,8 +103,8 @@ function getEventImage(event: CollapsedEvent): string {
   // 4. Category-specific refinements
   if (event.category === "live_music") {
     if (venueLower.includes("winery") || venueLower.includes("vineyard"))
-      return "/images/wine_glasses.jpg";
-    return "/images/acoustic_guitar.jpg";
+      return "/images/wine.svg";
+    return "/images/live_music.svg";
   }
 
   // 5. Category fallback
