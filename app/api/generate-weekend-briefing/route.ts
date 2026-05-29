@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL } from "@/lib/constants";
+import { dedupeEvents } from "@/lib/dedupe-events";
 
 export const maxDuration = 60;
 
@@ -71,7 +72,7 @@ async function getWeekendEvents() {
     .order("start_time", { ascending: true });
 
   if (error) throw error;
-  return data || [];
+  return dedupeEvents(data || []);
 }
 
 async function getCancelledWeekendEvents() {

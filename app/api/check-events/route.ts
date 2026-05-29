@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { findDuplicateClusters } from "@/lib/dedupe-events";
 
 export const maxDuration = 60;
 
@@ -41,7 +42,12 @@ interface EventRow {
   id: string;
   name: string;
   date: string;
+  town: string;
   venue_name: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  description: string | null;
+  artists: string[] | null;
   category: string | null;
   visibility: string | null;
   image_url: string | null;
@@ -83,7 +89,7 @@ export async function GET(request: Request) {
   const { data: events, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, venue_name, category, visibility, image_url, org_slug, last_scraped_at, status"
+      "id, name, date, town, venue_name, start_time, end_time, description, artists, category, visibility, image_url, org_slug, last_scraped_at, status"
     )
     .gte("date", today)
     .order("date", { ascending: true });
@@ -120,6 +126,27 @@ export async function GET(request: Request) {
       });
     }
   }
+
+  // 1b. Same-event duplicates the name check misses — same town + date +
+  // exact time + a strong signal (venue / description / artists) but a
+  // different title. These slip past the title-based dedup_key. Report only
+  // clusters whose normalized names differ, to avoid double-counting (1).
+  const sameEventDupes = findDuplicateClusters(
+    rows.filter((r) => r.status !== "cancelled")
+  )
+    .filter((cluster) => {
+      const distinctNames = new Set(cluster.map((r) => normalizeName(r.name)));
+      return distinctNames.size > 1;
+    })
+    .map((cluster) => ({
+      date: cluster[0].date,
+      town: cluster[0].town,
+      start_time: cluster[0].start_time,
+      count: cluster.length,
+      ids: cluster.map((r) => r.id),
+      names: cluster.map((r) => r.name),
+      venues: cluster.map((r) => r.venue_name ?? "—"),
+    }));
 
   // 2. Hidden future events.
   const hidden = rows
@@ -163,6 +190,7 @@ export async function GET(request: Request) {
     total_future_events: rows.length,
     issues: {
       duplicates: duplicates.length,
+      same_event_duplicates: sameEventDupes.length,
       hidden: hidden.length,
       missing_venue: missingVenue.length,
       invalid_category: invalidCategory.length,
@@ -186,6 +214,15 @@ export async function GET(request: Request) {
         );
       }
       if (duplicates.length > 10) lines.push(`  …and ${duplicates.length - 10} more`);
+    }
+    if (sameEventDupes.length > 0) {
+      lines.push(`\n*${sameEventDupes.length} same-event duplicate(s) (diff title, same venue/time):*`);
+      for (const d of sameEventDupes.slice(0, 10)) {
+        lines.push(
+          `• \`${d.date}\` ${d.start_time ?? "?"} ${d.town} — ${d.names.map((n) => `"${n}"`).join(" / ")}`
+        );
+      }
+      if (sameEventDupes.length > 10) lines.push(`  …and ${sameEventDupes.length - 10} more`);
     }
     if (hidden.length > 0) {
       lines.push(`\n*${hidden.length} hidden future event(s):*`);
@@ -223,6 +260,7 @@ export async function GET(request: Request) {
     summary,
     details: {
       duplicates,
+      same_event_duplicates: sameEventDupes,
       hidden,
       missing_venue: missingVenue,
       invalid_category: invalidCategory,

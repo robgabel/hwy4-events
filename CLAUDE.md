@@ -13,10 +13,19 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 ## Architecture
 
 - Events are scraped externally and loaded into Supabase — this app is **read-only** against event data (except community submissions via `/submit`)
-- `dedup_key` on events prevents duplicates from scrapers
 - Weekly recurring events use `is_weekly: true` and get collapsed in the UI (`CollapsedEvent` type)
 - `site_config` table is a key-value store (briefing text, timestamps, etc.)
 - `hwy4_orgs` maps venues/sources to display names and slugs for org pages
+
+## Deduplication (defense in depth)
+
+The same real-world event can appear twice: one source re-lists it under a changed title, or two sources describe it independently (e.g. the GoCalaveras aggregator lists "Live Music @ The Lube Room" while the venue feed lists "Live at The Lube: Poison Oakies" — same night). The title-based `dedup_key` only catches byte-identical re-scrapes of the *same* title, so it cannot see these. Three layers guard against dupes:
+
+1. **Read-time collapse** — [lib/dedupe-events.ts](lib/dedupe-events.ts) (`dedupeEvents`) runs on every user-facing list (homepage, town pages) and both briefing generators. It buckets by `town | date | exact start | exact end | visibility`, then merges rows in a bucket only on a strong identity signal: near-identical title, overlapping artists, near-identical description, or same venue + a generic placeholder title. **Two different specific titles never merge on venue/time alone** (a park hosts different events back to back). Keeps the richest row (`pickSurvivor`); penalizes scraper-artifact venues like `@Murphys Park featuring …`.
+2. **Write-time merge** — `scripts/lib/dedup.ts` (`isStrongEventMatch` / `buildStrongMatchUpdate`) replaces the old name-only fuzzy. When a scraped event has no `dedup_key`/`source_event_id` hit, it merges into an existing same-date/same-town row that shares an exact time slot + the same strong signal, field-merging so the survivor keeps the best of both (and unions artists). Conservative — never merges on title similarity alone.
+3. **Backfill + audit** — [scripts/backfill-dedup.ts](scripts/backfill-dedup.ts) is a re-runnable repair using the exact read-time definition: `tsx backfill-dedup.ts` (dry-run) / `--execute` (apply). Needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`. `/api/check-events` reports same-event dupes (venue+time, different title) that the old name-only check missed.
+
+The "same event" rule is defined **once** in `lib/dedupe-events.ts` and mirrored in `scripts/lib/dedup.ts`; the backfill and audit import the shared one so the definition can't drift.
 
 ## Cron Jobs (vercel.json)
 
