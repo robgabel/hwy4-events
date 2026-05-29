@@ -280,6 +280,41 @@ function timesAnchor(a: MatchableRow, b: MatchableRow): boolean {
   return true;
 }
 
+/** Minimal shape carrying an act's identity + searchable text. */
+type ActLike = { name?: string | null; description?: string | null; artists?: string[] | null };
+
+/** Normalized "act identity" strings for a row: its title plus any artists. */
+function actStrings(e: ActLike): string[] {
+  const out: string[] = [];
+  const n = normalizeName(e.name ?? "");
+  if (n) out.push(n);
+  for (const a of e.artists ?? []) {
+    const na = normalizeName(a ?? "");
+    if (na) out.push(na);
+  }
+  return out;
+}
+
+/** Searchable text of a row: title + description, normalized. */
+function searchBlob(e: ActLike): string {
+  return normalizeName(`${e.name ?? ""} ${e.description ?? ""}`);
+}
+
+/** A sibling listing names this row's act. The cross-source split where an
+ *  aggregator lists the venue's umbrella series ("… Hilltop Concert Series",
+ *  artists empty) while the venue feed lists the act ("Jimbo Scott & Yesterdays
+ *  Biscuits") — each describing the other. If one row's specific act name
+ *  (title or artist) appears verbatim in the other's title+description they're
+ *  the same show. Caller guards with venue match + time anchor; the length
+ *  floor keeps short/common tokens from triggering it. */
+function actNamedInOther(a: ActLike, b: ActLike): boolean {
+  const aBlob = searchBlob(a);
+  const bBlob = searchBlob(b);
+  const hit = (acts: string[], blob: string) =>
+    acts.some((s) => s.length >= 6 && blob.includes(s));
+  return hit(actStrings(a), bBlob) || hit(actStrings(b), aBlob);
+}
+
 /** A title generic enough to be an aggregator placeholder for whatever act is
  *  playing ("Live Music @ The Lube Room"). */
 function isGenericTitle(name: string): boolean {
@@ -313,6 +348,12 @@ function isStrongEventMatch(event: ExtractedEvent, candidate: MatchableRow & { n
   if (
     venueMatch(normalizeVenue(event.venue_name), normalizeVenue(candidate.venue_name)) &&
     (isGenericTitle(event.name) || (candidate.name ? isGenericTitle(candidate.name) : false))
+  ) {
+    return true;
+  }
+  if (
+    venueMatch(normalizeVenue(event.venue_name), normalizeVenue(candidate.venue_name)) &&
+    actNamedInOther(event, candidate)
   ) {
     return true;
   }

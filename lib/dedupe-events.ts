@@ -126,6 +126,63 @@ function artistsOverlap(
   return b.some((x) => setA.has(x.toLowerCase().trim()));
 }
 
+/** "HH:MM" / "HH:MM:SS" / "H:MM" → "HH:MM". Mirrors scripts/lib/dedup.ts. */
+function normalizeTime(t: string | null | undefined): string {
+  if (!t) return "";
+  const [h, m] = t.split(":");
+  return `${(h ?? "").padStart(2, "0")}:${(m ?? "00").padStart(2, "0")}`;
+}
+
+/** Two rows describe the same time slot: starts must be known and equal, and
+ *  end times must agree *only when both are known*. A source that omits the end
+ *  time ("7:00 PM") must still anchor to the same source's fuller listing
+ *  ("7:00 PM – 10:00 PM") — keying on an exact end would split them apart. */
+function timesAnchor(a: DedupableEvent, b: DedupableEvent): boolean {
+  const sa = normalizeTime(a.start_time);
+  const sb = normalizeTime(b.start_time);
+  if (!sa || !sb || sa !== sb) return false;
+  const ea = normalizeTime(a.end_time);
+  const eb = normalizeTime(b.end_time);
+  if (ea && eb && ea !== eb) return false;
+  return true;
+}
+
+/** Normalized "act identity" strings for a row: its title plus any listed
+ *  artists — the specific-act names a sibling listing would mention. */
+function actStrings(e: DedupableEvent): string[] {
+  const out: string[] = [];
+  const n = normalizeName(e.name);
+  if (n) out.push(n);
+  for (const a of e.artists ?? []) {
+    const na = normalizeName(a ?? "");
+    if (na) out.push(na);
+  }
+  return out;
+}
+
+/** Searchable text of a row: title + description, normalized. */
+function searchBlob(e: DedupableEvent): string {
+  return normalizeName(`${e.name ?? ""} ${e.description ?? ""}`);
+}
+
+/** A sibling listing names this row's act. The classic cross-source split: an
+ *  aggregator lists the venue's umbrella series ("Brice Station Vineyards –
+ *  Hilltop Concert Series", artists empty) while the venue feed lists the act
+ *  itself ("Jimbo Scott & Yesterdays Biscuits") — each describing the other.
+ *  Neither title is similar, neither is a "Live Music" placeholder, and the
+ *  aggregator row often has no artists to overlap on. But the act's name shows
+ *  up verbatim in the other listing's title+description. If one row's specific
+ *  act name (title or artist) is a substring of the other's blob, they're the
+ *  same show. Caller guards with venue match + the time anchor; a length floor
+ *  keeps short/common tokens ("jam", "free") from triggering it. */
+function actNamedInOther(a: DedupableEvent, b: DedupableEvent): boolean {
+  const aBlob = searchBlob(a);
+  const bBlob = searchBlob(b);
+  const hit = (acts: string[], blob: string) =>
+    acts.some((s) => s.length >= 6 && blob.includes(s));
+  return hit(actStrings(a), bBlob) || hit(actStrings(b), aBlob);
+}
+
 /** A title generic enough that it's an aggregator placeholder for whatever act
  *  is playing — "Live Music @ The Lube Room". A generic + a specific title at
  *  the same venue and exact time are the same show. */
@@ -138,19 +195,22 @@ function isGenericTitle(name: string): boolean {
   );
 }
 
-/** Two rows already share town + date + exact start/end + visibility (the
- *  bucket key). Decide whether they're the same real event.
+/** Two rows already share town + date + visibility (the bucket key). Decide
+ *  whether they're the same real event.
  *
- *  Deliberately conservative: a shared venue + time slot is NOT enough on its
- *  own — a community park or lake legitimately hosts different events back to
- *  back. We require an identity signal that distinguishes "same show, two
- *  listings" from "two different events at the same place":
+ *  First they must describe the same time slot (`timesAnchor`): equal start,
+ *  end agreeing only when both are known. Then, deliberately conservative: a
+ *  shared venue + time slot is NOT enough on its own — a community park or lake
+ *  legitimately hosts different events back to back. We require an identity
+ *  signal that distinguishes "same show, two listings" from "two different
+ *  events at the same place":
  *   - near-identical titles, or
  *   - overlapping artists, or
  *   - near-identical descriptions, or
  *   - same venue AND one title is a generic placeholder.
  *  Two *different specific* titles never merge on venue/time alone. */
 function isSameEvent(a: DedupableEvent, b: DedupableEvent): boolean {
+  if (!timesAnchor(a, b)) return false;
   if (textSimilarity(a.name, b.name) >= 0.85) return true;
   if (artistsOverlap(a.artists, b.artists)) return true;
   if (
@@ -163,6 +223,12 @@ function isSameEvent(a: DedupableEvent, b: DedupableEvent): boolean {
   if (
     venueMatch(normalizeVenue(a.venue_name), normalizeVenue(b.venue_name)) &&
     (isGenericTitle(a.name) || isGenericTitle(b.name))
+  ) {
+    return true;
+  }
+  if (
+    venueMatch(normalizeVenue(a.venue_name), normalizeVenue(b.venue_name)) &&
+    actNamedInOther(a, b)
   ) {
     return true;
   }
@@ -189,12 +255,16 @@ function richness(e: DedupableEvent): number {
   return s;
 }
 
+/** Groups rows that *could* be the same event so clustering stays near-linear.
+ *  Keyed on town + date + normalized start + visibility — NOT end time: a
+ *  source that omits the end ("7:00 PM") must share a bucket with the same
+ *  source's fuller listing ("7:00 PM – 10:00 PM"). The end-time rule lives in
+ *  `timesAnchor` (inside `isSameEvent`), mirroring the write-time matcher. */
 function bucketKey(e: DedupableEvent): string {
   return [
     normalizeTown(e.town),
     e.date,
-    e.start_time ?? "",
-    e.end_time ?? "",
+    normalizeTime(e.start_time),
     e.visibility ?? "",
   ].join("|");
 }
