@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/constants";
 import { generateEventSlug } from "@/lib/slugs";
 import { getPublishedTownSlugs } from "@/app/towns/town-content";
+import { TEMPORAL_CONFIG } from "@/lib/date-windows";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
@@ -11,6 +12,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 1,
     },
+    // Evergreen temporal aggregators. Daily changefreq + high priority:
+    // permanent URLs whose content refreshes constantly, prime AEO targets.
+    ...Object.values(TEMPORAL_CONFIG).map((cfg) => ({
+      url: `${SITE_URL}${cfg.path}`,
+      lastModified: new Date(),
+      changeFrequency: "daily" as const,
+      priority: 0.9,
+    })),
     {
       url: `${SITE_URL}/about`,
       lastModified: new Date(),
