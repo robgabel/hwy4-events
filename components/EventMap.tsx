@@ -12,8 +12,12 @@ interface EventMapProps {
   town: string;
   venueName: string;
   address: string | null;
-  /** Clean address string; geocoded on mount to recenter on the actual venue. */
+  /** Clean address string; geocoded on mount only if pre-resolved coords aren't passed. */
   geocodeQuery?: string | null;
+  /** Pre-resolved center (server-geocoded venue, or town centroid fallback). */
+  mapLat?: number | null;
+  mapLng?: number | null;
+  mapZoom?: number;
 }
 
 const markerIcon = L.divIcon({
@@ -38,19 +42,31 @@ function Recenter({ center, zoom }: { center: [number, number]; zoom: number }) 
   return null;
 }
 
-export default function EventMap({ town, venueName, address, geocodeQuery }: EventMapProps) {
+export default function EventMap({
+  town,
+  venueName,
+  address,
+  geocodeQuery,
+  mapLat,
+  mapLng,
+  mapZoom,
+}: EventMapProps) {
   const townData = TOWN_INFO[town];
   const townCenter: [number, number] | null =
     townData?.lat != null && townData?.lng != null ? [townData.lat, townData.lng] : null;
   const townZoom = townData?.mapZoom ?? VENUE_ZOOM;
 
-  const [center, setCenter] = useState<[number, number] | null>(townCenter);
-  const [zoom, setZoom] = useState(townZoom);
+  // Prefer the server-resolved center (already geocoded for the static
+  // thumbnail) so the interactive map opens on the venue without a round-trip.
+  const presetCenter: [number, number] | null =
+    mapLat != null && mapLng != null ? [mapLat, mapLng] : null;
 
-  // Geocode the venue after mount (off the page-load path), then recenter and
-  // zoom in to the exact point (even for wide-default rural towns).
+  const [center, setCenter] = useState<[number, number] | null>(presetCenter ?? townCenter);
+  const [zoom, setZoom] = useState(mapZoom ?? townZoom);
+
+  // Only geocode on mount if the page didn't already hand us coordinates.
   useEffect(() => {
-    if (!geocodeQuery) return;
+    if ((mapLat != null && mapLng != null) || !geocodeQuery) return;
     let cancelled = false;
     fetch(`/api/geocode?q=${encodeURIComponent(geocodeQuery)}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -64,7 +80,7 @@ export default function EventMap({ town, venueName, address, geocodeQuery }: Eve
     return () => {
       cancelled = true;
     };
-  }, [geocodeQuery]);
+  }, [geocodeQuery, mapLat, mapLng]);
 
   if (!center) return null;
 

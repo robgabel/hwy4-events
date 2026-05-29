@@ -35,8 +35,11 @@ export async function geocodeAddress(query: string): Promise<LatLng | null> {
         "User-Agent": "hwy4events.com (events map; contact: hello@hwy4events.com)",
         "Accept-Language": "en",
       },
-      // Cache the geocode result for a week across renders/requests.
-      next: { revalidate: 60 * 60 * 24 * 7 },
+      // Cache the geocode result for a week across renders/requests. Tagged so
+      // a venue/address backfill can bust it on demand (revalidateTag) rather
+      // than waiting out the week — otherwise a corrected address keeps pinning
+      // the old coordinates until the cache expires.
+      next: { revalidate: 60 * 60 * 24 * 7, tags: ["geocode"] },
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return null;

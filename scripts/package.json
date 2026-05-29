@@ -8,8 +8,8 @@
     "scrape:bear-valley": "tsx scrape.ts --source bear-valley",
     "scrape:gocalaveras": "tsx scrape.ts --source gocalaveras",
     "tag-weekly": "tsx tag-weekly.ts",
-    "generate-town-maps": "tsx generate-town-maps.ts",
-    "backfill-venues": "tsx backfill-venues.ts"
+    "backfill-venues": "tsx backfill-venues.ts",
+    "warm-maps": "tsx warm-map-cache.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

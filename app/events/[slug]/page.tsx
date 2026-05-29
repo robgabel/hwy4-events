@@ -6,6 +6,7 @@ import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
+import { geocodeAddress } from "@/lib/geocode";
 import { buildEventOffer } from "@/lib/schema";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
@@ -174,9 +175,16 @@ export default async function EventPage({ params }: PageProps) {
       : startTime
     : null;
   const displayAddress = resolveDisplayAddress(event.address, event.town);
-  // Pure string (no network) — the map geocodes it lazily on tap so the page
-  // render never blocks on an external request.
   const geocodeQuery = buildGeocodeQuery(event.address, event.town);
+
+  // Geocode server-side (cached weekly, tag-busted on address change) so the
+  // static thumbnail is centered on the venue. Falls back to the town centroid
+  // when there's no street address or the geocode misses.
+  const geocoded = geocodeQuery ? await geocodeAddress(geocodeQuery) : null;
+  const townData = TOWN_INFO[event.town];
+  const mapLat = geocoded?.lat ?? townData?.lat ?? null;
+  const mapLng = geocoded?.lng ?? townData?.lng ?? null;
+  const mapZoom = geocoded ? 15 : townData?.mapZoom ?? 13;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -281,6 +289,9 @@ export default async function EventPage({ params }: PageProps) {
           venueName={event.venue_name}
           address={event.address}
           geocodeQuery={geocodeQuery}
+          mapLat={mapLat}
+          mapLng={mapLng}
+          mapZoom={mapZoom}
         />
 
         {event.description && (
