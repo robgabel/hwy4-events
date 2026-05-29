@@ -130,13 +130,32 @@ function normalizeAddress(addr: string): string {
   return tokens.join(" ").trim();
 }
 
-const ADDRESS_INDEX: { norm: string; key: string; venue: KnownVenue }[] = [];
+const _addressCandidates: { norm: string; key: string; venue: KnownVenue }[] = [];
 for (const [key, venue] of Object.entries(KNOWN_VENUES)) {
   if (!venue.address) continue;
-  ADDRESS_INDEX.push({ norm: normalizeAddress(venue.address), key, venue });
+  _addressCandidates.push({ norm: normalizeAddress(venue.address), key, venue });
 }
-// Longer normalized address first so the most specific wins
-ADDRESS_INDEX.sort((a, b) => b.norm.length - a.norm.length);
+
+// Some venues genuinely share a street address (e.g. Ebbetts Pass Moose Lodge
+// and White Pines Lake Park are both 1965 Blagen Rd — co-located at the park
+// entrance). An address that maps to more than one distinct venue can't
+// disambiguate, so we exclude it from the address index entirely and let the
+// alias/title text scan decide. Prevents an event correctly named for one
+// venue from being flipped to the other purely on a shared address.
+const _normToKeys = new Map<string, Set<string>>();
+for (const c of _addressCandidates) {
+  const set = _normToKeys.get(c.norm) ?? new Set<string>();
+  set.add(c.key);
+  _normToKeys.set(c.norm, set);
+}
+const AMBIGUOUS_ADDRESSES = new Set(
+  [..._normToKeys].filter(([, keys]) => keys.size > 1).map(([norm]) => norm)
+);
+
+const ADDRESS_INDEX = _addressCandidates
+  .filter((c) => !AMBIGUOUS_ADDRESSES.has(c.norm))
+  // Longer normalized address first so the most specific wins
+  .sort((a, b) => b.norm.length - a.norm.length);
 
 /**
  * Match by address: the registry's normalized address must appear as a
@@ -169,6 +188,27 @@ function matchByAddress(eventAddress: string): VenueMatch | null {
     }
   }
   return null;
+}
+
+/**
+ * True if `alias` appears in `haystack` (already normalized) as a whole token —
+ * i.e. not embedded inside a larger word. Used for both venue-name self-match
+ * and the title/description/URL scan.
+ */
+function containsAlias(haystack: string, alias: string): boolean {
+  const validBoundary = (ch: string) => /[\s,.\-—–;:!?'"()&/|]/.test(ch);
+  let from = 0;
+  for (;;) {
+    const idx = haystack.indexOf(alias, from);
+    if (idx === -1) return false;
+    const before = idx > 0 ? haystack[idx - 1] : " ";
+    const after =
+      idx + alias.length < haystack.length ? haystack[idx + alias.length] : " ";
+    const okBefore = validBoundary(before) || !/\w/.test(before);
+    const okAfter = validBoundary(after) || !/\w/.test(after);
+    if (okBefore && okAfter) return true;
+    from = idx + 1;
+  }
 }
 
 function toMatch(venue: KnownVenue, key: string, alias: string): VenueMatch {
@@ -222,49 +262,45 @@ export function matchVenue(
   eventUrl: string | null = null
 ): VenueMatch | null {
   const venueIsGeneric = isGenericVenue(currentVenue);
+  const venueNorm = normalize(currentVenue);
 
-  // Layer 1: address (highest confidence). Even overrides a non-generic
-  // venue name, because a matching address is unambiguous and the prior
-  // venue text was likely a partial/marketing label ("Tasting Room", etc.).
+  // Layer 0: the venue_name itself names a known venue. Trust the name over
+  // everything else — a shared street address must NOT flip a correctly-named
+  // venue (e.g. Hovey Winery and Murphys Pourhouse are both 350 Main St), and
+  // title text must not either. Resolves messy-but-named strings like
+  // "Bear Valley Music Festival Tent" or "White Pines Lake: White Pines, CA".
+  // Skipped for generic placeholder names, which carry no venue signal.
+  if (!venueIsGeneric) {
+    for (const { alias, key, venue } of ALIAS_INDEX) {
+      if (!containsAlias(venueNorm, alias)) continue;
+      if (venueNorm === normalize(venue.canonical)) return null; // already canonical
+      return toMatch(venue, key, alias);
+    }
+  }
+
+  // Layer 1: address (highest confidence for a venue that did NOT self-identify
+  // above — e.g. a partial marketing label like "Tasting Room").
   if (address) {
     const addrMatch = matchByAddress(address);
     if (addrMatch) {
-      // If non-generic venue already names this same canonical venue, no-op.
-      if (!venueIsGeneric && normalize(currentVenue) === normalize(addrMatch.venue_name)) {
+      if (!venueIsGeneric && venueNorm === normalize(addrMatch.venue_name)) {
         return null;
       }
       return addrMatch;
     }
   }
 
-  // Layer 2: text scan across title + description + venue_name + URL slug
-  const searchText = normalize(
-    [title, description ?? "", currentVenue, urlSlugText(eventUrl)].join(" ")
-  );
-
-  for (const { alias, key, venue } of ALIAS_INDEX) {
-    const idx = searchText.indexOf(alias);
-    if (idx === -1) continue;
-
-    const before = idx > 0 ? searchText[idx - 1] : " ";
-    const after =
-      idx + alias.length < searchText.length
-        ? searchText[idx + alias.length]
-        : " ";
-
-    const validBoundary = (ch: string) => /[\s,.\-—–;:!?'"()&/|]/.test(ch);
-    if (!validBoundary(before) && /\w/.test(before)) continue;
-    if (!validBoundary(after) && /\w/.test(after)) continue;
-
-    // If current venue is already specific and matches this same venue, no change needed
-    if (!venueIsGeneric && normalize(currentVenue) === normalize(venue.canonical)) {
-      return null;
+  // Layer 2: text scan across title + description + URL slug. Only overrides a
+  // generic placeholder venue — a title mention must never clobber a specific
+  // (but un-self-identified) venue name.
+  if (venueIsGeneric) {
+    const searchText = normalize(
+      [title, description ?? "", currentVenue, urlSlugText(eventUrl)].join(" ")
+    );
+    for (const { alias, key, venue } of ALIAS_INDEX) {
+      if (!containsAlias(searchText, alias)) continue;
+      return toMatch(venue, key, alias);
     }
-
-    // Only override if the current venue is generic
-    if (!venueIsGeneric) continue;
-
-    return toMatch(venue, key, alias);
   }
 
   return null;

@@ -121,7 +121,11 @@ Page content:
 ${content}`;
 
   const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    // Sonnet, not Haiku: this is full free-text extraction of venue / address /
+    // dates from unstructured pages (BLS flyers, Facebook, generic sources).
+    // It's the highest-stakes call in the pipeline — a wrong venue/address here
+    // ships straight to the map — so accuracy beats the per-call cost savings.
+    model: "claude-sonnet-4-6",
     max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });

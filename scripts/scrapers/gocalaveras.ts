@@ -4,6 +4,7 @@ import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
+import { isNonCorridorAddress } from "../lib/corridor.js";
 
 const EVENTS_URL = "https://www.gocalaveras.com/events/";
 const AJAX_URL = "https://www.gocalaveras.com/wp-admin/admin-ajax.php";
@@ -558,46 +559,6 @@ function findCorridorTownInString(s: string | null | undefined): string | null {
 }
 
 /**
- * Known nearby cities that are NOT in the Hwy 4 corridor — events located in
- * these cities should be filtered out, even if the scraper/LLM tagged them
- * with a corridor town.
- *
- * Order matters: longer/more specific names first so e.g. "San Andreas" is
- * matched before any "Andreas" substring confusion.
- */
-const NON_CORRIDOR_CITIES = [
-  "mokelumne hill",
-  "san andreas",
-  "valley springs",
-  "wallace",
-  "rail road flat",
-  "railroad flat",
-  "west point",
-  "mountain ranch",
-  "burson",
-  "campo seco",
-  "glencoe",
-  "jackson",
-  "sutter creek",
-  "pioneer",
-  "stockton",
-  "lodi",
-  "sonora",
-  "columbia",
-  "jamestown",
-];
-
-/** Returns true if the address text mentions a known non-corridor city. */
-function isNonCorridorAddress(addr: string | null | undefined): boolean {
-  if (!addr) return false;
-  const lower = addr.toLowerCase();
-  for (const c of NON_CORRIDOR_CITIES) {
-    if (lower.includes(c)) return true;
-  }
-  return false;
-}
-
-/**
  * Fetch an EventON event page and extract the fields that the AJAX calendar feed leaves out:
  * full description, full address, organizer address, image.
  *
@@ -880,7 +841,11 @@ Return ONLY the JSON array, e.g. [0, 3, 5] — no other text.`;
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      // Sonnet, not Haiku: dedup decides whether to DROP a scraped event as a
+      // duplicate. A false positive silently deletes a real event; a false
+      // negative ships a visible dupe. Correctness-critical, so use the
+      // stronger model even though this runs on every GoCalaveras scrape.
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     });

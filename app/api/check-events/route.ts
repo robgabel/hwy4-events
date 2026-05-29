@@ -29,6 +29,47 @@ const VALID_CATEGORIES = [
   "other",
 ];
 
+/**
+ * Venue names the scraper uses when it couldn't resolve a real venue. Kept in
+ * sync with scripts/lib/venues.ts GENERIC_VENUE_NAMES — duplicated here because
+ * the Next app and the scraper package have separate module roots.
+ */
+const GENERIC_VENUE_NAMES = new Set([
+  "downtown murphys",
+  "unknown venue",
+  "unknown",
+  "tbd",
+  "angels camp",
+  "murphys",
+  "arnold",
+  "copperopolis",
+  "avery",
+  "dorrington",
+  "camp connell",
+  "bear valley",
+  "white pines",
+]);
+const POISONED_VENUE_PREFIX = /^(featuring|hosted by|with|feat\.?|w\/)\b/;
+
+/** A venue_name that names a real place (not a scraper fallback / poisoned string). */
+function isUnresolvedVenue(venue: string | null): boolean {
+  if (!venue) return false; // null handled by the missing_venue check
+  const n = venue.toLowerCase().trim();
+  return GENERIC_VENUE_NAMES.has(n) || POISONED_VENUE_PREFIX.test(n);
+}
+
+/** A street address with a leading house number, e.g. "472 Main St, Murphys". */
+function looksLikeStreetAddress(a: string | null): boolean {
+  if (!a) return false;
+  return /^\d+[A-Z]?\s+[A-Za-z]/.test(a.trim());
+}
+
+/** A town-only address with no street component, e.g. "Murphys, CA 95247". */
+function isTownOnlyAddress(a: string | null): boolean {
+  if (!a) return false;
+  return /^[A-Za-z .'-]+,\s*(CA|California)(\s+\d{5}(-\d{4})?)?\s*$/i.test(a.trim());
+}
+
 interface DuplicateGroup {
   date: string;
   normalized_name: string;
@@ -44,6 +85,7 @@ interface EventRow {
   date: string;
   town: string;
   venue_name: string | null;
+  address: string | null;
   start_time: string | null;
   end_time: string | null;
   description: string | null;
@@ -89,7 +131,7 @@ export async function GET(request: Request) {
   const { data: events, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, town, venue_name, start_time, end_time, description, artists, category, visibility, image_url, org_slug, last_scraped_at, status"
+      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, last_scraped_at, status"
     )
     .gte("date", today)
     .order("date", { ascending: true });
@@ -172,6 +214,24 @@ export async function GET(request: Request) {
     .filter((r) => r.org_slug === "blue-lake-springs" && !r.image_url)
     .map((r) => ({ id: r.id, name: r.name, date: r.date }));
 
+  // Unresolved venue: a scraper fallback ("Unknown Venue", a bare town) or a
+  // poisoned string ("Featuring …"). Distinct from missing_venue (null).
+  const unresolvedVenue = rows
+    .filter((r) => isUnresolvedVenue(r.venue_name))
+    .map((r) => ({ id: r.id, name: r.name, date: r.date, venue_name: r.venue_name }));
+
+  // Unresolved address: null or town-only (pins the map to the town centroid
+  // instead of the venue). These are the rows a registry entry would fix.
+  const unresolvedAddress = rows
+    .filter((r) => !looksLikeStreetAddress(r.address) && (!r.address || isTownOnlyAddress(r.address)))
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      date: r.date,
+      venue_name: r.venue_name,
+      address: r.address,
+    }));
+
   // 4. Stale scrapes — future events whose last_scraped_at is > 14 days old.
   const stale = rows
     .filter(
@@ -193,6 +253,8 @@ export async function GET(request: Request) {
       same_event_duplicates: sameEventDupes.length,
       hidden: hidden.length,
       missing_venue: missingVenue.length,
+      unresolved_venue: unresolvedVenue.length,
+      unresolved_address: unresolvedAddress.length,
       invalid_category: invalidCategory.length,
       missing_image_bls: missingImageBls.length,
       stale_scrapes: stale.length,
@@ -234,6 +296,20 @@ export async function GET(request: Request) {
     if (missingVenue.length > 0) {
       lines.push(`\n*${missingVenue.length} event(s) missing venue*`);
     }
+    if (unresolvedVenue.length > 0) {
+      lines.push(`\n*${unresolvedVenue.length} event(s) with an unresolved venue:*`);
+      for (const u of unresolvedVenue.slice(0, 5)) {
+        lines.push(`• \`${u.date}\` ${u.name} — venue="${u.venue_name}"`);
+      }
+      if (unresolvedVenue.length > 5) lines.push(`  …and ${unresolvedVenue.length - 5} more (add to scripts/lib/venues.ts)`);
+    }
+    if (unresolvedAddress.length > 0) {
+      lines.push(`\n*${unresolvedAddress.length} event(s) with no precise address:*`);
+      for (const u of unresolvedAddress.slice(0, 5)) {
+        lines.push(`• \`${u.date}\` ${u.name} @ ${u.venue_name} — address=${u.address ?? "null"}`);
+      }
+      if (unresolvedAddress.length > 5) lines.push(`  …and ${unresolvedAddress.length - 5} more`);
+    }
     if (invalidCategory.length > 0) {
       lines.push(`\n*${invalidCategory.length} event(s) with invalid/missing category*`);
     }
@@ -263,6 +339,8 @@ export async function GET(request: Request) {
       same_event_duplicates: sameEventDupes,
       hidden,
       missing_venue: missingVenue,
+      unresolved_venue: unresolvedVenue,
+      unresolved_address: unresolvedAddress,
       invalid_category: invalidCategory,
       missing_image_bls: missingImageBls,
       stale_scrapes: stale,

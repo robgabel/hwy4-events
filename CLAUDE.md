@@ -85,6 +85,7 @@ Some events charge admission (Brice Station concerts, ticketed festivals). The f
 - Vercel auto-deploys from `main`
 - Migrations in `supabase/migrations/` — apply via Supabase dashboard or CLI
 - No test suite currently
+- **Venue & address resolution:** `scripts/lib/venues.ts` is the venue registry (canonical name, aliases, town, street address) — the single source of truth. The matcher (`scripts/lib/venue-matcher.ts` `applyVenueDetection`) resolves generic/messy venue names; the upsert path (`scripts/lib/dedup.ts` `normalizeEventLocation`) fills a registry address when an event's address is missing or town-only. When a real venue shows up with a bad/missing address, add it to the registry — don't hand-edit rows. To retro-fix existing rows after a registry change, run `cd scripts && npm run backfill-venues` (dry-run; add `--apply` to write, `--future-only` to limit). Out-of-corridor venues are dropped at write time via `scripts/lib/corridor.ts`. The daily `/api/check-events` audit reports any remaining unresolved venues / town-only addresses to Slack.
 - **Static town maps:** the event detail page shows a pre-generated town map thumbnail (`public/maps/<town-slug>.webp`) and only loads the interactive Leaflet map on tap. Regenerate with `cd scripts && npm run generate-town-maps` — re-run only when a town's coordinates change in `lib/towns.ts`. Maps are committed assets (9 towns, ~10kb each), stitched from CARTO Voyager tiles to match the on-tap interactive basemap.
 
 ## Project Structure

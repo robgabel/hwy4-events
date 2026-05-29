@@ -136,7 +136,9 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "bear valley mountain resort",
       "bear valley resort",
       "bear valley ski",
-      "bear valley music festival",
+      // NOTE: "bear valley music festival" is NOT aliased here — the festival
+      // is held in the Big White Tent in Bear Valley Village, not at the ski
+      // resort. See "big-white-tent" below.
     ],
     town: "Bear Valley",
     address: "2280 State Route 207, Bear Valley, CA 95223",
@@ -472,6 +474,10 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "big white tent",
       "big white tent, bear valley",
       "bear valley big white tent",
+      // The Bear Valley Music Festival is held in the Big White Tent.
+      "bear valley music festival tent",
+      "bear valley music festival",
+      "music festival tent",
     ],
     town: "Bear Valley",
     address: "39 No Name Rd #34, Bear Valley, CA 95223",
@@ -483,7 +489,66 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "perry walther",
     ],
     town: "Bear Valley",
-    // address pending — Alpine County records didn't surface a street number
+    address: "325 Creekside Drive, Bear Valley, CA 95223",
+  },
+  "hovey-winery": {
+    canonical: "Hovey Winery",
+    aliases: [
+      "hovey winery",
+      "hovey tasting room",
+      "hovey wine",
+      "hovey",
+    ],
+    town: "Murphys",
+    // Suite A, same 1850 Albert Michelson house building as Murphys Pourhouse
+    // (350 Main St). Distinct suite keeps the normalized address from
+    // colliding with the Pourhouse in the address index.
+    address: "350-A Main Street, Murphys, CA 95247",
+  },
+  "new-melones-lake": {
+    canonical: "New Melones Lake",
+    aliases: [
+      "new melones lake",
+      "new melones reservoir",
+      "new melones",
+      "glory hole recreation area",
+      "glory hole",
+    ],
+    town: "Angels Camp",
+    // Glory Hole Recreation Area — the main boat ramp / day-use access.
+    address: "6503 Glory Hole Rd, Angels Camp, CA 95222",
+  },
+  "white-pines-lake-park": {
+    canonical: "White Pines Lake Park",
+    aliases: [
+      "white pines lake park",
+      "white pines lake",
+      "white pines park",
+      // The Arnold Rim Trail's "Run the Rim" races start/finish here, and it
+      // is the trail's main day-use trailhead hub, so a bare "Arnold Rim Trail"
+      // venue defaults here. (NOT "art trailhead" — that would clobber specific
+      // named trailheads like "ART Trailhead – Valley View Dr.")
+      "arnold rim trail",
+      "run the rim",
+    ],
+    town: "Arnold",
+    // Shares 1965 Blagen Rd with Ebbetts Pass Moose Lodge (co-located at the
+    // park entrance). The matcher treats that address as ambiguous and resolves
+    // these two by venue/title text instead — see venue-matcher.ts.
+    address: "1965 Blagen Rd, Arnold, CA 95223",
+  },
+  "bear-valley-meadow": {
+    canonical: "Bear Valley Meadow",
+    aliases: [
+      "bear valley meadow",
+      "grizzly ballfield",
+      "bear valley ballfield",
+      "hermitfest west",
+      "hermitfest",
+    ],
+    town: "Bear Valley",
+    // Grizzly Ballfield / meadow at the village entrance.
+    address: "1 Bear Valley Road, Bear Valley, CA 95223",
   },
 };
 

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "./supabase-admin.js";
 import type { ExtractedEvent } from "./extract.js";
 import { KNOWN_VENUES } from "./venues.js";
 import { isGenericVenue } from "./venue-matcher.js";
+import { isOutOfCorridor } from "./corridor.js";
 
 /**
  * Emit one structured log line per data-quality failure at write time.
@@ -77,11 +78,38 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
     event.address = event.venue_name;
     event.venue_name = "Unknown Venue";
   }
-  // Registry fill-in
-  if (!event.address) {
+  // Registry fill-in. Fill when the address is missing OR imprecise — a
+  // town-only string like "Murphys, CA" / "Avery, CA 95224" carries no street
+  // number and pins the map to the town centroid, so a registry street address
+  // is strictly better. Precise (house-numbered) addresses are left untouched.
+  if (!looksLikeStreetAddress(event.address)) {
     const registered = findRegisteredAddress(event.venue_name);
     if (registered) event.address = registered;
   }
+}
+
+/**
+ * Drop events that are outside the Hwy 4 corridor. A belt-and-suspenders guard
+ * at the write boundary so it covers EVERY source — not just GoCalaveras, which
+ * filters at fetch time. Some aggregators (e.g. visit-calaveras) tag an
+ * out-of-area venue with a corridor town and would otherwise slip through.
+ */
+function dropOutOfCorridor(
+  events: ExtractedEvent[],
+  orgSlug: string
+): ExtractedEvent[] {
+  const kept: ExtractedEvent[] = [];
+  for (const e of events) {
+    if (isOutOfCorridor(e.address, e.venue_name)) {
+      console.warn(
+        `  OUT_OF_CORRIDOR source=${orgSlug} venue="${e.venue_name}" ` +
+        `date=${e.date} town="${e.town}" name="${e.name}" addr="${e.address ?? ""}"`
+      );
+      continue;
+    }
+    kept.push(e);
+  }
+  return kept;
 }
 
 export interface UpsertResult {
@@ -400,6 +428,8 @@ async function upsertEventsBatched(
   const result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
   const now = new Date().toISOString();
 
+  events = dropOutOfCorridor(events, orgSlug);
+
   // Pre-pass: normalize + emit quality signals + compute dedup keys
   const prepared = events.map((event) => {
     normalizeEventLocation(event);
@@ -644,6 +674,8 @@ export async function upsertEvents(
   }
 
   const result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
+
+  events = dropOutOfCorridor(events, orgSlug);
 
   for (const event of events) {
     // Normalize location fields before keying / writing — recovers from
