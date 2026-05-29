@@ -19,7 +19,7 @@ import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content"
 import { TEMPORAL_CONFIG, type WindowKey } from "@/lib/date-windows";
 
 const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, is_weekly, image_url";
+  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, is_weekly, image_url";
 
 async function getEventsInRange(
   start: string,
