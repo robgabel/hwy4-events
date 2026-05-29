@@ -39,7 +39,7 @@ const findEventBySlug = cache(async (slug: string): Promise<Hwy4Event | null> =>
       .select(EVENT_COLUMNS)
       .eq("date", dateMatch[0])
       .neq("status", "cancelled");
-    const hit = matchSlug(data as Hwy4Event[] | null, slug);
+    const hit = matchSlug(data as unknown as Hwy4Event[] | null, slug);
     if (hit) return hit;
   }
 
@@ -54,7 +54,7 @@ const findEventBySlug = cache(async (slug: string): Promise<Hwy4Event | null> =>
       .order("date", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (error || !data) break;
-    const hit = matchSlug(data as Hwy4Event[], slug);
+    const hit = matchSlug(data as unknown as Hwy4Event[], slug);
     if (hit) return hit;
     if (data.length < PAGE_SIZE) break;
   }

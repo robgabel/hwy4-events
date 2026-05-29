@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Hwy4Event, Hwy4Org } from "@/lib/types";
+import { dedupeEvents } from "@/lib/dedupe-events";
 import { JsonLd, buildItemList } from "@/lib/schema";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
@@ -19,7 +20,7 @@ async function getEvents(): Promise<Hwy4Event[]> {
     const { data, error, count } = await supabase
       .from("hwy4_events")
       .select(
-        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, is_weekly, verification_status",
+        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, image_url, visibility, org_slug, importance, robs_pick, is_weekly, verification_status",
         { count: "exact" }
       )
       .gte("date", today)
@@ -33,15 +34,21 @@ async function getEvents(): Promise<Hwy4Event[]> {
       return allEvents;
     }
 
-    allEvents = allEvents.concat(data as Hwy4Event[]);
+    allEvents = allEvents.concat(data as unknown as Hwy4Event[]);
     console.log(`[getEvents] Batch: from=${from}, rows=${data?.length}, total so far=${allEvents.length}, db count=${count}`);
 
     if (!data || data.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
 
-  console.log(`[getEvents] Done. Total events: ${allEvents.length}`);
-  return allEvents;
+  const deduped = dedupeEvents(allEvents);
+  if (deduped.length !== allEvents.length) {
+    console.log(
+      `[getEvents] Collapsed ${allEvents.length - deduped.length} duplicate event(s).`
+    );
+  }
+  console.log(`[getEvents] Done. Total events: ${deduped.length}`);
+  return deduped;
 }
 
 async function getGreeting(): Promise<string | null> {

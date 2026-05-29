@@ -178,6 +178,175 @@ function levenshtein(a: string, b: string): number {
   return dp[n];
 }
 
+// ---------------------------------------------------------------------------
+// Conservative cross-source / re-titled-event matcher.
+//
+// The dedup_key (normalized-title|date|town) only catches byte-identical
+// re-scrapes of the same title. It is blind to the same real event listed
+// under a different title — either by the same source over time, or by a
+// second source. This matcher closes that gap WITHOUT risking false merges:
+// two rows are the same event only if they share town + date + exact start
+// time (end times must agree when both are known) AND at least one strong
+// identity signal — same venue, near-identical description, or overlapping
+// artists. Title similarity alone is deliberately NOT a trigger.
+// ---------------------------------------------------------------------------
+
+const GENERIC_VENUES = new Set([
+  "", "tba", "tbd", "unknown", "unknown venue", "various",
+  "various locations", "online", "virtual",
+]);
+
+function normalizeVenue(venue: string | null | undefined): string {
+  if (!venue) return "";
+  return venue
+    .toLowerCase()
+    .trim()
+    .replace(/^@\s*/, "")
+    .replace(/^the\s+/, "")
+    .replace(/\s+featuring\s+.*$/, "")
+    .replace(/[^a-z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function venueMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (GENERIC_VENUES.has(a) || GENERIC_VENUES.has(b)) return false;
+  if (a === b) return true;
+  const shorter = a.length <= b.length ? a : b;
+  const longer = a.length <= b.length ? b : a;
+  return shorter.length >= 5 && longer.includes(shorter);
+}
+
+function artistsOverlap(
+  a: string[] | null | undefined,
+  b: string[] | null | undefined
+): boolean {
+  if (!a?.length || !b?.length) return false;
+  const setA = new Set(a.map((x) => x.toLowerCase().trim()).filter(Boolean));
+  return b.some((x) => setA.has(x.toLowerCase().trim()));
+}
+
+/** "HH:MM" / "HH:MM:SS" / "H:MM" → "HH:MM". */
+function normalizeTime(t: string | null | undefined): string {
+  if (!t) return "";
+  const [h, m] = t.split(":");
+  return `${(h ?? "").padStart(2, "0")}:${(m ?? "00").padStart(2, "0")}`;
+}
+
+interface MatchableRow {
+  start_time: string | null;
+  end_time: string | null;
+  venue_name: string | null;
+  description: string | null;
+  artists?: string[] | null;
+}
+
+function timesAnchor(a: MatchableRow, b: MatchableRow): boolean {
+  const sa = normalizeTime(a.start_time);
+  const sb = normalizeTime(b.start_time);
+  if (!sa || !sb || sa !== sb) return false; // start must match exactly
+  const ea = normalizeTime(a.end_time);
+  const eb = normalizeTime(b.end_time);
+  if (ea && eb && ea !== eb) return false; // end must agree when both known
+  return true;
+}
+
+/** A title generic enough to be an aggregator placeholder for whatever act is
+ *  playing ("Live Music @ The Lube Room"). */
+function isGenericTitle(name: string): boolean {
+  const n = normalizeName(name);
+  return (
+    /^live music\b/.test(n) ||
+    /^live (entertainment|tunes)\b/.test(n) ||
+    /^music (in|at|on) the\b/.test(n)
+  );
+}
+
+/** Decide if an incoming event and an existing same-date/same-town candidate
+ *  are the same real event. Caller guarantees date + town already match.
+ *
+ *  Conservative: an exact time slot at the same venue is NOT enough on its own
+ *  (venues host different events back to back). Requires an identity signal:
+ *  near-identical title, overlapping artists, near-identical description, or
+ *  same venue paired with a generic placeholder title. Two different specific
+ *  titles never merge on venue/time alone. */
+function isStrongEventMatch(event: ExtractedEvent, candidate: MatchableRow & { name?: string }): boolean {
+  if (!timesAnchor(event, candidate)) return false;
+  if (candidate.name && similarity(event.name, candidate.name) >= 0.85) return true;
+  if (artistsOverlap(event.artists, candidate.artists)) return true;
+  if (
+    event.description &&
+    candidate.description &&
+    similarity(event.description, candidate.description) >= 0.92
+  ) {
+    return true;
+  }
+  if (
+    venueMatch(normalizeVenue(event.venue_name), normalizeVenue(candidate.venue_name)) &&
+    (isGenericTitle(event.name) || (candidate.name ? isGenericTitle(candidate.name) : false))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+type MergeableRow = MatchableRow & {
+  name: string;
+  town: string;
+  price: string | null;
+  event_url: string | null;
+  address: string | null;
+  image_url: string | null;
+  source_event_id?: string | null;
+};
+
+const isArtifactVenue = (v: string | null | undefined): boolean =>
+  !v || v.trim().startsWith("@") || /\bfeaturing\b/i.test(v);
+
+/** When two rows are the same event, build an update that keeps the survivor
+ *  at least as rich as both: prefer the incoming (freshest) value per field,
+ *  but never overwrite a populated field with an empty one, never replace a
+ *  clean venue with a scraper-artifact venue, and union the artist lists. */
+function buildStrongMatchUpdate(
+  existing: MergeableRow,
+  event: ExtractedEvent,
+  dedupKey: string,
+  now: string
+) {
+  const pick = <T>(incoming: T, current: T): T =>
+    incoming != null && incoming !== "" ? incoming : current;
+
+  const pickVenue = (incoming: string, current: string | null): string => {
+    if (isArtifactVenue(incoming) && current && !isArtifactVenue(current)) {
+      return current;
+    }
+    return incoming || current || "";
+  };
+
+  const artistSet = new Set(
+    [...(existing.artists ?? []), ...(event.artists ?? [])]
+      .map((a) => a?.trim())
+      .filter((a): a is string => !!a)
+  );
+
+  return {
+    name: pick(event.name, existing.name),
+    venue_name: pickVenue(event.venue_name, existing.venue_name),
+    description: pick(event.description, existing.description),
+    start_time: pick(event.start_time, existing.start_time),
+    end_time: pick(event.end_time, existing.end_time),
+    price: pick(event.price, existing.price),
+    event_url: pick(event.event_url, existing.event_url),
+    address: pick(event.address, existing.address),
+    image_url: pick(event.image_url ?? null, existing.image_url),
+    artists: artistSet.size > 0 ? [...artistSet] : null,
+    dedup_key: dedupKey,
+    ...(event.source_event_id && { source_event_id: event.source_event_id }),
+    last_scraped_at: now,
+  };
+}
+
 const EXISTING_ROW_SELECT =
   "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, dedup_key, source_event_id";
 
@@ -289,34 +458,43 @@ async function upsertEventsBatched(
     }
   }
 
-  // Fuzzy match the unmatched batch in one bulk SELECT by date.
-  // Only fetched if there's anything to fuzzy-match.
+  // Match the unmatched batch against existing same-date rows in one bulk
+  // SELECT. A row is the same event only with the strong anchor (exact start
+  // time + venue/description/artist signal) — never title similarity alone.
   let fuzzyMatched: Set<string> = new Set();
   if (unmatched.length > 0) {
     const unmatchedDates = [...new Set(unmatched.map((u) => u.event.date))];
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
-      .select("id, name, town, date")
+      .select(
+        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id"
+      )
       .in("date", unmatchedDates);
 
-    const candidatesByDate = new Map<string, { id: string; name: string; town: string }[]>();
-    for (const c of candidates ?? []) {
+    type Candidate = MergeableRow & { id: string; date: string };
+    const candidatesByDate = new Map<string, Candidate[]>();
+    for (const c of (candidates ?? []) as Candidate[]) {
       const list = candidatesByDate.get(c.date) ?? [];
       list.push(c);
       candidatesByDate.set(c.date, list);
     }
 
-    const fuzzyUpdates: { id: string; dedupKey: string; eventName: string; existingName: string }[] = [];
+    const matchUpdates: { id: string; payload: object; eventName: string; existingName: string }[] = [];
+    const claimed = new Set<string>(); // existing row ids already merged into this batch
     for (const u of unmatched) {
-      const candidates = candidatesByDate.get(u.event.date) ?? [];
+      const dateCandidates = candidatesByDate.get(u.event.date) ?? [];
       const canonicalTown = normalizeTown(u.event.town);
-      const hit = candidates.find(
-        (c) => normalizeTown(c.town) === canonicalTown && similarity(c.name, u.event.name) >= 0.85
+      const hit = dateCandidates.find(
+        (c) =>
+          !claimed.has(c.id) &&
+          normalizeTown(c.town) === canonicalTown &&
+          isStrongEventMatch(u.event, c)
       );
       if (hit) {
-        fuzzyUpdates.push({
+        claimed.add(hit.id);
+        matchUpdates.push({
           id: hit.id,
-          dedupKey: u.dedupKey,
+          payload: buildStrongMatchUpdate(hit, u.event, u.dedupKey, now),
           eventName: u.event.name,
           existingName: hit.name,
         });
@@ -324,34 +502,26 @@ async function upsertEventsBatched(
       }
     }
 
-    if (fuzzyUpdates.length > 0) {
-      // Re-key matched rows. Can't use Supabase upsert(..., onConflict: "id")
-      // here — Postgres evaluates NOT NULL constraints at INSERT-attempt time
-      // before ON CONFLICT routing, so a payload of just (id, dedup_key,
-      // last_scraped_at) trips the NOT NULL constraint on `name` etc. Use
-      // per-row UPDATEs in parallel — N round trips but concurrent, so
-      // wall-clock cost is one round trip + slack.
+    if (matchUpdates.length > 0) {
+      // Per-row UPDATEs in parallel. Can't use upsert(onConflict:"id") — a
+      // partial payload trips NOT NULL constraints before ON CONFLICT routing.
       const updates = await Promise.all(
-        fuzzyUpdates.map((f) =>
-          supabaseAdmin
-            .from("hwy4_events")
-            .update({ dedup_key: f.dedupKey, last_scraped_at: now })
-            .eq("id", f.id)
+        matchUpdates.map((m) =>
+          supabaseAdmin.from("hwy4_events").update(m.payload).eq("id", m.id)
         )
       );
-      let fuzzyErrCount = 0;
+      let errCount = 0;
       for (const { error } of updates) {
-        if (error) fuzzyErrCount++;
+        if (error) errCount++;
       }
-      if (fuzzyErrCount > 0) {
-        console.error(`Bulk fuzzy re-key: ${fuzzyErrCount}/${fuzzyUpdates.length} failed`);
+      if (errCount > 0) {
+        console.error(`Bulk merge: ${errCount}/${matchUpdates.length} failed`);
       }
-      const fuzzyOkCount = fuzzyUpdates.length - fuzzyErrCount;
-      result.skippedFuzzy += fuzzyOkCount;
-      for (let i = 0; i < fuzzyUpdates.length; i++) {
+      result.skippedFuzzy += matchUpdates.length - errCount;
+      for (let i = 0; i < matchUpdates.length; i++) {
         if (!updates[i].error) {
-          const f = fuzzyUpdates[i];
-          console.log(`  Fuzzy dedup: "${f.eventName}" matched existing "${f.existingName}"`);
+          const m = matchUpdates[i];
+          console.log(`  Merged duplicate: "${m.eventName}" → existing "${m.existingName}"`);
         }
       }
     }
@@ -583,29 +753,33 @@ export async function upsertEvents(
         result.unchanged++;
       }
     } else {
-      // Fuzzy match: check for near-duplicate on same date in same/nearby town
+      // Cross-source / re-titled-event match: same date + town + exact start
+      // time + a strong identity signal (venue / description / artists). This
+      // catches the same real event listed under a different title that the
+      // title-based dedup_key can't see.
       const canonicalTown = normalizeTown(event.town);
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
-        .select("id, name, town")
+        .select(
+          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id"
+        )
         .eq("date", event.date);
 
-      const fuzzyMatch = candidates?.find((c) => {
-        const sameTown = normalizeTown(c.town) === canonicalTown;
-        return sameTown && similarity(c.name, event.name) >= 0.85;
-      });
+      const strongMatch = candidates?.find(
+        (c) =>
+          normalizeTown(c.town) === canonicalTown &&
+          isStrongEventMatch(event, c as MatchableRow)
+      );
 
-      if (fuzzyMatch) {
-        // Update existing event with better data, re-key it
+      if (strongMatch) {
+        // Merge into the existing row so the survivor keeps the best of both,
+        // and re-key it to the incoming dedup_key.
         await supabaseAdmin
           .from("hwy4_events")
-          .update({
-            dedup_key: dedupKey,
-            last_scraped_at: now,
-          })
-          .eq("id", fuzzyMatch.id);
+          .update(buildStrongMatchUpdate(strongMatch as MergeableRow, event, dedupKey, now))
+          .eq("id", strongMatch.id);
         result.skippedFuzzy++;
-        console.log(`  Fuzzy dedup: "${event.name}" matched existing "${fuzzyMatch.name}"`);
+        console.log(`  Merged duplicate: "${event.name}" → existing "${strongMatch.name}"`);
         continue;
       }
 

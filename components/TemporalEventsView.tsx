@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { SITE_URL } from "@/lib/constants";
 import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event } from "@/lib/types";
+import { dedupeEvents } from "@/lib/dedupe-events";
 import { townSlug } from "@/lib/slugs";
 import { CORRIDOR_TOWNS } from "@/lib/towns";
 import {
@@ -19,7 +20,7 @@ import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content"
 import { TEMPORAL_CONFIG, type WindowKey } from "@/lib/date-windows";
 
 const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, is_weekly, image_url";
+  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, visibility, org_slug, importance, robs_pick, is_weekly, image_url";
 
 async function getEventsInRange(
   start: string,
@@ -44,11 +45,11 @@ async function getEventsInRange(
       console.error("[getEventsInRange]", error);
       break;
     }
-    all = all.concat((data ?? []) as Hwy4Event[]);
+    all = all.concat((data ?? []) as unknown as Hwy4Event[]);
     if (!data || data.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
-  return all;
+  return dedupeEvents(all);
 }
 
 function groupByDate(events: Hwy4Event[]): [string, Hwy4Event[]][] {
