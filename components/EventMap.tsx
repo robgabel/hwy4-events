@@ -27,12 +27,14 @@ const markerIcon = L.divIcon({
   popupAnchor: [0, -36],
 });
 
-/** Pans the map to a new center whenever it changes (e.g. after geocoding). */
-function Recenter({ center }: { center: [number, number] }) {
+const VENUE_ZOOM = 15; // tight zoom once we have an exact geocoded point
+
+/** Pans/zooms the map to a new view whenever it changes (e.g. after geocoding). */
+function Recenter({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
   useEffect(() => {
-    map.setView(center);
-  }, [map, center]);
+    map.setView(center, zoom);
+  }, [map, center, zoom]);
   return null;
 }
 
@@ -40,10 +42,13 @@ export default function EventMap({ town, venueName, address, geocodeQuery }: Eve
   const townData = TOWN_INFO[town];
   const townCenter: [number, number] | null =
     townData?.lat != null && townData?.lng != null ? [townData.lat, townData.lng] : null;
+  const townZoom = townData?.mapZoom ?? VENUE_ZOOM;
 
   const [center, setCenter] = useState<[number, number] | null>(townCenter);
+  const [zoom, setZoom] = useState(townZoom);
 
-  // Geocode the venue after mount (off the page-load path) and recenter on it.
+  // Geocode the venue after mount (off the page-load path), then recenter and
+  // zoom in to the exact point (even for wide-default rural towns).
   useEffect(() => {
     if (!geocodeQuery) return;
     let cancelled = false;
@@ -52,6 +57,7 @@ export default function EventMap({ town, venueName, address, geocodeQuery }: Eve
       .then((coords) => {
         if (!cancelled && coords && typeof coords.lat === "number" && typeof coords.lng === "number") {
           setCenter([coords.lat, coords.lng]);
+          setZoom(VENUE_ZOOM);
         }
       })
       .catch(() => {});
@@ -69,12 +75,12 @@ export default function EventMap({ town, venueName, address, geocodeQuery }: Eve
       <div className="overflow-hidden rounded-lg border border-stone-light/30 card-warm">
         <MapContainer
           center={center}
-          zoom={13}
+          zoom={zoom}
           scrollWheelZoom={false}
           className="h-[240px] sm:h-[300px] w-full z-0"
           attributionControl={true}
         >
-          <Recenter center={center} />
+          <Recenter center={center} zoom={zoom} />
           <TileLayer
             attribution='&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"

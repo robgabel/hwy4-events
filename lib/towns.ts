@@ -13,6 +13,14 @@ export interface TownInfo {
    * Optional — only set for towns where there's a sensible town-square anchor.
    */
   defaultAddress?: string;
+  /**
+   * Default zoom for the town's static map thumbnail and the interactive map's
+   * town-centroid fallback. Defaults to 15 (neighborhood) for towns with a real
+   * downtown; remote alpine hamlets whose centroid sits in forest use a wider
+   * zoom (13) so there's road/context instead of a blank frame. The interactive
+   * map still zooms to 15 once it geocodes an actual venue.
+   */
+  mapZoom?: number;
 }
 
 export const CORRIDOR_TOWNS: TownInfo[] = [
@@ -43,6 +51,7 @@ export const CORRIDOR_TOWNS: TownInfo[] = [
     tagline: "Quiet stop on the way up",
     lat: 38.1860,
     lng: -120.3870,
+    mapZoom: 13,
   },
   {
     name: "White Pines",
@@ -58,6 +67,7 @@ export const CORRIDOR_TOWNS: TownInfo[] = [
     lat: 38.2144,
     lng: -120.3510,
     defaultAddress: "961 Highway 4, Arnold CA",
+    mapZoom: 13,
   },
   {
     name: "Dorrington",
@@ -65,6 +75,7 @@ export const CORRIDOR_TOWNS: TownInfo[] = [
     tagline: "Quiet mountain hamlet",
     lat: 38.2280,
     lng: -120.2960,
+    mapZoom: 13,
   },
   {
     name: "Camp Connell",
@@ -72,13 +83,15 @@ export const CORRIDOR_TOWNS: TownInfo[] = [
     tagline: "Deep in the pines",
     lat: 38.2340,
     lng: -120.2750,
+    mapZoom: 13,
   },
   {
     name: "Bear Valley",
     elevation: 7000,
     tagline: "Alpine resort at the summit",
-    lat: 38.2810,
-    lng: -120.0420,
+    lat: 38.4646,
+    lng: -120.0399,
+    mapZoom: 14,
   },
 ];
 

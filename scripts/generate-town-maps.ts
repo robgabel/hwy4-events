@@ -19,19 +19,19 @@ import { join } from "node:path";
 import { CORRIDOR_TOWNS } from "../lib/towns";
 import { townSlug } from "../lib/slugs";
 
-const ZOOM = 13;
+const DEFAULT_ZOOM = 15; // neighborhood level; overridden per town via TownInfo.mapZoom
 const TILE = 512; // CARTO @2x tiles are 512px (retina)
 const OUT_W = 1200; // displayed at 600px CSS width
 const OUT_H = 600; // displayed at 300px CSS height
 const OUT_DIR = join(__dirname, "..", "public", "maps");
 
-function lngToWorldPx(lng: number): number {
-  const n = Math.pow(2, ZOOM);
+function lngToWorldPx(lng: number, zoom: number): number {
+  const n = Math.pow(2, zoom);
   return ((lng + 180) / 360) * n * TILE;
 }
 
-function latToWorldPx(lat: number): number {
-  const n = Math.pow(2, ZOOM);
+function latToWorldPx(lat: number, zoom: number): number {
+  const n = Math.pow(2, zoom);
   const latRad = (lat * Math.PI) / 180;
   const y = (1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2;
   return y * n * TILE;
@@ -46,9 +46,9 @@ async function fetchTile(z: number, x: number, y: number): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-async function generateForTown(name: string, lat: number, lng: number): Promise<void> {
-  const centerX = lngToWorldPx(lng);
-  const centerY = latToWorldPx(lat);
+async function generateForTown(name: string, lat: number, lng: number, zoom: number): Promise<void> {
+  const centerX = lngToWorldPx(lng, zoom);
+  const centerY = latToWorldPx(lat, zoom);
   const left = centerX - OUT_W / 2;
   const top = centerY - OUT_H / 2;
 
@@ -60,7 +60,7 @@ async function generateForTown(name: string, lat: number, lng: number): Promise<
   const composites: sharp.OverlayOptions[] = [];
   for (let tx = minTileX; tx <= maxTileX; tx++) {
     for (let ty = minTileY; ty <= maxTileY; ty++) {
-      const buf = await fetchTile(ZOOM, tx, ty);
+      const buf = await fetchTile(zoom, tx, ty);
       composites.push({
         input: buf,
         left: Math.round(tx * TILE - left),
@@ -84,7 +84,7 @@ async function generateForTown(name: string, lat: number, lng: number): Promise<
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
   for (const t of CORRIDOR_TOWNS) {
-    await generateForTown(t.name, t.lat, t.lng);
+    await generateForTown(t.name, t.lat, t.lng, t.mapZoom ?? DEFAULT_ZOOM);
   }
   console.log(`\nDone. ${CORRIDOR_TOWNS.length} town maps written to public/maps/`);
 }
