@@ -4,6 +4,16 @@ import type { ExtractedEvent } from "./extract.js";
 import { KNOWN_VENUES } from "./venues.js";
 import { isGenericVenue } from "./venue-matcher.js";
 import { isOutOfCorridor } from "./corridor.js";
+// The "same event" rule + its string helpers live in ONE place, shared with the
+// read-time collapse in lib/dedupe-events.ts. Do not re-implement them here.
+import {
+  isSameEvent,
+  normalizeName,
+  normalizeTown,
+} from "../../lib/event-identity.js";
+
+// Re-exported for backfill scripts that import it from this module.
+export { normalizeName };
 
 /**
  * Emit one structured log line per data-quality failure at write time.
@@ -120,43 +130,6 @@ export interface UpsertResult {
 }
 
 /**
- * Normalize an event name for dedup comparison.
- * Collapses dash variants, extra whitespace, and minor punctuation differences.
- */
-export function normalizeName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    // Replace all dash/hyphen variants (en-dash, em-dash, minus, etc.) with plain hyphen
-    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-")
-    // Collapse multiple spaces/whitespace to single space
-    .replace(/\s+/g, " ")
-    // Remove leading "the " (sometimes appears/disappears)
-    .replace(/^the\s+/, "")
-    // Normalize curly quotes / typographic punctuation to ASCII.
-    // Source pages render the same apostrophe as ASCII `'` or curly `’`
-    // (and double quotes as `“`/`”`) depending on the CMS / template.
-    // Without this, two scrapes of the same event produce different dedup
-    // keys and the bulk SELECT misses, forcing fuzzy fallback.
-    .replace(/[‘’ʼ′]/g, "'")
-    .replace(/[“”″]/g, '"');
-}
-
-/**
- * Towns that should be treated as equivalent for dedup purposes.
- * Maps variant → canonical name.
- */
-const TOWN_ALIASES: Record<string, string> = {
-  "white pines": "arnold",
-  "hathaway pines": "arnold",
-};
-
-function normalizeTown(town: string): string {
-  const lower = town.toLowerCase().trim();
-  return TOWN_ALIASES[lower] ?? lower;
-}
-
-/**
  * Generate a deterministic dedup key from event name + date + town.
  */
 export function generateDedupKey(
@@ -168,43 +141,6 @@ export function generateDedupKey(
   return createHash("sha256").update(input).digest("hex").slice(0, 32);
 }
 
-/**
- * Upsert extracted events into hwy4_events.
- * Uses dedup_key to avoid duplicates and update changed fields.
- */
-/**
- * Simple similarity score between two normalized strings (0-1).
- * Uses longest common substring ratio.
- */
-function similarity(a: string, b: string): number {
-  const na = normalizeName(a);
-  const nb = normalizeName(b);
-  if (na === nb) return 1;
-  const shorter = na.length <= nb.length ? na : nb;
-  const longer = na.length > nb.length ? na : nb;
-  if (shorter.length === 0) return 0;
-  // Check if one contains the other
-  if (longer.includes(shorter)) return shorter.length / longer.length;
-  // Levenshtein-based similarity
-  const maxLen = Math.max(na.length, nb.length);
-  const dist = levenshtein(na, nb);
-  return 1 - dist / maxLen;
-}
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
-  for (let i = 1; i <= m; i++) {
-    let prev = dp[0];
-    dp[0] = i;
-    for (let j = 1; j <= n; j++) {
-      const tmp = dp[j];
-      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
-      prev = tmp;
-    }
-  }
-  return dp[n];
-}
 
 // ---------------------------------------------------------------------------
 // Conservative cross-source / re-titled-event matcher.
@@ -219,49 +155,6 @@ function levenshtein(a: string, b: string): number {
 // artists. Title similarity alone is deliberately NOT a trigger.
 // ---------------------------------------------------------------------------
 
-const GENERIC_VENUES = new Set([
-  "", "tba", "tbd", "unknown", "unknown venue", "various",
-  "various locations", "online", "virtual",
-]);
-
-function normalizeVenue(venue: string | null | undefined): string {
-  if (!venue) return "";
-  return venue
-    .toLowerCase()
-    .trim()
-    .replace(/^@\s*/, "")
-    .replace(/^the\s+/, "")
-    .replace(/\s+featuring\s+.*$/, "")
-    .replace(/[^a-z0-9 ]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function venueMatch(a: string, b: string): boolean {
-  if (!a || !b) return false;
-  if (GENERIC_VENUES.has(a) || GENERIC_VENUES.has(b)) return false;
-  if (a === b) return true;
-  const shorter = a.length <= b.length ? a : b;
-  const longer = a.length <= b.length ? b : a;
-  return shorter.length >= 5 && longer.includes(shorter);
-}
-
-function artistsOverlap(
-  a: string[] | null | undefined,
-  b: string[] | null | undefined
-): boolean {
-  if (!a?.length || !b?.length) return false;
-  const setA = new Set(a.map((x) => x.toLowerCase().trim()).filter(Boolean));
-  return b.some((x) => setA.has(x.toLowerCase().trim()));
-}
-
-/** "HH:MM" / "HH:MM:SS" / "H:MM" → "HH:MM". */
-function normalizeTime(t: string | null | undefined): string {
-  if (!t) return "";
-  const [h, m] = t.split(":");
-  return `${(h ?? "").padStart(2, "0")}:${(m ?? "00").padStart(2, "0")}`;
-}
-
 interface MatchableRow {
   start_time: string | null;
   end_time: string | null;
@@ -270,94 +163,16 @@ interface MatchableRow {
   artists?: string[] | null;
 }
 
-function timesAnchor(a: MatchableRow, b: MatchableRow): boolean {
-  const sa = normalizeTime(a.start_time);
-  const sb = normalizeTime(b.start_time);
-  if (!sa || !sb || sa !== sb) return false; // start must match exactly
-  const ea = normalizeTime(a.end_time);
-  const eb = normalizeTime(b.end_time);
-  if (ea && eb && ea !== eb) return false; // end must agree when both known
-  return true;
-}
-
-/** Minimal shape carrying an act's identity + searchable text. */
-type ActLike = { name?: string | null; description?: string | null; artists?: string[] | null };
-
-/** Normalized "act identity" strings for a row: its title plus any artists. */
-function actStrings(e: ActLike): string[] {
-  const out: string[] = [];
-  const n = normalizeName(e.name ?? "");
-  if (n) out.push(n);
-  for (const a of e.artists ?? []) {
-    const na = normalizeName(a ?? "");
-    if (na) out.push(na);
-  }
-  return out;
-}
-
-/** Searchable text of a row: title + description, normalized. */
-function searchBlob(e: ActLike): string {
-  return normalizeName(`${e.name ?? ""} ${e.description ?? ""}`);
-}
-
-/** A sibling listing names this row's act. The cross-source split where an
- *  aggregator lists the venue's umbrella series ("… Hilltop Concert Series",
- *  artists empty) while the venue feed lists the act ("Jimbo Scott & Yesterdays
- *  Biscuits") — each describing the other. If one row's specific act name
- *  (title or artist) appears verbatim in the other's title+description they're
- *  the same show. Caller guards with venue match + time anchor; the length
- *  floor keeps short/common tokens from triggering it. */
-function actNamedInOther(a: ActLike, b: ActLike): boolean {
-  const aBlob = searchBlob(a);
-  const bBlob = searchBlob(b);
-  const hit = (acts: string[], blob: string) =>
-    acts.some((s) => s.length >= 6 && blob.includes(s));
-  return hit(actStrings(a), bBlob) || hit(actStrings(b), aBlob);
-}
-
-/** A title generic enough to be an aggregator placeholder for whatever act is
- *  playing ("Live Music @ The Lube Room"). */
-function isGenericTitle(name: string): boolean {
-  const n = normalizeName(name);
-  return (
-    /^live music\b/.test(n) ||
-    /^live (entertainment|tunes)\b/.test(n) ||
-    /^music (in|at|on) the\b/.test(n)
-  );
-}
-
 /** Decide if an incoming event and an existing same-date/same-town candidate
- *  are the same real event. Caller guarantees date + town already match.
- *
- *  Conservative: an exact time slot at the same venue is NOT enough on its own
- *  (venues host different events back to back). Requires an identity signal:
- *  near-identical title, overlapping artists, near-identical description, or
- *  same venue paired with a generic placeholder title. Two different specific
- *  titles never merge on venue/time alone. */
-function isStrongEventMatch(event: ExtractedEvent, candidate: MatchableRow & { name?: string }): boolean {
-  if (!timesAnchor(event, candidate)) return false;
-  if (candidate.name && similarity(event.name, candidate.name) >= 0.85) return true;
-  if (artistsOverlap(event.artists, candidate.artists)) return true;
-  if (
-    event.description &&
-    candidate.description &&
-    similarity(event.description, candidate.description) >= 0.92
-  ) {
-    return true;
-  }
-  if (
-    venueMatch(normalizeVenue(event.venue_name), normalizeVenue(candidate.venue_name)) &&
-    (isGenericTitle(event.name) || (candidate.name ? isGenericTitle(candidate.name) : false))
-  ) {
-    return true;
-  }
-  if (
-    venueMatch(normalizeVenue(event.venue_name), normalizeVenue(candidate.venue_name)) &&
-    actNamedInOther(event, candidate)
-  ) {
-    return true;
-  }
-  return false;
+ *  are the same real event. Thin wrapper over the shared `isSameEvent` so the
+ *  write-time and read-time definitions can never diverge. The caller already
+ *  guarantees date + town match; `isSameEvent` re-checks the time slot and the
+ *  identity signals (title / artists / description / venue+generic / venue+act). */
+function isStrongEventMatch(
+  event: ExtractedEvent,
+  candidate: MatchableRow & { name?: string }
+): boolean {
+  return isSameEvent(event, { ...candidate, name: candidate.name ?? "" });
 }
 
 type MergeableRow = MatchableRow & {

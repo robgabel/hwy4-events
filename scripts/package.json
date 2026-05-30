@@ -9,7 +9,8 @@
     "scrape:gocalaveras": "tsx scrape.ts --source gocalaveras",
     "tag-weekly": "tsx tag-weekly.ts",
     "backfill-venues": "tsx backfill-venues.ts",
-    "warm-maps": "tsx warm-map-cache.ts"
+    "warm-maps": "tsx warm-map-cache.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
