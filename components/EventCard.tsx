@@ -1,5 +1,7 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
+import { isPatrioticEvent } from "@/lib/featured-events";
+import PatrioticEventCard from "@/components/PatrioticEventCard";
 import { getTownContent } from "@/app/towns/town-content";
 import {
   parseDate,
@@ -118,6 +120,11 @@ export default function EventCard({
   event: CollapsedEvent;
   isUpNext?: boolean;
 }) {
+  // Marquee patriotic events get a fully bespoke card.
+  if (isPatrioticEvent(event)) {
+    return <PatrioticEventCard event={event} isUpNext={isUpNext} />;
+  }
+
   const isPrivate = event.visibility === "private";
   const dateObj = parseDate(event.date);
   const dayOfWeek = formatShortWeekday(dateObj);

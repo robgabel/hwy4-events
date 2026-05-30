@@ -13,6 +13,8 @@ import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
+import PatrioticEventDetail from "@/components/PatrioticEventDetail";
+import { isPatrioticEvent } from "@/lib/featured-events";
 
 export const revalidate = 3600;
 
@@ -185,6 +187,26 @@ export default async function EventPage({ params }: PageProps) {
   const mapLat = geocoded?.lat ?? townData?.lat ?? null;
   const mapLng = geocoded?.lng ?? townData?.lng ?? null;
   const mapZoom = geocoded ? 15 : townData?.mapZoom ?? 13;
+
+  // Marquee patriotic events get a fully bespoke detail layout.
+  if (isPatrioticEvent(event)) {
+    return (
+      <>
+        <EventJsonLd event={event} slug={slug} />
+        <PatrioticEventDetail
+          event={event}
+          slug={slug}
+          dateStr={dateStr}
+          timeRange={timeRange}
+          displayAddress={displayAddress}
+          geocodeQuery={geocodeQuery}
+          mapLat={mapLat}
+          mapLng={mapLng}
+          mapZoom={mapZoom}
+        />
+      </>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
