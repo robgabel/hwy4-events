@@ -10,6 +10,12 @@
  */
 const MANUAL_VENUE_PATTERNS: readonly string[] = [
   "cameo plaza",
+  // The Lube Room Saloon's "Live at the Lube" summer series is transcribed from
+  // an in-venue chalkboard (scripts/seed-lube-room-summer-2026.ts) and is not
+  // published online. GoCalaveras re-lists it as a generic "Live Music @ The
+  // Lube Room", which kept overwriting the hand-entered band titles on every
+  // scrape. Matches via venue_name ("The Lube Room Saloon") on every variant.
+  "lube room",
 ];
 
 export interface MatchableEvent {
