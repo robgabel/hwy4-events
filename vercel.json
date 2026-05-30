@@ -43,6 +43,10 @@
     {
       "path": "/api/aeo-audit-reminder",
       "schedule": "0 16 1 * *"
+    },
+    {
+      "path": "/api/sync-venue-facts",
+      "schedule": "0 12 * * 1"
     }
   ]
 }
