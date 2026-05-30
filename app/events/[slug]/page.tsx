@@ -17,6 +17,7 @@ import ShareButton from "@/components/ShareButton";
 import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import { isPatrioticEvent } from "@/lib/featured-events";
+import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
 
 export const revalidate = 3600;
 
@@ -85,6 +86,20 @@ const findEventBySlug = cache(async (slug: string): Promise<Hwy4Event | null> =>
   return null;
 });
 
+/**
+ * Orgs that have a canonical destination URL, for the link resolver. Tiny table,
+ * cached per request via React cache(). Loaded by canonical_url (not the
+ * verification opt-in flag) so a link-only org like Big Trees still resolves.
+ */
+const getCanonicalOrgs = cache(async (): Promise<LinkOrg[]> => {
+  const { supabase } = await import("@/lib/supabase");
+  const { data } = await supabase
+    .from("hwy4_orgs")
+    .select("slug, display_name, canonical_url, match_patterns")
+    .not("canonical_url", "is", null);
+  return (data as LinkOrg[] | null) ?? [];
+});
+
 function formatTime(time: string | null): string | null {
   if (!time) return null;
   const [h, m] = time.split(":");
@@ -129,12 +144,16 @@ export async function generateMetadata({
   };
 }
 
-function EventJsonLd({ event, slug }: { event: Hwy4Event; slug: string }) {
+function EventJsonLd({
+  event,
+  offerUrl,
+}: {
+  event: Hwy4Event;
+  slug: string;
+  offerUrl: string;
+}) {
   const displayAddress = resolveDisplayAddress(event.address, event.town);
-  const offer = buildEventOffer(
-    event,
-    event.event_url || `${SITE_URL}/events/${slug}`
-  );
+  const offer = buildEventOffer(event, offerUrl);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -188,6 +207,13 @@ export default async function EventPage({ params }: PageProps) {
   const event = await findEventBySlug(slug);
   if (!event) notFound();
 
+  // Resolve the outbound link from event identity (organizer/venue), not scrape
+  // provenance. A dead/churning aggregator permalink never becomes the CTA; the
+  // internal page is the fallback destination. See lib/event-link.ts.
+  const orgs = await getCanonicalOrgs();
+  const link = resolveEventLinkFromOrgs(event, orgs);
+  const offerUrl = link.href ?? `${SITE_URL}/events/${slug}`;
+
   const dateObj = parseISO(event.date);
   const dateStr = format(dateObj, "EEEE, MMMM d, yyyy");
   const startTime = formatTime(event.start_time);
@@ -213,7 +239,7 @@ export default async function EventPage({ params }: PageProps) {
   if (isPatrioticEvent(event)) {
     return (
       <>
-        <EventJsonLd event={event} slug={slug} />
+        <EventJsonLd event={event} slug={slug} offerUrl={offerUrl} />
         <PatrioticEventDetail
           event={event}
           slug={slug}
@@ -224,6 +250,7 @@ export default async function EventPage({ params }: PageProps) {
           mapLat={mapLat}
           mapLng={mapLng}
           mapZoom={mapZoom}
+          linkHref={link.href}
         />
       </>
     );
@@ -233,7 +260,7 @@ export default async function EventPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <EventJsonLd event={event} slug={slug} />
+      <EventJsonLd event={event} slug={slug} offerUrl={offerUrl} />
 
       <nav aria-label="Breadcrumb" className="mb-6 text-sm text-stone">
         <ol className="flex items-center gap-1.5">
@@ -392,14 +419,14 @@ export default async function EventPage({ params }: PageProps) {
         )}
 
         <div className="mb-6 flex flex-wrap gap-3">
-          {event.event_url && (
+          {link.kind !== "none" && link.href && (
             <a
-              href={event.event_url}
+              href={link.href}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg bg-forest px-4 py-2 text-sm font-medium text-white hover:bg-pine transition-colors"
             >
-              Visit Event Page
+              {link.label}
               <svg
                 className="h-4 w-4"
                 fill="none"

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { matchOrgForEvent } from "@/lib/event-link";
 
 export const maxDuration = 120;
 
@@ -89,21 +90,9 @@ async function fetchCanonicalText(url: string): Promise<string | null> {
   }
 }
 
-function matchEventToOrg(ev: EventRow, orgs: OrgRow[]): OrgRow | null {
-  // Direct org_slug match wins.
-  if (ev.org_slug) {
-    const direct = orgs.find((o) => o.slug === ev.org_slug);
-    if (direct) return direct;
-  }
-  // Fall back to pattern match — needed when the event was scraped via an
-  // aggregator (e.g., org_slug='gocalaveras') but names the actual organizer.
-  const haystack = `${ev.name} ${ev.description ?? ""} ${ev.venue_name}`.toLowerCase();
-  for (const o of orgs) {
-    if (!o.match_patterns) continue;
-    if (o.match_patterns.some((p) => haystack.includes(p.toLowerCase()))) return o;
-  }
-  return null;
-}
+// Org matching lives in lib/event-link.ts (matchOrgForEvent) — the single
+// definition shared with the link resolver, so date-verification and link
+// resolution always agree on which org owns an event.
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -147,7 +136,7 @@ export async function GET(request: Request) {
 
   const events = (eventsRaw ?? []) as EventRow[];
   const pairs = events
-    .map((ev) => ({ ev, org: matchEventToOrg(ev, orgs) }))
+    .map((ev) => ({ ev, org: matchOrgForEvent(ev, orgs) }))
     .filter((p): p is { ev: EventRow; org: OrgRow } => p.org !== null);
 
   if (pairs.length === 0) {

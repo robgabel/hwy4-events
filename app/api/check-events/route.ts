@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { findDuplicateClusters } from "@/lib/dedupe-events";
+import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
 
 export const maxDuration = 60;
 
@@ -94,6 +95,7 @@ interface EventRow {
   visibility: string | null;
   image_url: string | null;
   org_slug: string | null;
+  event_url: string | null;
   last_scraped_at: string | null;
   status: string | null;
 }
@@ -131,7 +133,7 @@ export async function GET(request: Request) {
   const { data: events, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, last_scraped_at, status"
+      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, event_url, last_scraped_at, status"
     )
     .gte("date", today)
     .order("date", { ascending: true });
@@ -262,10 +264,60 @@ export async function GET(request: Request) {
     mergesLast24h = mergeCount ?? 0;
   }
 
+  // Link-resolution coverage. Two numbers, because a raw gap count lies: a gap at
+  // a siteless one-off venue is the CORRECT terminal state (our internal page is
+  // the destination), not a to-do. What's actionable is a *venue* with several
+  // upcoming events and no organizer canonical yet — that's worth one hwy4_orgs
+  // row. `aggregator_link_gaps` is the raw count (trend only); `actionableLinkGaps`
+  // is the worklist of venues at/above the threshold. See lib/event-link.ts.
+  // Deliberately NO auto-discovery of canonicals (see "Outbound Event Links" in
+  // CLAUDE.md): the payoff per long-tail venue is too small to justify a pipeline;
+  // this nudge surfaces the few high-frequency ones for a ~10-min manual row.
+  // Guarded so a failure here never breaks the audit.
+  const GAP_VENUE_THRESHOLD = 5;
+  let aggregatorLinkGaps: number | null = null;
+  let actionableLinkGaps: { venue: string; count: number }[] = [];
+  try {
+    const { data: linkOrgs } = await supabase
+      .from("hwy4_orgs")
+      .select("slug, display_name, canonical_url, match_patterns")
+      .not("canonical_url", "is", null);
+    const orgs = (linkOrgs ?? []) as LinkOrg[];
+    const gapByVenue = new Map<string, number>();
+    let rawGaps = 0;
+    for (const r of rows) {
+      if (r.status === "cancelled" || !r.event_url) continue;
+      const link = resolveEventLinkFromOrgs(
+        {
+          name: r.name,
+          description: r.description,
+          venue_name: r.venue_name ?? "",
+          org_slug: r.org_slug,
+          event_url: r.event_url,
+        },
+        orgs
+      );
+      if (link.kind !== "none") continue;
+      rawGaps++;
+      const v = r.venue_name?.trim() || "(no venue)";
+      gapByVenue.set(v, (gapByVenue.get(v) ?? 0) + 1);
+    }
+    aggregatorLinkGaps = rawGaps;
+    actionableLinkGaps = [...gapByVenue.entries()]
+      .filter(([, n]) => n >= GAP_VENUE_THRESHOLD)
+      .map(([venue, count]) => ({ venue, count }))
+      .sort((a, b) => b.count - a.count);
+  } catch (err) {
+    console.error("[check-events] link-gap computation failed:", err);
+  }
+
   const summary = {
     audited_at: new Date().toISOString(),
     total_future_events: rows.length,
     merges_last_24h: mergesLast24h,
+    aggregator_link_gaps: aggregatorLinkGaps,
+    actionable_link_gaps: actionableLinkGaps.length,
+    actionable_link_gap_venues: actionableLinkGaps,
     issues: {
       duplicates: duplicates.length,
       same_event_duplicates: sameEventDupes.length,
@@ -282,10 +334,11 @@ export async function GET(request: Request) {
   const totalIssues = Object.values(summary.issues).reduce((a, b) => a + b, 0);
   console.log("[check-events] Audit complete:", summary);
 
-  // Post to Slack if there are issues and webhook is configured.
+  // Post to Slack if there are issues OR a high-frequency link gap to nudge.
   const webhook = process.env.SLACK_WEBHOOK_URL;
-  if (webhook && totalIssues > 0) {
-    const lines: string[] = [`*Hwy4 events audit — ${totalIssues} issue(s)*`];
+  if (webhook && (totalIssues > 0 || actionableLinkGaps.length > 0)) {
+    const header = totalIssues > 0 ? `${totalIssues} issue(s)` : "no issues — link-gap nudge";
+    const lines: string[] = [`*Hwy4 events audit — ${header}*`];
     if (duplicates.length > 0) {
       lines.push(`\n*${duplicates.length} duplicate group(s):*`);
       for (const d of duplicates.slice(0, 10)) {
@@ -339,6 +392,14 @@ export async function GET(request: Request) {
     }
     if (mergesLast24h && mergesLast24h > 0) {
       lines.push(`\n_${mergesLast24h} duplicate merge(s) auto-healed in the last 24h (reversible via event_merge_log)._`);
+    }
+    if (actionableLinkGaps.length > 0) {
+      lines.push(`\n*${actionableLinkGaps.length} venue(s) worth a canonical link (≥${GAP_VENUE_THRESHOLD} upcoming events, no organizer URL yet):*`);
+      for (const g of actionableLinkGaps.slice(0, 10)) {
+        lines.push(`• ${g.venue} — ${g.count} events`);
+      }
+      if (actionableLinkGaps.length > 10) lines.push(`  …and ${actionableLinkGaps.length - 10} more`);
+      lines.push(`_Add canonical_url + match_patterns to the matching hwy4_orgs row to close one (≈10 min). ${aggregatorLinkGaps ?? 0} events are link-less in total; the long tail below the threshold is one-offs where no link is the correct answer._`);
     }
 
     try {
