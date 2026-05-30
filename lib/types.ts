@@ -55,6 +55,7 @@ export interface Hwy4Event {
   robs_pick: boolean;
   is_weekly: boolean;
   verification_status?: EventVerificationStatus;
+  community_sourced?: boolean;
 }
 
 export interface Hwy4Org {

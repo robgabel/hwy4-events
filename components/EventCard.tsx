@@ -220,6 +220,27 @@ export default function EventCard({
               Rob&apos;s Pick
             </span>
           )}
+          {event.community_sourced && (
+            <span
+              title="Submitted by a Hwy 4 neighbor"
+              className="inline-flex items-center gap-1 rounded-full bg-pine/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-pine"
+            >
+              <svg
+                className="h-3 w-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-1.34"
+                />
+              </svg>
+              Community sourced
+            </span>
+          )}
           <h3
             className={`font-semibold transition-colors group-hover:text-pine ${
               isUpNext ? "text-lg text-forest" : "text-forest"

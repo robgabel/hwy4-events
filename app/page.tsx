@@ -20,7 +20,7 @@ async function getEvents(): Promise<Hwy4Event[]> {
     const { data, error, count } = await supabase
       .from("hwy4_events")
       .select(
-        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, image_url, visibility, org_slug, importance, robs_pick, is_weekly, verification_status",
+        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, image_url, visibility, org_slug, importance, robs_pick, is_weekly, verification_status, community_sourced",
         { count: "exact" }
       )
       .gte("date", today)

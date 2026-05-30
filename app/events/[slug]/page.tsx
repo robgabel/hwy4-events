@@ -17,7 +17,7 @@ import ShareButton from "@/components/ShareButton";
 export const revalidate = 3600;
 
 const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick";
+  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, community_sourced";
 const PAGE_SIZE = 60;
 
 const matchSlug = (events: Hwy4Event[] | null, slug: string): Hwy4Event | null =>
@@ -218,6 +218,27 @@ export default async function EventPage({ params }: PageProps) {
             {event.status === "tentative" && (
               <span className="inline-flex items-center rounded-full bg-sunset/10 px-2 py-0.5 text-xs font-medium text-sunset">
                 Tentative
+              </span>
+            )}
+            {event.community_sourced && (
+              <span
+                title="Submitted by a Hwy 4 neighbor"
+                className="inline-flex items-center gap-1 rounded-full bg-pine/10 px-2.5 py-0.5 text-xs font-medium text-pine"
+              >
+                <svg
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-1.34"
+                  />
+                </svg>
+                Community sourced
               </span>
             )}
           </div>

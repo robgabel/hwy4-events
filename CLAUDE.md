@@ -13,6 +13,7 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 ## Architecture
 
 - Events are scraped externally and loaded into Supabase — this app is **read-only** against event data (except community submissions via `/submit`)
+- Community submissions land in `event_submissions` (status `pending`). To publish one, insert into `hwy4_events` with `community_sourced=true` and `source_name='Community Submission'` (compute `dedup_key` the same way the scraper does — `sha256(normalizeName|date|normalizeTown)`, first 32 hex chars), then set the submission's status to `approved`. `community_sourced=true` renders a pine **"Community sourced"** badge on the event card and detail page.
 - Weekly recurring events use `is_weekly: true` and get collapsed in the UI (`CollapsedEvent` type)
 - `site_config` table is a key-value store (briefing text, timestamps, etc.)
 - `hwy4_orgs` maps venues/sources to display names and slugs for org pages

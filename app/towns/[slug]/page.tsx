@@ -37,7 +37,7 @@ async function getEventsInTown(townName: string): Promise<Hwy4Event[]> {
   const { data, error } = await getSupabase()
     .from("hwy4_events")
     .select(
-      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, visibility, org_slug, importance, robs_pick, is_weekly, image_url"
+      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, visibility, org_slug, importance, robs_pick, is_weekly, image_url, community_sourced"
     )
     .eq("town", townName)
     .gte("date", today)
