@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./supabase-admin.js";
+import { isUnstableHost } from "../../lib/event-link.js";
 
 const BATCH_SIZE = 5; // concurrent HEAD requests
 const TIMEOUT_MS = 10000;
@@ -33,7 +34,20 @@ export async function validateEventUrls(): Promise<{
     return { checked: 0, broken: 0, nulled: 0 };
   }
 
-  console.log(`Checking ${events.length} event URLs...`);
+  // Skip hosts we can't server-validate and don't render anyway (bot-walled
+  // aggregators like GoCalaveras — see lib/event-link.ts). A 403 from them is
+  // not a dead link, and the resolver never surfaces these URLs, so nulling
+  // them would be a false positive that also destroys provenance.
+  const skippedAggregator = events.filter(
+    (e) => e.event_url && isUnstableHost(e.event_url)
+  ).length;
+  const checkable = events.filter(
+    (e) => e.event_url && !isUnstableHost(e.event_url)
+  );
+
+  console.log(
+    `Checking ${checkable.length} event URLs (${skippedAggregator} aggregator URLs skipped)...`
+  );
 
   let broken = 0;
   let nulled = 0;
@@ -41,8 +55,8 @@ export async function validateEventUrls(): Promise<{
   const brokenIds: string[] = [];
 
   // Process in batches to avoid overwhelming servers
-  for (let i = 0; i < events.length; i += BATCH_SIZE) {
-    const batch = events.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < checkable.length; i += BATCH_SIZE) {
+    const batch = checkable.slice(i, i + BATCH_SIZE);
     const results = await Promise.all(
       batch.map(async (event) => {
         try {
@@ -86,7 +100,7 @@ export async function validateEventUrls(): Promise<{
     }
 
     // Delay between batches to avoid rate limiting
-    if (i + BATCH_SIZE < events.length) {
+    if (i + BATCH_SIZE < checkable.length) {
       await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
     }
   }
@@ -108,8 +122,9 @@ export async function validateEventUrls(): Promise<{
   }
 
   console.log(
-    `URL validation: ${events.length} checked, ${broken} broken, ${nulled} nulled` +
-    (rateLimited > 0 ? `, ${rateLimited} skipped (rate limited)` : "")
+    `URL validation: ${checkable.length} checked, ${broken} broken, ${nulled} nulled` +
+    (rateLimited > 0 ? `, ${rateLimited} skipped (rate limited)` : "") +
+    (skippedAggregator > 0 ? `, ${skippedAggregator} aggregator URLs skipped` : "")
   );
-  return { checked: events.length, broken, nulled };
+  return { checked: checkable.length, broken, nulled };
 }

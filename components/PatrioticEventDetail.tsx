@@ -56,6 +56,7 @@ export default function PatrioticEventDetail({
   mapLat,
   mapLng,
   mapZoom,
+  linkHref,
 }: {
   event: Hwy4Event;
   slug: string;
@@ -66,6 +67,8 @@ export default function PatrioticEventDetail({
   mapLat: number | null;
   mapLng: number | null;
   mapZoom: number;
+  /** Resolved outbound link (organizer canonical); falls back to arnoldparade.org. */
+  linkHref: string | null;
 }) {
   const townInfo = TOWN_INFO[event.town];
 
@@ -284,7 +287,7 @@ export default function PatrioticEventDetail({
           </p>
           <div className="mt-3">
             <a
-              href={event.event_url || "https://www.arnoldparade.org"}
+              href={linkHref ?? "https://www.arnoldparade.org"}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"

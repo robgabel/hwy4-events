@@ -1,0 +1,173 @@
+// The ONE definition of "where should this event's outbound link go."
+//
+// The bug this fixes: the UI used to link to `event_url` — *where the scraper
+// found the event*. For ~69% of upcoming events that's a GoCalaveras
+// (EventON/WordPress) permalink that mints a new slug per occurrence and
+// trashes the old one, so the link 404s days later (and gocalaveras.com 403s
+// any server trying to validate it). Provenance is not destination.
+//
+// resolveEventLink answers destination from event *identity*, in priority order:
+//   1. organizer canonical  (hwy4_orgs.canonical_url, matched by slug or pattern)
+//   2. venue canonical      (registry URL, caller-supplied)
+//   3. stable-source link   (event_url, only if its host isn't a churning aggregator)
+//   4. none                 (render no outbound CTA — our own page is the destination)
+//
+// Defined here once and imported by every surface that links out (the event
+// detail page, its JSON-LD, the patriotic detail layout) plus the org matcher
+// reused by /api/verify-events — so "where does this link go" can't drift.
+// Locked by scripts/test/event-link.test.ts.
+
+/** Hosts whose per-event permalinks are not durable (aggregators that churn
+ *  slugs and/or bot-wall server validation). We never render these as the CTA
+ *  unless AGGREGATOR_FALLBACK is flipped on. Compared case-insensitively with
+ *  and without a leading "www.". */
+export const UNSTABLE_SOURCE_HOSTS: ReadonlySet<string> = new Set([
+  "gocalaveras.com",
+]);
+
+/** When false (default): an event whose only link is an unstable-host
+ *  `event_url` resolves to kind:'none' (no outbound button) — be the
+ *  destination, never ship a 404. Flip to true only if we add live,
+ *  browser-grade validation for a specific aggregator. */
+export const AGGREGATOR_FALLBACK = false;
+
+export interface LinkOrg {
+  slug: string;
+  display_name?: string | null;
+  canonical_url: string | null;
+  match_patterns: string[] | null;
+}
+
+/** Minimal event shape the matcher reads. */
+export interface OrgMatchEvent {
+  name: string;
+  description?: string | null;
+  venue_name: string;
+  org_slug: string | null;
+}
+
+/** Minimal event shape the resolver reads. */
+export interface LinkEvent extends OrgMatchEvent {
+  event_url: string | null;
+}
+
+export type LinkKind = "organizer" | "venue" | "source" | "none";
+
+export interface ResolvedLink {
+  /** Destination href, or null when kind === 'none'. */
+  href: string | null;
+  /** Button label, e.g. "Visit Arnold Rim Trail" or "Visit Event Page". */
+  label: string;
+  kind: LinkKind;
+  /** True when the destination is authoritative + durable (organizer/venue, or
+   *  a stable-host source). False only when AGGREGATOR_FALLBACK surfaces an
+   *  aggregator link. Consumers use this to decide JSON-LD offer URLs etc. */
+  durable: boolean;
+}
+
+const NONE: ResolvedLink = { href: null, label: "", kind: "none", durable: false };
+
+/** Collapse whitespace + lowercase for forgiving substring matching. */
+function norm(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/** Bare host without a leading "www.", or null if the URL can't be parsed. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/** True if the URL's host is a churning/bot-walled aggregator we neither render
+ *  nor server-validate (also true for an unparseable URL). */
+export function isUnstableHost(url: string): boolean {
+  const h = hostOf(url);
+  if (!h) return true; // unparseable → don't render it
+  return UNSTABLE_SOURCE_HOSTS.has(h) || UNSTABLE_SOURCE_HOSTS.has(`www.${h}`);
+}
+
+/**
+ * Resolve an event to its organizer, given the org registry.
+ *
+ * A direct `org_slug` match wins ONLY when that org has a canonical
+ * destination. The critical case: aggregator-sourced events carry
+ * `org_slug='gocalaveras'`, and that aggregator row has no `canonical_url` — so
+ * it must NOT short-circuit. Instead we fall through to `match_patterns`
+ * against the event's name/description/venue to find the real organizer
+ * (Arnold Rim Trail, Big Trees). Patterns match normalized, so enumerate
+ * spelling variants in the data (the source really does list "Aronld Rim
+ * Trail"). This is the single matcher; /api/verify-events imports it too.
+ */
+export function matchOrgForEvent<O extends LinkOrg>(
+  ev: OrgMatchEvent,
+  orgs: O[]
+): O | null {
+  if (ev.org_slug) {
+    const direct = orgs.find((o) => o.slug === ev.org_slug);
+    // An explicit slug pointing at a real organizer is authoritative. An
+    // aggregator slug (no canonical) is not a destination — let patterns win.
+    if (direct?.canonical_url) return direct;
+  }
+  const haystack = norm(`${ev.name} ${ev.description ?? ""} ${ev.venue_name}`);
+  for (const o of orgs) {
+    if (!o.match_patterns) continue;
+    if (o.match_patterns.some((p) => haystack.includes(norm(p)))) return o;
+  }
+  return null;
+}
+
+/**
+ * The destination resolver. Pure: callers supply the matched org and any venue
+ * URL. Use resolveEventLinkFromOrgs when you have the full org registry.
+ */
+export function resolveEventLink(
+  ev: LinkEvent,
+  opts?: { org?: LinkOrg | null; venueUrl?: string | null; venueName?: string | null }
+): ResolvedLink {
+  // 1. Organizer canonical — the most authoritative, durable destination.
+  const org = opts?.org;
+  if (org?.canonical_url) {
+    return {
+      href: org.canonical_url,
+      label: `Visit ${org.display_name?.trim() || "event organizer"}`,
+      kind: "organizer",
+      durable: true,
+    };
+  }
+
+  // 2. Venue canonical.
+  if (opts?.venueUrl) {
+    return {
+      href: opts.venueUrl,
+      label: `Visit ${opts.venueName?.trim() || ev.venue_name}`,
+      kind: "venue",
+      durable: true,
+    };
+  }
+
+  // 3. Scraped per-event link — only from a host we trust to be durable.
+  if (ev.event_url) {
+    if (!isUnstableHost(ev.event_url)) {
+      return { href: ev.event_url, label: "Visit Event Page", kind: "source", durable: true };
+    }
+    // 3b. Unstable host (e.g. GoCalaveras): suppressed by default.
+    if (AGGREGATOR_FALLBACK) {
+      return { href: ev.event_url, label: "Visit Event Page", kind: "source", durable: false };
+    }
+  }
+
+  // 4. No durable destination — the internal event page is the destination.
+  return NONE;
+}
+
+/** Convenience: match the org from the registry, then resolve. */
+export function resolveEventLinkFromOrgs(
+  ev: LinkEvent,
+  orgs: LinkOrg[],
+  opts?: { venueUrl?: string | null; venueName?: string | null }
+): ResolvedLink {
+  return resolveEventLink(ev, { org: matchOrgForEvent(ev, orgs), ...opts });
+}

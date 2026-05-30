@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { findDuplicateClusters } from "@/lib/dedupe-events";
+import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
 
 export const maxDuration = 60;
 
@@ -94,6 +95,7 @@ interface EventRow {
   visibility: string | null;
   image_url: string | null;
   org_slug: string | null;
+  event_url: string | null;
   last_scraped_at: string | null;
   status: string | null;
 }
@@ -131,7 +133,7 @@ export async function GET(request: Request) {
   const { data: events, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, last_scraped_at, status"
+      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, event_url, last_scraped_at, status"
     )
     .gte("date", today)
     .order("date", { ascending: true });
@@ -262,10 +264,42 @@ export async function GET(request: Request) {
     mergesLast24h = mergeCount ?? 0;
   }
 
+  // Link-resolution coverage (informational, not an issue): upcoming events that
+  // resolve to NO outbound link because they came from a bot-walled aggregator
+  // and don't yet match an org/venue canonical. Each is closeable by adding
+  // canonical_url + match_patterns to hwy4_orgs. See lib/event-link.ts. Guarded
+  // so a failure here never breaks the audit.
+  let aggregatorLinkGaps: number | null = null;
+  try {
+    const { data: linkOrgs } = await supabase
+      .from("hwy4_orgs")
+      .select("slug, display_name, canonical_url, match_patterns")
+      .not("canonical_url", "is", null);
+    const orgs = (linkOrgs ?? []) as LinkOrg[];
+    aggregatorLinkGaps = rows.filter((r) => {
+      if (r.status === "cancelled" || !r.event_url) return false;
+      return (
+        resolveEventLinkFromOrgs(
+          {
+            name: r.name,
+            description: r.description,
+            venue_name: r.venue_name ?? "",
+            org_slug: r.org_slug,
+            event_url: r.event_url,
+          },
+          orgs
+        ).kind === "none"
+      );
+    }).length;
+  } catch (err) {
+    console.error("[check-events] link-gap computation failed:", err);
+  }
+
   const summary = {
     audited_at: new Date().toISOString(),
     total_future_events: rows.length,
     merges_last_24h: mergesLast24h,
+    aggregator_link_gaps: aggregatorLinkGaps,
     issues: {
       duplicates: duplicates.length,
       same_event_duplicates: sameEventDupes.length,
@@ -339,6 +373,9 @@ export async function GET(request: Request) {
     }
     if (mergesLast24h && mergesLast24h > 0) {
       lines.push(`\n_${mergesLast24h} duplicate merge(s) auto-healed in the last 24h (reversible via event_merge_log)._`);
+    }
+    if (aggregatorLinkGaps && aggregatorLinkGaps > 0) {
+      lines.push(`\n_${aggregatorLinkGaps} event(s) have no outbound link (aggregator-sourced, no organizer canonical yet). Add canonical_url + match_patterns to hwy4_orgs to close gaps._`);
     }
 
     try {

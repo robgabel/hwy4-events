@@ -221,10 +221,10 @@ export function buildEvent(event: Hwy4Event, slug?: string) {
   const eventSlug =
     slug ?? generateEventSlug(event.name, event.date, event.town);
   const displayAddress = resolveDisplayAddress(event.address, event.town);
-  const offer = buildEventOffer(
-    event,
-    event.event_url || `${SITE_URL}/events/${eventSlug}`
-  );
+  // Offer URL points at our own stable event page, never the scraped
+  // `event_url` (which for aggregator sources is a churning permalink). The
+  // detail page passes a resolved organizer/venue URL when it has one.
+  const offer = buildEventOffer(event, `${SITE_URL}/events/${eventSlug}`);
 
   return {
     "@context": "https://schema.org",
