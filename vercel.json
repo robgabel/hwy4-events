@@ -33,6 +33,10 @@
       "schedule": "30 13 * * *"
     },
     {
+      "path": "/api/reconcile-dupes",
+      "schedule": "30 15 * * *"
+    },
+    {
       "path": "/api/check-events",
       "schedule": "0 18 * * *"
     },
