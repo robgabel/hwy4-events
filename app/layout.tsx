@@ -9,7 +9,6 @@ import { JsonLd, buildWebSite, buildOrganization } from "@/lib/schema";
 import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content";
 import { TOWN_INFO } from "@/lib/towns";
 import LastChecked from "@/components/LastChecked";
-import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import CloudflareAnalytics from "@/components/CloudflareAnalytics";
@@ -120,15 +119,7 @@ export default function RootLayout({
         {children}
         <footer className="border-t border-stone-light/50 bg-warm-white py-10 text-center">
           <div className="mx-auto max-w-5xl px-4">
-            <Image
-              src="/millie-lying.svg"
-              alt=""
-              width={40}
-              height={24}
-              className="mx-auto opacity-30"
-            />
-
-            <p className="mt-3 text-sm text-stone">
+            <p className="text-sm text-stone">
               Events along the Highway 4 corridor
               <br />
               from Angels Camp to Bear Valley.
