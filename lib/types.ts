@@ -56,6 +56,29 @@ export interface Hwy4Event {
   is_weekly: boolean;
   verification_status?: EventVerificationStatus;
   community_sourced?: boolean;
+  venue_key?: string | null;
+}
+
+/**
+ * Per-venue display info shown on event detail pages. Keyed by the registry
+ * key in scripts/lib/venues.ts. `blurb` is a local-voice paragraph; the rest of
+ * the optional fields are live facts synced from the Google Places API. Any
+ * field may be absent — the UI renders only what's present.
+ */
+export interface Hwy4Venue {
+  venue_key: string;
+  canonical: string;
+  town: string;
+  address: string | null;
+  blurb: string | null;
+  place_id: string | null;
+  rating: number | null;
+  user_ratings_total: number | null;
+  phone: string | null;
+  website: string | null;
+  maps_url: string | null;
+  hours: string[] | null;
+  places_synced_at: string | null;
 }
 
 export interface Hwy4Org {

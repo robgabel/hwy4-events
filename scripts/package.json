@@ -9,6 +9,9 @@
     "scrape:gocalaveras": "tsx scrape.ts --source gocalaveras",
     "tag-weekly": "tsx tag-weekly.ts",
     "backfill-venues": "tsx backfill-venues.ts",
+    "backfill-venue-keys": "tsx backfill-venue-keys.ts",
+    "seed-venues": "tsx seed-venues.ts",
+    "draft-venue-blurbs": "tsx draft-venue-blurbs.ts",
     "warm-maps": "tsx warm-map-cache.ts"
   },
   "dependencies": {

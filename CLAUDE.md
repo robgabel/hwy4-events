@@ -5,7 +5,7 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router) + React 19 + Tailwind v4
-- **Database:** Supabase (`hwy4_events`, `hwy4_orgs`, `site_config`, `event_submissions`)
+- **Database:** Supabase (`hwy4_events`, `hwy4_orgs`, `hwy4_venues`, `site_config`, `event_submissions`)
 - **AI:** Anthropic SDK (Claude Opus) for daily briefing generation
 - **Maps:** Leaflet / react-leaflet
 - **Hosting:** Vercel (auto-deploys from main branch)
@@ -41,6 +41,7 @@ The "same event" rule is defined **once** in `lib/dedupe-events.ts` and mirrored
 | `/api/extract-prices` | Daily 1:30pm UTC | Extract explicitly-stated admission fees from event description/name into `price` + `cost_tier` via Haiku. Only lifts fees that are stated, never guesses. Processes 40/run by default; `?limit=150` for manual backfill. Stamps `price_extracted_at` so events aren't reprocessed. |
 | `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
 | `/api/aeo-audit-reminder` | 1st of month, 8am PT (16:00 UTC) | Posts the monthly AEO prompt-audit checklist to Slack (`SLACK_WEBHOOK_URL`). Manual ritual — a human runs the 13-query bank against AI engines and logs results in `AEO-SEO-MEASUREMENT.md`. Read-only. |
+| `/api/sync-venue-facts` | Mondays 12pm UTC | Refresh `hwy4_venues` live facts (rating, review count, phone, website, hours, Maps URL) from the Google Places API (New). `place_id` is resolved once and cached; the rest refresh weekly. Needs `GOOGLE_PLACES_API_KEY`. `?limit=` to cap the batch. |
 
 All cron routes require `CRON_SECRET` as a bearer token. To smoke-test any cron route manually:
 
@@ -72,6 +73,16 @@ Some events charge admission (Brice Station concerts, ticketed festivals). The f
 - The public site shows a green **"Free"** badge or a **"$25" / "Ticketed" / "Pay what you can"** cost badge on each event card (scan-level), plus a **"Free"** quick filter on the homepage. `unknown` shows nothing.
 - Backfill the whole upcoming queue by hitting the route repeatedly (it's idempotent via `price_extracted_at`): `curl -H "Authorization: Bearer $CRON_SECRET" "https://hwy4events.com/api/extract-prices?limit=150"`.
 
+## Venue Info (`hwy4_venues`)
+
+The event detail page shows a venue section: a **local-voice blurb** (what the place is, the vibe, named specifics) plus a **live-facts strip** (rating, today's hours, phone, website). This serves the personas who want venue context (Miguel deciding if the drive is worth it, Jen checking logistics, Mia recommending to guests) without violating the "local voice, not corporate voice" rule — the prose is ours; only the factual strip is third-party.
+
+- **`hwy4_venues`** — one row per registry venue, keyed by `venue_key` (the `scripts/lib/venues.ts` key). Columns: `canonical/town/address` (seeded from the registry), `blurb` + `blurb_generated_at` (local voice), and Google Places facts (`place_id`, `rating`, `user_ratings_total`, `phone`, `website`, `maps_url`, `hours` JSONB of weekday strings, `places_synced_at`). RLS on, public read only.
+- **`hwy4_events.venue_key`** — links an event to its venue row. Populated at write time by the scraper upsert (`scripts/lib/dedup.ts` via `resolveVenueKey` in `scripts/lib/venue-matcher.ts`) and backfilled by `scripts/backfill-venue-keys.ts`. NULL when the venue isn't in the registry → the detail page shows no venue section (graceful no-op).
+- **Blurbs** are drafted by `scripts/draft-venue-blurbs.ts` (Opus, sourced from `docs/LOCAL-KNOWLEDGE-BASE.md`, em-dash + banned-phrase enforced). Dry-run by default; `--apply` to write; `--all` to regenerate; pass venue keys to target specific ones. **Rob reviews before publish** — the script refuses to auto-write a blurb that trips a hard voice rule.
+- **Live facts** come from `/api/sync-venue-facts` (weekly cron, Google Places API New). `place_id` is cached indefinitely; rating/hours/etc. refresh weekly. The UI attributes the rating to Google (links to `maps_url`, "via Google" label) as required by Google's terms.
+- **Adding/refreshing a venue:** add it to `scripts/lib/venues.ts`, then `cd scripts && npm run seed-venues` (registry → `hwy4_venues`), `npm run draft-venue-blurbs -- --apply` (blurb), and let the weekly cron (or a manual `curl .../api/sync-venue-facts`) fill the Places facts. Re-run `npm run backfill-venue-keys -- --apply` so existing events link to the new venue.
+
 ## Environment Variables
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -79,6 +90,7 @@ Some events charge admission (Brice Station concerts, ticketed festivals). The f
 - `CRON_SECRET`
 - `NEXT_PUBLIC_CF_BEACON_TOKEN` (optional) — Cloudflare Web Analytics beacon token. When set, `app/layout.tsx` injects the Cloudflare RUM script. Get it from https://dash.cloudflare.com/?to=/:account/web-analytics.
 - `SLACK_WEBHOOK_URL` (optional — enables `/api/check-events` to post audit issues and `/api/aeo-audit-reminder` to post the monthly AEO checklist to Slack)
+- `GOOGLE_PLACES_API_KEY` — billing-enabled Google Cloud key with the Places API (New) enabled. Powers `/api/sync-venue-facts` (venue rating/hours/phone/website). ~45 venues refreshed weekly stays within Google's free credit.
 
 ## Dev Workflow
 
@@ -112,6 +124,7 @@ components/
   WeeklyBriefing.tsx    ← "This Week on the 4" display
   EventMapStatic.tsx    ← detail-page map entry point: static town thumbnail + Get Directions; mounts interactive Leaflet (EventMap.tsx) only on tap
   EventMap.tsx          ← interactive Leaflet map (CARTO Voyager tiles), lazy-loaded by EventMapStatic
+  VenueInfo.tsx         ← detail-page venue section: local-voice blurb + Google Places facts strip (server component)
   Header.tsx, LiveBadge.tsx, ShareButton.tsx, etc.
 lib/
   types.ts              ← Hwy4Event, EventCategory, TOWNS, etc.
