@@ -20,13 +20,16 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 
 ## Deduplication (defense in depth)
 
-The same real-world event can appear twice: one source re-lists it under a changed title, or two sources describe it independently (e.g. the GoCalaveras aggregator lists "Live Music @ The Lube Room" while the venue feed lists "Live at The Lube: Poison Oakies" — same night). The title-based `dedup_key` only catches byte-identical re-scrapes of the *same* title, so it cannot see these. Three layers guard against dupes:
+The same real-world event can appear twice: one source re-lists it under a changed title, or two sources describe it independently (e.g. the GoCalaveras aggregator lists "Live Music @ The Lube Room" while the venue feed lists "Live at The Lube: Poison Oakies" — same night). The title-based `dedup_key` only catches byte-identical re-scrapes of the *same* title, so it cannot see these. Four layers guard against dupes:
 
 1. **Read-time collapse** — [lib/dedupe-events.ts](lib/dedupe-events.ts) (`dedupeEvents`) runs on every user-facing list (homepage, town pages) and both briefing generators. It buckets by `town | date | normalized start | visibility` — **not end time**: a source that omits the end ("7:00 PM") must share a bucket with the same source's fuller listing ("7:00 PM – 10:00 PM"), so the end-agrees-only-when-both-known rule lives in `timesAnchor` inside `isSameEvent`, mirroring the write-time matcher. It then merges rows in a bucket only on a strong identity signal: near-identical title, overlapping artists, near-identical description, or same venue + a generic placeholder title. **Two different specific titles never merge on venue/time alone** (a park hosts different events back to back). Keeps the richest row (`pickSurvivor`); penalizes scraper-artifact venues like `@Murphys Park featuring …`.
 2. **Write-time merge** — `scripts/lib/dedup.ts` (`isStrongEventMatch` / `buildStrongMatchUpdate`) replaces the old name-only fuzzy. When a scraped event has no `dedup_key`/`source_event_id` hit, it merges into an existing same-date/same-town row that shares an exact time slot + the same strong signal, field-merging so the survivor keeps the best of both (and unions artists). Conservative — never merges on title similarity alone.
-3. **Backfill + audit** — [scripts/backfill-dedup.ts](scripts/backfill-dedup.ts) is a re-runnable repair using the exact read-time definition: `tsx backfill-dedup.ts` (dry-run) / `--execute` (apply). Needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`. `/api/check-events` reports same-event dupes (venue+time, different title) that the old name-only check missed.
+3. **Continuous reconcile (self-healing identity)** — [lib/reconcile.ts](lib/reconcile.ts) (`reconcileDuplicates`) operates on DB state, blind to who wrote the rows, so it covers **every** write path — the `upsertEvents` scrapers AND the three raw-insert writers (`scrape-bls`, `scrape-moose-lodge`, `bistro-espresso`) AND any future writer. It clusters resident rows with the same shared `clusterEvents`/`pickSurvivor`, back-fills the survivor from its losers, and deletes the losers — writing a full reversible snapshot to `event_merge_log` **before** each delete. Run daily by [`/api/reconcile-dupes`](app/api/reconcile-dupes/route.ts) (15:30 UTC, after scrapes, before the audit). **Ships in dry-run mode** (reports what it would merge, mutates nothing); flip to live by setting Vercel env `RECONCILE_EXECUTE=true` after a clean canary week (or `?execute=1` for a one-off). Every merge is reversible: `INSERT INTO hwy4_events SELECT (jsonb_populate_record(null::hwy4_events, merged_snapshot)).* FROM event_merge_log WHERE merged_from_id = '…'`.
+4. **Backfill + audit** — [scripts/backfill-dedup.ts](scripts/backfill-dedup.ts) is a thin CLI wrapper over the same `reconcileDuplicates` engine: `tsx backfill-dedup.ts` (dry-run) / `--execute` (apply). Needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`. `/api/check-events` reports same-event dupes (venue+time, different title) that the old name-only check missed, plus a `merges_last_24h` count.
 
-The "same event" rule is defined **once** in `lib/dedupe-events.ts` and mirrored in `scripts/lib/dedup.ts`; the backfill and audit import the shared one so the definition can't drift.
+The "same event" rule is defined **once** in `lib/event-identity.ts` (`isSameEvent`, locked by `scripts/test/event-identity.test.ts`) and reused everywhere via `lib/dedupe-events.ts` (`clusterEvents`/`pickSurvivor`): the read-time collapse, the write-time merge (`scripts/lib/dedup.ts`), the reconcile engine, the backfill, and the audit all import it, so the definition can't drift.
+
+> **Open item (dedup Move 3, Step 4):** once `/api/reconcile-dupes` runs live and `/api/check-events` reports 0 same-event clusters + 0 surprising merges for **4 consecutive weeks**, downgrade read-time `dedupeEvents` to a dev-only assertion, then remove it a release later. Until then it stays as a free backstop. Canary-week clock starts when `RECONCILE_EXECUTE=true` is set.
 
 ## Cron Jobs (vercel.json)
 
@@ -39,7 +42,8 @@ The "same event" rule is defined **once** in `lib/dedupe-events.ts` and mirrored
 | `/api/scrape-moose-lodge` | Mondays 2pm UTC | Scrape Ebbetts Pass Moose Lodge monthly PDF calendar via Claude PDF document API. Replaces the deprecated `scrape-moose-lodge` Supabase edge function (2026-05-26). |
 | `/api/verify-events` | Daily 3pm UTC | Cross-check upcoming events against organizers' canonical sites; flag mismatches as `needs_verification` |
 | `/api/extract-prices` | Daily 1:30pm UTC | Extract explicitly-stated admission fees from event description/name into `price` + `cost_tier` via Haiku. Only lifts fees that are stated, never guesses. Processes 40/run by default; `?limit=150` for manual backfill. Stamps `price_extracted_at` so events aren't reprocessed. |
-| `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
+| `/api/reconcile-dupes` | Daily 3:30pm UTC | Self-healing event identity: clusters resident `hwy4_events` rows via the shared matcher and merges duplicates (back-fill survivor, snapshot loser to `event_merge_log`, delete loser). Covers every write path including the raw-insert writers. **Dry-run by default**; set `RECONCILE_EXECUTE=true` (or `?execute=1`) to apply. After scrapes, before the audit. |
+| `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes, plus `merges_last_24h`. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
 | `/api/aeo-audit-reminder` | 1st of month, 8am PT (16:00 UTC) | Posts the monthly AEO prompt-audit checklist to Slack (`SLACK_WEBHOOK_URL`). Manual ritual — a human runs the 13-query bank against AI engines and logs results in `AEO-SEO-MEASUREMENT.md`. Read-only. |
 
 All cron routes require `CRON_SECRET` as a bearer token. To smoke-test any cron route manually:
@@ -79,6 +83,7 @@ Some events charge admission (Brice Station concerts, ticketed festivals). The f
 - `CRON_SECRET`
 - `NEXT_PUBLIC_CF_BEACON_TOKEN` (optional) — Cloudflare Web Analytics beacon token. When set, `app/layout.tsx` injects the Cloudflare RUM script. Get it from https://dash.cloudflare.com/?to=/:account/web-analytics.
 - `SLACK_WEBHOOK_URL` (optional — enables `/api/check-events` to post audit issues and `/api/aeo-audit-reminder` to post the monthly AEO checklist to Slack)
+- `RECONCILE_EXECUTE` (optional) — when `"true"`, `/api/reconcile-dupes` actually merges duplicates; otherwise it runs in dry-run (report-only). Leave unset during the canary week, then set in Vercel to go live.
 
 ## Dev Workflow
 
@@ -133,6 +138,8 @@ lib/
   - `PLAN-seo-aeo.md` — SEO and answer-engine optimization plan (the build)
   - `AEO-SEO-MEASUREMENT.md` — measuring SEO/AEO success at $0: GSC + Bing setup, monthly SEO scoreboard, monthly AEO prompt-audit ritual + query bank, log template. Reminder delivered via `/api/aeo-audit-reminder` cron.
   - `PRD-blue-lake-springs.md` — Blue Lake Springs HOA integration: members-only club events, Vision AI scraping of flyer images, `club` category, "Members & Guests" badge
+  - `PRD-event-identity-ingest.md` — Self-healing event identity (dedup Move 3): continuous DB-state reconcile (`lib/reconcile.ts` + `/api/reconcile-dupes`) so duplicates can't survive at rest, with a reversible `event_merge_log`. Implemented; rolling out dry-run-first.
+  - `PRD-event-identity-ingest.md` — Move 3 of the dedup work (deferred from the matcher consolidation): a self-healing reconcile engine + Vercel cron + `event_merge_log` so duplicate rows can't survive at rest, covering all four write paths (including the three that bypass `upsertEvents`). Reuses the shared `isSameEvent`; gates read-time `dedupeEvents` removal on a clean-streak. Not yet built.
 
 ## UI Standards
 

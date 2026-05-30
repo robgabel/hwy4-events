@@ -245,9 +245,27 @@ export async function GET(request: Request) {
       org_slug: r.org_slug,
     }));
 
+  // Recent self-healing merges (lib/reconcile.ts via /api/reconcile-dupes).
+  // Informational, NOT an issue — a merge means the dedup is working. Reported
+  // separately so it never inflates totalIssues / triggers a false alarm. Stays
+  // 0 during the dry-run canary week (dry-run writes no log rows). Tolerant of
+  // the table not existing yet (pre-migration) — the audit must not crash.
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  let mergesLast24h: number | null = null;
+  const { count: mergeCount, error: mergeErr } = await supabase
+    .from("event_merge_log")
+    .select("*", { count: "exact", head: true })
+    .gte("merged_at", twentyFourHoursAgo);
+  if (mergeErr) {
+    console.error("[check-events] event_merge_log query failed:", mergeErr.message);
+  } else {
+    mergesLast24h = mergeCount ?? 0;
+  }
+
   const summary = {
     audited_at: new Date().toISOString(),
     total_future_events: rows.length,
+    merges_last_24h: mergesLast24h,
     issues: {
       duplicates: duplicates.length,
       same_event_duplicates: sameEventDupes.length,
@@ -318,6 +336,9 @@ export async function GET(request: Request) {
     }
     if (stale.length > 0) {
       lines.push(`\n*${stale.length} future event(s) not re-scraped in 14+ days*`);
+    }
+    if (mergesLast24h && mergesLast24h > 0) {
+      lines.push(`\n_${mergesLast24h} duplicate merge(s) auto-healed in the last 24h (reversible via event_merge_log)._`);
     }
 
     try {
