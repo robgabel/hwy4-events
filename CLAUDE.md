@@ -132,6 +132,7 @@ lib/
   - `PLAN-seo-aeo.md` — SEO and answer-engine optimization plan (the build)
   - `AEO-SEO-MEASUREMENT.md` — measuring SEO/AEO success at $0: GSC + Bing setup, monthly SEO scoreboard, monthly AEO prompt-audit ritual + query bank, log template. Reminder delivered via `/api/aeo-audit-reminder` cron.
   - `PRD-blue-lake-springs.md` — Blue Lake Springs HOA integration: members-only club events, Vision AI scraping of flyer images, `club` category, "Members & Guests" badge
+  - `PRD-event-identity-ingest.md` — Move 3 of the dedup work (deferred from the matcher consolidation): a self-healing reconcile engine + Vercel cron + `event_merge_log` so duplicate rows can't survive at rest, covering all four write paths (including the three that bypass `upsertEvents`). Reuses the shared `isSameEvent`; gates read-time `dedupeEvents` removal on a clean-streak. Not yet built.
 
 ## UI Standards
 
