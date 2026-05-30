@@ -46,6 +46,8 @@ export interface Hwy4Event {
   // When true, price + cost_tier are human-set; the scraper and
   // /api/extract-prices must not overwrite them. See dedup.ts + extract-prices.
   price_locked?: boolean;
+  // When true, description is human-set; the scraper must not overwrite it.
+  description_locked?: boolean;
   event_url: string | null;
   source_url: string;
   source_name: string | null;
