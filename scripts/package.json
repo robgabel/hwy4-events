@@ -12,7 +12,8 @@
     "backfill-venue-keys": "tsx backfill-venue-keys.ts",
     "seed-venues": "tsx seed-venues.ts",
     "draft-venue-blurbs": "tsx draft-venue-blurbs.ts",
-    "warm-maps": "tsx warm-map-cache.ts"
+    "warm-maps": "tsx warm-map-cache.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

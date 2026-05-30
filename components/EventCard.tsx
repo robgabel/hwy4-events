@@ -1,5 +1,7 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
+import { isPatrioticEvent } from "@/lib/featured-events";
+import PatrioticEventCard from "@/components/PatrioticEventCard";
 import { getTownContent } from "@/app/towns/town-content";
 import {
   parseDate,
@@ -118,6 +120,11 @@ export default function EventCard({
   event: CollapsedEvent;
   isUpNext?: boolean;
 }) {
+  // Marquee patriotic events get a fully bespoke card.
+  if (isPatrioticEvent(event)) {
+    return <PatrioticEventCard event={event} isUpNext={isUpNext} />;
+  }
+
   const isPrivate = event.visibility === "private";
   const dateObj = parseDate(event.date);
   const dayOfWeek = formatShortWeekday(dateObj);
@@ -220,6 +227,13 @@ export default function EventCard({
               Rob&apos;s Pick
             </span>
           )}
+          <h3
+            className={`font-semibold transition-colors group-hover:text-pine ${
+              isUpNext ? "text-lg text-forest" : "text-forest"
+            }`}
+          >
+            {event.name}
+          </h3>
           {event.community_sourced && (
             <span
               title="Submitted by a Hwy 4 neighbor"
@@ -241,13 +255,6 @@ export default function EventCard({
               Community sourced
             </span>
           )}
-          <h3
-            className={`font-semibold transition-colors group-hover:text-pine ${
-              isUpNext ? "text-lg text-forest" : "text-forest"
-            }`}
-          >
-            {event.name}
-          </h3>
           <span
             className={`badge-${event.category} inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}
           >

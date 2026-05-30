@@ -15,6 +15,8 @@ import VenueInfo from "@/components/VenueInfo";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
 import type { Hwy4Venue } from "@/lib/types";
+import PatrioticEventDetail from "@/components/PatrioticEventDetail";
+import { isPatrioticEvent } from "@/lib/featured-events";
 
 export const revalidate = 3600;
 
@@ -207,6 +209,26 @@ export default async function EventPage({ params }: PageProps) {
   const mapLng = geocoded?.lng ?? townData?.lng ?? null;
   const mapZoom = geocoded ? 15 : townData?.mapZoom ?? 13;
 
+  // Marquee patriotic events get a fully bespoke detail layout.
+  if (isPatrioticEvent(event)) {
+    return (
+      <>
+        <EventJsonLd event={event} slug={slug} />
+        <PatrioticEventDetail
+          event={event}
+          slug={slug}
+          dateStr={dateStr}
+          timeRange={timeRange}
+          displayAddress={displayAddress}
+          geocodeQuery={geocodeQuery}
+          mapLat={mapLat}
+          mapLng={mapLng}
+          mapZoom={mapZoom}
+        />
+      </>
+    );
+  }
+
   const venue = event.venue_key ? await findVenue(event.venue_key) : null;
 
   return (
@@ -243,30 +265,32 @@ export default async function EventPage({ params }: PageProps) {
                 Tentative
               </span>
             )}
-            {event.community_sourced && (
-              <span
-                title="Submitted by a Hwy 4 neighbor"
-                className="inline-flex items-center gap-1 rounded-full bg-pine/10 px-2.5 py-0.5 text-xs font-medium text-pine"
-              >
-                <svg
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-1.34"
-                  />
-                </svg>
-                Community sourced
-              </span>
-            )}
           </div>
           <div className="flex items-start justify-between gap-3">
-            <h1 className="font-display text-3xl font-bold text-forest">{event.name}</h1>
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+              <h1 className="font-display text-3xl font-bold text-forest">{event.name}</h1>
+              {event.community_sourced && (
+                <span
+                  title="Submitted by a Hwy 4 neighbor"
+                  className="mt-1.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-pine/10 px-2.5 py-0.5 text-xs font-medium text-pine"
+                >
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-1.34"
+                    />
+                  </svg>
+                  Community sourced
+                </span>
+              )}
+            </div>
             <div className="shrink-0 pt-1">
               <ShareButton
                 url={`${SITE_URL}/events/${slug}`}
