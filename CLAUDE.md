@@ -31,6 +31,15 @@ The "same event" rule is defined **once** in `lib/event-identity.ts` (`isSameEve
 
 > **Open item (dedup Move 3, Step 4):** once `/api/reconcile-dupes` runs live and `/api/check-events` reports 0 same-event clusters + 0 surprising merges for **4 consecutive weeks**, downgrade read-time `dedupeEvents` to a dev-only assertion, then remove it a release later. Until then it stays as a free backstop. Canary-week clock starts when `RECONCILE_EXECUTE=true` is set.
 
+## Manually Curated Venues
+
+Some venues publish their schedule in a form the scrapers can't read — e.g. The Lube Room Saloon posts its "Live at the Lube" lineup only as an image. These are curated by hand and protected two ways:
+
+- **A seed script owns the rows** (e.g. `scripts/seed-lube-room-summer-2026.ts`). Edit the data there and re-run it to change a venue's events.
+- **`scripts/lib/manual-sources.ts`** (`isManuallyManagedEvent`) lists venue substrings; every auto-scraper skips matches before upserting, so a re-scrape can't overwrite the hand-entered rows. Cameo Plaza and The Lube Room are blocklisted today.
+
+For image-only schedules, a watcher cron detects changes and pings Slack without auto-writing (see `/api/check-lube-schedule`).
+
 ## Cron Jobs (vercel.json)
 
 | Route | Schedule | Purpose |
@@ -46,6 +55,7 @@ The "same event" rule is defined **once** in `lib/event-identity.ts` (`isSameEve
 | `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes, plus `merges_last_24h`. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
 | `/api/aeo-audit-reminder` | 1st of month, 8am PT (16:00 UTC) | Posts the monthly AEO prompt-audit checklist to Slack (`SLACK_WEBHOOK_URL`). Manual ritual — a human runs the 13-query bank against AI engines and logs results in `AEO-SEO-MEASUREMENT.md`. Read-only. |
 | `/api/sync-venue-facts` | Mondays 12pm UTC | Refresh `hwy4_venues` live facts (rating, review count, phone, website, hours, Maps URL) from the Google Places API (New). `place_id` is resolved once and cached; the rest refresh weekly. Needs `GOOGLE_PLACES_API_KEY`. `?limit=` to cap the batch. |
+| `/api/check-lube-schedule` | Mondays 4pm UTC | Fingerprints the Shopify CDN images on [theluberoom.com/pages/events](https://www.theluberoom.com/pages/events). If the "Live at the Lube" schedule graphic changed, posts to Slack so a human can update + re-run `scripts/seed-lube-room-summer-2026.ts`. The venue's schedule is image-only / hand-curated and blocklisted from the auto-scrapers, so this **never writes events** — it only watches. State in `site_config.lube_schedule_fingerprint`. |
 
 All cron routes require `CRON_SECRET` as a bearer token. To smoke-test any cron route manually:
 
