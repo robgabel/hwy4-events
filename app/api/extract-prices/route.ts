@@ -68,11 +68,15 @@ export async function GET(request: Request) {
   const anthropic = new Anthropic({ apiKey: anthropicKey });
 
   // Queue: upcoming events with no fee captured yet and not previously processed.
+  // price_locked rows are human-set — never re-extract them (would re-lift a
+  // stale amount out of the description, e.g. "$15 each" for Ironstone Mimosa
+  // Sundays after the price changed).
   const { data: eventsRaw, error: evErr } = await supabase
     .from("hwy4_events")
     .select("id, name, description, venue_name")
     .is("price", null)
     .is("price_extracted_at", null)
+    .eq("price_locked", false)
     .gte("date", todayISO())
     .order("date", { ascending: true })
     .limit(limit);
