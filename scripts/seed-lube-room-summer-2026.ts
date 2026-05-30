@@ -1,6 +1,13 @@
 // One-shot seeder for The Lube Room Saloon's "Live at The Lube — Summer of Music"
-// 2026 series. Transcribed from a chalkboard photo (IMG_4103.HEIC) on 2026-05-20.
+// 2026 series. Transcribed from a chalkboard photo (IMG_4103.HEIC) on 2026-05-20,
+// re-verified against a fresh photo on 2026-05-30.
 // The venue's website doesn't publish this list, so the live scraper can't find it.
+//
+// This script is the SINGLE SOURCE OF TRUTH for the venue. The venue is also
+// blocklisted in scripts/lib/manual-sources.ts ("lube room"), so the auto-scrapers
+// (GoCalaveras et al.) skip it and can no longer overwrite these rows. To change
+// the schedule, edit SHOWS below and re-run — nothing else writes these events.
+//
 // Re-runnable: upsertEvents() dedups by hash(name|date|town).
 //
 // Run: npx tsx scripts/seed-lube-room-summer-2026.ts
@@ -15,11 +22,21 @@ const SOURCE_NAME = "The Lube Room Saloon";
 const ORG_SLUG = "lube-room";
 const SOURCE_URL = "https://www.theluberoom.com/new-events";
 
+// Generic series blurb + photo used for every show that doesn't carry its own.
+// (Both originated from the venue's GoCalaveras listings; preserved so the cards
+// keep their image and description after the venue was pulled from the scrapers.)
+const SERIES_IMAGE =
+  "https://www.gocalaveras.com/wp-content/uploads/2026/05/lube-room-concert.jpg";
+const SERIES_DESCRIPTION =
+  "Join us for the Summer Concert Series at the Lube Room, featuring live music in a relaxed mountain setting. Enjoy great performances, scenic views, and a laid-back atmosphere with friends all season long.";
+
 type ShowRow = {
   date: string;
   artist: string;
   start: string;
   end: string;
+  description?: string; // overrides SERIES_DESCRIPTION for this show
+  image?: string; // overrides SERIES_IMAGE for this show
 };
 
 const SHOWS: ShowRow[] = [
@@ -45,13 +62,21 @@ const SHOWS: ShowRow[] = [
   { date: "2026-09-06", artist: "Snarky Cats", start: "19:00", end: "22:00" },
   { date: "2026-09-12", artist: "Hit Eject", start: "18:00", end: "21:00" },
   { date: "2026-09-19", artist: "Hit Replay", start: "18:00", end: "21:00" },
-  { date: "2026-09-25", artist: "Firelight", start: "18:00", end: "21:00" },
+  {
+    date: "2026-09-25",
+    artist: "Firelight",
+    start: "18:00",
+    end: "21:00",
+    description:
+      "Kimberly Annand and myself have decided to start a little side project called Firelight – Acoustic Duo and we just got our first gig at the Lube Room Saloon in Dorrington on Friday Evening Sept 25, 2026. We hope to see you there.",
+    image: "https://www.gocalaveras.com/wp-content/uploads/2026/04/firelight.jpg",
+  },
 ];
 
 function toExtracted(row: ShowRow): ExtractedEvent {
   return {
     name: `Live at The Lube: ${row.artist}`,
-    description: null,
+    description: row.description ?? SERIES_DESCRIPTION,
     date: row.date,
     start_time: row.start,
     end_time: row.end,
@@ -62,6 +87,7 @@ function toExtracted(row: ShowRow): ExtractedEvent {
     price: null,
     artists: [row.artist],
     event_url: null,
+    image_url: row.image ?? SERIES_IMAGE,
   };
 }
 
