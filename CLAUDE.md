@@ -5,7 +5,7 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router) + React 19 + Tailwind v4
-- **Database:** Supabase (`hwy4_events`, `hwy4_orgs`, `site_config`, `event_submissions`)
+- **Database:** Supabase (`hwy4_events`, `hwy4_orgs`, `hwy4_venues`, `site_config`, `event_submissions`)
 - **AI:** Anthropic SDK (Claude Opus) for daily briefing generation
 - **Maps:** Leaflet / react-leaflet
 - **Hosting:** Vercel (auto-deploys from main branch)
@@ -45,6 +45,7 @@ The "same event" rule is defined **once** in `lib/event-identity.ts` (`isSameEve
 | `/api/reconcile-dupes` | Daily 3:30pm UTC | Self-healing event identity: clusters resident `hwy4_events` rows via the shared matcher and merges duplicates (back-fill survivor, snapshot loser to `event_merge_log`, delete loser). Covers every write path including the raw-insert writers. **Dry-run by default**; set `RECONCILE_EXECUTE=true` (or `?execute=1`) to apply. After scrapes, before the audit. |
 | `/api/check-events` | Daily 6pm UTC | Data-quality audit on `hwy4_events`: duplicates, hidden rows, missing fields, stale scrapes, plus `merges_last_24h`. Posts to Slack if `SLACK_WEBHOOK_URL` is set. Read-only. |
 | `/api/aeo-audit-reminder` | 1st of month, 8am PT (16:00 UTC) | Posts the monthly AEO prompt-audit checklist to Slack (`SLACK_WEBHOOK_URL`). Manual ritual — a human runs the 13-query bank against AI engines and logs results in `AEO-SEO-MEASUREMENT.md`. Read-only. |
+| `/api/sync-venue-facts` | Mondays 12pm UTC | Refresh `hwy4_venues` live facts (rating, review count, phone, website, hours, Maps URL) from the Google Places API (New). `place_id` is resolved once and cached; the rest refresh weekly. Needs `GOOGLE_PLACES_API_KEY`. `?limit=` to cap the batch. |
 
 All cron routes require `CRON_SECRET` as a bearer token. To smoke-test any cron route manually:
 
@@ -90,6 +91,16 @@ The "Visit Event Page" button links to a **destination derived from event identi
 - **`/api/check-events` link-gap KPI.** A raw count of link-less events lies: a gap at a siteless one-off venue is the *correct* terminal state (our own page is the destination), not a to-do. So the audit reports two things: `aggregator_link_gaps` (raw count, trend only) and `actionable_link_gaps` — distinct venues with **≥5 upcoming events** and no organizer canonical (`GAP_VENUE_THRESHOLD` in the route). The Slack post lists those venues by name and **fires on a high-frequency gap alone**, even with zero other issues — so a new recurring organizer (a new concert series, a new winery) surfaces itself for a ~10-min `hwy4_orgs` row. Watch `actionable_link_gaps`, not the raw count.
 - **Decision (2026-05-30): do NOT build canonical auto-discovery.** The long tail below the threshold is one-offs at venues with no usable site, where no outbound link is correct — chasing them is optimizing something that shouldn't exist. The threshold-filtered KPI surfaces the few high-frequency venues worth a manual row; that's the whole mechanism. Only revisit automation if `actionable_link_gaps` starts climbing fast (watch the rate, not the count). To give an organizer a link, add its `hwy4_orgs` row by hand (canonical URL must be a page that renders server-side — JS-only calendars like `bigtrees.org/events/` are fine as a *link* but can't be enrolled in `canonical_check_enabled` date-verification).
 
+## Venue Info (`hwy4_venues`)
+
+The event detail page shows a venue section: a **local-voice blurb** (what the place is, the vibe, named specifics) plus a **live-facts strip** (rating, today's hours, phone, website). This serves the personas who want venue context (Miguel deciding if the drive is worth it, Jen checking logistics, Mia recommending to guests) without violating the "local voice, not corporate voice" rule — the prose is ours; only the factual strip is third-party.
+
+- **`hwy4_venues`** — one row per registry venue, keyed by `venue_key` (the `scripts/lib/venues.ts` key). Columns: `canonical/town/address` (seeded from the registry), `blurb` + `blurb_generated_at` (local voice), and Google Places facts (`place_id`, `rating`, `user_ratings_total`, `phone`, `website`, `maps_url`, `hours` JSONB of weekday strings, `places_synced_at`). RLS on, public read only.
+- **`hwy4_events.venue_key`** — links an event to its venue row. Populated at write time by the scraper upsert (`scripts/lib/dedup.ts` via `resolveVenueKey` in `scripts/lib/venue-matcher.ts`) and backfilled by `scripts/backfill-venue-keys.ts`. NULL when the venue isn't in the registry → the detail page shows no venue section (graceful no-op).
+- **Blurbs** are drafted by `scripts/draft-venue-blurbs.ts` (Opus, sourced from `docs/LOCAL-KNOWLEDGE-BASE.md`, em-dash + banned-phrase enforced). Dry-run by default; `--apply` to write; `--all` to regenerate; pass venue keys to target specific ones. **Rob reviews before publish** — the script refuses to auto-write a blurb that trips a hard voice rule.
+- **Live facts** come from `/api/sync-venue-facts` (weekly cron, Google Places API New). `place_id` is cached indefinitely; rating/hours/etc. refresh weekly. The UI attributes the rating to Google (links to `maps_url`, "via Google" label) as required by Google's terms.
+- **Adding/refreshing a venue:** add it to `scripts/lib/venues.ts`, then `cd scripts && npm run seed-venues` (registry → `hwy4_venues`), `npm run draft-venue-blurbs -- --apply` (blurb), and let the weekly cron (or a manual `curl .../api/sync-venue-facts`) fill the Places facts. Re-run `npm run backfill-venue-keys -- --apply` so existing events link to the new venue.
+
 ## Environment Variables
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -97,6 +108,7 @@ The "Visit Event Page" button links to a **destination derived from event identi
 - `CRON_SECRET`
 - `NEXT_PUBLIC_CF_BEACON_TOKEN` (optional) — Cloudflare Web Analytics beacon token. When set, `app/layout.tsx` injects the Cloudflare RUM script. Get it from https://dash.cloudflare.com/?to=/:account/web-analytics.
 - `SLACK_WEBHOOK_URL` (optional — enables `/api/check-events` to post audit issues and `/api/aeo-audit-reminder` to post the monthly AEO checklist to Slack)
+- `GOOGLE_PLACES_API_KEY` — billing-enabled Google Cloud key with the Places API (New) enabled. Powers `/api/sync-venue-facts` (venue rating/hours/phone/website). ~45 venues refreshed weekly stays within Google's free credit.
 - `RECONCILE_EXECUTE` (optional) — when `"true"`, `/api/reconcile-dupes` actually merges duplicates; otherwise it runs in dry-run (report-only). Leave unset during the canary week, then set in Vercel to go live.
 
 ## Dev Workflow
@@ -131,6 +143,7 @@ components/
   WeeklyBriefing.tsx    ← "This Week on the 4" display
   EventMapStatic.tsx    ← detail-page map entry point: static town thumbnail + Get Directions; mounts interactive Leaflet (EventMap.tsx) only on tap
   EventMap.tsx          ← interactive Leaflet map (CARTO Voyager tiles), lazy-loaded by EventMapStatic
+  VenueInfo.tsx         ← detail-page venue section: local-voice blurb + Google Places facts strip (server component)
   Header.tsx, LiveBadge.tsx, ShareButton.tsx, etc.
 lib/
   types.ts              ← Hwy4Event, EventCategory, TOWNS, etc.

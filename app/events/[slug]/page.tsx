@@ -11,8 +11,10 @@ import { buildEventOffer } from "@/lib/schema";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
+import VenueInfo from "@/components/VenueInfo";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
+import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import { isPatrioticEvent } from "@/lib/featured-events";
 import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
@@ -20,7 +22,26 @@ import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
 export const revalidate = 3600;
 
 const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, community_sourced";
+  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, community_sourced, venue_key";
+
+const VENUE_COLUMNS =
+  "venue_key, canonical, town, address, blurb, place_id, rating, user_ratings_total, phone, website, maps_url, hours, places_synced_at";
+
+/**
+ * Fetch the venue's display row (blurb + Google Places facts) for an event.
+ * Returns null when the event isn't linked to a known venue. Wrapped in
+ * cache() so it's deduped within a request; the page's revalidate=3600 keeps
+ * it cheap across requests.
+ */
+const findVenue = cache(async (venueKey: string): Promise<Hwy4Venue | null> => {
+  const { supabase } = await import("@/lib/supabase");
+  const { data } = await supabase
+    .from("hwy4_venues")
+    .select(VENUE_COLUMNS)
+    .eq("venue_key", venueKey)
+    .maybeSingle();
+  return (data as unknown as Hwy4Venue) ?? null;
+});
 const PAGE_SIZE = 60;
 
 const matchSlug = (events: Hwy4Event[] | null, slug: string): Hwy4Event | null =>
@@ -235,6 +256,8 @@ export default async function EventPage({ params }: PageProps) {
     );
   }
 
+  const venue = event.venue_key ? await findVenue(event.venue_key) : null;
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <EventJsonLd event={event} slug={slug} offerUrl={offerUrl} />
@@ -365,6 +388,8 @@ export default async function EventPage({ params }: PageProps) {
           mapLng={mapLng}
           mapZoom={mapZoom}
         />
+
+        {venue && <VenueInfo venue={venue} />}
 
         {event.description && (
           <section className="mb-6">

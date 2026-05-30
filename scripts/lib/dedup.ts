@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { supabaseAdmin } from "./supabase-admin.js";
 import type { ExtractedEvent } from "./extract.js";
 import { KNOWN_VENUES } from "./venues.js";
-import { isGenericVenue } from "./venue-matcher.js";
+import { isGenericVenue, resolveVenueKey } from "./venue-matcher.js";
 import { isOutOfCorridor } from "./corridor.js";
 // The "same event" rule + its string helpers live in ONE place, shared with the
 // read-time collapse in lib/dedupe-events.ts. Do not re-implement them here.
@@ -432,6 +432,7 @@ async function upsertEventsBatched(
           ? {
               name: event.name,
               venue_name: event.venue_name,
+              venue_key: resolveVenueKey(event),
               // Locked fields are human-set — never overwrite them.
               ...(existing.description_locked ? {} : { description: event.description }),
               start_time: event.start_time,
@@ -496,6 +497,7 @@ async function upsertEventsBatched(
       start_time: event.start_time,
       end_time: event.end_time,
       venue_name: event.venue_name,
+      venue_key: resolveVenueKey(event),
       town: event.town,
       address: event.address,
       category: event.category,
@@ -619,6 +621,7 @@ export async function upsertEvents(
           .update({
             name: event.name,
             venue_name: event.venue_name,
+            venue_key: resolveVenueKey(event),
             // Locked fields are human-set — never overwrite them.
             ...(existing.description_locked ? {} : { description: event.description }),
             start_time: event.start_time,
@@ -693,6 +696,7 @@ export async function upsertEvents(
         start_time: event.start_time,
         end_time: event.end_time,
         venue_name: event.venue_name,
+        venue_key: resolveVenueKey(event),
         town: event.town,
         address: event.address,
         category: event.category,

@@ -334,3 +334,38 @@ export function applyVenueDetection(event: {
   }
   return true;
 }
+
+/**
+ * Resolve an event to its registry venue_key, or null if it isn't a known
+ * venue. Unlike matchVenue (which returns null when the venue_name is already
+ * canonical, since there's nothing to *correct*), this answers "which registry
+ * entry is this?" — so it first matches a named/canonical venue_name directly
+ * against the alias index, then falls back to matchVenue's address/text layers
+ * for generic or partially-labeled venues.
+ *
+ * Used to populate hwy4_events.venue_key, which links a row to hwy4_venues.
+ */
+export function resolveVenueKey(event: {
+  name: string;
+  description: string | null;
+  venue_name: string;
+  address: string | null;
+  event_url?: string | null;
+}): string | null {
+  if (!isGenericVenue(event.venue_name)) {
+    const venueNorm = normalize(event.venue_name);
+    // ALIAS_INDEX is sorted longest-first, so the most specific alias wins.
+    for (const { alias, key } of ALIAS_INDEX) {
+      if (containsAlias(venueNorm, alias)) return key;
+    }
+  }
+
+  const match = matchVenue(
+    event.name,
+    event.description,
+    event.venue_name,
+    event.address,
+    event.event_url ?? null
+  );
+  return match?.venue_key ?? null;
+}

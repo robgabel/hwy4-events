@@ -170,14 +170,6 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Arnold",
     address: "1218 CA-4, Arnold, CA 95223",
   },
-  "moose-lodge": {
-    canonical: "Moose Lodge",
-    aliases: [
-      "moose lodge",
-      "loyal order of moose",
-    ],
-    town: "Angels Camp",
-  },
   "fairgrounds": {
     canonical: "Calaveras County Fairgrounds",
     aliases: [
@@ -351,6 +343,14 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     aliases: [
       "ebbetts pass moose lodge",
       "ebbetts moose lodge",
+      // The corridor has one Moose Lodge (#1123, on Blagen Rd in Arnold). The
+      // generic "Moose Lodge" / "Loyal Order of Moose" names were once a
+      // separate "moose-lodge" registry entry mistakenly placed in Angels Camp;
+      // merged here so a bare "Moose Lodge" resolves to the real venue.
+      // (NOTE: "moose-lodge" still exists as an ORG slug for member-event
+      // gating — that's a different namespace and is unaffected.)
+      "moose lodge",
+      "loyal order of moose",
     ],
     town: "Arnold",
     address: "1965 Blagen Rd, Arnold, CA 95223",
