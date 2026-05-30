@@ -184,6 +184,7 @@ type MergeableRow = MatchableRow & {
   image_url: string | null;
   source_event_id?: string | null;
   price_locked?: boolean | null;
+  description_locked?: boolean | null;
 };
 
 const isArtifactVenue = (v: string | null | undefined): boolean =>
@@ -218,10 +219,12 @@ function buildStrongMatchUpdate(
   return {
     name: pick(event.name, existing.name),
     venue_name: pickVenue(event.venue_name, existing.venue_name),
-    description: pick(event.description, existing.description),
+    // description + price are human-set when locked — leave them out entirely.
+    ...(existing.description_locked
+      ? {}
+      : { description: pick(event.description, existing.description) }),
     start_time: pick(event.start_time, existing.start_time),
     end_time: pick(event.end_time, existing.end_time),
-    // price is human-set when locked — leave it out of the merge entirely.
     ...(existing.price_locked ? {} : { price: pick(event.price, existing.price) }),
     event_url: pick(event.event_url, existing.event_url),
     address: pick(event.address, existing.address),
@@ -234,7 +237,7 @@ function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, dedup_key, source_event_id, price_locked";
+  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, dedup_key, source_event_id, price_locked, description_locked";
 
 type ExistingRow = {
   id: string;
@@ -250,18 +253,19 @@ type ExistingRow = {
   image_url: string | null;
   dedup_key?: string | null;
   source_event_id?: string | null;
-  // When true, `price` is human-set — no scrape write may touch it.
+  // When true, the field is human-set — no scrape write may touch it.
   price_locked?: boolean | null;
+  description_locked?: boolean | null;
 };
 
 function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
   return (
     existing.name !== event.name ||
     existing.venue_name !== event.venue_name ||
-    existing.description !== event.description ||
+    // A locked field can't be written, so a diff there is not a change.
+    (!existing.description_locked && existing.description !== event.description) ||
     existing.start_time !== event.start_time ||
     existing.end_time !== event.end_time ||
-    // A locked price can't be written, so a price-only diff is not a change.
     (!existing.price_locked && existing.price !== event.price) ||
     existing.event_url !== event.event_url ||
     existing.address !== event.address ||
@@ -358,7 +362,7 @@ async function upsertEventsBatched(
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
       .select(
-        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked"
+        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked"
       )
       .in("date", unmatchedDates);
 
@@ -428,10 +432,10 @@ async function upsertEventsBatched(
           ? {
               name: event.name,
               venue_name: event.venue_name,
-              description: event.description,
+              // Locked fields are human-set — never overwrite them.
+              ...(existing.description_locked ? {} : { description: event.description }),
               start_time: event.start_time,
               end_time: event.end_time,
-              // Locked price is human-set — never overwrite it.
               ...(existing.price_locked ? {} : { price: event.price }),
               event_url: event.event_url,
               address: event.address,
@@ -567,13 +571,14 @@ export async function upsertEvents(
       town: string;
       image_url: string | null;
       price_locked?: boolean | null;
+      description_locked?: boolean | null;
     } | null = null;
 
     if (event.source_event_id) {
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked"
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked, description_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -584,7 +589,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked"
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked, description_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -594,12 +599,12 @@ export async function upsertEvents(
     const now = new Date().toISOString();
 
     if (existing) {
-      // Check if any mutable fields changed. A locked price can't be written,
-      // so a price-only diff doesn't count as a change.
+      // Check if any mutable fields changed. A locked field can't be written,
+      // so a diff there doesn't count as a change.
       const changed =
         existing.name !== event.name ||
         existing.venue_name !== event.venue_name ||
-        existing.description !== event.description ||
+        (!existing.description_locked && existing.description !== event.description) ||
         existing.start_time !== event.start_time ||
         existing.end_time !== event.end_time ||
         (!existing.price_locked && existing.price !== event.price) ||
@@ -614,10 +619,10 @@ export async function upsertEvents(
           .update({
             name: event.name,
             venue_name: event.venue_name,
-            description: event.description,
+            // Locked fields are human-set — never overwrite them.
+            ...(existing.description_locked ? {} : { description: event.description }),
             start_time: event.start_time,
             end_time: event.end_time,
-            // Locked price is human-set — never overwrite it.
             ...(existing.price_locked ? {} : { price: event.price }),
             event_url: event.event_url,
             address: event.address,
@@ -658,7 +663,7 @@ export async function upsertEvents(
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked"
+          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked"
         )
         .eq("date", event.date);
 
