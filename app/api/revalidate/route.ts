@@ -25,6 +25,12 @@ export async function GET(request: NextRequest) {
   for (const tag of tags) revalidateTag(tag, "max");
   for (const path of paths) revalidatePath(path);
 
+  // The shared upcoming-events cache (lib/events-data.ts) is keyed by the
+  // "events" tag. revalidatePath alone won't bust it, so always invalidate the
+  // tag too — this keeps existing scraper/backfill callers (which hit this
+  // endpoint after writes) refreshing event data after the caching change.
+  revalidateTag("events", "max");
+
   // Default behavior (no params): refresh the homepage list.
   if (tags.length === 0 && paths.length === 0) revalidatePath("/");
 
