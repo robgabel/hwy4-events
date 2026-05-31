@@ -41,11 +41,46 @@ test("Cameo Plaza still matches (no regression)", () => {
   );
 });
 
+test("Calaveras Big Trees programs are treated as manually managed (all variants)", () => {
+  // GoCalaveras's name format — matches via "big trees state park" in the name.
+  assert.equal(
+    isManuallyManagedEvent({
+      name: "Creek Critters @ Big Trees State Park",
+      venue_name: "Calaveras Big Trees State Park",
+    }),
+    true
+  );
+  // A program whose name doesn't contain "big trees" — matches via venue_name.
+  assert.equal(
+    isManuallyManagedEvent({
+      name: "Junior Rangers",
+      venue_name: "Calaveras Big Trees State Park",
+    }),
+    true
+  );
+  // Name alone is enough.
+  assert.equal(
+    isManuallyManagedEvent({
+      name: "North Grove Guided Walk @ Big Trees State Park",
+      venue_name: null,
+    }),
+    true
+  );
+});
+
 test("unrelated corridor events are not blocklisted", () => {
   assert.equal(
     isManuallyManagedEvent({
       name: "Live Music @ Murphys Irish Pub",
       venue_name: "Murphys Irish Pub",
+    }),
+    false
+  );
+  // An Arnold event that isn't at the state park must still scrape normally.
+  assert.equal(
+    isManuallyManagedEvent({
+      name: "Arnold Independence Day Parade",
+      venue_name: "Cedar Center, Arnold",
     }),
     false
   );
