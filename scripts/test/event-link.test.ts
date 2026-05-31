@@ -34,7 +34,7 @@ const ART: LinkOrg = {
 const BIGTREES: LinkOrg = {
   slug: "calaveras-big-trees-state-park",
   display_name: "Calaveras Big Trees State Park",
-  canonical_url: "https://www.bigtrees.org/events/",
+  canonical_url: "https://www.parks.ca.gov/?page_id=25994",
   match_patterns: ["big trees", "calaveras big trees"],
 };
 const GOCAL: LinkOrg = {
@@ -56,7 +56,7 @@ test("organizer canonical wins over a (dead) GoCalaveras event_url", () => {
     ORGS
   );
   assert.equal(r.kind, "organizer");
-  assert.equal(r.href, "https://www.bigtrees.org/events/");
+  assert.equal(r.href, "https://www.parks.ca.gov/?page_id=25994");
   assert.equal(r.durable, true);
 });
 
