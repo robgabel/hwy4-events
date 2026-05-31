@@ -9,7 +9,11 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSameEvent, type EventIdentity } from "../../lib/event-identity.js";
+import {
+  isSameEvent,
+  isGenericTitle,
+  type EventIdentity,
+} from "../../lib/event-identity.js";
 
 /** Build an event with sensible defaults; override only what the case needs. */
 function ev(p: Partial<EventIdentity> & { name: string }): EventIdentity {
@@ -42,6 +46,31 @@ const cases: { label: string; a: EventIdentity; b: EventIdentity; same: boolean 
       venue_name: "Brice Station Vineyards",
       artists: ["Jimbo Scott & Yesterdays Biscuits"],
       description: "Live music performance featuring Jimbo Scott & Yesterdays Biscuits.",
+    }),
+    same: true,
+  },
+  {
+    // The Bistro case: aggregator umbrella whose blurb does NOT name the act, so
+    // actNamedInOther can't catch it. Must merge because the umbrella TITLE is
+    // recognized as a series placeholder (isGenericTitle) at the same venue+time.
+    label: "umbrella series (act not in blurb) vs act, same venue — same",
+    a: ev({
+      name: "Bistro Summer Concerts Series",
+      date: "2026-06-13",
+      town: "Arnold",
+      venue_name: "Bistro Espresso",
+      start_time: "18:00:00",
+      end_time: "21:00:00",
+      description: "Summer concert season is back. Live music every Saturday 6-9 PM, smoky BBQ.",
+    }),
+    b: ev({
+      name: "Avalon Revival",
+      date: "2026-06-13",
+      town: "Arnold",
+      venue_name: "Bistro Espresso",
+      start_time: "18:00:00",
+      end_time: "21:00:00",
+      artists: ["Avalon Revival"],
     }),
     same: true,
   },
@@ -88,6 +117,15 @@ const cases: { label: string; a: EventIdentity; b: EventIdentity; same: boolean 
     same: false,
   },
   {
+    // Guard: a title that names the act AFTER the series ("... Summer Concert:
+    // Foo") is specific, not a bare umbrella — two of them at the same venue +
+    // start must NOT collapse into one.
+    label: "two 'Summer Concert: <act>' specifics, same venue + start — NOT same",
+    a: ev({ name: "Cameo Plaza Summer Concert: Leilani & The Distractions", date: "2026-06-13", town: "Arnold", venue_name: "Cameo Plaza", start_time: "18:00:00", artists: ["Leilani & The Distractions"] }),
+    b: ev({ name: "Cameo Plaza Summer Concert: Snarky Cats", date: "2026-06-13", town: "Arnold", venue_name: "Cameo Plaza", start_time: "18:00:00", artists: ["Snarky Cats"] }),
+    same: false,
+  },
+  {
     // Guard: identical titles but back-to-back start times = different shows.
     label: "same title/venue, different start times — NOT same",
     a: ev({ name: "Live Music @ The Lube Room", town: "Dorrington", date: "2026-08-07", venue_name: "The Lube Room Saloon", start_time: "15:00:00" }),
@@ -124,3 +162,20 @@ for (const c of cases) {
     assert.equal(isSameEvent(c.b, c.a), c.same, `${c.label} (symmetric)`);
   });
 }
+
+test("isGenericTitle flags bare umbrella / series placeholders", () => {
+  assert.equal(isGenericTitle("Bistro Summer Concerts Series"), true);
+  assert.equal(isGenericTitle("Hilltop Concert Series"), true);
+  assert.equal(isGenericTitle("Summer Concerts"), true);
+  assert.equal(isGenericTitle("Live Music @ The Lube Room"), true);
+  assert.equal(isGenericTitle("Music in the Park"), true);
+});
+
+test("isGenericTitle keeps titles that name a specific act", () => {
+  assert.equal(isGenericTitle("Avalon Revival"), false);
+  assert.equal(isGenericTitle("The Sky Kings"), false);
+  assert.equal(
+    isGenericTitle("Cameo Plaza Summer Concert: Leilani & The Distractions"),
+    false
+  );
+});

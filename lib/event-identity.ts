@@ -197,12 +197,18 @@ function actNamedInOther(a: EventIdentity, b: EventIdentity): boolean {
 /** A title generic enough that it's an aggregator placeholder for whatever act
  *  is playing — "Live Music @ The Lube Room". A generic + a specific title at
  *  the same venue and exact time are the same show. */
-function isGenericTitle(name: string): boolean {
+export function isGenericTitle(name: string): boolean {
   const n = normalizeName(name);
   return (
     /^live music\b/.test(n) ||
     /^live (entertainment|tunes)\b/.test(n) ||
-    /^music (in|at|on) the\b/.test(n)
+    /^music (in|at|on) the\b/.test(n) ||
+    // Umbrella / series placeholder for a venue's recurring program (e.g.
+    // "Bistro Summer Concerts Series", "Hilltop Concert Series"). End-anchored
+    // so a title that names the act after the series ("... Summer Concert:
+    // Leilani & The Distractions") stays specific.
+    /\b(?:concerts?|music) series$/.test(n) ||
+    /\bsummer concerts?$/.test(n)
   );
 }
 
