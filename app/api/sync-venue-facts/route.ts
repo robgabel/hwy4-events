@@ -122,6 +122,9 @@ export async function GET(request: Request) {
   const { data: venuesRaw, error } = await supabase
     .from("hwy4_venues")
     .select("venue_key, canonical, town, address, place_id, places_synced_at")
+    // Locked venues (no correct Places listing — closed, or private/no distinct
+    // listing) are never touched, so the sync can't re-populate a wrong match.
+    .eq("places_locked", false)
     .or(`places_synced_at.is.null,places_synced_at.lt.${staleBefore}`)
     .order("places_synced_at", { ascending: true, nullsFirst: true })
     .limit(limit);
