@@ -1,12 +1,20 @@
-import { describe, it, expect } from "vitest";
+// Read-time merge behavior for the umbrella-series + act case.
+//
+// `dedupeEvents` must collapse the GoCalaveras umbrella row ("Bistro Summer
+// Concerts Series") and the venue feed's act ("Avalon Revival") into ONE card
+// that keeps the band's name/photo but backfills the umbrella's blurb. Uses the
+// repo's node:test + tsx harness (same as event-identity.test.ts).
+//
+// Run: `cd scripts && npm test`
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
 import {
   dedupeEvents,
   mergeCluster,
   type DedupableEvent,
-} from "../../lib/dedupe-events";
+} from "../../lib/dedupe-events.js";
 
-// Same venue, date, and exact time slot — the real Bistro Espresso shape where
-// the aggregator lists the umbrella series and the venue feed lists the band.
 const slot = {
   date: "2026-06-13",
   town: "Arnold",
@@ -35,39 +43,35 @@ const act: DedupableEvent = {
   image_url: "https://example.com/band.jpg",
 };
 
-describe("dedupeEvents — umbrella series + act", () => {
-  it("collapses the pair to a single card", () => {
-    expect(dedupeEvents([umbrella, act])).toHaveLength(1);
-    expect(dedupeEvents([act, umbrella])).toHaveLength(1);
-  });
-
-  it("keeps the band name and its photo, backfills the blurb", () => {
-    const [card] = dedupeEvents([umbrella, act]);
-    expect(card.name).toBe("Avalon Revival");
-    expect(card.image_url).toBe("https://example.com/band.jpg");
-    expect(card.description).toContain("Summer concert season");
-    expect(card.artists).toEqual(["Avalon Revival"]);
-  });
-
-  it("does not mutate the input rows", () => {
-    dedupeEvents([umbrella, act]);
-    expect(act.description).toBeNull();
-    expect(umbrella.name).toBe("Bistro Summer Concerts Series");
-  });
+test("collapses the umbrella + act pair to a single card (either order)", () => {
+  assert.equal(dedupeEvents([umbrella, act]).length, 1);
+  assert.equal(dedupeEvents([act, umbrella]).length, 1);
 });
 
-describe("mergeCluster", () => {
-  it("returns the row unchanged for a singleton", () => {
-    expect(mergeCluster([act])).toBe(act);
-  });
+test("keeps the band name + its photo, backfills the umbrella blurb", () => {
+  const [card] = dedupeEvents([umbrella, act]);
+  assert.equal(card.name, "Avalon Revival");
+  assert.equal(card.image_url, "https://example.com/band.jpg");
+  assert.ok((card.description ?? "").includes("Summer concert season"));
+  assert.deepEqual(card.artists, ["Avalon Revival"]);
+});
 
-  it("leaves genuinely different shows alone (different venue)", () => {
-    const elsewhere: DedupableEvent = {
-      ...act,
-      venue_name: "Cameo Plaza",
-      name: "Snarky Cats",
-      artists: ["Snarky Cats"],
-    };
-    expect(dedupeEvents([act, elsewhere])).toHaveLength(2);
-  });
+test("does not mutate the input rows", () => {
+  dedupeEvents([umbrella, act]);
+  assert.equal(act.description, null);
+  assert.equal(umbrella.name, "Bistro Summer Concerts Series");
+});
+
+test("mergeCluster returns the row unchanged for a singleton", () => {
+  assert.equal(mergeCluster([act]), act);
+});
+
+test("leaves genuinely different shows alone (different venue)", () => {
+  const elsewhere: DedupableEvent = {
+    ...act,
+    venue_name: "Cameo Plaza",
+    name: "Snarky Cats",
+    artists: ["Snarky Cats"],
+  };
+  assert.equal(dedupeEvents([act, elsewhere]).length, 2);
 });
