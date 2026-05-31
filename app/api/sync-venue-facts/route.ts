@@ -36,6 +36,46 @@ interface PlaceDetails {
   websiteUri?: string;
   googleMapsUri?: string;
   regularOpeningHours?: { weekdayDescriptions?: string[] };
+  // Factual attributes used to ground blurbs in real persona signals.
+  primaryTypeDisplayName?: { text?: string };
+  allowsDogs?: boolean;
+  goodForChildren?: boolean;
+  goodForGroups?: boolean;
+  outdoorSeating?: boolean;
+  servesBeer?: boolean;
+  servesWine?: boolean;
+  servesCocktails?: boolean;
+  liveMusic?: boolean;
+  menuForChildren?: boolean;
+  restroom?: boolean;
+  reservable?: boolean;
+  parkingOptions?: Record<string, unknown>;
+}
+
+// Compact, blurb-friendly attribute bag persisted to hwy4_venues.places_attributes.
+// Only includes attributes Google actually returned (undefined fields dropped).
+function buildAttributes(d: PlaceDetails): Record<string, unknown> | null {
+  const attrs: Record<string, unknown> = {};
+  const pt = d.primaryTypeDisplayName?.text;
+  if (pt) attrs.primary_type = pt;
+  const bool: [keyof PlaceDetails, string][] = [
+    ["allowsDogs", "allows_dogs"],
+    ["goodForChildren", "good_for_children"],
+    ["goodForGroups", "good_for_groups"],
+    ["outdoorSeating", "outdoor_seating"],
+    ["servesBeer", "serves_beer"],
+    ["servesWine", "serves_wine"],
+    ["servesCocktails", "serves_cocktails"],
+    ["liveMusic", "live_music"],
+    ["menuForChildren", "menu_for_children"],
+    ["restroom", "restroom"],
+    ["reservable", "reservable"],
+  ];
+  for (const [src, dest] of bool) {
+    if (typeof d[src] === "boolean") attrs[dest] = d[src];
+  }
+  if (d.parkingOptions) attrs.parking = Object.keys(d.parkingOptions);
+  return Object.keys(attrs).length > 0 ? attrs : null;
 }
 
 async function findPlaceId(
@@ -77,6 +117,19 @@ async function fetchDetails(
     "websiteUri",
     "googleMapsUri",
     "regularOpeningHours.weekdayDescriptions",
+    "primaryTypeDisplayName",
+    "allowsDogs",
+    "goodForChildren",
+    "goodForGroups",
+    "outdoorSeating",
+    "servesBeer",
+    "servesWine",
+    "servesCocktails",
+    "liveMusic",
+    "menuForChildren",
+    "restroom",
+    "reservable",
+    "parkingOptions",
   ].join(",");
   const res = await fetch(`${PLACES_BASE}/places/${encodeURIComponent(placeId)}`, {
     headers: {
@@ -166,6 +219,7 @@ export async function GET(request: Request) {
           website: details.websiteUri ?? null,
           maps_url: details.googleMapsUri ?? null,
           hours: details.regularOpeningHours?.weekdayDescriptions ?? null,
+          places_attributes: buildAttributes(details),
           places_synced_at: syncedAt,
           updated_at: syncedAt,
         })
