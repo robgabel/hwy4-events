@@ -52,26 +52,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let eventPages: MetadataRoute.Sitemap = [];
 
   try {
-    const { supabase } = await import("@/lib/supabase");
-    const today = new Date().toISOString().split("T")[0];
-    const PAGE_SIZE = 60;
-    let allEvents: { id: string; name: string; date: string; town: string }[] = [];
-    let from = 0;
-
-    while (true) {
-      const { data, error } = await supabase
-        .from("hwy4_events")
-        .select("id, name, date, town")
-        .gte("date", today)
-        .neq("status", "cancelled")
-        .order("date", { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
-
-      if (error) break;
-      allEvents = allEvents.concat(data || []);
-      if (!data || data.length < PAGE_SIZE) break;
-      from += PAGE_SIZE;
-    }
+    // Reads the site-wide cached upcoming-events set — no dedicated DB scan.
+    const { getUpcomingEventSlugRows } = await import("@/lib/events-data");
+    const allEvents = await getUpcomingEventSlugRows();
 
     eventPages = allEvents.map((event) => ({
       url: `${SITE_URL}/events/${generateEventSlug(event.name, event.date, event.town)}`,

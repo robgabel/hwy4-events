@@ -7,8 +7,7 @@ import { SITE_URL } from "@/lib/constants";
 import { CORRIDOR_TOWNS, TOWN_INFO, TownInfo } from "@/lib/towns";
 import { townSlug } from "@/lib/slugs";
 import { getSupabase } from "@/lib/supabase";
-import { Hwy4Event } from "@/lib/types";
-import { dedupeEvents } from "@/lib/dedupe-events";
+import { getEventsInTown } from "@/lib/events-data";
 import {
   JsonLd,
   buildBreadcrumbs,
@@ -32,26 +31,8 @@ type PageProps = { params: Promise<{ slug: string }> };
 
 // ---------- data ----------
 
-async function getEventsInTown(townName: string): Promise<Hwy4Event[]> {
-  const today = new Date().toISOString().split("T")[0];
-  const { data, error } = await getSupabase()
-    .from("hwy4_events")
-    .select(
-      "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, visibility, org_slug, importance, robs_pick, is_weekly, image_url, community_sourced"
-    )
-    .eq("town", townName)
-    .gte("date", today)
-    .neq("status", "cancelled")
-    .order("date", { ascending: true })
-    .order("start_time", { ascending: true })
-    .limit(40);
-
-  if (error) {
-    console.error(`[getEventsInTown:${townName}]`, error);
-    return [];
-  }
-  return dedupeEvents(data as unknown as Hwy4Event[]).slice(0, 20);
-}
+// getEventsInTown now lives in lib/events-data.ts — an in-memory filter over the
+// site-wide cached upcoming-events set. No per-town database scan.
 
 async function getVenuesInTown(townName: string): Promise<string[]> {
   const { data, error } = await getSupabase()

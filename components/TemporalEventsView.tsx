@@ -3,9 +3,8 @@ import Image from "next/image";
 import { format, parseISO } from "date-fns";
 
 import { SITE_URL } from "@/lib/constants";
-import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event } from "@/lib/types";
-import { dedupeEvents } from "@/lib/dedupe-events";
+import { getEventsInRange } from "@/lib/events-data";
 import { townSlug } from "@/lib/slugs";
 import { CORRIDOR_TOWNS } from "@/lib/towns";
 import {
@@ -19,38 +18,9 @@ import NewsletterSignup from "@/components/NewsletterSignup";
 import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content";
 import { TEMPORAL_CONFIG, type WindowKey } from "@/lib/date-windows";
 
-const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, visibility, org_slug, importance, robs_pick, is_weekly, image_url";
-
-async function getEventsInRange(
-  start: string,
-  end: string
-): Promise<Hwy4Event[]> {
-  const PAGE_SIZE = 1000;
-  let all: Hwy4Event[] = [];
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await getSupabase()
-      .from("hwy4_events")
-      .select(EVENT_COLUMNS)
-      .gte("date", start)
-      .lte("date", end)
-      .neq("status", "cancelled")
-      .order("date", { ascending: true })
-      .order("start_time", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) {
-      console.error("[getEventsInRange]", error);
-      break;
-    }
-    all = all.concat((data ?? []) as unknown as Hwy4Event[]);
-    if (!data || data.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
-  }
-  return dedupeEvents(all);
-}
+// Event fetching moved to lib/events-data.ts (getEventsInRange) — an in-memory
+// filter over the site-wide cached upcoming-events set, so this view adds no
+// database scan of its own.
 
 function groupByDate(events: Hwy4Event[]): [string, Hwy4Event[]][] {
   const map = new Map<string, Hwy4Event[]>();

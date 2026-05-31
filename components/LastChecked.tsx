@@ -1,16 +1,11 @@
-import { supabase } from "@/lib/supabase";
+import { getLastScrapedAt } from "@/lib/events-data";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
 
 export default async function LastChecked() {
-  const { data } = await supabase
-    .from("hwy4_events")
-    .select("last_scraped_at")
-    .not("last_scraped_at", "is", null)
-    .order("last_scraped_at", { ascending: false })
-    .limit(1)
-    .single();
+  // Derived from the site-wide cached events set — no dedicated query.
+  const lastScrapedAt = await getLastScrapedAt();
 
-  if (!data?.last_scraped_at) {
+  if (!lastScrapedAt) {
     return (
       <p className="mt-5 text-sm text-stone">
         Updated regularly. Not all events may be listed.
@@ -18,7 +13,7 @@ export default async function LastChecked() {
     );
   }
 
-  const date = parseISO(data.last_scraped_at);
+  const date = parseISO(lastScrapedAt);
   const relative = formatDistanceToNow(date, { addSuffix: true });
   const day = format(date, "EEEE");
   const isRecent = Date.now() - date.getTime() < 2 * 24 * 60 * 60 * 1000;

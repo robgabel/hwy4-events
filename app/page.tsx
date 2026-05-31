@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
-import { Hwy4Event, Hwy4Org } from "@/lib/types";
-import { dedupeEvents } from "@/lib/dedupe-events";
+import { Hwy4Org } from "@/lib/types";
+import { getUpcomingEvents } from "@/lib/events-data";
 import { JsonLd, buildItemList } from "@/lib/schema";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
@@ -10,46 +10,9 @@ import Link from "next/link";
 
 export const revalidate = 3600; // revalidate every hour
 
-async function getEvents(): Promise<Hwy4Event[]> {
-  const today = new Date().toISOString().split("T")[0];
-  const PAGE_SIZE = 1000;
-  let allEvents: Hwy4Event[] = [];
-  let from = 0;
-
-  while (true) {
-    const { data, error, count } = await supabase
-      .from("hwy4_events")
-      .select(
-        "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, source_event_id, image_url, visibility, org_slug, importance, robs_pick, is_weekly, verification_status, community_sourced",
-        { count: "exact" }
-      )
-      .gte("date", today)
-      .neq("status", "cancelled")
-      .order("date", { ascending: true })
-      .order("start_time", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) {
-      console.error("[getEvents] Failed to fetch events:", error);
-      return allEvents;
-    }
-
-    allEvents = allEvents.concat(data as unknown as Hwy4Event[]);
-    console.log(`[getEvents] Batch: from=${from}, rows=${data?.length}, total so far=${allEvents.length}, db count=${count}`);
-
-    if (!data || data.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
-  }
-
-  const deduped = dedupeEvents(allEvents);
-  if (deduped.length !== allEvents.length) {
-    console.log(
-      `[getEvents] Collapsed ${allEvents.length - deduped.length} duplicate event(s).`
-    );
-  }
-  console.log(`[getEvents] Done. Total events: ${deduped.length}`);
-  return deduped;
-}
+// Event fetching now lives in lib/events-data.ts (getUpcomingEvents), a shared
+// cache so this page, the temporal views, town pages, and the sitemap all read
+// from ONE database scan per cache window instead of each running its own.
 
 async function getGreeting(): Promise<string | null> {
   const { data, error } = await supabase
@@ -130,7 +93,7 @@ async function getOrgs(): Promise<Hwy4Org[]> {
 
 export default async function Home() {
   const [events, orgs, greeting, briefing, weekendBriefing] = await Promise.all([
-    getEvents(),
+    getUpcomingEvents(),
     getOrgs(),
     getGreeting(),
     getBriefing(),
