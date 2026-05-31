@@ -18,7 +18,7 @@
  * scripts/draft-town-content.ts.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { supabaseAdmin } from "./lib/supabase-admin.js";
 
@@ -29,7 +29,11 @@ const limitArg = args.find((a) => a.startsWith("--limit"));
 const LIMIT = limitArg
   ? parseInt(limitArg.split("=")[1] ?? args[args.indexOf(limitArg) + 1] ?? "", 10) || Infinity
   : Infinity;
-const explicitKeys = args.filter((a) => !a.startsWith("--") && !/^\d+$/.test(a));
+const outArg = args.find((a) => a.startsWith("--out"));
+const OUT_FILE = outArg ? outArg.split("=")[1] ?? args[args.indexOf(outArg) + 1] ?? "" : "";
+const explicitKeys = args.filter(
+  (a) => !a.startsWith("--") && !/^\d+$/.test(a) && a !== OUT_FILE
+);
 
 const repoRoot = resolve(__dirname, "..");
 const knowledgeBase = readFileSync(join(repoRoot, "docs/LOCAL-KNOWLEDGE-BASE.md"), "utf-8");
@@ -84,6 +88,58 @@ interface VenueRow {
   town: string;
   address: string | null;
   blurb: string | null;
+  place_id: string | null;
+  places_attributes: Record<string, unknown> | null;
+}
+
+/**
+ * Render the stored Google Places attributes as a plain-English signal list the
+ * model can weave in (dog/kid/group/outdoor/live-music/etc.). Only includes
+ * attributes Google actually returned.
+ */
+function attributesBlock(attrs: Record<string, unknown> | null): string {
+  if (!attrs) return "(no Places attributes on file)";
+  const label: Record<string, [string, string]> = {
+    allows_dogs: ["dogs welcome", "no dogs"],
+    good_for_children: ["good for kids", "not really a kids' spot"],
+    good_for_groups: ["handles groups", ""],
+    outdoor_seating: ["has outdoor seating", ""],
+    serves_beer: ["serves beer", ""],
+    serves_wine: ["serves wine", ""],
+    serves_cocktails: ["full cocktails", ""],
+    live_music: ["hosts live music", ""],
+    menu_for_children: ["has a kids' menu", ""],
+    reservable: ["takes reservations", "no reservations"],
+  };
+  const out: string[] = [];
+  if (typeof attrs.primary_type === "string") out.push(`type: ${attrs.primary_type}`);
+  for (const [key, [yes, no]] of Object.entries(label)) {
+    if (attrs[key] === true && yes) out.push(yes);
+    else if (attrs[key] === false && no) out.push(no);
+  }
+  if (Array.isArray(attrs.parking) && attrs.parking.some((p) => String(p).startsWith("free")))
+    out.push("free parking");
+  return out.length ? out.join("; ") : "(no usable Places attributes)";
+}
+
+/** Fetch up to 3 recent review snippets (live, transient — never stored). */
+async function fetchReviewSnippets(placeId: string | null): Promise<string[]> {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!placeId || !key) return [];
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+      headers: { "X-Goog-Api-Key": key, "X-Goog-FieldMask": "reviews.text,reviews.rating" },
+    });
+    if (!res.ok) return [];
+    const d = (await res.json()) as { reviews?: { text?: { text?: string } }[] };
+    return (d.reviews ?? [])
+      .map((r) => r.text?.text?.replace(/\s+/g, " ").trim() ?? "")
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((t) => t.slice(0, 320));
+  } catch {
+    return [];
+  }
 }
 
 function stripFences(text: string): string {
@@ -111,7 +167,7 @@ async function main() {
 
   let query = supabaseAdmin
     .from("hwy4_venues")
-    .select("venue_key, canonical, town, address, blurb")
+    .select("venue_key, canonical, town, address, blurb, place_id, places_attributes")
     .order("venue_key");
   if (explicitKeys.length > 0) query = query.in("venue_key", explicitKeys);
   else if (!ALL) query = query.is("blurb", null);
@@ -129,21 +185,30 @@ async function main() {
   }
 
   console.log(
-    `${APPLY ? "APPLY" : "DRY RUN"} — drafting ${venues.length} venue blurb(s) with Opus.\n`
+    `${APPLY ? "APPLY" : OUT_FILE ? "PROPOSE" : "DRY RUN"} — drafting ${venues.length} venue blurb(s) with Opus.\n`
   );
 
+  const proposals: { venue_key: string; canonical: string; blurb: string; has_source: boolean }[] = [];
+
   for (const v of venues) {
+    const reviews = await fetchReviewSnippets(v.place_id);
     const userPrompt = `Write the blurb for this venue:
 - Name: ${v.canonical}
 - Town: ${v.town}, California${v.address ? `\n- Address: ${v.address}` : ""}
 
-=== LOCAL KNOWLEDGE BASE (your only source — find this venue in it) ===
+=== GOOGLE PLACES SIGNALS (factual — safe to state directly) ===
+${attributesBlock(v.places_attributes)}
+
+=== RECENT VISITOR REVIEWS (for vibe + named specifics only — do NOT quote, do NOT invent hours/cadence from these) ===
+${reviews.length ? reviews.map((r, i) => `${i + 1}. ${r}`).join("\n") : "(none available)"}
+
+=== LOCAL KNOWLEDGE BASE (primary source for owners, history, named specifics) ===
 ${knowledgeBase}
 
 === ABOUT PAGE (voice reference, match this tone) ===
 ${aboutPage}
 
-Output the JSON object now.`;
+Lean on the Places signals for practical persona facts (dogs, kids, groups, outdoor, live music) — those are verified, so state them plainly. Use reviews only to sense the vibe and surface real named details (a dish, a feature); never quote a review or lift a star rating into the prose. Output the JSON object now.`;
 
     let blurb = "";
     let hasSource = false;
@@ -176,6 +241,8 @@ Output the JSON object now.`;
     if (emDashes > 0) console.log(`  ⚠️  ${emDashes} em dash(es) — rewrite before publish`);
     if (violations.length > 0) console.log(`  ⚠️  banned phrase(s): ${violations.join(", ")}`);
 
+    proposals.push({ venue_key: v.venue_key, canonical: v.canonical, blurb, has_source: hasSource });
+
     if (APPLY) {
       // Don't auto-write a blurb that trips a hard voice rule; leave it for review.
       if (emDashes > 0 || violations.length > 0) {
@@ -195,7 +262,12 @@ Output the JSON object now.`;
     }
   }
 
-  if (!APPLY) console.log(`\nDry run only. Re-run with --apply to write blurbs.`);
+  if (OUT_FILE) {
+    writeFileSync(OUT_FILE, JSON.stringify(proposals, null, 2));
+    console.log(`\nWrote ${proposals.length} proposals to ${OUT_FILE} (nothing written to DB).`);
+  } else if (!APPLY) {
+    console.log(`\nDry run only. Re-run with --apply to write blurbs.`);
+  }
 }
 
 main().catch((err) => {
