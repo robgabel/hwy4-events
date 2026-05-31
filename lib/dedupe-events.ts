@@ -14,6 +14,7 @@
 
 import {
   isSameEvent,
+  isGenericTitle,
   normalizeTown,
   normalizeTime,
   normalizeVenue,
@@ -54,6 +55,10 @@ function richness(e: DedupableEvent): number {
   if (e.source_event_id) s += 2;
   if (e.image_url) s += 1;
   if (e.event_url) s += 1;
+  // An umbrella/series placeholder ("Bistro Summer Concerts Series") must lose
+  // the display slot to the specific act sharing its venue + time, so the card
+  // shows the band name and its category, not the generic series row.
+  if (e.name && isGenericTitle(e.name)) s -= 12;
   return s;
 }
 
@@ -112,24 +117,54 @@ export function pickSurvivor<T extends DedupableEvent>(cluster: T[]): T {
   );
 }
 
+/** The survivor of a cluster, enriched by backfilling display fields it lacks
+ *  from its siblings. The richest row keeps its identity (title, artists,
+ *  category, link target), but a sibling can still donate the description /
+ *  image a bare act row is missing — so the surviving card carries the band
+ *  name AND the umbrella listing's blurb + poster. Returns a shallow copy;
+ *  inputs are never mutated. Mirrors `buildFill` in lib/reconcile.ts, which does
+ *  the same backfill on DB state. */
+export function mergeCluster<T extends DedupableEvent>(cluster: T[]): T {
+  const winner = pickSurvivor(cluster);
+  if (cluster.length === 1) return winner;
+  const merged: T = { ...winner };
+  const len = (v: unknown) => (typeof v === "string" ? v.trim().length : 0);
+  // Description: a bare act row often has none; the umbrella sibling carries the
+  // blurb. Take the longest in the cluster so the card isn't empty.
+  for (const e of cluster) {
+    if (len(e.description) > len(merged.description)) merged.description = e.description;
+  }
+  // Image / link: keep the winner's (the band photo), else borrow from a sibling.
+  if (!merged.image_url) {
+    const donor = cluster.find((e) => e.image_url)?.image_url;
+    if (donor) merged.image_url = donor;
+  }
+  if (!merged.event_url) {
+    const donor = cluster.find((e) => e.event_url)?.event_url;
+    if (donor) merged.event_url = donor;
+  }
+  return merged;
+}
+
 /**
- * Collapse same-event duplicates, keeping the richest row of each cluster and
- * preserving input order (winner emitted at its earliest position).
+ * Collapse same-event duplicates, keeping the merged survivor of each cluster
+ * and preserving input order (survivor emitted at the cluster's earliest
+ * position).
  */
 export function dedupeEvents<T extends DedupableEvent>(events: T[]): T[] {
-  const winnerOf = new Map<T, T>();
+  const survivorOf = new Map<T, T>();
   for (const cluster of clusterEvents(events)) {
-    const winner = pickSurvivor(cluster);
-    for (const m of cluster) winnerOf.set(m, winner);
+    const survivor = mergeCluster(cluster);
+    for (const m of cluster) survivorOf.set(m, survivor);
   }
 
   const emitted = new Set<T>();
   const result: T[] = [];
   for (const e of events) {
-    const winner = winnerOf.get(e) ?? e;
-    if (emitted.has(winner)) continue;
-    emitted.add(winner);
-    result.push(winner);
+    const survivor = survivorOf.get(e) ?? e;
+    if (emitted.has(survivor)) continue;
+    emitted.add(survivor);
+    result.push(survivor);
   }
   return result;
 }
