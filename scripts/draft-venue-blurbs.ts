@@ -47,6 +47,7 @@ NEVER USE EM DASHES (—). This is Rob's most-broken rule. Use commas, periods, 
 - Direct, specific, lightly wry. No corporate fog, no marketing speak.
 - Reference REAL specifics from the knowledge base: owners, what the place is known for, the vibe, named menu items or features. "Giant Burger's been slinging burgers since 1968, and the breakfast burritos locals order aren't on the marquee" beats "a classic local eatery".
 - First-person ("I" = Rob) only where it's natural; usually third person is fine.
+- WORK IN PRACTICAL SIGNALS when the knowledge base supports them — these are what readers actually decide on: dog-friendly (or not), good for kids / strollers, big outdoor area for groups, walkable to other spots, indoor vs outdoor, parking, members-only. "Dogs are welcome on the fire roads but not the trails" or "a big outdoor area that takes large groups without reservations, dogs included" earns its place. Only state these when the source supports them; never invent a dog or kid policy.
 
 === DO NOT INVENT ===
 
