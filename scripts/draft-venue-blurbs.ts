@@ -54,6 +54,16 @@ Use ONLY facts present in the knowledge base for this venue. If the knowledge ba
 
 NEVER assert specific hours or a weekly cadence ("open every day", "live music every Thursday", "7 nights a week") unless the knowledge base explicitly verifies it. These go stale and get quoted forever. Rob once caught a hallucinated "Murphys Irish Pub live music 7 nights a week" (the pub is closed Mon-Tue). If you must reference timing, hedge ("often", "most weeks") or omit it. The live facts strip handles current hours separately, so you don't need to state hours at all.
 
+=== NEVER REFERENCE INTERNAL TOOLING (hard rule) ===
+
+The blurb is public copy in Rob's voice. NEVER mention "the knowledge base", "my notes", "my sources", "public info", "the data", or any internal artifact — it breaks the voice and means nothing to a reader. When you don't have enough to say, punt like a neighbor would, in honest first person:
+  GOOD: "My Bar sits on S Main in Angels Camp, but I've never been there. If you've been and have the scoop, send it our way!"
+  GOOD: "I don't have much on it yet, so check their site before you go."
+  BAD:  "the knowledge base doesn't have much specific on it yet."
+  BAD:  "I don't have much in my notes."
+  BAD:  "that's about all I can tell you from public info."
+Only claim "I've never been" / "I haven't been in" if it's actually true for Rob; if unsure, use the neutral "I don't have much on it yet." Then point the reader somewhere useful: the event details, the venue's own site, or an invite to send the scoop.
+
 === BANNED PHRASES (never use these or close variants) ===
 "discover", "explore", "your gateway to", "nestled in the heart of", "charming", "hidden gem", "something for everyone", "a slice of", "experience the magic", "step back in time", "moreover", "furthermore", "it's worth noting". Any line that could appear unchanged on another venue's page is a failure.
 
@@ -86,6 +96,8 @@ const BANNED = [
   "discover", "explore", "your gateway", "nestled in", "charming", "hidden gem",
   "something for everyone", "experience the magic", "step back in time",
   "moreover", "furthermore", "it's worth noting",
+  // Internal tooling must never leak into public copy (see hard rule above).
+  "knowledge base", "my notes", "public info", "the data",
 ];
 
 async function main() {
