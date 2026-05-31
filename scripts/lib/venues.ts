@@ -40,17 +40,6 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Murphys",
     address: "415 Main St, Murphys, CA 95247",
   },
-  "poor-house": {
-    canonical: "The Poor House",
-    aliases: [
-      "the poor house",
-      "poor house",
-      "murphys poor house",
-      "murphy's poor house",
-    ],
-    town: "Murphys",
-    address: "467 Main St, Murphys, CA 95247",
-  },
   "wine-beer-garden": {
     canonical: "Murphys Wine & Beer Garden",
     aliases: [
@@ -312,6 +301,13 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "murphy's pour house",
       "the murphys pourhouse",
       "the pourhouse murphys",
+      // "The Poor House" isn't a real Murphys venue — sources that list it
+      // mean the Pourhouse, so resolve those here (the old "poor-house" entry
+      // was removed). 467 Main vs 350 Main is the same misattribution.
+      "the poor house",
+      "poor house",
+      "murphys poor house",
+      "murphy's poor house",
     ],
     town: "Murphys",
     address: "350 Main St, Murphys, CA 95247",
