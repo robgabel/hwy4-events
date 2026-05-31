@@ -16,6 +16,16 @@ const MANUAL_VENUE_PATTERNS: readonly string[] = [
   // Lube Room", which kept overwriting the hand-entered band titles on every
   // scrape. Matches via venue_name ("The Lube Room Saloon") on every variant.
   "lube room",
+  // Calaveras Big Trees State Park publishes its interpretive program schedule as
+  // recurrence rules in prose (https://www.parks.ca.gov/?page_id=25994), which the
+  // scrapers can't parse. GoCalaveras re-lists the programs with wrong date ranges
+  // and flattened times (Creek Critters as May 30 - Sept 5 when the park runs it
+  // June 13 - Aug 15; astronomy nights at one fixed time when each date differs).
+  // The canonical schedule is curated by hand (scripts/seed-bigtrees-programs-2026.ts)
+  // and watched by /api/check-bigtrees-schedule. Both patterns match the venue_name
+  // ("Calaveras Big Trees State Park") and the event names ("... @ Big Trees State Park").
+  "big trees state park",
+  "calaveras big trees",
 ];
 
 export interface MatchableEvent {

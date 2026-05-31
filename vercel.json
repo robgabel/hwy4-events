@@ -51,6 +51,10 @@
     {
       "path": "/api/check-lube-schedule",
       "schedule": "0 16 * * 1"
+    },
+    {
+      "path": "/api/check-bigtrees-schedule",
+      "schedule": "0 17 * * 1"
     }
   ]
 }
