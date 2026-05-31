@@ -88,6 +88,19 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Murphys",
     address: "458 Main St, Murphys, CA 95247",
   },
+  "boyle-macdonald": {
+    canonical: "Boyle MacDonald Wines",
+    aliases: [
+      "boyle macdonald wines",
+      "boyle macdonald",
+      "boyle mcdonald wines",
+      "boyle mcdonald",
+      // Formerly Ariel Vineyards — older listings may still use that name.
+      "ariel vineyards",
+    ],
+    town: "Murphys",
+    address: "448B Main St, Murphys, CA 95247",
+  },
   "lube-room": {
     canonical: "The Lube Room Saloon",
     aliases: [
