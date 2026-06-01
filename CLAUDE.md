@@ -65,6 +65,36 @@ All cron routes require `CRON_SECRET` as a bearer token. To smoke-test any cron 
 curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/<route>
 ```
 
+## Event Sources (scripts/scrape.ts — daily GitHub Action)
+
+Most events come from the `scripts/scrape.ts` orchestrator, run daily by
+`.github/workflows/scrape.yml` (a GitHub Action, **not** a Vercel cron). It
+dispatches per-source scrapers and writes through the shared
+`scripts/lib/dedup.ts::upsertEvents` path (dedup_key + corridor drop +
+cross-source merge). Two source shapes:
+
+- **Config-driven Firecrawl** — one entry in `scripts/scrapers/firecrawl-sources.ts`
+  (single fixed venue/town). The generic runner fetches markdown + LLM-extracts.
+- **Special scrapers** — hand-written files for non-generic shapes (GoCalaveras
+  EventON AJAX, visit-murphys WP REST, **red-cross**, …), registered in `SPECIAL_SCRAPERS`.
+
+### American Red Cross blood drives (`scripts/scrapers/red-cross.ts`)
+
+- Searches the public Red Cross **drive-results** SPA for corridor ZIP anchors
+  (Murphys 95247, Angels Camp 95222, Arnold 95223 — add ZIPs to `ANCHORS` to expand coverage).
+- The page is a JS SPA behind Akamai bot-protection (a plain `fetch` 403s), so it is
+  rendered + JSON-extracted via **Firecrawl** (`FIRECRAWL_API_KEY`, already set), not direct fetch.
+- Each drive → `category='civic'` (Community), `cost_tier='free'`, `visibility='public'`,
+  `org_slug='red-cross'`, `event_url` = the per-ZIP drive-results page (donor lands on the
+  bookable list). Cross-anchor repeats and out-of-corridor overspill (San Andreas, Sonora)
+  are dropped by the corridor filter + dedup. A 10-day-grace stale sweep removes cancelled drives.
+- Requires the `red-cross` row in `hwy4_orgs` (migration `20260601_add_red_cross_org.sql`;
+  FK `fk_hwy4_events_org`). `canonical_url` is left NULL so the link resolver surfaces the
+  precise per-ZIP `event_url` (path 3) instead of one generic organizer URL.
+- **URL validation:** `scripts/lib/validate-urls.ts` now treats **401/403** like 429
+  (access-denied / bot-walled ≠ dead link) and never nulls those URLs. Without this the
+  nightly check would HEAD the Red Cross page, get a 403, and wipe the booking CTA every run.
+
 ## Event Verification
 
 Aggregator scrapers (e.g., GoCalaveras) occasionally get event dates wrong. For organizers we trust as canonical (e.g., Arnold Rim Trail), we cross-check scraped data against the organizer's own events page.

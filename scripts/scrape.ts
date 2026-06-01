@@ -3,6 +3,7 @@ import { scrapeGoCalaveras } from "./scrapers/gocalaveras.js";
 import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
+import { scrapeRedCross } from "./scrapers/red-cross.js";
 import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
 import { FIRECRAWL_SOURCES } from "./scrapers/firecrawl-sources.js";
 import { validateEventUrls } from "./lib/validate-urls.js";
@@ -15,6 +16,8 @@ import { runHealthCheck } from "./lib/health.js";
  *   - mystic-saloon: Facebook primary + multi-URL website fallback
  *   - hwy4-fb-discover: Apify Facebook events scraper
  *   - visit-murphys: Tribe (The Events Calendar) WordPress REST API
+ *   - red-cross: Firecrawl JSON extraction of the Red Cross drive-results SPA,
+ *     many hosts per search across multiple corridor ZIP anchors
  *
  * Everything else goes through the config-driven generic Firecrawl runner.
  */
@@ -24,6 +27,7 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   "mystic-saloon": scrapeMysticSaloon,
   "hwy4-fb-discover": scrapeHwy4FbDiscover,
   "visit-murphys": scrapeVisitMurphys,
+  "red-cross": scrapeRedCross,
 };
 
 const SCRAPERS: Record<string, () => Promise<void>> = {

@@ -75,9 +75,13 @@ export async function validateEventUrls(): Promise<{
 
           clearTimeout(timeout);
 
-          // 429 = rate limited, not actually broken — skip
-          if (resp.status === 429) {
-            return { id: event.id, name: event.name, url: event.event_url, ok: true, status: 429, rateLimited: true };
+          // 401/403/429 = access-denied or rate-limited, NOT a dead link. A
+          // server-side HEAD often gets bot-walled (Akamai etc.) on pages that
+          // load fine in a real browser — e.g. redcrossblood.org drive pages
+          // 403 every non-browser request. Treat as not-broken so we never null
+          // a live link. Genuinely dead links return 404/410/DNS-fail/timeout.
+          if (resp.status === 401 || resp.status === 403 || resp.status === 429) {
+            return { id: event.id, name: event.name, url: event.event_url, ok: true, status: resp.status, rateLimited: true };
           }
           if (resp.status >= 400) {
             return { id: event.id, name: event.name, url: event.event_url, ok: false, status: resp.status };
@@ -123,7 +127,7 @@ export async function validateEventUrls(): Promise<{
 
   console.log(
     `URL validation: ${checkable.length} checked, ${broken} broken, ${nulled} nulled` +
-    (rateLimited > 0 ? `, ${rateLimited} skipped (rate limited)` : "") +
+    (rateLimited > 0 ? `, ${rateLimited} skipped (blocked or rate-limited)` : "") +
     (skippedAggregator > 0 ? `, ${skippedAggregator} aggregator URLs skipped` : "")
   );
   return { checked: checkable.length, broken, nulled };
