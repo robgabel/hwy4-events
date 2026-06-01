@@ -347,38 +347,31 @@ async function sweepStale(today: string): Promise<number> {
     Date.now() - STALE_GRACE_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  // Two deletes instead of a single .or() filter: PostgREST mis-parses an ISO
-  // timestamp embedded in an or() string (the milliseconds dot reads as a token
-  // separator and it errors "column does not exist"). Rows still on the Red
-  // Cross list were refreshed with a fresh last_scraped_at this run, so anything
-  // older than the grace window — or never stamped — is a drive that fell off.
-  const swept: Array<{ name: string; date: string }> = [];
-
-  const { data: aged, error: agedErr } = await supabaseAdmin
+  // A drive still on the Red Cross list was refreshed with a fresh
+  // last_scraped_at this run, so anything older than the grace window (or never
+  // stamped) is a drive that fell off the list.
+  //
+  // The .select() RETURNING list MUST include last_scraped_at: a DELETE that
+  // filters a column via .or() but omits that column from the returned columns
+  // errors "column does not exist" in PostgREST. Same idiom as the sweep in
+  // app/api/scrape-moose-lodge/route.ts.
+  const { data, error } = await supabaseAdmin
     .from("hwy4_events")
     .delete()
     .eq("org_slug", ORG_SLUG)
     .gte("date", today)
-    .lt("last_scraped_at", cutoff)
-    .select("name, date");
-  if (agedErr) console.warn("  Stale sweep (aged) failed:", agedErr.message);
-  else if (aged) swept.push(...aged);
+    .or(`last_scraped_at.is.null,last_scraped_at.lt.${cutoff}`)
+    .select("id, name, date, last_scraped_at");
 
-  const { data: orphan, error: orphanErr } = await supabaseAdmin
-    .from("hwy4_events")
-    .delete()
-    .eq("org_slug", ORG_SLUG)
-    .gte("date", today)
-    .is("last_scraped_at", null)
-    .select("name, date");
-  if (orphanErr) console.warn("  Stale sweep (null) failed:", orphanErr.message);
-  else if (orphan) swept.push(...orphan);
-
-  if (swept.length > 0) {
+  if (error) {
+    console.warn("  Stale sweep failed:", error.message);
+    return 0;
+  }
+  if (data && data.length > 0) {
     console.log(
-      `  Swept ${swept.length} stale row(s):`,
-      swept.map((r) => `${r.date} ${r.name}`).join(", ")
+      `  Swept ${data.length} stale row(s):`,
+      data.map((r) => `${r.date} ${r.name}`).join(", ")
     );
   }
-  return swept.length;
+  return data?.length ?? 0;
 }
