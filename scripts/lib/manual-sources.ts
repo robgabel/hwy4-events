@@ -26,6 +26,14 @@ const MANUAL_VENUE_PATTERNS: readonly string[] = [
   // ("Calaveras Big Trees State Park") and the event names ("... @ Big Trees State Park").
   "big trees state park",
   "calaveras big trees",
+  // The Camp Connell General Store's "Beer Garden" summer concert series is
+  // transcribed from the venue's image-only season flyer
+  // (scripts/seed-camp-connell-beer-garden-2026.ts) and isn't published in a
+  // machine-readable form. GoCalaveras re-lists shows generically; this keeps the
+  // auto-scrapers from overwriting the hand-entered lineup. Matches the
+  // venue_name on every variant (store and beer-garden branding).
+  "camp connell general store",
+  "camp connell beer garden",
 ];
 
 export interface MatchableEvent {

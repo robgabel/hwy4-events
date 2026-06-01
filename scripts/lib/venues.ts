@@ -128,9 +128,15 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     aliases: [
       "camp connell general store",
       "general store camp connell",
+      // The store's summer concerts are billed under its "Beer Garden".
+      "camp connell beer garden",
+      "beer garden camp connell",
     ],
     town: "Camp Connell",
-    address: "3190 CA-4, Camp Connell, CA 95223",
+    // The store's own site, Yelp, and Facebook all list 4036 Old Highway 4 — the
+    // Google Places listing's "3190 CA-4" was wrong. (sync-venue-facts pins by
+    // place_id and never writes address, so this stays put.)
+    address: "4036 Old Highway 4, Camp Connell, CA 95223",
   },
   "bear-valley-resort": {
     canonical: "Bear Valley Mountain Resort",
