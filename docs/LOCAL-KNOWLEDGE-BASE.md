@@ -34,7 +34,7 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 | Giant Burger | Classic roadside diner | Since 1968. Wed–Sun 11am–7pm; closed Mon–Tue. Milkshakes, burgers, giant carved bear out front. Same family ownership since 2007. Local institution. **Insider tip: the breakfast burritos.** Not on the marquee, but locals order them. | Everyone | [giantburgerarnold.com](https://giantburgerarnold.com/); [Rob, 2026-05-26 — breakfast burrito tip] |
 | Sarafina's Italian Kitchen | Italian | 794 Hwy 4. (209) 795-9858. Wed–Sun 5pm–9pm. Reservations recommended. | Rob, date night | [sarafinasitaliankitchen.com](https://sarafinasitaliankitchen.com/) |
 | Sierra House Pub & Eatery | Pub/sandwiches + craft beer | 1051 Hwy 4. (209) 813-7018. Hours fluctuate seasonally — check ahead. Cuban, Mushroom Reuben, kid's menu. | Dave, Rob | [sierrahouseofarnold.com](https://sierrahouseofarnold.com/) |
-| Snowshoe Brewery | Microbrewery + restaurant | Overlooks Meadowmont at 2050 Hwy 4. Apricot Wheat Ale won gold. Ownership changed in recent years (exact date unverified); the long-time community-anchor energy has shifted, and the regulars haven't all come back. Still draws tourists. Branded as "Snowshoe Brewery" (no longer "Brewing Company"). | Tourist-leaning today | [thesnowshoebrewery.com](https://thesnowshoebrewery.com/) |
+| Snowshoe Brewery | Microbrewery + restaurant | Overlooks Meadowmont at 2050 Hwy 4. Dog-friendly, with an outdoor beer garden that's great in summer. Refreshed the beer lineup three or four years back and some of it's genuinely good (the Apricot Wheat Ale won gold). Big food menu, and they fill growlers to go. Quieter and sparser than it used to be, the old community-anchor energy has faded and the regulars haven't all come back, but the people are lovely and Rob roots for them. Worth a stop, just not the first place to send an out-of-towner. Branded as "Snowshoe Brewery" (no longer "Brewing Company"). | Rob (regular), dog owners | [thesnowshoebrewery.com](https://thesnowshoebrewery.com/) |
 | Posterity Ciderworks | Craft cidery (opened Arnold 2026) | 1771 Hwy 4 Suite F, Arnold. Owners: Brendan & Kris Barnard (husband-wife; Brendan is head cidermaker). Second tasting room (HQ in Mokelumne Hill). Natural ciders, meads, co-ferments — fermented dry, no added sweeteners. Locally foraged fruit + reclaimed Gold Country orchards. Featured on James Beard and Michelin Star–restaurant beverage lists. | Rob, Mia, Karen's guests | [posterityciderworks.com](https://posterityciderworks.com/pages/location); [Pine Tree](https://new.thepinetree.net/?p=198497) |
 | Hinterhaus Distilling | Craft distillery + tasting room | 925 Hwy 4, Arnold. Owners: **Nate & Bonnie Randall** (husband-wife co-founders). North Grove Vodka — Country Winner USA + Gold, 2024 World Vodka Awards. South Grove Gin — Double Gold + 95 pts + Best Gin, 2023 Sunset International Spirits Competition. Tasting room with production views. **Locals' tip:** unless it's a busy weekend, they serve a flight of three mini-cocktails as a taster, and they're fantastic. The merch wall is also legit, both Hinterhaus-branded and unbranded gear of unusually high quality. | Rob, Karen's guests | [hinterhausdistilling.com](https://www.hinterhausdistilling.com/); [craftspiritsmag.com](https://craftspiritsmag.com/2024/01/24/hinterhaus-earns-best-varietal-vodka-in-u-s-at-world-vodka-awards/); [Rob, 2026-05-26 — mini-cocktail flight + merch] |
 | El Vaquero Authentic Mexican | Mexican | 925 Hwy 4 (same complex as Hinterhaus). (209) 795-3303. Mon–Fri 11am–8:30pm; weekend hours vary. Deck overlooking Hwy 4. Dog-friendly. | Jen, families | [yelp.com/biz/el-vaquero-authentic-mexican-arnold](https://www.yelp.com/biz/el-vaquero-authentic-mexican-arnold) |
@@ -338,7 +338,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 **Social circuit:**
 - Ebbetts Pass Moose Lodge (#1123) — events, dinners, fundraisers
 - Arnold Lions Club meetings
-- Snowshoe Brewery — used to be a regular spot, but has gone downhill since ownership change. Gary probably still checks in but doesn't linger.
+- Snowshoe Brewery: quieter than it used to be, but Gary still swings by. Dog-friendly garden, a few good beers, nice people.
 - The Lube Room on weekends with buddies
 - Sequoia Woods Country Club (golf, restaurant)
 
@@ -410,7 +410,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 
 **Social life:**
 - The Lube Room (his bar — 5 minutes from home in Dorrington)
-- Snowshoe Brewery — used to go, but it's fallen off
+- Snowshoe Brewery: goes now and then. Mellower these days, but the beer garden's still a nice hang.
 - Lions Club or Moose Lodge events
 - Community fundraisers, car shows, BBQ competitions
 - Possibly Ebbetts Pass Fire District events (it's a volunteer fire district covering Arnold/Dorrington/Camp Connell)
@@ -443,7 +443,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 - Saturday morning: Bistro Espresso, then Calaveras Big Trees or winery tour
 - Saturday afternoon: Murphys Main Street tasting room crawl (Newsome Harlow → Lavender Ridge → Hovey → Frog's Tooth)
 - Saturday night: Hinterhaus cocktails → dinner at Grounds or V Restaurant
-- Sunday: White Pines Lake or Snowshoe brunch → drive home
+- Sunday: White Pines Lake or a stop at Snowshoe → drive home
 
 **What Rob recommends to friends:**
 - "You have to go to Hinterhaus — Nate and Bonnie Randall make incredible spirits. North Grove Vodka took a country win at the 2024 World Vodka Awards."
@@ -453,13 +453,13 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 - "Skip Ironstone unless you've never been — it's more of a first-timer thing"
 - "V Restaurant in Murphys is legitimately Bay Area quality"
 - "Bear Valley in winter is way less crowded than Tahoe — but call ahead, they consolidated F&B to the Village Lodge for 25/26"
-- "Don't bother with Snowshoe — it used to be great but it's gone way downhill"
+- "Snowshoe's worth an afternoon, especially the dog-friendly garden in summer. It's quieter than it used to be, but the people are great and a few of the beers are good. Just not your first pour in town."
 
 **Winter version:**
 - Ski Bear Valley (less crowds, good snow, 30 min from Arnold)
 - Après at the Village Lodge (Sky High Pizza in 25/26; Monte Wolfe returns 26/27)
 - Dinner at Creekside Bistro when it's open
-- Snowshoe Brewery after the slopes (if you must)
+- Snowshoe Brewery after the slopes (the garden's a nice wind-down)
 
 ---
 
@@ -473,7 +473,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 - Kalamata — "Great Mediterranean, unexpected in a mountain town"
 - Hinterhaus Distilling — "Award-winning craft spirits from Nate & Bonnie Randall. Country Winner at the 2024 World Vodka Awards. A must-visit."
 - Posterity Ciderworks — "New craft cidery, Thu–Sun 12–6pm. Their ciders are on Michelin restaurant lists — really special."
-- Snowshoe Brewery — "Local brewery, but quality has slipped since ownership change. YMMV."
+- Snowshoe Brewery: "Dog-friendly local brewery with a nice beer garden in summer. Quieter than it used to be, but a pleasant, low-key stop."
 
 *Murphys (15–20 min drive):*
 - "Walk Main Street and hit 3–4 tasting rooms"
@@ -515,7 +515,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 **Kid-friendly spots she relies on:**
 - Giant Burger (kids love it)
 - El Vaquero (reliable, kid-friendly)
-- Snowshoe Brewery (used to be great for families — lawn games, arcade — but has gone downhill. Jen may still try it but won't count on it.)
+- Snowshoe Brewery (low-key and dog-friendly, with an outdoor garden. Quieter than it used to be, but an easy, relaxed stop. Jen might still swing by.)
 - White Pines Lake (playground + sandy beach)
 - Calaveras Big Trees North Grove (stroller-accessible)
 - BLS summer movies
@@ -918,5 +918,7 @@ Arnold, Blue Lake Springs, Lake Mont Pines, Mill Woods, Meadowmont, Fly In Acres
 *2026-05-26 (Rob review pass): Arnold corrections from local knowledge. Added Rocket gas station (1297 Hwy 4) as a new business with wine corner + fishing lures detail; verified address via 76.com. Added Big Trees Village and Lakemont Pines HOA sections so BLS isn't the only documented community-with-facilities. Verified Sequoia Woods restaurant/lounge is open to non-members (sequoiawoods.com/menu_and_reservations). Softened Snowshoe Brewery line per Rob's request: nudge at the ownership-change quality shift rather than calling it out directly. Layered Rob-sourced detail (Hinterhaus mini-cocktail flight + merch, Ace Hardware home/decor section, Grizzly Chevron made-to-order sandwiches, Bistro Espresso homemade ketchup + care, Giant Burger breakfast burrito secret). All Rob-sourced facts tagged [Rob, 2026-05-26] in the Source column.*
 
 *2026-05-26 (Rob review pass, Avery): Expanded Howard's Mystic Saloon detail (goth-mystic aesthetic, skull chandeliers, table shuffleboard, pool tables, juke box, drinks-only / no food). Added Day-O Espresso (Avery location: 68 Avery Hotel Rd, drive-thru + fancy toasts including cinnamon toast on thick bread). Added JC Power Equipment (Jim & Nancy Conway, opened January 2019, on Hwy 4 in Avery; small-engine repair for the whole corridor) — verified via calaverasenterprise.com. Logged Rossetti's at the 19th Hole (4462 CA-4) as CLOSED per Yelp banner + Rob's local confirmation; some aggregator listings still show Fri-Sun hours but those are stale. Rob-sourced facts tagged [Rob, 2026-05-26].*
+
+*2026-06-01 (Rob review pass, Snowshoe Brewery): Reframed Snowshoe Brewery from the "gone downhill / don't bother" framing to Rob's actual stance. He likes it and goes regularly: dog-friendly with a nice outdoor beer garden in summer, the beer lineup was refreshed three or four years ago and some pours are genuinely good, it's quieter and sparser than its peak with the old community-anchor energy faded, the people are lovely and he roots for them, and it's worth a stop but not the first rec for out-of-towners. Updated the canonical entry, the live Arnold town-page bullet (app/towns/town-content.ts), and the Gary/Dave/Rob/Karen/Jen persona lines. Dropped the unverified "ownership change" attribution from public-facing copy. Fixed stale "Snowshoe Brewing" to "Snowshoe Brewery" in PERSONAS.md, prompt-local-knowledge-research.md, and scripts/draft-town-content.ts. Current owner names still unknown (open item above). Rob-sourced [Rob, 2026-06-01].*
 
 *2026-05-26 (Rob review pass, Dorrington): Materially expanded The Lube Room row with real food detail (11 oz fish & chips, chili with cornbread, two-handed burgers) and the beer-garden-with-horseshoes context — corrects the original draft's "drinks and atmosphere" framing. Added Dorrington / Camp Connell / Big Trees Village proximity context (they share fire station, after-work spots, grocery runs). Verified Ebbetts Pass Fire District Station 2 at 5510 Meko Drive via epfd.org/station-2 — added as a sourced KB row. Added a Winter snow-line gradient note to Seasonal Rhythms: from Dorrington (4,760 ft) and above, ground holds 1-2+ inches all winter; Arnold (~1,000 ft lower) sees snow come and go between storms.*

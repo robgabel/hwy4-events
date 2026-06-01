@@ -20,7 +20,7 @@ For each persona below, research and document:
 
 3. **Local vocabulary & geography** — Words and phrases locals use that outsiders wouldn't know. Examples: "Ebbetts Pass," "the 4," "BLS" (Blue Lake Springs), "up the hill," "down the hill," "the valley" (Central Valley), "Gold Country." Town nicknames, road references, seasonal language ("chain control," "burn day").
 
-4. **Known local figures & proprietors** — Real business owners, community leaders, and personalities that are part of the social fabric. Examples I already know: Bonnie and Craig at Hinterhaus Distillery in Arnold, the folks at Snowshoe Brewing. Who else? Winery owners in Murphys, restaurant owners, lodge leaders, event organizers, the people who ARE the community.
+4. **Known local figures & proprietors** — Real business owners, community leaders, and personalities that are part of the social fabric. Examples I already know: Bonnie and Craig at Hinterhaus Distillery in Arnold, the folks at Snowshoe Brewery. Who else? Winery owners in Murphys, restaurant owners, lodge leaders, event organizers, the people who ARE the community.
 
 5. **Institutions & organizations** — Moose Lodge, Lions Club, Blue Lake Springs HOA, Calaveras County Fair, Bear Valley Mountain Resort, Mark Twain Medical Center, volunteer fire departments, school districts, churches that host events. Which ones matter to which personas?
 

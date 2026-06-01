@@ -10,7 +10,7 @@
 
 **Tech comfort:** Comfortable with iPhone, checks email and Facebook daily. Doesn't love apps — prefers mobile web. Will bookmark a site but won't download anything.
 
-**Current event discovery:** Gary already knows what's happening. He's on the Moose Lodge email list, reads the Calaveras Enterprise, sees flyers at the post office and Snowshoe Brewing, and hears about everything at the Arnold Byway Cafe. His wife is in two Facebook groups.
+**Current event discovery:** Gary already knows what's happening. He's on the Moose Lodge email list, reads the Calaveras Enterprise, sees flyers at the post office and Snowshoe Brewery, and hears about everything at the Arnold Byway Cafe. His wife is in two Facebook groups.
 
 **Relationship to Hwy4Events:** Supplemental. Gary doesn't *need* the site — he's already wired into the grapevine. But he checks it to catch things outside his usual orbit (a new band at Murphys, a festival in Copperopolis he wouldn't have heard about). He also likes seeing the full picture in one place rather than piecing it together from 5 sources.
 
