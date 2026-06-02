@@ -42,6 +42,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <span style={{ fontSize: 11, color: "#999", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>
             Admin
           </span>
+          <NavLink href="/admin/today">Today</NavLink>
           <NavLink href="/admin/newsletter-note">Newsletter notes</NavLink>
           <NavLink href="/admin/verification">
             Verification
