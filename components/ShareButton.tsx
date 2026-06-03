@@ -11,10 +11,22 @@ interface ShareButtonProps {
 export default function ShareButton({ url, title, text }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
+  // Tag the shared link so the recipient's landing is attributed to a share
+  // (ShareTracker reads ?src on arrival). Keeps the canonical URL clean elsewhere.
+  const shareUrl = (() => {
+    try {
+      const u = new URL(url);
+      u.searchParams.set("src", "share");
+      return u.toString();
+    } catch {
+      return url;
+    }
+  })();
+
   async function handleShare() {
     if (navigator.share) {
       try {
-        await navigator.share({ title, text, url });
+        await navigator.share({ title, text, url: shareUrl });
       } catch {
         // User cancelled or share failed — ignore
       }
@@ -23,7 +35,7 @@ export default function ShareButton({ url, title, text }: ShareButtonProps) {
 
     // Desktop fallback: copy to clipboard
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

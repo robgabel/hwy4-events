@@ -1,19 +1,21 @@
-import { cache } from "react";
+import { cache, Suspense } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
-import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
 import { buildEventOffer } from "@/lib/schema";
+import { findEventBySlug } from "@/lib/events";
+import { posterKind, posterImageUrl, generatedPosterPath, withSrc } from "@/lib/poster";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
 import VenueInfo from "@/components/VenueInfo";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
+import ShareTracker from "@/components/ShareTracker";
 import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import { isPatrioticEvent } from "@/lib/featured-events";
@@ -21,18 +23,9 @@ import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
 
 export const revalidate = 3600;
 
-const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, community_sourced, venue_key";
-
 const VENUE_COLUMNS =
   "venue_key, canonical, town, address, blurb, place_id, rating, user_ratings_total, phone, website, maps_url, hours, places_synced_at";
 
-/**
- * Fetch the venue's display row (blurb + Google Places facts) for an event.
- * Returns null when the event isn't linked to a known venue. Wrapped in
- * cache() so it's deduped within a request; the page's revalidate=3600 keeps
- * it cheap across requests.
- */
 const findVenue = cache(async (venueKey: string): Promise<Hwy4Venue | null> => {
   const { supabase } = await import("@/lib/supabase");
   const { data } = await supabase
@@ -42,55 +35,7 @@ const findVenue = cache(async (venueKey: string): Promise<Hwy4Venue | null> => {
     .maybeSingle();
   return (data as unknown as Hwy4Venue) ?? null;
 });
-const PAGE_SIZE = 60;
 
-const matchSlug = (events: Hwy4Event[] | null, slug: string): Hwy4Event | null =>
-  events?.find((e) => generateEventSlug(e.name, e.date, e.town) === slug) ?? null;
-
-/**
- * Resolve an event from its computed slug. Wrapped in React cache() so the
- * page and generateMetadata share a single fetch per request. The slug embeds
- * the event date (YYYY-MM-DD), so we query just that date — a handful of rows —
- * instead of scanning the whole upcoming table. Falls back to a paginated scan
- * only if the date can't be parsed or the row isn't found.
- */
-const findEventBySlug = cache(async (slug: string): Promise<Hwy4Event | null> => {
-  const { supabase } = await import("@/lib/supabase");
-
-  const dateMatch = slug.match(/\d{4}-\d{2}-\d{2}/);
-  if (dateMatch) {
-    const { data } = await supabase
-      .from("hwy4_events")
-      .select(EVENT_COLUMNS)
-      .eq("date", dateMatch[0])
-      .neq("status", "cancelled");
-    const hit = matchSlug(data as unknown as Hwy4Event[] | null, slug);
-    if (hit) return hit;
-  }
-
-  // Fallback: scan upcoming events (rare — only if the slug has no parseable date).
-  const today = new Date().toISOString().split("T")[0];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("hwy4_events")
-      .select(EVENT_COLUMNS)
-      .gte("date", today)
-      .neq("status", "cancelled")
-      .order("date", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-    if (error || !data) break;
-    const hit = matchSlug(data as unknown as Hwy4Event[], slug);
-    if (hit) return hit;
-    if (data.length < PAGE_SIZE) break;
-  }
-  return null;
-});
-
-/**
- * Orgs that have a canonical destination URL, for the link resolver. Tiny table,
- * cached per request via React cache(). Loaded by canonical_url (not the
- * verification opt-in flag) so a link-only org like Big Trees still resolves.
- */
 const getCanonicalOrgs = cache(async (): Promise<LinkOrg[]> => {
   const { supabase } = await import("@/lib/supabase");
   const { data } = await supabase
@@ -109,6 +54,26 @@ function formatTime(time: string | null): string | null {
   return `${display}:${m} ${ampm}`;
 }
 
+/** Google Calendar "add event" template link. */
+function calendarUrl(event: Hwy4Event): string {
+  const d = event.date.replace(/-/g, "");
+  const toStamp = (t: string | null) =>
+    t ? `${d}T${t.replace(/:/g, "").padEnd(6, "0")}` : null;
+  const start = toStamp(event.start_time);
+  const end = toStamp(event.end_time);
+  const dates = start
+    ? `${start}/${end ?? start}`
+    : `${d}/${d}`;
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: event.name,
+    dates,
+    location: [event.venue_name, event.town, "CA"].filter(Boolean).join(", "),
+    details: `Details: ${SITE_URL}/events/${event.id}`,
+  });
+  return `https://www.google.com/calendar/render?${params.toString()}`;
+}
+
 type PageProps = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({
@@ -124,22 +89,26 @@ export async function generateMetadata({
     ? event.description.slice(0, 155)
     : `${event.name} at ${event.venue_name} in ${event.town}, CA on ${dateStr}.`;
 
+  // The poster is the share image: organizer's own art if supplied, else the
+  // generated screenprint. Portrait, so use a summary_large_image-friendly card.
+  const posterUrl = posterImageUrl(event, slug);
+
   return {
     title,
     description,
-    alternates: {
-      canonical: `/events/${slug}`,
-    },
+    alternates: { canonical: `/events/${slug}` },
     openGraph: {
       title,
       description,
       type: "website",
       url: `${SITE_URL}/events/${slug}`,
+      images: [{ url: posterUrl, width: 1080, height: 1350, alt: `${event.name} poster` }],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
+      images: [posterUrl],
     },
   };
 }
@@ -207,9 +176,6 @@ export default async function EventPage({ params }: PageProps) {
   const event = await findEventBySlug(slug);
   if (!event) notFound();
 
-  // Resolve the outbound link from event identity (organizer/venue), not scrape
-  // provenance. A dead/churning aggregator permalink never becomes the CTA; the
-  // internal page is the fallback destination. See lib/event-link.ts.
   const orgs = await getCanonicalOrgs();
   const link = resolveEventLinkFromOrgs(event, orgs);
   const offerUrl = link.href ?? `${SITE_URL}/events/${slug}`;
@@ -226,9 +192,6 @@ export default async function EventPage({ params }: PageProps) {
   const displayAddress = resolveDisplayAddress(event.address, event.town);
   const geocodeQuery = buildGeocodeQuery(event.address, event.town);
 
-  // Geocode server-side (cached weekly, tag-busted on address change) so the
-  // static thumbnail is centered on the venue. Falls back to the town centroid
-  // when there's no street address or the geocode misses.
   const geocoded = geocodeQuery ? await geocodeAddress(geocodeQuery) : null;
   const townData = TOWN_INFO[event.town];
   const mapLat = geocoded?.lat ?? townData?.lat ?? null;
@@ -258,9 +221,23 @@ export default async function EventPage({ params }: PageProps) {
 
   const venue = event.venue_key ? await findVenue(event.venue_key) : null;
 
+  // The poster artifact: organizer's own art (untouched) if supplied, else the
+  // generated screenprint. The page uses a relative src so it can be cached/ISR.
+  const posterSrc =
+    posterKind(event) === "supplied"
+      ? (event.image_url as string)
+      : generatedPosterPath(slug);
+  const downloadHref = withSrc(posterSrc, "pdf");
+  const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+    geocodeQuery || `${event.venue_name}, ${event.town}, CA`
+  )}`;
+
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="mx-auto max-w-4xl px-4 py-8 sm:py-10">
       <EventJsonLd event={event} slug={slug} offerUrl={offerUrl} />
+      <Suspense fallback={null}>
+        <ShareTracker slug={slug} />
+      </Suspense>
 
       <nav aria-label="Breadcrumb" className="mb-6 text-sm text-stone">
         <ol className="flex items-center gap-1.5">
@@ -275,124 +252,163 @@ export default async function EventPage({ params }: PageProps) {
       </nav>
 
       <article>
-        <header className="mb-6">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <LiveBadge
-              eventDate={event.date}
-              startTime={event.start_time}
-              endTime={event.end_time}
-            />
-            <span
-              className={`badge-${event.category} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}
-            >
-              {CATEGORY_LABELS[event.category]}
-            </span>
-            {event.status === "tentative" && (
-              <span className="inline-flex items-center rounded-full bg-sunset/10 px-2 py-0.5 text-xs font-medium text-sunset">
-                Tentative
-              </span>
-            )}
+        {/* HERO — poster + action rail */}
+        <div className="grid gap-8 md:grid-cols-[minmax(0,340px)_1fr] md:items-start">
+          {/* The poster */}
+          <div>
+            <div className="overflow-hidden rounded-xl bg-cream shadow-lg ring-1 ring-stone-light/30">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={posterSrc}
+                alt={`${event.name} — event poster`}
+                width={1080}
+                height={1350}
+                className="block w-full"
+                style={{ aspectRatio: "4 / 5", objectFit: "cover" }}
+              />
+            </div>
+            <p className="mt-3 text-center text-sm font-medium text-stone">
+              Share or download this poster
+            </p>
           </div>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-              <h1 className="font-display text-3xl font-bold text-forest">{event.name}</h1>
+
+          {/* Info + actions */}
+          <div>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <LiveBadge
+                eventDate={event.date}
+                startTime={event.start_time}
+                endTime={event.end_time}
+              />
+              <span
+                className={`badge-${event.category} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}
+              >
+                {CATEGORY_LABELS[event.category]}
+              </span>
+              {event.cost_tier === "free" && (
+                <span className="inline-flex items-center rounded-full bg-pine px-2.5 py-0.5 text-xs font-semibold text-white">
+                  Free
+                </span>
+              )}
+              {event.status === "tentative" && (
+                <span className="inline-flex items-center rounded-full bg-sunset/10 px-2 py-0.5 text-xs font-medium text-sunset">
+                  Tentative
+                </span>
+              )}
               {event.community_sourced && (
-                <span
-                  title="Submitted by a Hwy 4 neighbor"
-                  className="mt-1.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-pine/10 px-2.5 py-0.5 text-xs font-medium text-pine"
-                >
-                  <svg
-                    className="h-3.5 w-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-1.34"
-                    />
-                  </svg>
+                <span className="inline-flex items-center rounded-full bg-pine/10 px-2.5 py-0.5 text-xs font-medium text-pine">
                   Community sourced
                 </span>
               )}
             </div>
-            <div className="shrink-0 pt-1">
+
+            <h1 className="font-display text-3xl font-bold leading-tight text-forest sm:text-4xl">
+              {event.name}
+            </h1>
+            {event.source_name && !/gocalaveras/i.test(event.source_name) && (
+              <p className="mt-2 text-sm font-semibold uppercase tracking-wide text-earth">
+                {event.source_name}
+              </p>
+            )}
+
+            {/* facts */}
+            <dl className="mt-5 grid gap-3 text-sm">
+              <div className="flex items-start gap-3">
+                <dt className="w-20 shrink-0 text-xs font-semibold uppercase tracking-wide text-stone-light">
+                  When
+                </dt>
+                <dd className="font-medium text-forest">{dateStr}</dd>
+              </div>
+              {timeRange && (
+                <div className="flex items-start gap-3">
+                  <dt className="w-20 shrink-0 text-xs font-semibold uppercase tracking-wide text-stone-light">
+                    Time
+                  </dt>
+                  <dd className="font-medium text-forest">{timeRange}</dd>
+                </div>
+              )}
+              <div className="flex items-start gap-3">
+                <dt className="w-20 shrink-0 text-xs font-semibold uppercase tracking-wide text-stone-light">
+                  Where
+                </dt>
+                <dd className="font-medium text-forest">
+                  {event.venue_name}
+                  <span className="block text-xs font-normal text-stone">
+                    {displayAddress || `${event.town}, CA`}
+                  </span>
+                </dd>
+              </div>
+              {event.price && (
+                <div className="flex items-start gap-3">
+                  <dt className="w-20 shrink-0 text-xs font-semibold uppercase tracking-wide text-stone-light">
+                    Price
+                  </dt>
+                  <dd className="font-medium text-forest">{event.price}</dd>
+                </div>
+              )}
+            </dl>
+
+            {/* actions — Share + Download are the loop's two doors */}
+            <div className="mt-6 flex flex-wrap gap-2.5">
               <ShareButton
                 url={`${SITE_URL}/events/${slug}`}
                 title={event.name}
                 text={`${event.name} at ${event.venue_name} in ${event.town}`}
               />
+              <a
+                href={downloadHref}
+                download
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-sunset px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sunset/90"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                </svg>
+                Download poster
+              </a>
+              <a
+                href={calendarUrl(event)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest transition-colors hover:border-pine/30 hover:text-pine"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Add to calendar
+              </a>
+              <a
+                href={directionsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest transition-colors hover:border-pine/30 hover:text-pine"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-6.5-7-11a7 7 0 0114 0c0 4.5-7 11-7 11z" />
+                  <circle cx="12" cy="10" r="2.5" />
+                </svg>
+                Directions
+              </a>
             </div>
-          </div>
-        </header>
 
-        <dl className="grid gap-3 sm:grid-cols-2 mb-6 text-sm">
-          <div className="rounded-lg border border-stone-light/30 bg-white p-3">
-            <dt className="text-xs font-medium uppercase tracking-wide text-stone-light">
-              Date
-            </dt>
-            <dd className="mt-0.5 font-medium text-forest">{dateStr}</dd>
+            {link.kind !== "none" && link.href && (
+              <p className="mt-4 text-sm text-stone">
+                More info:{" "}
+                <a
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-pine underline underline-offset-2 hover:text-forest"
+                >
+                  {link.label}
+                </a>
+              </p>
+            )}
           </div>
-          {timeRange && (
-            <div className="rounded-lg border border-stone-light/30 bg-white p-3">
-              <dt className="text-xs font-medium uppercase tracking-wide text-stone-light">
-                Time
-              </dt>
-              <dd className="mt-0.5 font-medium text-forest">{timeRange}</dd>
-            </div>
-          )}
-          <div className="rounded-lg border border-stone-light/30 bg-white p-3">
-            <dt className="text-xs font-medium uppercase tracking-wide text-stone-light">
-              Venue
-            </dt>
-            <dd className="mt-0.5 font-medium text-forest">
-              {event.venue_name}
-            </dd>
-          </div>
-          <div className="rounded-lg border border-stone-light/30 bg-white p-3">
-            <dt className="text-xs font-medium uppercase tracking-wide text-stone-light">
-              Location
-            </dt>
-            <dd className="mt-0.5 font-medium text-forest">
-              {event.town}, California
-              {displayAddress && (
-                <span className="block text-xs text-stone">
-                  {displayAddress}
-                </span>
-              )}
-              {TOWN_INFO[event.town] && (
-                <span className="mt-1 block text-xs text-stone">
-                  {TOWN_INFO[event.town].elevation.toLocaleString()} ft
-                </span>
-              )}
-            </dd>
-          </div>
-          {event.price && (
-            <div className="rounded-lg border border-stone-light/30 bg-white p-3">
-              <dt className="text-xs font-medium uppercase tracking-wide text-stone-light">
-                Price
-              </dt>
-              <dd className="mt-0.5 font-medium text-forest">{event.price}</dd>
-            </div>
-          )}
-        </dl>
+        </div>
 
-        <EventMap
-          town={event.town}
-          venueName={event.venue_name}
-          address={event.address}
-          geocodeQuery={geocodeQuery}
-          mapLat={mapLat}
-          mapLng={mapLng}
-          mapZoom={mapZoom}
-        />
-
-        {venue && <VenueInfo venue={venue} />}
-
+        {/* About */}
         {event.description && (
-          <section className="mb-6">
+          <section className="mt-10">
             <h2 className="font-display mb-2 text-lg font-semibold text-forest">
               About This Event
             </h2>
@@ -400,8 +416,9 @@ export default async function EventPage({ params }: PageProps) {
           </section>
         )}
 
+        {/* Performers */}
         {event.artists && event.artists.length > 0 && (
-          <section className="mb-6">
+          <section className="mt-8">
             <h2 className="font-display mb-2 text-lg font-semibold text-forest">
               Performers
             </h2>
@@ -418,38 +435,27 @@ export default async function EventPage({ params }: PageProps) {
           </section>
         )}
 
-        <div className="mb-6 flex flex-wrap gap-3">
-          {link.kind !== "none" && link.href && (
-            <a
-              href={link.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-forest px-4 py-2 text-sm font-medium text-white hover:bg-pine transition-colors"
-            >
-              {link.label}
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                />
-              </svg>
-            </a>
-          )}
-        </div>
+        {/* Where */}
+        <section className="mt-8">
+          <h2 className="font-display mb-3 text-lg font-semibold text-forest">
+            Where
+          </h2>
+          <EventMap
+            town={event.town}
+            venueName={event.venue_name}
+            address={event.address}
+            geocodeQuery={geocodeQuery}
+            mapLat={mapLat}
+            mapLng={mapLng}
+            mapZoom={mapZoom}
+          />
+        </section>
+
+        {venue && <VenueInfo venue={venue} />}
       </article>
 
-      <div className="mt-8 border-t border-stone-light/30 pt-6">
-        <Link
-          href="/"
-          className="text-sm font-medium text-pine hover:underline"
-        >
+      <div className="mt-10 border-t border-stone-light/30 pt-6">
+        <Link href="/" className="text-sm font-medium text-pine hover:underline">
           &larr; Back to all events
         </Link>
       </div>
