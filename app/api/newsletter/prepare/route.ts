@@ -75,7 +75,7 @@ export async function GET(request: Request) {
         model: NEWSLETTER_MODEL,
         event_count: events.length,
         edited: false,
-        approved_at: null,
+        vetoed_at: null,
         sent_at: null,
         sent_count: null,
         updated_at: new Date().toISOString(),
