@@ -106,8 +106,8 @@ export default async function GrowthPage() {
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 24, margin: "0 0 4px" }}>Growth</h1>
-      <p style={{ color: "#666", fontSize: 14, margin: "0 0 24px", lineHeight: 1.5 }}>
+      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Growth</h1>
+      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
         Traffic from Cloudflare Web Analytics, snapshotted nightly into the site&rsquo;s own
         history. Privacy-first and cookieless, so the numbers run a touch lower than ad-tech
         analytics, but they&rsquo;re honest.
@@ -115,10 +115,10 @@ export default async function GrowthPage() {
 
       {!hasData ? (
         <section style={emptyCardStyle}>
-          <p style={{ color: "#2d5016", fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>
+          <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
             No traffic data yet.
           </p>
-          <p style={{ color: "#666", fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+          <p style={{ color: "#666", fontSize: 16, margin: 0, lineHeight: 1.5 }}>
             The nightly snapshot runs at 09:00 UTC. Once it has run, daily traffic shows up here.
           </p>
         </section>
@@ -165,14 +165,14 @@ export default async function GrowthPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 }}>
               {ai.map((e) => (
                 <div key={e.key} style={{ textAlign: "center", padding: "8px 4px" }}>
-                  <p style={{ color: e.visits > 0 ? "#2d5016" : "#bbb", fontSize: 22, fontWeight: 700, margin: "0 0 2px" }}>
+                  <p style={{ color: e.visits > 0 ? "#2d5016" : "#bbb", fontSize: 24, fontWeight: 700, margin: "0 0 2px" }}>
                     {nf(e.visits)}
                   </p>
                   <p style={{ ...labelStyle, margin: 0 }}>{e.label}</p>
                 </div>
               ))}
             </div>
-            <p style={{ color: "#999", fontSize: 12, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
+            <p style={{ color: "#999", fontSize: 14, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
               {aiTotal > 0
                 ? `${nf(aiTotal)} visits referred from answer engines in the last 30 days. `
                 : "No answer-engine referrals captured yet. "}
@@ -192,7 +192,7 @@ export default async function GrowthPage() {
             <RankedList title="Devices · 30d" rows={devices} kind="plain" />
           </div>
 
-          <p style={{ color: "#aaa", fontSize: 12, margin: "28px 0 0", lineHeight: 1.5 }}>
+          <p style={{ color: "#aaa", fontSize: 14, margin: "28px 0 0", lineHeight: 1.5 }}>
             Source: Cloudflare Web Analytics (RUM){lastSynced ? ` · snapshot updated ${new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}.
             Search-engine performance (Google/Bing) is tracked separately by the cockpit&rsquo;s SEO
             collector and surfaces in the nightly digest on <a href="/admin/today" style={{ color: "#2d5016" }}>Today</a>.
@@ -211,7 +211,7 @@ function StatStrip({ stats }: { stats: Array<{ label: string; value: number }> }
       {stats.map((s) => (
         <div key={s.label} style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 10, padding: "12px 14px" }}>
           <p style={{ ...labelStyle, margin: "0 0 4px" }}>{s.label}</p>
-          <p style={{ color: "#2d5016", fontSize: 22, fontWeight: 700, margin: 0 }}>{nf(s.value)}</p>
+          <p style={{ color: "#2d5016", fontSize: 24, fontWeight: 700, margin: 0 }}>{nf(s.value)}</p>
         </div>
       ))}
     </div>
@@ -224,7 +224,7 @@ function RankedList({ title, rows, kind }: { title: string; rows: CountRow[]; ki
     <section style={cardStyle}>
       <p style={{ ...labelStyle, margin: "0 0 12px" }}>{title}</p>
       {rows.length === 0 ? (
-        <p style={{ color: "#aaa", fontSize: 13, margin: 0 }}>No data.</p>
+        <p style={{ color: "#aaa", fontSize: 15, margin: 0 }}>No data.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
           {rows.map((r) => {
@@ -233,10 +233,10 @@ function RankedList({ title, rows, kind }: { title: string; rows: CountRow[]; ki
             return (
               <div key={r.key || "_"}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-                  <span style={{ color: "#2d3a22", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ color: "#2d3a22", fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {display}
                   </span>
-                  <span style={{ color: "#2d5016", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+                  <span style={{ color: "#2d5016", fontSize: 15, fontWeight: 600, flexShrink: 0 }}>
                     {nf(r.visits)}
                   </span>
                 </div>
@@ -254,7 +254,7 @@ function RankedList({ title, rows, kind }: { title: string; rows: CountRow[]; ki
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h2 style={{ color: "#2d5016", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", margin: "28px 0 12px" }}>
+    <h2 style={{ color: "#2d5016", fontSize: 15, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", margin: "28px 0 12px" }}>
       {children}
     </h2>
   );
@@ -276,7 +276,7 @@ const emptyCardStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 12,
   fontWeight: 600,
   textTransform: "uppercase",
   letterSpacing: "0.06em",
@@ -284,6 +284,6 @@ const labelStyle: React.CSSProperties = {
 };
 
 const axisStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 13,
   color: "#aaa",
 };
