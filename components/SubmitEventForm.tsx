@@ -230,14 +230,21 @@ export default function SubmitEventForm() {
         </div>
 
         <div>
-          <label className={labelClass}>Your Email</label>
+          <label className={labelClass}>
+            Your Email <span className="text-sunset">*</span>
+          </label>
           <input
             type="email"
+            required
             value={form.submitter_email}
             onChange={(e) => update("submitter_email", e.target.value)}
-            placeholder="Optional — in case we have questions"
+            placeholder="you@example.com"
             className={inputClass}
           />
+          <p className="mt-1 text-xs text-stone-light">
+            Required so we can reach you if we have a question about your event
+            before it goes up. We won&apos;t share it or add you to any list.
+          </p>
         </div>
       </div>
 
