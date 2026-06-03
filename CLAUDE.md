@@ -70,6 +70,15 @@ All cron routes require `CRON_SECRET` as a bearer token. To smoke-test any cron 
 curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/<route>
 ```
 
+## Newsletter email rendering ([lib/newsletter.ts](lib/newsletter.ts))
+
+`buildEmailHtml(robNote, content, unsubscribeUrl)` is the single source of truth for the email HTML — both the Thursday send and the `?preview=1` route use it, so what you preview is what ships. Body + "From Rob" note are markdown-ish (`[label](url)` links) wrapped into `<p>` by `renderParagraphs`, which **normalizes CRLF→LF first** (admin-textarea edits arrive as `\r\n\r\n`, which a naive `split("\n\n")` misses and collapses into one block).
+
+- **Layout:** 640px shell, 18px body / line-height 1.6, forest-green hero (`#1B3A2D`) with the site's Big Trees sequoias flanking the title + Millie peeking onto the cream below. Tuned against pro newsletters (Feed Me, Walk With History) — wider + larger type than the old 560/16.
+- **Scannable spine:** `boldEventAnchors` bolds **dated** weekday anchors ("Friday, June 5", "Saturday the 6th") and the "Rob's Pick" lead-in (body only, not the From-Rob note). Render-time + deterministic, so it lands on every draft — including already-queued/edited ones — with no dependency on the model emitting markup. Bare day names are deliberately left unbolded.
+- **Voice:** the generation prompt (`NEWSLETTER_SYSTEM_PROMPT`) treats the email as a **teaser, not the full calendar** — be selective, the site carries the complete lineup, the email earns the click.
+- **Brand assets:** email clients don't render SVG, so the hero marks are PNGs in `public/email/` (`tree.png`, `millie-happy.png`), served from `SITE_URL` at send time. Regenerate from the site's SVGs with `node scripts/generate-email-assets.mjs`.
+
 ## Event Sources (scripts/scrape.ts — daily GitHub Action)
 
 Most events come from the `scripts/scrape.ts` orchestrator, run daily by

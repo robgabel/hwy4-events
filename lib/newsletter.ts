@@ -22,6 +22,7 @@ Voice: Warm, opinionated, dry humor. Like a friend who lives up here. Not a tour
 Rules:
 - This is a WEEKLY EMAIL newsletter sent Thursday mornings. Cover the upcoming weekend (Fri-Sun) and the following week.
 - 3-5 short paragraphs. Total length: 150-250 words.
+- TEASER, NOT THE FULL CALENDAR: this email exists to pull readers to the site, not to be the complete listing. Be selective — feature the standouts and the can't-miss picks, and it is good to leave things out. The website carries the full lineup; the email earns the click. Better to make six events feel irresistible than to cram in twenty.
 - P1: Quick hello and weekend highlights — what's worth showing up for.
 - P2: Saturday/Sunday specifics. Name-drop venues and artists.
 - P3: Next week preview — anything notable coming up Mon-Thu.
@@ -283,27 +284,57 @@ function markdownLinksToHtml(text: string): string {
   });
 }
 
+// Bold the "scannable spine" so a skimming reader gets the plan at a glance —
+// do the scanning for them rather than making them parse prose. Render-time and
+// deterministic, so it lands on EVERY draft (freshly generated, hand-edited, or
+// already queued) with no dependency on the model emitting markup. Scoped to
+// DATED weekday anchors ("Friday, June 5", "Saturday the 6th") and the "Rob's
+// Pick" lead-in; a bare day name is left alone, since by convention only the
+// first, dated mention is the anchor. Runs on raw text BEFORE link conversion,
+// so it can never inject into a tag or an href.
+const MONTHS =
+  "January|February|March|April|May|June|July|August|September|October|November|December";
+const DATED_DAY_ANCHOR = new RegExp(
+  "\\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)" +
+    "(,?\\s+(?:the\\s+\\d{1,2}(?:st|nd|rd|th)|(?:" +
+    MONTHS +
+    ")\\s+\\d{1,2}(?:st|nd|rd|th)?))",
+  "g"
+);
+const ROBS_PICK_LEADIN = /\bRob['’]s(?:\s+family)?\s+[Pp]ick\b[^:\n.]*:/g;
+
+function boldEventAnchors(text: string): string {
+  return text
+    .replace(ROBS_PICK_LEADIN, (m) => `<strong>${m}</strong>`)
+    .replace(DATED_DAY_ANCHOR, (m) => `<strong>${m}</strong>`);
+}
+
 // Render a markdown-ish block (with [label](url) links) into stacked <p> tags.
 // Normalizes line endings FIRST: hand-edits saved from the /admin/newsletter
 // <textarea> come back with CRLF (browsers normalize textarea newlines to \r\n on
 // form submit), so a paragraph break is "\r\n\r\n" — which a naive split on "\n\n"
 // misses, collapsing the whole email into one block. Normalize CRLF/CR to LF, then
 // split on one-or-more blank lines so runs of 3+ newlines don't yield empty <p>s.
-function renderParagraphs(text: string, pStyle: string): string {
-  return markdownLinksToHtml(text.replace(/\r\n?/g, "\n"))
+// When emphasizeAnchors is set, bold the scannable spine before linkifying.
+function renderParagraphs(text: string, pStyle: string, emphasizeAnchors = false): string {
+  return text
+    .replace(/\r\n?/g, "\n")
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean)
-    .map((p) => `<p style="${pStyle}">${p}</p>`)
+    .map((p) => {
+      const spine = emphasizeAnchors ? boldEventAnchors(p) : p;
+      return `<p style="${pStyle}">${markdownLinksToHtml(spine)}</p>`;
+    })
     .join("");
 }
 
 export function buildEmailHtml(robNote: string, content: string, unsubscribeUrl: string): string {
-  const htmlContent = renderParagraphs(content, "color: #333; line-height: 1.7; margin: 0 0 16px;");
+  const htmlContent = renderParagraphs(content, "color: #333; font-size: 18px; line-height: 1.6; margin: 0 0 18px;", true);
 
   const robNoteHtml = renderParagraphs(
     robNote.trim(),
-    "color: #3a3a3a; font-size: 14px; line-height: 1.65; margin: 0 0 12px;"
+    "color: #3a3a3a; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"
   );
 
   const primaryHref = withUtm(SITE_URL, "primary_cta");
@@ -332,17 +363,27 @@ export function buildEmailHtml(robNote: string, content: string, unsubscribeUrl:
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #faf9f6; margin: 0; padding: 0;">
-  <div style="max-width: 560px; margin: 0 auto; padding: 32px 20px;">
-    <div style="text-align: center; margin-bottom: 24px;">
-      <h1 style="color: #2d5016; font-size: 22px; margin: 0;">Hwy 4 Events</h1>
-      <p style="color: #888; font-size: 13px; margin: 4px 0 0;">Weekly roundup — Angels Camp to Bear Valley</p>
+  <div style="max-width: 640px; margin: 0 auto; padding: 32px 16px;">
+    <!-- Forest-green hero, mirroring the site header: Big Trees flank the title; Millie peeks onto the cream below. -->
+    <div style="background: #1B3A2D; border-radius: 12px; padding: 26px 20px 22px; text-align: center;">
+      <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
+        <tr>
+          <td valign="middle" style="padding: 0 12px 0 0;"><img src="${SITE_URL}/email/tree.png" width="25" height="36" alt="" style="display: block; border: 0;"></td>
+          <td valign="middle"><h1 style="color: #ffffff; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; line-height: 1; margin: 0;">Hwy 4 Events</h1></td>
+          <td valign="middle" style="padding: 0 0 0 12px;"><img src="${SITE_URL}/email/tree.png" width="25" height="36" alt="" style="display: block; border: 0;"></td>
+        </tr>
+      </table>
+      <p style="color: #B5C4A8; font-size: 14px; margin: 11px 0 0;">Weekly roundup · Angels Camp to Bear Valley</p>
+    </div>
+    <div style="text-align: center; line-height: 0; margin: 0 0 14px;">
+      <img src="${SITE_URL}/email/millie-happy.png" width="88" height="99" alt="Millie the sheepadoodle" style="display: inline-block; border: 0; margin-top: -2px;">
     </div>
     <div style="background: #f4efe6; border-radius: 12px; padding: 18px 20px; border: 1px solid #e0d9cb; margin-bottom: 14px;">
       <p style="color: #2d5016; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px;">From Rob —</p>
       ${robNoteHtml}
-      <p style="color: #555; font-size: 13px; font-style: italic; margin: 4px 0 0;">— Rob</p>
     </div>
     <div style="background: white; border-radius: 12px; padding: 28px 24px; border: 1px solid #e8e4de;">
+      <p style="color: #2d5016; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 14px;">Highlights for the upcoming week —</p>
       ${htmlContent}
     </div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 20px;">
