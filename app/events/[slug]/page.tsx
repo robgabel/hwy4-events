@@ -12,6 +12,7 @@ import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
 import VenueInfo from "@/components/VenueInfo";
+import LinkifiedText from "@/components/LinkifiedText";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
 import type { Hwy4Venue } from "@/lib/types";
@@ -396,7 +397,9 @@ export default async function EventPage({ params }: PageProps) {
             <h2 className="font-display mb-2 text-lg font-semibold text-forest">
               About This Event
             </h2>
-            <p className="leading-relaxed text-stone">{event.description}</p>
+            <p className="leading-relaxed text-stone">
+              <LinkifiedText text={event.description} />
+            </p>
           </section>
         )}
 
