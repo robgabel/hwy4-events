@@ -283,16 +283,28 @@ function markdownLinksToHtml(text: string): string {
   });
 }
 
-export function buildEmailHtml(robNote: string, content: string, unsubscribeUrl: string): string {
-  const htmlContent = markdownLinksToHtml(content)
-    .split("\n\n")
-    .map((p) => `<p style="color: #333; line-height: 1.7; margin: 0 0 16px;">${p}</p>`)
+// Render a markdown-ish block (with [label](url) links) into stacked <p> tags.
+// Normalizes line endings FIRST: hand-edits saved from the /admin/newsletter
+// <textarea> come back with CRLF (browsers normalize textarea newlines to \r\n on
+// form submit), so a paragraph break is "\r\n\r\n" — which a naive split on "\n\n"
+// misses, collapsing the whole email into one block. Normalize CRLF/CR to LF, then
+// split on one-or-more blank lines so runs of 3+ newlines don't yield empty <p>s.
+function renderParagraphs(text: string, pStyle: string): string {
+  return markdownLinksToHtml(text.replace(/\r\n?/g, "\n"))
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p style="${pStyle}">${p}</p>`)
     .join("");
+}
 
-  const robNoteHtml = markdownLinksToHtml(robNote.trim())
-    .split("\n\n")
-    .map((p) => `<p style="color: #3a3a3a; font-size: 14px; line-height: 1.65; margin: 0 0 12px;">${p}</p>`)
-    .join("");
+export function buildEmailHtml(robNote: string, content: string, unsubscribeUrl: string): string {
+  const htmlContent = renderParagraphs(content, "color: #333; line-height: 1.7; margin: 0 0 16px;");
+
+  const robNoteHtml = renderParagraphs(
+    robNote.trim(),
+    "color: #3a3a3a; font-size: 14px; line-height: 1.65; margin: 0 0 12px;"
+  );
 
   const primaryHref = withUtm(SITE_URL, "primary_cta");
   const submitHref = withUtm(`${SITE_URL}/submit`, "submit_cta");
@@ -336,7 +348,7 @@ export function buildEmailHtml(robNote: string, content: string, unsubscribeUrl:
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 20px;">
       <tr>
         <td style="padding: 0 0 12px;">
-          <a href="${primaryHref}" style="display: block; box-sizing: border-box; width: 100%; padding: 16px 18px; background: #2d5016; color: #ffffff; text-decoration: none; text-align: center; border-radius: 8px; font-size: 16px; font-weight: 600;">Open this week on hwy4events.com →</a>
+          <a href="${primaryHref}" style="display: block; box-sizing: border-box; width: 100%; padding: 16px 18px; background: #2d5016; color: #ffffff; text-decoration: none; text-align: center; border-radius: 8px; font-size: 16px; font-weight: 600;">See all events →</a>
         </td>
       </tr>
       ${secondaryBtn(forwardHref, "📩  Forward to a friend")}
