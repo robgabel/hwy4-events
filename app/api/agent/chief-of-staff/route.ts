@@ -35,7 +35,7 @@ Voice: plain, direct, a little dry. Like a sharp operator briefing a peer, not a
 Output STRICT JSON only. No markdown fences, no preamble. Match this shape exactly:
 {"summary": string, "needs_you": [{"title": string, "detail": string, "why": string, "link"?: string}], "fyi": [{"title": string, "detail": string}], "watching": [{"title": string, "detail": string}]}
 
-For links, use an internal admin path only when relevant: "/admin/verification" for the verification queue. Omit link otherwise.`;
+Links: the ONLY admin page that exists is "/admin/verification", and it lists ONLY events flagged for date verification. Attach "link":"/admin/verification" to an item ONLY if that item is specifically about a date-verification-flagged event. Community submissions, SEO, merges, and everything else have NO admin page yet, so omit "link" for them entirely. A wrong link sends Rob to an empty page.`;
 
 async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
   const today = new Date().toISOString().split("T")[0];
@@ -214,6 +214,17 @@ export async function GET(request: Request) {
   try {
     const context = await gatherContext(supabase);
     const { digest, status, usage } = await generateDigest(context);
+
+    // Guard: never link an item to /admin/verification when that queue is empty.
+    // The reasoner can attach the only known admin link to non-verification items
+    // (e.g. community submissions), which then dead-ends on an empty page.
+    if (context.vitals.needs_verification === 0) {
+      for (const bucket of [digest.needs_you, digest.fyi, digest.watching]) {
+        for (const item of bucket) {
+          if (item.link === "/admin/verification") delete item.link;
+        }
+      }
+    }
 
     const { error } = await supabase.from("agent_runs").insert({
       status,
