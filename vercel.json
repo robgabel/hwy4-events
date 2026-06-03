@@ -63,6 +63,14 @@
     {
       "path": "/api/check-camp-connell-schedule",
       "schedule": "30 17 * * 1"
+    },
+    {
+      "path": "/api/agent/collect-seo",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/agent/chief-of-staff",
+      "schedule": "0 19 * * *"
     }
   ]
 }
