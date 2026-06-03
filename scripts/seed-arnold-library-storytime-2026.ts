@@ -32,7 +32,10 @@ const VENUE_NAME = "Arnold Library";
 const VENUE_KEY = "arnold-library";
 const ADDRESS = "1065 Blagen Rd, Arnold, CA 95223";
 const DESCRIPTION =
-  "Come sing songs, dance and listen to stories every week with Miss Debbie!";
+  "Come sing songs, dance and listen to stories every week with Miss Debbie! " +
+  "This was a community sourced weekly event added June 3, 2026. I couldn't find " +
+  "a website to confirm it is still happening. Please call ahead to confirm it's " +
+  "on (209) 795-1009 before you head down there.";
 
 const START = "2026-06-03"; // first Wednesday (the submitted date)
 const END = "2026-12-30"; // bump + re-run to extend
@@ -78,6 +81,7 @@ async function main(): Promise<void> {
     price: null,
     cost_tier: "free", // free library program — locked so extract-prices won't downgrade it
     price_locked: true,
+    description_locked: true, // hand-written "call ahead to confirm" caveat — keep it
     event_url: null,
     source_url: "https://hwy4events.com/submit",
     source_name: "Community Submission",

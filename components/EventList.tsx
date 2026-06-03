@@ -24,6 +24,7 @@ import {
   formatLongMonthDay,
   formatISODate,
 } from "@/lib/date-utils";
+import { nowPacificMinutes, hasEventEnded } from "@/lib/event-time";
 
 // Lazy-load non-critical components so they don't block hydration
 const FilterBar = dynamic(() => import("./FilterBar"), { ssr: true });
@@ -250,10 +251,33 @@ export default function EventList({
 
   const groups = useMemo(() => groupEventsByDate(filtered), [filtered]);
 
-  const upNextId =
-    groups.length > 0 && groups[0].events.length > 0
-      ? groups[0].events[0].id
-      : null;
+  // "Up Next" must respect the clock: today's earliest event shouldn't keep the
+  // badge after it's over (a 10:30 AM storytime is not "up next" at 4 PM). The
+  // page is statically rendered, so there's no useful server clock — compute
+  // Pacific "now" on the client and refresh each minute. `now` is null until
+  // mounted, so the badge simply doesn't render server-side (no stale highlight,
+  // no hydration mismatch); it appears on the right event after hydration.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(nowPacificMinutes());
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // First event, in chronological order, that hasn't ended yet (skips finished
+  // earlier-today events; a currently-live event still qualifies).
+  const upNextId = useMemo(() => {
+    if (now === null) return null;
+    for (const group of groups) {
+      for (const event of group.events) {
+        if (!hasEventEnded(event.date, event.start_time, event.end_time, now)) {
+          return event.id;
+        }
+      }
+    }
+    return null;
+  }, [groups, now]);
 
   // Progressive rendering: only hydrate a small initial batch, then load more
   // as the user scrolls. This keeps hydration fast (<2s) even with 200+ events.
