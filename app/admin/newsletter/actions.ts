@@ -27,9 +27,9 @@ function done(flash: string): never {
   redirect(`${ADMIN_PATH}?flash=${encodeURIComponent(flash)}`);
 }
 
-// Save hand-edits to the subject/body. Marks the draft edited so the Wednesday
-// prepare cron won't clobber it. Editing an approved draft drops it back to
-// pending — a changed body must be re-approved before it can ship.
+// Save hand-edits to the subject/body. Leaves the status as-is (a pending draft
+// stays queued to auto-send; a vetoed draft stays held) and marks it edited so
+// Wednesday's prepare cron won't clobber the changes.
 export async function saveDraft(formData: FormData) {
   const id = requireId(formData);
   const subject = (formData.get("subject") as string | null)?.trim() ?? "";
@@ -44,52 +44,50 @@ export async function saveDraft(formData: FormData) {
       subject,
       content,
       edited: true,
-      status: "pending",
-      approved_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
     .neq("status", "sent");
   if (error) fail(error.message);
-  done("Saved. Re-approve to send.");
+  done("Saved.");
 }
 
-// Approve: lock the draft for Thursday's send.
-export async function approveDraft(formData: FormData) {
+// Veto: hold this draft so Thursday's send skips it.
+export async function vetoDraft(formData: FormData) {
   const id = requireId(formData);
   const supabase = getServiceClient();
   const { error } = await supabase
     .from("newsletter_drafts")
     .update({
-      status: "approved",
-      approved_at: new Date().toISOString(),
+      status: "vetoed",
+      vetoed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
     .neq("status", "sent");
   if (error) fail(error.message);
-  done("Approved — this will ship Thursday.");
+  done("Vetoed — this will NOT send Thursday.");
 }
 
-// Unapprove: pull it back to pending so it won't send.
-export async function unapproveDraft(formData: FormData) {
+// Un-veto: put it back in the queue so it auto-sends Thursday.
+export async function unvetoDraft(formData: FormData) {
   const id = requireId(formData);
   const supabase = getServiceClient();
   const { error } = await supabase
     .from("newsletter_drafts")
     .update({
       status: "pending",
-      approved_at: null,
+      vetoed_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
     .neq("status", "sent");
   if (error) fail(error.message);
-  done("Moved back to pending. It will not send until re-approved.");
+  done("Re-queued — it will auto-send Thursday unless vetoed again.");
 }
 
 // Regenerate: re-run the LLM for the same target Thursday, discarding edits and
-// resetting to pending.
+// returning the draft to the pending (will-auto-send) state.
 export async function regenerateDraft(formData: FormData) {
   const id = requireId(formData);
   const supabase = getServiceClient();
@@ -114,7 +112,7 @@ export async function regenerateDraft(formData: FormData) {
       .update({
         content,
         status: "pending",
-        approved_at: null,
+        vetoed_at: null,
         edited: false,
         model: NEWSLETTER_MODEL,
         event_count: events.length,
@@ -125,5 +123,5 @@ export async function regenerateDraft(formData: FormData) {
   } catch (err) {
     fail(err instanceof Error ? err.message : "Regeneration failed.");
   }
-  done("Regenerated a fresh draft. Review + approve.");
+  done("Regenerated a fresh draft. It will auto-send Thursday unless vetoed.");
 }

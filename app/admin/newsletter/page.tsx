@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { saveDraft, approveDraft, unapproveDraft, regenerateDraft } from "./actions";
+import { saveDraft, vetoDraft, unvetoDraft, regenerateDraft } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120; // regenerateDraft calls the LLM
@@ -9,11 +9,11 @@ type Draft = {
   target_send_date: string;
   subject: string;
   content: string;
-  status: "pending" | "approved" | "sent" | "canceled";
+  status: "pending" | "vetoed" | "sent" | "canceled";
   model: string | null;
   event_count: number | null;
   edited: boolean;
-  approved_at: string | null;
+  vetoed_at: string | null;
   sent_at: string | null;
   sent_count: number | null;
 };
@@ -26,7 +26,7 @@ async function loadDrafts(): Promise<Draft[]> {
   const { data } = await supabase
     .from("newsletter_drafts")
     .select(
-      "id, target_send_date, subject, content, status, model, event_count, edited, approved_at, sent_at, sent_count"
+      "id, target_send_date, subject, content, status, model, event_count, edited, vetoed_at, sent_at, sent_count"
     )
     .order("target_send_date", { ascending: false })
     .limit(8);
@@ -66,10 +66,10 @@ export default async function NewsletterDraftAdminPage({
         Weekly Newsletter — Draft &amp; Approve
       </h1>
       <p style={{ color: "#666", fontSize: 14, margin: "0 0 24px" }}>
-        Wednesday&rsquo;s cron drafts the weekly email. Review it here and{" "}
-        <strong>Approve</strong> before Thursday&rsquo;s send. <strong>Nothing
-        ships unless a draft is approved</strong> — if you do nothing, no email
-        goes out (and Slack will say so).
+        Wednesday&rsquo;s cron drafts the weekly email. It{" "}
+        <strong>auto-sends Thursday morning</strong> unless you <strong>veto</strong>{" "}
+        it here first — you have ~24 hours. Edit freely; edits ship too. Only a
+        veto (or a missing draft) stops the send.
       </p>
 
       {errorMsg && <Banner kind="error">{errorMsg}</Banner>}
@@ -101,10 +101,16 @@ export default async function NewsletterDraftAdminPage({
             </span>
           </div>
 
-          {current.status === "approved" && (
+          {current.status === "pending" && (
             <Banner kind="ok">
-              Approved{current.approved_at ? ` at ${new Date(current.approved_at).toLocaleString()}` : ""}.
-              This will ship Thursday morning. Editing it below will require re-approval.
+              Queued — this will <strong>auto-send</strong> {fmtDate(current.target_send_date)} morning.
+              Edit below if you like (edits ship), or veto to hold it.
+            </Banner>
+          )}
+          {current.status === "vetoed" && (
+            <Banner kind="error">
+              Vetoed{current.vetoed_at ? ` at ${new Date(current.vetoed_at).toLocaleString()}` : ""} —
+              this will NOT send. Un-veto to put it back in the queue.
             </Banner>
           )}
 
@@ -128,13 +134,13 @@ export default async function NewsletterDraftAdminPage({
               <button type="submit" style={secondaryBtnStyle}>
                 Save edits
               </button>
-              {current.status !== "approved" ? (
-                <button type="submit" formAction={approveDraft} style={primaryBtnStyle}>
-                  ✓ Approve for Thursday
+              {current.status !== "vetoed" ? (
+                <button type="submit" formAction={vetoDraft} style={dangerBtnStyle}>
+                  🛑 Veto (don&rsquo;t send)
                 </button>
               ) : (
-                <button type="submit" formAction={unapproveDraft} style={dangerBtnStyle}>
-                  Unapprove (hold)
+                <button type="submit" formAction={unvetoDraft} style={primaryBtnStyle}>
+                  ↩ Un-veto (re-queue)
                 </button>
               )}
               <button type="submit" formAction={regenerateDraft} style={ghostBtnStyle}>
@@ -150,7 +156,7 @@ export default async function NewsletterDraftAdminPage({
               </a>
             </div>
             <p style={{ color: "#999", fontSize: 12, margin: "10px 0 0" }}>
-              Note: <strong>Approve</strong> ships exactly the text above. The
+              Note: Thursday&rsquo;s send ships exactly the text above. The
               &ldquo;From Rob&rdquo; block is managed separately under{" "}
               <a href="/admin/newsletter-note" style={{ color: "#2d5016" }}>Newsletter notes</a>.
             </p>
@@ -195,10 +201,16 @@ export default async function NewsletterDraftAdminPage({
 
 function StatusTag({ status }: { status: Draft["status"] }) {
   const palette: Record<Draft["status"], { bg: string; fg: string }> = {
-    pending: { bg: "#fdf0d5", fg: "#9a6700" },
-    approved: { bg: "#2d5016", fg: "#fff" },
+    pending: { bg: "#2d5016", fg: "#fff" },
+    vetoed: { bg: "#fdecea", fg: "#922b21" },
     sent: { bg: "#e8e4de", fg: "#666" },
     canceled: { bg: "#f0ebe2", fg: "#999" },
+  };
+  const label: Record<Draft["status"], string> = {
+    pending: "queued to send",
+    vetoed: "vetoed",
+    sent: "sent",
+    canceled: "canceled",
   };
   const c = palette[status];
   return (
@@ -214,7 +226,7 @@ function StatusTag({ status }: { status: Draft["status"] }) {
         color: c.fg,
       }}
     >
-      {status}
+      {label[status]}
     </span>
   );
 }

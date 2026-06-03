@@ -16,11 +16,12 @@ import {
 
 export const maxDuration = 120;
 
-// Thursday cron. The weekly newsletter is now GATED: this route ships ONLY a
-// draft that a human approved at /admin/newsletter (prepared the day before by
-// /api/newsletter/prepare). If no approved draft exists for today, it sends
-// nothing and warns on Slack — the safe failure mode for the single most
-// outward-facing action in the system (never ship unreviewed copy).
+// Thursday cron. The weekly newsletter now ships on a 24h veto window: the day
+// before, /api/newsletter/prepare stored a draft; a human had ~24h to edit or
+// VETO it at /admin/newsletter. This route AUTO-SENDS today's draft unless it was
+// vetoed. If NO draft exists (prepare didn't run), it sends nothing and warns on
+// Slack — it never auto-generates-and-blasts unsupervised; it only ships a draft
+// that sat in the veto window.
 //
 //   ?preview=1            read-only HTML preview of the current draft (no auth)
 //   ?test_email=you@x.com generate fresh + send only to that address (for testing)
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, test: true, sent: 1, subject });
     }
 
-    // Real send: ship ONLY today's approved draft.
+    // Real send: AUTO-SEND today's draft unless it was vetoed (or already sent).
     const supabase = getServiceClient();
     const today = todayISO();
     const { data: draft } = await supabase
@@ -82,22 +83,25 @@ export async function GET(request: Request) {
       .eq("target_send_date", today)
       .maybeSingle();
 
-    if (!draft || draft.status !== "approved") {
+    if (!draft || draft.status !== "pending") {
       const reason = !draft
-        ? `No newsletter draft exists for ${today}.`
-        : `Draft for ${today} is "${draft.status}", not approved.`;
+        ? `No newsletter draft exists for ${today} (prepare didn't run).`
+        : draft.status === "vetoed"
+        ? `Draft for ${today} was vetoed — held by a human.`
+        : `Draft for ${today} is "${draft.status}", not sendable.`;
       console.warn(`[newsletter/send] Skipping send — ${reason}`);
 
       const webhook = process.env.SLACK_WEBHOOK_URL;
       if (webhook) {
+        const icon = draft?.status === "vetoed" ? "🛑" : "⏸️";
         try {
           await fetch(webhook, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               text:
-                `*⏸️ Weekly newsletter NOT sent (${today})* — ${reason}\n` +
-                `Nothing shipped (safe default). Approve a draft at ${SITE_URL}/admin/newsletter to send.`,
+                `*${icon} Weekly newsletter NOT sent (${today})* — ${reason}\n` +
+                `Nothing shipped. See ${SITE_URL}/admin/newsletter.`,
             }),
           });
         } catch (err) {

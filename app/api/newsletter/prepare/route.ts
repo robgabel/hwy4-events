@@ -14,13 +14,13 @@ export const maxDuration = 120;
 
 // Wednesday cron (after the weekday data jobs settle). Generates the weekly
 // newsletter body and stores it as a PENDING draft for the coming Thursday, then
-// pings Slack so a human reviews + approves it at /admin/newsletter before
-// /api/newsletter/send ships it. Generates nothing-irreversible: it only writes a
-// draft row; it never emails anyone.
+// pings Slack so a human has ~24h to edit or VETO it at /admin/newsletter before
+// /api/newsletter/send auto-sends it. Generates nothing-irreversible: it only
+// writes a draft row; it never emails anyone.
 //
 // Idempotent per target Thursday (target_send_date is UNIQUE): re-running upserts
-// the same row. To avoid clobbering a draft a human already approved/edited, an
-// existing approved/sent/edited draft is preserved unless ?force=1 is passed.
+// the same row. To avoid clobbering a human's work, an existing vetoed/sent/edited
+// draft is preserved unless ?force=1 is passed.
 export async function GET(request: Request) {
   const url = new URL(request.url);
 
@@ -95,8 +95,8 @@ export async function GET(request: Request) {
           body: JSON.stringify({
             text:
               `*📨 Newsletter draft ready for ${targetSendDate}* (${events.length} events)\n` +
-              `Review + approve before it ships Thursday → ${SITE_URL}/admin/newsletter\n` +
-              `_It will NOT send unless you approve it._`,
+              `Review or edit → ${SITE_URL}/admin/newsletter\n` +
+              `_It auto-sends Thursday morning unless you veto it (you have ~24h)._`,
           }),
         });
       } catch (err) {

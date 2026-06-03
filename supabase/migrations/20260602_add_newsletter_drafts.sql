@@ -3,14 +3,18 @@
 -- Until now the Thursday cron (/api/newsletter/send) generated the weekly email
 -- with an LLM and shipped it to every subscriber in one shot, with no human
 -- preview — the single most outward-facing action in the system and the only one
--- with no gate. This table inserts a human between generation and send:
+-- with no gate. This table inserts a 24h human veto window between generation and
+-- send:
 --
 --   Wednesday  /api/newsletter/prepare  → INSERT a draft (status 'pending')
---   (human)    /admin/newsletter        → edit + Approve (status 'approved')
---   Thursday   /api/newsletter/send      → ship ONLY an 'approved' draft (→ 'sent')
+--   (human)    /admin/newsletter        → review, edit, or VETO (status 'vetoed')
+--   Thursday   /api/newsletter/send      → AUTO-SEND any non-vetoed draft (→ 'sent')
 --
--- If no approved draft exists on send day, the send is skipped (safe failure:
--- never ship unreviewed copy) and a Slack warning fires.
+-- Default is auto-send: if the human does nothing in the ~24h between Wednesday's
+-- prepare and Thursday's send, the draft ships. A veto holds it. If NO draft
+-- exists on send day (prepare didn't run), the send is skipped and Slack-warns —
+-- the system never auto-generates-and-blasts unsupervised; it only ships a draft
+-- that sat in the veto window.
 --
 -- One draft per target Thursday (target_send_date UNIQUE) so prepare/regenerate
 -- is idempotent — re-running upserts the same row rather than piling up drafts.
@@ -27,13 +31,13 @@ CREATE TABLE newsletter_drafts (
   subject text NOT NULL,
   content text NOT NULL,                    -- AI-generated body (markdown links)
   status text NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'approved', 'sent', 'canceled')),
+    CHECK (status IN ('pending', 'vetoed', 'sent', 'canceled')),
   model text,
   event_count int,
   edited boolean NOT NULL DEFAULT false,    -- true once a human hand-edits the body
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  approved_at timestamptz,
+  vetoed_at timestamptz,
   sent_at timestamptz,
   sent_count int
 );
@@ -52,4 +56,4 @@ CREATE POLICY "service role full access"
   WITH CHECK (true);
 
 COMMENT ON TABLE newsletter_drafts IS
-  'Weekly newsletter approval gate. prepare (Wed) inserts a pending draft; a human approves it at /admin/newsletter; send (Thu) ships only the approved draft. One row per target Thursday. Service-role only.';
+  'Weekly newsletter veto gate. prepare (Wed) inserts a pending draft; a human may edit or veto it at /admin/newsletter; send (Thu) auto-sends any non-vetoed draft (skips + Slack-warns if none exists). One row per target Thursday. Service-role only.';
