@@ -37,6 +37,10 @@
       "schedule": "30 15 * * *"
     },
     {
+      "path": "/api/snapshot-analytics",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/check-events",
       "schedule": "0 18 * * *"
     },
