@@ -43,6 +43,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Admin
           </span>
           <NavLink href="/admin/today">Today</NavLink>
+          <NavLink href="/admin/newsletter">Newsletter</NavLink>
           <NavLink href="/admin/newsletter-note">Newsletter notes</NavLink>
           <NavLink href="/admin/verification">
             Verification

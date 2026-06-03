@@ -13,6 +13,10 @@
       "schedule": "0 14 * * 5"
     },
     {
+      "path": "/api/newsletter/prepare",
+      "schedule": "0 15 * * 3"
+    },
+    {
       "path": "/api/newsletter/send",
       "schedule": "0 15 * * 4"
     },
