@@ -4,6 +4,63 @@ export type LiveStatus =
   | null;
 
 /**
+ * Current Pacific wall-clock time as absolute minutes, in the same scheme as
+ * `toAbsoluteMinutes`. Exported so list views can find the next event that
+ * hasn't ended yet (the "Up Next" highlight) without re-deriving timezone math.
+ * Runs client-side; the page is statically rendered, so the server has no useful
+ * clock for this.
+ */
+export function nowPacificMinutes(): number {
+  const pacificParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const get = (type: string) =>
+    parseInt(pacificParts.find((p) => p.type === type)?.value || "0", 10);
+
+  return (
+    get("year") * 525960 +
+    (get("month") - 1) * 43830 +
+    get("day") * 1440 +
+    get("hour") * 60 +
+    get("minute")
+  );
+}
+
+/**
+ * Has an event already finished, relative to `nowMinutes` (Pacific, from
+ * `nowPacificMinutes`)? An event with no end time is treated as running 4h from
+ * its start (matching the live-status default); a timeless/all-day event (no
+ * start) runs until the end of its calendar day. An unparseable start is treated
+ * as not-ended, so a malformed row is never hidden. Used to pick the first event
+ * that's still upcoming or live for the "Up Next" badge.
+ */
+export function hasEventEnded(
+  eventDate: string,
+  startTime: string | null,
+  endTime: string | null,
+  nowMinutes: number
+): boolean {
+  if (!startTime) {
+    const endOfDay = toAbsoluteMinutes(eventDate, "23:59");
+    return endOfDay !== null && endOfDay <= nowMinutes;
+  }
+  const startMinutes = toAbsoluteMinutes(eventDate, startTime);
+  if (startMinutes === null) return false;
+  const endMinutes = endTime
+    ? toAbsoluteMinutes(eventDate, endTime)
+    : startMinutes + 240;
+  if (endMinutes === null) return false;
+  return endMinutes <= nowMinutes;
+}
+
+/**
  * Get the live status of an event based on current time in Pacific time.
  * Returns "live" if event is in progress, "starting-soon" with minutes if within 90 min, null otherwise.
  *
@@ -18,27 +75,7 @@ export function getEventLiveStatus(
 ): LiveStatus {
   if (!startTime) return null;
 
-  // Get current time expressed as Pacific wall-clock values
-  const now = new Date();
-  const pacificParts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-
-  const get = (type: string) =>
-    parseInt(pacificParts.find((p) => p.type === type)?.value || "0", 10);
-
-  const nowMinutes =
-    get("year") * 525960 +
-    (get("month") - 1) * 43830 +
-    get("day") * 1440 +
-    get("hour") * 60 +
-    get("minute");
+  const nowMinutes = nowPacificMinutes();
 
   // Parse event start as Pacific wall-clock minutes
   const startMinutes = toAbsoluteMinutes(eventDate, startTime);
@@ -82,11 +119,13 @@ function toAbsoluteMinutes(dateStr: string, timeStr: string): number | null {
 }
 
 function to24Hour(time: string): string | null {
-  // Already 24h format like "19:00"
-  if (/^\d{1,2}:\d{2}$/.test(time)) return time;
+  // Already 24h format like "19:00" or "19:00:00" (Postgres `time` columns come
+  // back with seconds). Normalize to "H:MM", dropping any seconds.
+  const h24 = time.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (h24) return `${h24[1]}:${h24[2]}`;
 
-  // 12h format like "7:00 PM" or "7:00PM"
-  const match = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  // 12h format like "7:00 PM" or "7:00PM" (optional seconds tolerated)
+  const match = time.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
   if (!match) return null;
 
   let hours = parseInt(match[1], 10);
