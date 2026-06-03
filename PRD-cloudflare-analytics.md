@@ -1,6 +1,6 @@
 # PRD: Cloudflare Analytics Read API
 
-**Status:** Phase 1 + 2 complete 2026-06-02 — read path live & smoke-tested (533 pv / 442 visits last 7d); `analytics_daily` migration applied to project `uzediwokyshjbsymevtp` (verified, advisor clean). Remaining: merge to main (Production env already set → Vercel deploys), then Phase 3 (admin Growth tab + AEO auto-fill).
+**Status:** Shipped 2026-06-03. Phases 1–3 live in production — read path (`/api/analytics`), nightly persistence (`/api/snapshot-analytics` → `analytics_daily`, 30-day history backfilled), and the admin **Growth tab** (`/admin/analytics`) surfacing traffic + answer-engine (AEO) referral counts. Remaining: fold GSC/search into the Growth tab once `seo_snapshots` has data.
 **Created:** 2026-06-01
 **Owner:** Rob
 **Related:** [PRD-agent-cockpit.md](PRD-agent-cockpit.md) — this is the cockpit's **Growth/traffic collector**: the chief-of-staff reasoner reads `analytics_daily`, and the `/admin/analytics` page below *is* the cockpit's Growth tab (same surface). [AEO-SEO-MEASUREMENT.md](AEO-SEO-MEASUREMENT.md), `/api/aeo-audit-reminder`
@@ -167,8 +167,9 @@ Phase 1 + 2 built and smoke-tested against live data:
 ### Remaining steps
 - [x] **Migration applied (2026-06-02) via MCP.** Correction to an earlier wrong assumption: hwy4events is **not** a separate Supabase project. Its `NEXT_PUBLIC_SUPABASE_URL` points to `uzediwokyshjbsymevtp` — the shared rob-ai / PAOS project (org "Gabel.Global", labeled "Claude Code" in Supabase), which the MCP reaches. Applied with `apply_migration`; verified 10 columns + RLS + deny-all policy; the security advisor surfaced no new findings for `analytics_daily` (the other lints are pre-existing).
 - [ ] **Vercel Preview env** (optional) — Production is set; Preview adds kept returning the CLI hint. Add via the Vercel dashboard if PR-deploy analytics is wanted.
-- [ ] **First Phase 3 surface.** Recommended: AEO auto-fill on top of Phases 1 + 2, vs. a generic admin dashboard first (= the agent-cockpit Growth tab). Decision pending.
-- [ ] **Admin auth.** `/admin` is currently unprotected; gate it when building `/admin/analytics`, or stay consistent with the rest of `/admin`? Decision pending.
+- [x] **Phase 3 surface — shipped 2026-06-03.** `app/admin/analytics/page.tsx` (nav label "Growth", beside the cockpit's "Today"). Reads `analytics_daily` only (no live CF calls): 7d/30d stat strip, 14-day pageviews trend, **answer-engine referral counts** (the AEO auto-fill, with the lower-bound caveat), top pages/referrers/countries/devices. Matches the admin inline-style system; imports `CountRow` from `lib/cloudflare-analytics.ts`.
+- [x] **Admin auth — resolved.** Main shipped `middleware.ts` (Basic Auth on `/admin/:path*`, user `rob`) in the agent-cockpit work, so the Growth tab is gated automatically.
+- [ ] **GSC/search on the Growth tab.** `seo_snapshots` exists but is empty (cockpit's collect-seo hasn't produced data). The page cross-links to Today for now; fold a search section in once GSC data lands.
 
 ### Resolved
 - [x] RUM dimension field names — confirmed live: `requestPath`, `refererHost`, `countryName`, `deviceType`, `userAgentBrowser`.
