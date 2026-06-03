@@ -74,10 +74,10 @@ export default async function NewsletterNoteAdminPage({
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
-        <h1 style={{ color: "#2d5016", fontSize: 24, margin: "0 0 4px" }}>
+        <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>
           Newsletter — Rob&rsquo;s Notes
         </h1>
-        <p style={{ color: "#666", fontSize: 14, margin: "0 0 24px" }}>
+        <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px" }}>
           Schedule personal notes for the &ldquo;From Rob&rdquo; block at the top of the weekly email. Each note
           has a date window. Windows cannot overlap. If no note is active on send day, the email ships the
           default note.
@@ -91,7 +91,7 @@ export default async function NewsletterNoteAdminPage({
               color: "#922b21",
               padding: "12px 16px",
               borderRadius: 8,
-              fontSize: 14,
+              fontSize: 16,
               marginBottom: 16,
             }}
           >
@@ -106,7 +106,7 @@ export default async function NewsletterNoteAdminPage({
               color: "#2d5016",
               padding: "12px 16px",
               borderRadius: 8,
-              fontSize: 14,
+              fontSize: 16,
               marginBottom: 16,
             }}
           >
@@ -127,7 +127,7 @@ export default async function NewsletterNoteAdminPage({
           <p
             style={{
               color: "#2d5016",
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 600,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -138,19 +138,19 @@ export default async function NewsletterNoteAdminPage({
           </p>
           {activeNote ? (
             <>
-              <p style={{ color: "#3a3a3a", fontSize: 14, lineHeight: 1.65, margin: "0 0 8px" }}>
+              <p style={{ color: "#3a3a3a", fontSize: 16, lineHeight: 1.65, margin: "0 0 8px" }}>
                 {activeNote.body}
               </p>
-              <p style={{ color: "#666", fontSize: 12, margin: 0 }}>
+              <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
                 Window: <strong>{fmtDate(activeNote.starts_at)}</strong> → <strong>{fmtDate(activeNote.ends_at)}</strong>
               </p>
             </>
           ) : (
             <>
-              <p style={{ color: "#3a3a3a", fontSize: 14, lineHeight: 1.65, margin: "0 0 8px" }}>
+              <p style={{ color: "#3a3a3a", fontSize: 16, lineHeight: 1.65, margin: "0 0 8px" }}>
                 <em>No active note — shipping the default:</em>
               </p>
-              <p style={{ color: "#666", fontSize: 13, lineHeight: 1.65, margin: 0 }}>
+              <p style={{ color: "#666", fontSize: 15, lineHeight: 1.65, margin: 0 }}>
                 {DEFAULT_ROB_NOTE}
               </p>
             </>
@@ -167,7 +167,7 @@ export default async function NewsletterNoteAdminPage({
             marginBottom: 24,
           }}
         >
-          <h2 style={{ color: "#2d5016", fontSize: 16, margin: "0 0 12px" }}>Schedule a new note</h2>
+          <h2 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 12px" }}>Schedule a new note</h2>
           <form action={addNote}>
             <NoteFields defaultStart={defaultStart} defaultEnd={defaultEnd} />
             <div style={{ marginTop: 12 }}>
@@ -188,11 +188,11 @@ export default async function NewsletterNoteAdminPage({
 
         {/* Existing notes list */}
         <section>
-          <h2 style={{ color: "#2d5016", fontSize: 16, margin: "0 0 12px" }}>
+          <h2 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 12px" }}>
             All scheduled notes <span style={{ color: "#999", fontWeight: 400 }}>({notes.length})</span>
           </h2>
           {notes.length === 0 ? (
-            <p style={{ color: "#666", fontSize: 14 }}>No notes scheduled yet.</p>
+            <p style={{ color: "#666", fontSize: 16 }}>No notes scheduled yet.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {notes.map((n) => (
@@ -208,7 +208,7 @@ export default async function NewsletterNoteAdminPage({
 function NoteRow({ note, today }: { note: Note; today: string }) {
   const cls = classifyWindow(today, note);
   const tagStyle: React.CSSProperties = {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 600,
     letterSpacing: "0.06em",
     textTransform: "uppercase",
@@ -231,7 +231,7 @@ function NoteRow({ note, today }: { note: Note; today: string }) {
     >
       <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
         <span style={tagStyle}>{cls}</span>
-        <span style={{ color: "#666", fontSize: 13 }}>
+        <span style={{ color: "#666", fontSize: 15 }}>
           {fmtDate(note.starts_at)} → {fmtDate(note.ends_at)}
         </span>
       </div>
@@ -306,7 +306,7 @@ function NoteFields({
 const fieldLabelStyle: React.CSSProperties = {
   display: "block",
   color: "#333",
-  fontSize: 13,
+  fontSize: 15,
   fontWeight: 600,
   marginBottom: 4,
 };
@@ -316,7 +316,7 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "10px 12px",
-  fontSize: 14,
+  fontSize: 16,
   border: "1px solid #d4cdbf",
   borderRadius: 8,
   fontFamily: "inherit",
@@ -335,7 +335,7 @@ const primaryBtnStyle: React.CSSProperties = {
   color: "#fff",
   border: "none",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -346,7 +346,7 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "#2d5016",
   border: "1px solid #2d5016",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 500,
   cursor: "pointer",
 };
@@ -357,7 +357,7 @@ const dangerBtnStyle: React.CSSProperties = {
   color: "#922b21",
   border: "1px solid #e6b8b3",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 500,
   cursor: "pointer",
 };
