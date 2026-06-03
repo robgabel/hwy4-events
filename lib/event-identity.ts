@@ -19,6 +19,8 @@
 // titles never merge on venue + time alone — a park hosts different shows back
 // to back.
 
+import { createHash } from "node:crypto";
+
 /** The minimal shape the matching predicate reads. Both the app's `Hwy4Event`
  *  and the scraper's `ExtractedEvent` are structural supersets of this. `date`
  *  and `town` are optional because a candidate row passed by the write path may
@@ -246,4 +248,14 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
     return true;
   }
   return false;
+}
+
+/** Deterministic dedup key: `sha256(normalizeName(name)|date|normalizeTown(town))`,
+ *  first 32 hex chars. The ONE definition of a row's identity key — the
+ *  write-time matcher (`scripts/lib/dedup.ts`) re-exports it, and the
+ *  `/admin/submissions` publish action imports it, so a hand-published event and
+ *  a scraped one collide on the same `dedup_key` instead of duplicating. */
+export function generateDedupKey(name: string, date: string, town: string): string {
+  const input = `${normalizeName(name)}|${date}|${normalizeTown(town)}`;
+  return createHash("sha256").update(input).digest("hex").slice(0, 32);
 }
