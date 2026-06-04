@@ -1,4 +1,5 @@
 import { CollapsedEvent } from "@/lib/types";
+import { isParadeEvent } from "@/lib/featured-events";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
 import { getTownContent } from "@/app/towns/town-content";
 import {
@@ -36,7 +37,7 @@ function Star({ className }: { className?: string }) {
  * Independence Day Parade). Same structural anatomy as EventCard — full-card
  * Link overlay, date block, content column, thumbnail flourish — recolored into
  * an Old Glory theme so it stops the scroll without feeling like a different
- * site. Selected via isPatrioticEvent() in EventCard.
+ * site. Selected via isPatrioticCard() in EventCard.
  */
 export default function PatrioticEventCard({
   event,
@@ -130,18 +131,24 @@ export default function PatrioticEventCard({
               Rob&apos;s Pick
             </span>
           )}
-          <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: NAVY }}>
-            Free
-          </span>
+          {event.cost_tier === "free" && (
+            <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: NAVY }}>
+              Free
+            </span>
+          )}
         </div>
 
         <h3 className="mt-1.5 font-display text-lg font-bold leading-tight text-white">
           {event.name}
         </h3>
 
-        <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-white/70">
-          Theme: Stars, Stripes &amp; 250 Years
-        </p>
+        {/* The parade's official theme line — parade-only; other patriotic
+            features (e.g. the arts & crafts festival) keep their own subtitle. */}
+        {isParadeEvent(event) && (
+          <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-white/70">
+            Theme: Stars, Stripes &amp; 250 Years
+          </p>
+        )}
 
         {event.description && (
           <p className="mt-1.5 line-clamp-2 text-sm text-white/80">

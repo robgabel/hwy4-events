@@ -19,7 +19,8 @@ import ShareButton from "@/components/ShareButton";
 import ShareTracker from "@/components/ShareTracker";
 import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
-import { isPatrioticEvent } from "@/lib/featured-events";
+import PatrioticBanner from "@/components/PatrioticBanner";
+import { isParadeEvent, isFourthFeatureEvent } from "@/lib/featured-events";
 import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
 
 export const revalidate = 3600;
@@ -203,8 +204,8 @@ export default async function EventPage({ params }: PageProps) {
   const mapLng = geocoded?.lng ?? townData?.lng ?? null;
   const mapZoom = geocoded ? 15 : townData?.mapZoom ?? 13;
 
-  // Marquee patriotic events get a fully bespoke detail layout.
-  if (isPatrioticEvent(event)) {
+  // The Arnold parade gets a fully bespoke, parade-specific detail microsite.
+  if (isParadeEvent(event)) {
     return (
       <>
         <EventJsonLd event={event} slug={slug} offerUrl={offerUrl} />
@@ -255,6 +256,8 @@ export default async function EventPage({ params }: PageProps) {
           <li className="truncate text-stone-light">{event.name}</li>
         </ol>
       </nav>
+
+      {isFourthFeatureEvent(event) && <PatrioticBanner town={event.town} />}
 
       <article>
         {/* HERO — poster + action rail */}
