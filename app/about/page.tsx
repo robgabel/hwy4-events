@@ -180,8 +180,17 @@ export default async function AboutPage() {
             className="font-medium text-pine hover:underline"
           >
             California Doodle Rescue
+          </a>{" "}
+          (We also LOVE and support{" "}
+          <a
+            href="https://calaverashumane.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-pine hover:underline"
+          >
+            Calaveras Humane Society
           </a>
-          . She comes with us every trip and has strong opinions about which
+          ). She comes with us every trip and has strong opinions about which
           events involve food.
         </p>
       </address>
