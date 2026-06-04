@@ -103,7 +103,7 @@ export default function SubmitEventForm() {
   const inputClass =
     "w-full rounded-lg border border-stone-light/40 bg-white px-3 py-2 text-sm text-forest placeholder:text-stone-light focus:border-pine focus:outline-none focus:ring-1 focus:ring-pine/30";
   const labelClass =
-    "block text-xs font-medium uppercase tracking-wide text-stone-light mb-1";
+    "block text-sm font-medium uppercase tracking-wide text-stone mb-1";
 
   return (
     <form

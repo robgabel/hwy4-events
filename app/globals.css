@@ -10,8 +10,8 @@
   --color-earth: #6B4226;
   --color-earth-light: #8B5E3C;
   --color-bark: #4A3728;
-  --color-stone: #A09484;
-  --color-stone-light: #C4B8AA;
+  --color-stone: #6E6153;       /* body text: ~5.7:1 on cream (was #A09484, ~2.8:1, below WCAG AA) */
+  --color-stone-light: #8A7B66; /* secondary / placeholders: ~3.9:1 (was #C4B8AA, ~1.9:1) */
   --color-cream: #FDF8F3;
   --color-warm-white: #F5F0EB;
   --color-sky: #5A8FA8;
