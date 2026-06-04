@@ -48,13 +48,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             display: "flex",
             gap: 8,
             alignItems: "center",
-            fontSize: 13,
+            fontSize: 15,
             color: "#666",
             paddingBottom: 16,
             borderBottom: "1px solid #e8e4de",
           }}
         >
-          <span style={{ fontSize: 11, color: "#999", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>
+          <span style={{ fontSize: 13, color: "#999", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>
             Admin
           </span>
           <NavLink href="/admin/today">Today</NavLink>
@@ -72,7 +72,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                   borderRadius: 10,
                   background: "#d97706",
                   color: "#fff",
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: 700,
                   lineHeight: 1.4,
                 }}
@@ -92,7 +92,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                   borderRadius: 10,
                   background: "#d97706",
                   color: "#fff",
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: 700,
                   lineHeight: 1.4,
                 }}

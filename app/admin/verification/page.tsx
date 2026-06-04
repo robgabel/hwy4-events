@@ -96,10 +96,10 @@ export default async function VerificationAdminPage({
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 24, margin: "0 0 4px" }}>
+      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>
         Event verification queue
       </h1>
-      <p style={{ color: "#666", fontSize: 14, margin: "0 0 24px" }}>
+      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px" }}>
         Events whose dates didn&rsquo;t match the organizer&rsquo;s canonical events page. Confirm
         the ones that are fine, dismiss false positives, hide or delete the rest.
       </p>
@@ -112,7 +112,7 @@ export default async function VerificationAdminPage({
             color: "#922b21",
             padding: "12px 16px",
             borderRadius: 8,
-            fontSize: 14,
+            fontSize: 16,
             marginBottom: 16,
           }}
         >
@@ -127,7 +127,7 @@ export default async function VerificationAdminPage({
             color: "#2d5016",
             padding: "12px 16px",
             borderRadius: 8,
-            fontSize: 14,
+            fontSize: 16,
             marginBottom: 16,
           }}
         >
@@ -145,10 +145,10 @@ export default async function VerificationAdminPage({
             textAlign: "center",
           }}
         >
-          <p style={{ color: "#2d5016", fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>
+          <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
             All clear.
           </p>
-          <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
+          <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
             No events are currently flagged for verification.
           </p>
         </section>
@@ -183,17 +183,17 @@ function FlaggedEventRow({
       }}
     >
       <header style={{ marginBottom: 12 }}>
-        <h2 style={{ color: "#2d5016", fontSize: 17, margin: "0 0 4px", fontWeight: 600 }}>
+        <h2 style={{ color: "#2d5016", fontSize: 19, margin: "0 0 4px", fontWeight: 600 }}>
           {event.name}
         </h2>
-        <p style={{ color: "#666", fontSize: 13, margin: 0 }}>
+        <p style={{ color: "#666", fontSize: 15, margin: 0 }}>
           <strong>{fmtDate(event.date)}</strong>
           {fmtTime(event.start_time)} · {event.venue_name}, {event.town}
         </p>
       </header>
 
       {event.description && (
-        <p style={{ color: "#3a3a3a", fontSize: 13, lineHeight: 1.55, margin: "0 0 12px" }}>
+        <p style={{ color: "#3a3a3a", fontSize: 15, lineHeight: 1.55, margin: "0 0 12px" }}>
           {event.description}
         </p>
       )}
@@ -210,7 +210,7 @@ function FlaggedEventRow({
         <p
           style={{
             color: "#9a3412",
-            fontSize: 11,
+            fontSize: 13,
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.06em",
@@ -219,10 +219,10 @@ function FlaggedEventRow({
         >
           Why flagged
         </p>
-        <p style={{ color: "#3a3a3a", fontSize: 13, lineHeight: 1.5, margin: 0 }}>
+        <p style={{ color: "#3a3a3a", fontSize: 15, lineHeight: 1.5, margin: 0 }}>
           {event.verification_reason ?? "No reason recorded."}
         </p>
-        <p style={{ color: "#999", fontSize: 11, margin: "6px 0 0" }}>
+        <p style={{ color: "#999", fontSize: 13, margin: "6px 0 0" }}>
           Checked {fmtChecked(event.verification_checked_at)}
         </p>
       </div>
@@ -233,7 +233,7 @@ function FlaggedEventRow({
           gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: 10,
           marginBottom: 14,
-          fontSize: 13,
+          fontSize: 15,
         }}
       >
         <LinkBox
@@ -259,7 +259,7 @@ function FlaggedEventRow({
         <details style={{ marginBottom: 14 }}>
           <summary
             style={{
-              fontSize: 12,
+              fontSize: 14,
               color: "#666",
               cursor: "pointer",
               userSelect: "none",
@@ -274,7 +274,7 @@ function FlaggedEventRow({
               borderRadius: 6,
               padding: 10,
               marginTop: 8,
-              fontSize: 11,
+              fontSize: 13,
               lineHeight: 1.5,
               color: "#555",
               maxHeight: 240,
@@ -350,7 +350,7 @@ function LinkBox({
     >
       <p
         style={{
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "0.06em",
@@ -362,7 +362,7 @@ function LinkBox({
       </p>
       <p
         style={{
-          fontSize: 13,
+          fontSize: 15,
           color: "#2d5016",
           margin: 0,
           overflow: "hidden",
@@ -382,7 +382,7 @@ const primaryBtnStyle: React.CSSProperties = {
   color: "#fff",
   border: "none",
   borderRadius: 8,
-  fontSize: 13,
+  fontSize: 15,
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -393,7 +393,7 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "#2d5016",
   border: "1px solid #2d5016",
   borderRadius: 8,
-  fontSize: 13,
+  fontSize: 15,
   fontWeight: 500,
   cursor: "pointer",
 };
@@ -404,7 +404,7 @@ const dangerBtnStyle: React.CSSProperties = {
   color: "#922b21",
   border: "1px solid #e6b8b3",
   borderRadius: 8,
-  fontSize: 13,
+  fontSize: 15,
   fontWeight: 500,
   cursor: "pointer",
 };

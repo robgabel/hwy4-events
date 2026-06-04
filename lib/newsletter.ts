@@ -334,7 +334,7 @@ export function buildEmailHtml(robNote: string, content: string, unsubscribeUrl:
 
   const robNoteHtml = renderParagraphs(
     robNote.trim(),
-    "color: #3a3a3a; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"
+    "color: #3a3a3a; font-size: 18px; line-height: 1.6; margin: 0 0 14px;"
   );
 
   const primaryHref = withUtm(SITE_URL, "primary_cta");
