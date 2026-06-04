@@ -110,6 +110,16 @@ function collapseMultiDayEvents(events: Hwy4Event[]): CollapsedEvent[] {
   return result;
 }
 
+// A multi-day collapsed event is represented by its FIRST day, but it's only
+// "over" once the final day's slot has passed — so check ended against endDate.
+// (hasEventEnded folds the date into its comparison, so a future endDate is
+// never treated as ended even if the morning start_time has gone by today.)
+function eventHasEnded(event: CollapsedEvent, nowMinutes: number): boolean {
+  const lastDay =
+    event.isCollapsed && event.endDate ? event.endDate : event.date;
+  return hasEventEnded(lastDay, event.start_time, event.end_time, nowMinutes);
+}
+
 function groupEventsByDate(events: CollapsedEvent[]) {
   const groups: { label: string; date: string; events: CollapsedEvent[] }[] =
     [];
@@ -259,6 +269,21 @@ export default function EventList({
 
   const weekendRange = useMemo(() => getThisWeekendRange(), []);
 
+  // Today's list shouldn't keep showing events that are already over (a 9:30 AM
+  // bird walk is not "today's plan" at 4 PM). The page is statically rendered,
+  // so there's no useful server clock — compute Pacific "now" on the client and
+  // refresh each minute. `now` is null until mounted, so the server render (and
+  // first client paint) shows everything for the current calendar day with no
+  // hydration mismatch; finished events drop out a beat later, once hydrated.
+  // The same clock drives the "Up Next" badge below.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(nowPacificMinutes());
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const filtered = useMemo(() => {
     const visible = initialEvents.filter((e) => {
       if (e.visibility === "private") {
@@ -280,21 +305,15 @@ export default function EventList({
     return collapseMultiDayEvents(visible);
   }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange, freeOnly]);
 
-  const groups = useMemo(() => groupEventsByDate(filtered), [filtered]);
+  // Drop events that have already ended (today's morning slots, mostly). Until
+  // the clock is known (`now === null`, i.e. server + first paint) show the full
+  // day so there's no hydration mismatch; after mount, finished events fall off.
+  const visible = useMemo(() => {
+    if (now === null) return filtered;
+    return filtered.filter((e) => !eventHasEnded(e, now));
+  }, [filtered, now]);
 
-  // "Up Next" must respect the clock: today's earliest event shouldn't keep the
-  // badge after it's over (a 10:30 AM storytime is not "up next" at 4 PM). The
-  // page is statically rendered, so there's no useful server clock — compute
-  // Pacific "now" on the client and refresh each minute. `now` is null until
-  // mounted, so the badge simply doesn't render server-side (no stale highlight,
-  // no hydration mismatch); it appears on the right event after hydration.
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    const tick = () => setNow(nowPacificMinutes());
-    tick();
-    const id = setInterval(tick, 60_000);
-    return () => clearInterval(id);
-  }, []);
+  const groups = useMemo(() => groupEventsByDate(visible), [visible]);
 
   // First event, in chronological order, that hasn't started yet (skips both
   // finished earlier-today events and currently-live ones). A live event already
@@ -320,7 +339,7 @@ export default function EventList({
   // footer (town directory, what's-on links, submit CTA) is always reachable.
   const INITIAL_EVENTS = 25;
   const BATCH_SIZE = 50;
-  const totalEvents = filtered.length;
+  const totalEvents = visible.length;
   const [visibleCount, setVisibleCount] = useState(INITIAL_EVENTS);
 
   // Captured once on mount (a lazy initializer runs before any effect, so the
@@ -466,7 +485,7 @@ export default function EventList({
           onTownsChange={setSelectedTowns}
           showWeekly={showWeekly}
           onShowWeeklyChange={setShowWeekly}
-          eventCount={filtered.length}
+          eventCount={visible.length}
           orgs={memberOrgs}
           enabledOrgs={enabledOrgs}
           onToggleOrg={toggleOrg}
