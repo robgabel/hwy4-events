@@ -24,7 +24,7 @@ import {
   formatLongMonthDay,
   formatISODate,
 } from "@/lib/date-utils";
-import { nowPacificMinutes, hasEventEnded } from "@/lib/event-time";
+import { nowPacificMinutes, hasEventEnded, hasEventStarted } from "@/lib/event-time";
 
 // Lazy-load non-critical components so they don't block hydration
 const FilterBar = dynamic(() => import("./FilterBar"), { ssr: true });
@@ -265,13 +265,17 @@ export default function EventList({
     return () => clearInterval(id);
   }, []);
 
-  // First event, in chronological order, that hasn't ended yet (skips finished
-  // earlier-today events; a currently-live event still qualifies).
+  // First event, in chronological order, that hasn't started yet (skips both
+  // finished earlier-today events and currently-live ones). A live event already
+  // shows "Happening Now", and the two badges are mutually exclusive: "Up Next"
+  // is reserved for the soonest event that hasn't begun.
   const upNextId = useMemo(() => {
     if (now === null) return null;
     for (const group of groups) {
       for (const event of group.events) {
-        if (!hasEventEnded(event.date, event.start_time, event.end_time, now)) {
+        const ended = hasEventEnded(event.date, event.start_time, event.end_time, now);
+        const started = hasEventStarted(event.date, event.start_time, now);
+        if (!ended && !started) {
           return event.id;
         }
       }
