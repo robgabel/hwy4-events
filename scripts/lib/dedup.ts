@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { supabaseAdmin } from "./supabase-admin.js";
 import type { ExtractedEvent } from "./extract.js";
 import { KNOWN_VENUES } from "./venues.js";
@@ -10,10 +9,11 @@ import {
   isSameEvent,
   normalizeName,
   normalizeTown,
+  generateDedupKey,
 } from "../../lib/event-identity.js";
 
-// Re-exported for backfill scripts that import it from this module.
-export { normalizeName };
+// Re-exported for scripts that import these from this module.
+export { normalizeName, generateDedupKey };
 
 /**
  * Emit one structured log line per data-quality failure at write time.
@@ -129,17 +129,9 @@ export interface UpsertResult {
   skippedFuzzy: number;
 }
 
-/**
- * Generate a deterministic dedup key from event name + date + town.
- */
-export function generateDedupKey(
-  name: string,
-  date: string,
-  town: string
-): string {
-  const input = `${normalizeName(name)}|${date}|${normalizeTown(town)}`;
-  return createHash("sha256").update(input).digest("hex").slice(0, 32);
-}
+// generateDedupKey now lives in lib/event-identity.ts (the one identity-key
+// definition, shared with the /admin/submissions publish action). Imported and
+// re-exported above.
 
 
 // ---------------------------------------------------------------------------

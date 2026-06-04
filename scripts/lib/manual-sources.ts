@@ -34,6 +34,12 @@ const MANUAL_VENUE_PATTERNS: readonly string[] = [
   // venue_name on every variant (store and beer-garden branding).
   "camp connell general store",
   "camp connell beer garden",
+  // The Arnold Library's weekly "Storytime with Miss Debbie" came in as a
+  // community submission and is hand-seeded as a recurring program
+  // (scripts/seed-arnold-library-storytime-2026.ts). The county library has no
+  // calendar the scrapers can read; this keeps an aggregator from later
+  // re-listing storytime with wrong/flattened dates over the curated rows.
+  "arnold library",
 ];
 
 export interface MatchableEvent {

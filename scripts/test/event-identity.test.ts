@@ -12,8 +12,25 @@ import assert from "node:assert/strict";
 import {
   isSameEvent,
   isGenericTitle,
+  generateDedupKey,
   type EventIdentity,
 } from "../../lib/event-identity.js";
+
+test("generateDedupKey: 32 hex chars, deterministic, normalization-invariant", () => {
+  const k = generateDedupKey("Storytime with Miss Debbie", "2026-06-03", "Arnold");
+  assert.match(k, /^[0-9a-f]{32}$/);
+  assert.equal(k, generateDedupKey("Storytime with Miss Debbie", "2026-06-03", "Arnold"));
+  // normalizeName folds case, whitespace, and a leading "the"
+  assert.equal(
+    generateDedupKey("The   Foo Fest", "2026-07-01", "Murphys"),
+    generateDedupKey("foo fest", "2026-07-01", "Murphys")
+  );
+  // normalizeTown aliases White Pines -> Arnold
+  assert.equal(
+    generateDedupKey("Trivia Night", "2026-07-01", "White Pines"),
+    generateDedupKey("Trivia Night", "2026-07-01", "Arnold")
+  );
+});
 
 /** Build an event with sensible defaults; override only what the case needs. */
 function ev(p: Partial<EventIdentity> & { name: string }): EventIdentity {

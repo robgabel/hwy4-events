@@ -15,8 +15,23 @@ async function loadPendingCount(): Promise<number> {
   return count ?? 0;
 }
 
+async function loadPendingSubmissionsCount(): Promise<number> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return 0;
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const { count } = await supabase
+    .from("event_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending");
+  return count ?? 0;
+}
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pending = await loadPendingCount();
+  const [pending, pendingSubs] = await Promise.all([
+    loadPendingCount(),
+    loadPendingSubmissionsCount(),
+  ]);
 
   return (
     <main
@@ -43,7 +58,29 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Admin
           </span>
           <NavLink href="/admin/today">Today</NavLink>
+          <NavLink href="/admin/analytics">Growth</NavLink>
+          <NavLink href="/admin/newsletter">Newsletter</NavLink>
           <NavLink href="/admin/newsletter-note">Newsletter notes</NavLink>
+          <NavLink href="/admin/submissions">
+            Submissions
+            {pendingSubs > 0 && (
+              <span
+                style={{
+                  display: "inline-block",
+                  marginLeft: 6,
+                  padding: "1px 7px",
+                  borderRadius: 10,
+                  background: "#d97706",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1.4,
+                }}
+              >
+                {pendingSubs}
+              </span>
+            )}
+          </NavLink>
           <NavLink href="/admin/verification">
             Verification
             {pending > 0 && (

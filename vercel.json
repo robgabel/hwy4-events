@@ -13,6 +13,10 @@
       "schedule": "0 14 * * 5"
     },
     {
+      "path": "/api/newsletter/prepare",
+      "schedule": "0 15 * * 3"
+    },
+    {
       "path": "/api/newsletter/send",
       "schedule": "0 15 * * 4"
     },
@@ -35,6 +39,10 @@
     {
       "path": "/api/reconcile-dupes",
       "schedule": "30 15 * * *"
+    },
+    {
+      "path": "/api/snapshot-analytics",
+      "schedule": "0 9 * * *"
     },
     {
       "path": "/api/check-events",

@@ -123,6 +123,18 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Avery",
     address: "4529 Highway 4, Avery, CA 95224",
   },
+  "arnold-library": {
+    canonical: "Arnold Library",
+    aliases: [
+      "arnold library",
+      "arnold branch library",
+      "calaveras county library arnold",
+      "calaveras county library, arnold branch",
+      "arnold branch, calaveras county library",
+    ],
+    town: "Arnold",
+    address: "1065 Blagen Rd, Arnold, CA 95223",
+  },
   "camp-connell-general-store": {
     canonical: "Camp Connell General Store",
     aliases: [

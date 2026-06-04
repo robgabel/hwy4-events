@@ -43,6 +43,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Town is required" }, { status: 400 });
   }
 
+  // Email is required so we can follow up if we have a question about the event
+  // before publishing it. Validate presence and a basic shape server-side — the
+  // form's `required` attribute is a convenience, not a guarantee.
+  if (!submitter_email?.trim()) {
+    return NextResponse.json(
+      { error: "Email is required so we can reach you with any questions" },
+      { status: 400 }
+    );
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(submitter_email.trim())) {
+    return NextResponse.json(
+      { error: "Please enter a valid email address" },
+      { status: 400 }
+    );
+  }
+
   // Validate town
   if (!(TOWNS as readonly string[]).includes(town)) {
     return NextResponse.json({ error: "Invalid town" }, { status: 400 });
