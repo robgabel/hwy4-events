@@ -1,6 +1,6 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
-import { isPatrioticEvent } from "@/lib/featured-events";
+import { isPatrioticCard } from "@/lib/featured-events";
 import PatrioticEventCard from "@/components/PatrioticEventCard";
 import { getTownContent } from "@/app/towns/town-content";
 import {
@@ -121,7 +121,7 @@ export default function EventCard({
   isUpNext?: boolean;
 }) {
   // Marquee patriotic events get a fully bespoke card.
-  if (isPatrioticEvent(event)) {
+  if (isPatrioticCard(event)) {
     return <PatrioticEventCard event={event} isUpNext={isUpNext} />;
   }
 
