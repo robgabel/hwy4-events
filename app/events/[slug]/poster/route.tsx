@@ -5,6 +5,7 @@ import { findEventBySlug } from "@/lib/events";
 import { posterKind } from "@/lib/poster";
 import { resolveDisplayAddress } from "@/lib/address";
 import type { EventCategory, Hwy4Event } from "@/lib/types";
+import QRCode from "qrcode";
 
 // Node runtime so we can Buffer-encode the inline SVG art and load the bundled
 // brand fonts via import.meta.url. Cached hard: a poster is a pure function of
@@ -118,18 +119,16 @@ const MILLIE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180">
     <path d="M70 62 C74 66 86 66 90 62 L90 64 C86 68 74 68 70 64Z" fill="#E8878C"/>
   </g></svg>`;
 
-// --- faux QR (v1 placeholder; the real one encodes ?src=qr + slug) ----------
-function qrSvg(): string {
-  const finder = (x: number, y: number) =>
-    `<path d="M${x},${y}h28v28h-28Z M${x + 6},${y + 6}h16v16h-16Z" fill-rule="evenodd"/><rect x="${x + 10}" y="${y + 10}" width="8" height="8"/>`;
-  const mods = [
-    [42, 6], [54, 6], [48, 18], [42, 30], [60, 24], [6, 42], [18, 42], [30, 48], [42, 42], [54, 48],
-    [66, 42], [78, 48], [88, 42], [12, 54], [24, 60], [48, 60], [60, 54], [72, 60], [84, 60], [42, 72],
-    [54, 78], [66, 72], [78, 78], [88, 72], [42, 84], [60, 88], [72, 88], [84, 84],
-  ]
-    .map(([x, y]) => `<rect x="${x}" y="${y}" width="6" height="6"/>`)
-    .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g fill="#1e3b2d">${finder(6, 6)}${finder(66, 6)}${finder(6, 66)}${mods}</g></svg>`;
+// --- real QR: encodes the event URL with ?src=qr so scans are attributed -----
+// Forest-on-cream to match the screenprint; the cream module color blends into
+// the QR's framed cream box on the poster. Scans fine at print size.
+function qrSvg(url: string): Promise<string> {
+  return QRCode.toString(url, {
+    type: "svg",
+    margin: 1,
+    errorCorrectionLevel: "M",
+    color: { dark: "#1e3b2d", light: "#f4edda" },
+  });
 }
 
 function formatTime(t: string | null): string | null {
@@ -174,7 +173,9 @@ export async function GET(
   }
 
   const skin = SKINS[event.category] ?? SKINS.other;
-  const [b700, b900, d600, d700] = await loadFonts(new URL(req.url).origin);
+  const origin = new URL(req.url).origin;
+  const [b700, b900, d600, d700] = await loadFonts(origin);
+  const qrMarkup = await qrSvg(`${origin}/events/${slug}?src=qr`);
 
   const dateObj = parseISO(event.date);
   const dow = format(dateObj, "EEE");
@@ -356,7 +357,7 @@ export async function GET(
               </div>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={svgUri(qrSvg())} width={132} height={132} style={{ backgroundColor: C.paper, padding: 8, border: `4px solid ${C.ink}`, borderRadius: 8 }} alt="" />
+            <img src={svgUri(qrMarkup)} width={132} height={132} style={{ backgroundColor: C.paper, padding: 8, border: `4px solid ${C.ink}`, borderRadius: 8 }} alt="" />
           </div>
         </div>
       </div>
