@@ -51,29 +51,62 @@ export async function GET(request: Request) {
   }
 
   try {
-    // test_email path: generate fresh content and send only to the tester. This
-    // bypasses the approval gate on purpose (it's a template smoke-test to one
-    // address you control) and never archives or touches a draft row.
+    // test_email path: send the current stored draft to one address so you can
+    // preview exactly what subscribers will receive (including your edits). Falls
+    // back to generating fresh content only when no draft exists yet (e.g. before
+    // Wednesday's prepare cron has run). Never writes to newsletter_drafts.
     if (testEmail) {
-      const [events, recentBriefings, robNoteResult] = await Promise.all([
+      const supabase = getServiceClient();
+      const { data: draft } = await supabase
+        .from("newsletter_drafts")
+        .select("id, subject, content, status")
+        .in("status", ["pending", "vetoed"])
+        .order("target_send_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const [events, robNoteResult] = await Promise.all([
         getUpcomingEvents(),
-        getRecentBriefings(),
         getRobNote(),
       ]);
-      const content = await generateNewsletter(events, recentBriefings);
-      const subject = buildSubject(todayISO());
+      const slugToEventId = buildSlugToEventId(events);
+
+      let content: string;
+      let subject: string;
+      let campaignId: string;
+
+      if (draft) {
+        // Use the stored (possibly hand-edited) draft — this is what will actually ship.
+        content = draft.content as string;
+        subject = draft.subject as string;
+        campaignId = draft.id as string;
+      } else {
+        // No draft yet — fall back to generating fresh content.
+        const [recentBriefings] = await Promise.all([getRecentBriefings()]);
+        content = await generateNewsletter(events, recentBriefings);
+        subject = buildSubject(todayISO());
+        campaignId = "test";
+      }
+
       const resend = new Resend(resendApiKey);
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=test-token`;
-      const testTracking = { campaignId: "test", slugToEventId: buildSlugToEventId(events) };
+      const testTracking = { campaignId, slugToEventId };
       await resend.emails.send({
         from: `${SITE_NAME} <newsletter@hwy4events.com>`,
         replyTo: "robgabel@gmail.com",
         to: testEmail,
-        subject,
+        subject: `[TEST] ${subject}`,
         html: buildEmailHtml(robNoteResult.body, content, unsubscribeUrl, testTracking),
         headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
       });
-      return NextResponse.json({ ok: true, test: true, sent: 1, subject });
+      return NextResponse.json({
+        ok: true,
+        test: true,
+        sent: 1,
+        subject,
+        used_draft: !!draft,
+        draft_status: draft?.status ?? null,
+      });
     }
 
     // Real send: AUTO-SEND today's draft unless it was vetoed (or already sent).
