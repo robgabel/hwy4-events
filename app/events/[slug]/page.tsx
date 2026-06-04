@@ -234,7 +234,7 @@ export default async function EventPage({ params }: PageProps) {
   )}`;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:py-10">
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
       <EventJsonLd event={event} slug={slug} offerUrl={offerUrl} />
       <Suspense fallback={null}>
         <ShareTracker slug={slug} />
@@ -254,7 +254,7 @@ export default async function EventPage({ params }: PageProps) {
 
       <article>
         {/* HERO — poster + action rail */}
-        <div className="grid gap-8 md:grid-cols-[minmax(0,340px)_1fr] md:items-start">
+        <div className="grid gap-8 md:grid-cols-[minmax(0,46%)_1fr] md:items-start">
           {/* The poster */}
           <div>
             <div className="overflow-hidden rounded-xl bg-cream shadow-lg ring-1 ring-stone-light/30">
@@ -413,7 +413,7 @@ export default async function EventPage({ params }: PageProps) {
             <h2 className="font-display mb-2 text-lg font-semibold text-forest">
               About This Event
             </h2>
-            <p className="leading-relaxed text-stone">
+            <p className="max-w-3xl leading-relaxed text-stone">
               <LinkifiedText text={event.description} />
             </p>
           </section>
