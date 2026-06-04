@@ -278,6 +278,14 @@ export default async function EventPage({ params }: PageProps) {
             <p className="mt-3 text-center text-sm font-medium text-stone">
               Share or download this poster
             </p>
+            <p className="mt-1 text-center text-xs text-stone-light">
+              <Link
+                href={`/events/${slug}/submit-poster`}
+                className="underline underline-offset-2 transition-colors hover:text-pine"
+              >
+                Organizer? Swap in your own poster
+              </Link>
+            </p>
           </div>
 
           {/* Info + actions */}

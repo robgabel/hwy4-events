@@ -27,10 +27,23 @@ async function loadPendingSubmissionsCount(): Promise<number> {
   return count ?? 0;
 }
 
+async function loadPendingPostersCount(): Promise<number> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return 0;
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const { count } = await supabase
+    .from("poster_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending");
+  return count ?? 0;
+}
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [pending, pendingSubs] = await Promise.all([
+  const [pending, pendingSubs, pendingPosters] = await Promise.all([
     loadPendingCount(),
     loadPendingSubmissionsCount(),
+    loadPendingPostersCount(),
   ]);
 
   return (
@@ -78,6 +91,26 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 }}
               >
                 {pendingSubs}
+              </span>
+            )}
+          </NavLink>
+          <NavLink href="/admin/posters">
+            Posters
+            {pendingPosters > 0 && (
+              <span
+                style={{
+                  display: "inline-block",
+                  marginLeft: 6,
+                  padding: "1px 7px",
+                  borderRadius: 10,
+                  background: "#d97706",
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  lineHeight: 1.4,
+                }}
+              >
+                {pendingPosters}
               </span>
             )}
           </NavLink>
