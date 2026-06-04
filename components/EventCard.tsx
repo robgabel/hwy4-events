@@ -1,7 +1,8 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
-import { isPatrioticCard } from "@/lib/featured-events";
+import { isPatrioticCard, isAdoptAPetEvent } from "@/lib/featured-events";
 import PatrioticEventCard from "@/components/PatrioticEventCard";
+import AdoptAPetEventCard from "@/components/AdoptAPetEventCard";
 import { getTownContent } from "@/app/towns/town-content";
 import {
   parseDate,
@@ -123,6 +124,11 @@ export default function EventCard({
   // Marquee patriotic events get a fully bespoke card.
   if (isPatrioticCard(event)) {
     return <PatrioticEventCard event={event} isUpNext={isUpNext} />;
+  }
+
+  // Adopt-a-Pet Day gets its own warm, dogs-and-cats card.
+  if (isAdoptAPetEvent(event)) {
+    return <AdoptAPetEventCard event={event} isUpNext={isUpNext} />;
   }
 
   const isPrivate = event.visibility === "private";

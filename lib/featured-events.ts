@@ -22,6 +22,14 @@ const FOURTH_FEATURE_EVENT_IDS = new Set<string>([
   "dddfef2b-df2d-43a8-89a6-2006bfcf20da", // Sierra Nevada Arts & Crafts Festival — Sat Jul 4 2026
 ]);
 
+// 3. ADOPT-A-PET DAY — a warm, dogs-and-cats skin: a pet-celebrating list card
+//    plus a banner atop its OWN detail page (it keeps its real shelter poster,
+//    description, and map). Keyed by event id so only this specific Saturday
+//    lights up; future shelter events stay standard until added here.
+const ADOPT_A_PET_EVENT_IDS = new Set<string>([
+  "a1721b10-cfbb-4ef1-8ed0-567a152de04c", // California Adopt-a-Pet Day — Sat Jun 6 2026, Calaveras Humane Society
+]);
+
 /** The Arnold parade: special card + the bespoke parade detail microsite. */
 export function isParadeEvent(event: Pick<Hwy4Event, "org_slug">): boolean {
   return !!event.org_slug && PARADE_ORG_SLUGS.has(event.org_slug);
@@ -43,4 +51,12 @@ export function isPatrioticCard(
   event: Pick<Hwy4Event, "org_slug" | "id">
 ): boolean {
   return isParadeEvent(event) || isFourthFeatureEvent(event);
+}
+
+/**
+ * Adopt-a-Pet Day: the warm dogs-and-cats list card + a banner on its own detail
+ * page. Keyed by event id.
+ */
+export function isAdoptAPetEvent(event: Pick<Hwy4Event, "id">): boolean {
+  return ADOPT_A_PET_EVENT_IDS.has(event.id);
 }

@@ -20,7 +20,8 @@ import ShareTracker from "@/components/ShareTracker";
 import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import PatrioticBanner from "@/components/PatrioticBanner";
-import { isParadeEvent, isFourthFeatureEvent } from "@/lib/featured-events";
+import AdoptAPetBanner from "@/components/AdoptAPetBanner";
+import { isParadeEvent, isFourthFeatureEvent, isAdoptAPetEvent } from "@/lib/featured-events";
 import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
 
 export const revalidate = 3600;
@@ -258,6 +259,7 @@ export default async function EventPage({ params }: PageProps) {
       </nav>
 
       {isFourthFeatureEvent(event) && <PatrioticBanner town={event.town} />}
+      {isAdoptAPetEvent(event) && <AdoptAPetBanner town={event.town} />}
 
       <article>
         {/* HERO — poster + action rail */}
