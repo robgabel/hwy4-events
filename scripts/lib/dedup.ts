@@ -177,6 +177,7 @@ type MergeableRow = MatchableRow & {
   source_event_id?: string | null;
   price_locked?: boolean | null;
   description_locked?: boolean | null;
+  poster_locked?: boolean | null;
 };
 
 const isArtifactVenue = (v: string | null | undefined): boolean =>
@@ -220,7 +221,7 @@ function buildStrongMatchUpdate(
     ...(existing.price_locked ? {} : { price: pick(event.price, existing.price) }),
     event_url: pick(event.event_url, existing.event_url),
     address: pick(event.address, existing.address),
-    image_url: pick(event.image_url ?? null, existing.image_url),
+    ...(existing.poster_locked ? {} : { image_url: pick(event.image_url ?? null, existing.image_url) }),
     artists: artistSet.size > 0 ? [...artistSet] : null,
     dedup_key: dedupKey,
     ...(event.source_event_id && { source_event_id: event.source_event_id }),
@@ -229,7 +230,7 @@ function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, dedup_key, source_event_id, price_locked, description_locked";
+  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, dedup_key, source_event_id, price_locked, description_locked, poster_locked";
 
 type ExistingRow = {
   id: string;
@@ -248,6 +249,7 @@ type ExistingRow = {
   // When true, the field is human-set — no scrape write may touch it.
   price_locked?: boolean | null;
   description_locked?: boolean | null;
+  poster_locked?: boolean | null;
 };
 
 function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
@@ -262,7 +264,7 @@ function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
     existing.event_url !== event.event_url ||
     existing.address !== event.address ||
     existing.town !== event.town ||
-    existing.image_url !== (event.image_url ?? null)
+    (!existing.poster_locked && existing.image_url !== (event.image_url ?? null))
   );
 }
 
@@ -354,7 +356,7 @@ async function upsertEventsBatched(
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
       .select(
-        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked"
+        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked"
       )
       .in("date", unmatchedDates);
 
@@ -433,7 +435,7 @@ async function upsertEventsBatched(
               event_url: event.event_url,
               address: event.address,
               town: event.town,
-              image_url: event.image_url ?? null,
+              ...(existing.poster_locked ? {} : { image_url: event.image_url ?? null }),
               dedup_key: dedupKey,
               ...(event.source_event_id && { source_event_id: event.source_event_id }),
               last_scraped_at: now,
@@ -566,13 +568,14 @@ export async function upsertEvents(
       image_url: string | null;
       price_locked?: boolean | null;
       description_locked?: boolean | null;
+      poster_locked?: boolean | null;
     } | null = null;
 
     if (event.source_event_id) {
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked, description_locked"
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked, description_locked, poster_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -583,7 +586,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked, description_locked"
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked, description_locked, poster_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -605,7 +608,7 @@ export async function upsertEvents(
         existing.event_url !== event.event_url ||
         existing.address !== event.address ||
         existing.town !== event.town ||
-        existing.image_url !== (event.image_url ?? null);
+        (!existing.poster_locked && existing.image_url !== (event.image_url ?? null));
 
       if (changed) {
         await supabaseAdmin
@@ -622,7 +625,7 @@ export async function upsertEvents(
             event_url: event.event_url,
             address: event.address,
             town: event.town,
-            image_url: event.image_url ?? null,
+            ...(existing.poster_locked ? {} : { image_url: event.image_url ?? null }),
             // Keep dedup_key in sync with the (possibly-changed) town so
             // dedup_key lookups still find this row if source_event_id
             // ever disappears.
@@ -658,7 +661,7 @@ export async function upsertEvents(
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked"
+          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked"
         )
         .eq("date", event.date);
 

@@ -48,6 +48,8 @@ export interface Hwy4Event {
   price_locked?: boolean;
   // When true, description is human-set; the scraper must not overwrite it.
   description_locked?: boolean;
+  // When true, image_url is human-pinned; no scraper may overwrite it.
+  poster_locked?: boolean;
   event_url: string | null;
   source_url: string;
   source_name: string | null;
