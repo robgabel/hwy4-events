@@ -61,6 +61,28 @@ export function hasEventEnded(
 }
 
 /**
+ * Has an event already begun, relative to `nowMinutes` (Pacific, from
+ * `nowPacificMinutes`)? Mirrors the live-badge's notion of "started": only an
+ * event with a parseable clock start can be "started" — a timeless/all-day event
+ * has no start instant and never shows "Happening Now", so it counts as
+ * not-started here, and an unparseable start is likewise treated as not-started
+ * (so a malformed row is never wrongly skipped). Paired with `hasEventEnded` to
+ * pick the "Up Next" event: the soonest one that has neither started nor ended,
+ * so a currently-live event keeps only its "Happening Now" badge instead of also
+ * claiming "Up Next".
+ */
+export function hasEventStarted(
+  eventDate: string,
+  startTime: string | null,
+  nowMinutes: number
+): boolean {
+  if (!startTime) return false;
+  const startMinutes = toAbsoluteMinutes(eventDate, startTime);
+  if (startMinutes === null) return false;
+  return startMinutes <= nowMinutes;
+}
+
+/**
  * Get the live status of an event based on current time in Pacific time.
  * Returns "live" if event is in progress, "starting-soon" with minutes if within 90 min, null otherwise.
  *
