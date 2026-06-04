@@ -65,10 +65,28 @@ const LANDSCAPE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220"
 </svg>`;
 
 // --- per-category motif (the one thing that swaps) -------------------------
-function motifInner(cat: EventCategory): string {
+// Canonical objects start from vetted Phosphor fill silhouettes (MIT)
+// restyled to flat forest screenprint; bespoke local marks (frog, Big-Tree,
+// string lights) are primitive-composed. Real geometry — no freehand bezier
+// guessing, so no neck gaps / broken limbs / party-hat tents.
+const motifWrap = (vb: string, inner: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}">${inner}</svg>`;
+
+function motifSvg(cat: EventCategory): string {
   switch (cat) {
-    case "kids":
-      return `<g>
+    case "live_music": // acoustic guitar (Phosphor) under primitive string lights
+      return motifWrap("0 0 256 256", `
+        <path d="M14,46 Q128,104 242,46" fill="none" stroke="#3f6b4d" stroke-width="3"/>
+        <g fill="#e3a72f" stroke="#3f6b4d" stroke-width="1.5"><circle cx="44" cy="62" r="7"/><circle cx="86" cy="80" r="7"/><circle cx="128" cy="88" r="7"/><circle cx="170" cy="80" r="7"/><circle cx="212" cy="62" r="7"/></g>
+        <g transform="translate(6,40) scale(0.80)" fill="#1e3b2d"><path d="M249.66,46.34l-40-40a8,8,0,0,0-11.32,11.32L200.69,20,140.52,80.16C117.73,68.3,92.21,69.29,76.75,84.74a42.27,42.27,0,0,0-9.39,14.37A8.24,8.24,0,0,1,59.81,104c-14.59.49-27.26,5.72-36.65,15.11C11.08,131.22,6,148.6,8.74,168.07,11.4,186.7,21.07,205.15,36,220s33.34,24.56,52,27.22A71.13,71.13,0,0,0,98.1,248c15.32,0,28.83-5.23,38.76-15.16,9.39-9.39,14.62-22.06,15.11-36.65a8.24,8.24,0,0,1,4.92-7.55,42.22,42.22,0,0,0,14.37-9.39c15.45-15.46,16.44-41,4.58-63.77L236,55.31l2.34,2.35a8,8,0,0,0,11.32-11.32ZM135.8,159.79a28,28,0,1,1,0-39.59A28,28,0,0,1,135.8,159.79Z"/></g>`);
+    case "festival": // bunting + Phosphor tent + door
+      return motifWrap("0 0 256 256", `
+        <path d="M14,52 Q128,34 242,52" fill="none" stroke="#1e3b2d" stroke-width="2.5"/>
+        <g stroke="#1e3b2d" stroke-width="1.5"><path d="M30,50 l20,2 l-12,18 Z" fill="#e3a72f"/><path d="M64,53 l20,1 l-11,18 Z" fill="#c8642f"/><path d="M98,54 l20,0 l-10,18 Z" fill="#5b8c5a"/><path d="M150,54 l20,0 l-10,18 Z" fill="#e3a72f"/><path d="M184,53 l20,-1 l-9,18 Z" fill="#c8642f"/><path d="M218,50 l20,-2 l-9,18 Z" fill="#5b8c5a"/></g>
+        <g transform="translate(0,18)" fill="#1e3b2d"><path d="M255.31,188.75l-64-144A8,8,0,0,0,184,40H72a8,8,0,0,0-7.31,4.75h0l0,.12v0L.69,188.75A8,8,0,0,0,8,200H248a8,8,0,0,0,7.31-11.25ZM64,184H20.31L64,85.7Zm16,0V85.7L123.69,184Z"/></g>
+        <path d="M104,200 v-26 a24,24 0 0 1 48,0 v26 Z" fill="#f4edda" transform="translate(0,18)"/>`);
+    case "kids": // bespoke frog (kept)
+      return motifWrap("0 0 200 168", `
         <path d="M28,150 q-14,-4 -6,-26 q6,-16 26,-12 q14,4 4,22 q-8,16 -24,16 Z" fill="#4f8a4c"/>
         <path d="M172,150 q14,-4 6,-26 q-6,-16 -26,-12 q-14,4 -4,22 q8,16 24,16 Z" fill="#4f8a4c"/>
         <path d="M100,38 C146,38 168,78 168,112 C168,146 138,160 100,160 C62,160 32,146 32,112 C32,78 54,38 100,38 Z" fill="#6aa45f"/>
@@ -76,34 +94,30 @@ function motifInner(cat: EventCategory): string {
         <circle cx="70" cy="46" r="22" fill="#6aa45f"/><circle cx="130" cy="46" r="22" fill="#6aa45f"/>
         <circle cx="70" cy="44" r="15" fill="#f4edda"/><circle cx="130" cy="44" r="15" fill="#f4edda"/>
         <circle cx="73" cy="46" r="7" fill="#1e3b2d"/><circle cx="127" cy="46" r="7" fill="#1e3b2d"/>
-        <path d="M68,98 Q100,128 132,98" fill="none" stroke="#1e3b2d" stroke-width="4.5" stroke-linecap="round"/>
-      </g>`;
-    case "games":
-      return `<g fill="#1e3b2d">
-        <path d="M58,176 h84 v-12 q0,-10 -12,-12 h-60 q-12,2 -12,12 Z"/><rect x="66" y="150" width="68" height="10" rx="3"/>
-        <path d="M84,150 q-10,-30 6,-52 q-6,2 -12,-2 q4,-10 0,-18 q14,2 26,-10 q22,-22 42,2 q22,24 16,62 q-2,18 -10,18 Z"/>
-        <circle cx="120" cy="78" r="5" fill="#f4edda"/></g>`;
-    case "live_music":
-    case "festival":
-      return `<g>
-        <rect x="92" y="120" width="16" height="44" fill="#1e3b2d"/><path d="M70,168 q30,-14 60,0 q-4,8 -30,8 q-26,0 -30,-8 Z" fill="#1e3b2d"/>
-        <rect x="64" y="30" width="72" height="100" rx="36" fill="#1e3b2d"/>
-        <g stroke="#f4edda" stroke-width="4"><line x1="74" y1="52" x2="126" y2="52"/><line x1="72" y1="66" x2="128" y2="66"/><line x1="72" y1="80" x2="128" y2="80"/><line x1="74" y1="94" x2="126" y2="94"/></g></g>`;
-    case "wine":
-      return `<g>
-        <path d="M74,40 h52 l-6,40 a20,20 0 0 1 -40,0 Z" fill="#7d3350"/>
-        <rect x="96" y="100" width="8" height="48" fill="#1e3b2d"/><rect x="74" y="150" width="52" height="9" rx="3" fill="#1e3b2d"/>
-        <path d="M80,44 q20,18 40,0" fill="none" stroke="#f4edda" stroke-width="4"/></g>`;
-    default:
-      // Big Trees sequoia — the brand landmark, used for civic / hike / other.
-      return `<g>
-        <rect x="88" y="120" width="24" height="60" rx="4" fill="#8a4b2f"/>
-        <path d="M100,30 L60,120 h80 Z" fill="#1e3b2d"/><path d="M100,55 L68,120 h64 Z" fill="#2f5d43"/>
-        <path d="M100,80 L78,130 h44 Z" fill="#2f5d43"/></g>`;
+        <path d="M68,98 Q100,128 132,98" fill="none" stroke="#1e3b2d" stroke-width="4.5" stroke-linecap="round"/>`);
+    case "wine": // Phosphor glass + primitive grape cluster
+      return motifWrap("0 0 256 256", `
+        <g transform="translate(-44,0) scale(0.92)" fill="#1e3b2d"><path d="M205.33,103.67,183.56,29.74A8,8,0,0,0,175.89,24H80.11a8,8,0,0,0-7.67,5.74L50.67,103.67a63.46,63.46,0,0,0,17.42,64.67A87.41,87.41,0,0,0,120,191.63V232H88a8,8,0,1,0,0,16h80a8,8,0,1,0,0-16H136V191.63a87.39,87.39,0,0,0,51.91-23.29A63.48,63.48,0,0,0,205.33,103.67ZM86.09,40h83.82L190,108.19c.09.3.17.6.25.9-21.42,7.68-45.54-1.6-58.63-8.23C106.43,88.11,86.43,86.49,71.68,88.93Z"/></g>
+        <g stroke="#5a2139" stroke-width="2" fill="#7d3350"><circle cx="176" cy="150" r="15"/><circle cx="204" cy="146" r="15"/><circle cx="190" cy="174" r="15"/><circle cx="164" cy="176" r="15"/><circle cx="216" cy="174" r="15"/><circle cx="190" cy="200" r="15"/></g>
+        <path d="M190,128 q-8,-22 12,-30 q5,16 -12,30Z" fill="#5b8c5a"/>`);
+    case "games": // clean primitive dice (the knight was unfakeable freehand)
+      return motifWrap("0 0 256 256", `
+        <g transform="translate(-30,18) scale(0.62) rotate(-10 128 128)"><rect x="40" y="40" width="176" height="176" rx="34" fill="#1e3b2d"/><g fill="#f4edda"><circle cx="92" cy="92" r="12"/><circle cx="92" cy="164" r="12"/><circle cx="128" cy="128" r="12"/><circle cx="164" cy="92" r="12"/><circle cx="164" cy="164" r="12"/></g></g>
+        <g transform="translate(96,70) scale(0.5) rotate(14 128 128)"><rect x="44" y="44" width="168" height="168" rx="34" fill="#2f5d43"/><g fill="#f4edda"><circle cx="92" cy="92" r="13"/><circle cx="164" cy="92" r="13"/><circle cx="92" cy="164" r="13"/><circle cx="164" cy="164" r="13"/></g></g>`);
+    case "hike_walk": // Phosphor hiking boot
+      return motifWrap("0 0 256 256", `
+        <path transform="translate(0,16) scale(0.95)" fill="#1e3b2d" d="M192,112H112.27a8.17,8.17,0,0,1-8.25-7.47A8,8,0,0,1,112,96h44a4,4,0,0,0,4-4V84a4,4,0,0,0-4-4H112.27A8.17,8.17,0,0,1,104,72.53,8,8,0,0,1,112,64h44a4,4,0,0,0,4-4V56a16,16,0,0,0-16-16H32.22a8.23,8.23,0,0,0-5.08,1.64,8,8,0,0,0-2.61,9.22c11.06,28.84,8.76,83.71-.22,114.93A8,8,0,0,0,24,168v32a16,16,0,0,0,16,16H66.11a16,16,0,0,0,7.16-1.69L85.89,208h16.22l12.62,6.31a16,16,0,0,0,7.16,1.69h28.22a16,16,0,0,0,7.16-1.69L169.89,208h16.22l12.62,6.31a16,16,0,0,0,7.16,1.69H232a16,16,0,0,0,16-16V168A56,56,0,0,0,192,112Z"/>`);
+    case "civic": // Phosphor "three people" — no neck gaps
+      return motifWrap("0 0 256 256", `
+        <path transform="translate(0,10) scale(0.96)" fill="#1e3b2d" d="M64.12,147.8a4,4,0,0,1-4,4.2H16a8,8,0,0,1-7.8-6.17,8.35,8.35,0,0,1,1.62-6.93A67.79,67.79,0,0,1,37,117.51a40,40,0,1,1,66.46-35.8,3.94,3.94,0,0,1-2.27,4.18A64.08,64.08,0,0,0,64,144C64,145.28,64,146.54,64.12,147.8Zm182-8.91A67.76,67.76,0,0,0,219,117.51a40,40,0,1,0-66.46-35.8,3.94,3.94,0,0,0,2.27,4.18A64.08,64.08,0,0,1,192,144c0,1.28,0,2.54-.12,3.8a4,4,0,0,0,4,4.2H240a8,8,0,0,0,7.8-6.17A8.33,8.33,0,0,0,246.17,138.89Zm-89,43.18a48,48,0,1,0-58.37,0A72.13,72.13,0,0,0,65.07,212,8,8,0,0,0,72,224H184a8,8,0,0,0,6.93-12A72.15,72.15,0,0,0,157.19,182.07Z"/>`);
+    default: // Big-Trees sequoia (bespoke, brand landmark) — wine/other fall here too
+      return motifWrap("0 0 200 200", `
+        <rect x="88" y="120" width="24" height="62" rx="4" fill="#8a4b2f"/>
+        <path d="M100,28 L58,122 h84 Z" fill="#1e3b2d"/>
+        <path d="M100,54 L66,124 h68 Z" fill="#2f5d43"/>
+        <path d="M100,82 L76,132 h48 Z" fill="#2f5d43"/>`);
   }
 }
-const motifSvg = (cat: EventCategory) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">${motifInner(cat)}</svg>`;
 
 // --- Millie (real asset, simplified for resvg) ------------------------------
 const MILLIE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180">
