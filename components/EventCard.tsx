@@ -410,6 +410,7 @@ export default function EventCard({
             </span>
           )}
 
+          {/* Place: town leads (the geographic decision unit), venue second. */}
           <span className="flex items-center gap-1">
             <svg
               className="h-3.5 w-3.5 shrink-0"
@@ -429,17 +430,20 @@ export default function EventCard({
                 d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
               />
             </svg>
-            {event.venue_name},{" "}
-            {townHasPage ? (
-              <Link
-                href={`/towns/${townSlug(event.town)}`}
-                className="relative z-20 underline decoration-stone-light/60 underline-offset-2 hover:text-pine hover:decoration-pine"
-              >
-                {event.town}
-              </Link>
-            ) : (
-              event.town
-            )}
+            <span>
+              {townHasPage ? (
+                <Link
+                  href={`/towns/${townSlug(event.town)}`}
+                  className="relative z-20 underline decoration-stone-light/60 underline-offset-2 hover:text-pine hover:decoration-pine"
+                >
+                  {event.town}
+                </Link>
+              ) : (
+                event.town
+              )}
+              <span className="px-1 text-stone-light">·</span>
+              {event.venue_name}
+            </span>
           </span>
         </div>
       </div>
