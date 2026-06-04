@@ -98,7 +98,7 @@ export async function getUpcomingEvents() {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url"
+      "id, name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url"
     )
     .gte("date", today)
     .lte("date", tenDaysOut)
@@ -269,8 +269,51 @@ function withUtm(url: string, content: string): string {
   }
 }
 
-function markdownLinksToHtml(text: string): string {
+// Per-send click tracking: when present, event-page links are rewritten to the
+// first-party redirect (/r/n/<campaign>/<eventId>) that logs the click. The map
+// is slug -> hwy4_events.id; only links whose slug is in it get rewritten, so a
+// drifted or hand-edited link just stays a plain (untracked) event link. See
+// PRD-newsletter-click-tracking.md.
+export type NewsletterTracking = {
+  campaignId: string;
+  slugToEventId: Map<string, string>;
+};
+
+export function buildSlugToEventId(
+  events: Record<string, unknown>[]
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const e of events) {
+    if (!e.id) continue;
+    const slug = generateEventSlug(e.name as string, e.date as string, e.town as string);
+    map.set(slug, e.id as string);
+  }
+  return map;
+}
+
+// If url is an internal /events/<slug> link, return the slug; else null.
+function eventSlugFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!/(^|\.)hwy4events\.com$/i.test(u.hostname)) return null;
+    const parts = u.pathname.split("/").filter(Boolean);
+    return parts.length === 2 && parts[0] === "events" ? parts[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function markdownLinksToHtml(text: string, tracking?: NewsletterTracking): string {
   return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
+    // Rewrite event links to the first-party click tracker on a map hit.
+    if (tracking) {
+      const slug = eventSlugFromUrl(url);
+      const eventId = slug ? tracking.slugToEventId.get(slug) : undefined;
+      if (eventId) {
+        const href = `${SITE_URL}/r/n/${encodeURIComponent(tracking.campaignId)}/${eventId}`;
+        return `<a href="${href}" style="color: #2d5016; text-decoration: underline;">${label}</a>`;
+      }
+    }
     let utmContent = "body_link";
     try {
       const u = new URL(url);
@@ -316,7 +359,12 @@ function boldEventAnchors(text: string): string {
 // misses, collapsing the whole email into one block. Normalize CRLF/CR to LF, then
 // split on one-or-more blank lines so runs of 3+ newlines don't yield empty <p>s.
 // When emphasizeAnchors is set, bold the scannable spine before linkifying.
-function renderParagraphs(text: string, pStyle: string, emphasizeAnchors = false): string {
+function renderParagraphs(
+  text: string,
+  pStyle: string,
+  emphasizeAnchors = false,
+  tracking?: NewsletterTracking
+): string {
   return text
     .replace(/\r\n?/g, "\n")
     .split(/\n{2,}/)
@@ -324,13 +372,18 @@ function renderParagraphs(text: string, pStyle: string, emphasizeAnchors = false
     .filter(Boolean)
     .map((p) => {
       const spine = emphasizeAnchors ? boldEventAnchors(p) : p;
-      return `<p style="${pStyle}">${markdownLinksToHtml(spine)}</p>`;
+      return `<p style="${pStyle}">${markdownLinksToHtml(spine, tracking)}</p>`;
     })
     .join("");
 }
 
-export function buildEmailHtml(robNote: string, content: string, unsubscribeUrl: string): string {
-  const htmlContent = renderParagraphs(content, "color: #333; font-size: 18px; line-height: 1.6; margin: 0 0 18px;", true);
+export function buildEmailHtml(
+  robNote: string,
+  content: string,
+  unsubscribeUrl: string,
+  tracking?: NewsletterTracking
+): string {
+  const htmlContent = renderParagraphs(content, "color: #333; font-size: 18px; line-height: 1.6; margin: 0 0 18px;", true, tracking);
 
   const robNoteHtml = renderParagraphs(
     robNote.trim(),
