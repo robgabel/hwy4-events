@@ -170,6 +170,37 @@ function getThisWeekendRange(): { start: string; end: string } | null {
   };
 }
 
+type SavedListState = { count: number; scrollY: number };
+
+// The homepage list length + scroll offset, stashed in sessionStorage so a
+// round-trip to an event page (which re-mounts this client component) can land
+// the user back where they were instead of the default first-25 view.
+const LIST_STATE_KEY = "hwy4:home-list-state";
+
+function readSavedListState(): SavedListState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(LIST_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SavedListState>;
+    if (typeof parsed.count === "number" && typeof parsed.scrollY === "number") {
+      return { count: parsed.count, scrollY: parsed.scrollY };
+    }
+  } catch {
+    // unavailable or malformed storage — fall back to defaults
+  }
+  return null;
+}
+
+function writeSavedListState(state: SavedListState): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(LIST_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // storage full / unavailable — best-effort, ignore
+  }
+}
+
 export default function EventList({
   initialEvents,
   orgs,
@@ -292,11 +323,33 @@ export default function EventList({
   const totalEvents = filtered.length;
   const [visibleCount, setVisibleCount] = useState(INITIAL_EVENTS);
 
+  // Captured once on mount (a lazy initializer runs before any effect, so the
+  // persistence effect below can't clobber it). null on the server and on a
+  // first-ever visit.
+  const [savedListState] = useState<SavedListState | null>(readSavedListState);
+  const pendingScrollRef = useRef<number | null>(null);
+
   // Reset visible count when filters change (show initial batch of new results)
   const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}-${freeOnly}`;
   useEffect(() => {
     setVisibleCount(INITIAL_EVENTS);
   }, [filteredKey]);
+
+  // Restore the saved list length + scroll position when the user returns from
+  // an event page. Declared AFTER the filter-reset effect so it wins the initial
+  // mount — both run once, and the last write to visibleCount sticks. The scroll
+  // itself is replayed by the effect below, once the list has grown tall enough.
+  useEffect(() => {
+    if (!savedListState) return;
+    if (savedListState.count > INITIAL_EVENTS) {
+      setVisibleCount(Math.min(savedListState.count, totalEvents));
+    }
+    if (savedListState.scrollY > 0) {
+      pendingScrollRef.current = savedListState.scrollY;
+    }
+    // Replay once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Slice groups to only include the visible event count
   const visibleGroups = useMemo(() => {
@@ -315,6 +368,52 @@ export default function EventList({
     }
     return result;
   }, [groups, visibleCount]);
+
+  // Replay the saved scroll offset once the list has grown back to its restored
+  // length. We retry on a short timer until the page is tall enough to reach the
+  // offset, since content can keep extending the page after the first paint.
+  // setTimeout (not rAF) so restoration still runs if the tab isn't foregrounded
+  // at the moment of return — rAF is paused while a page is hidden.
+  useEffect(() => {
+    const target = pendingScrollRef.current;
+    if (target === null) return;
+    let timer = 0;
+    let tries = 0;
+    const step = () => {
+      const reachable =
+        document.documentElement.scrollHeight - window.innerHeight;
+      if (reachable >= target || tries++ > 40) {
+        window.scrollTo(0, target);
+        pendingScrollRef.current = null;
+        return;
+      }
+      timer = window.setTimeout(step, 50);
+    };
+    step();
+    return () => clearTimeout(timer);
+  }, [visibleGroups]);
+
+  // Persist the list position (length + scroll) as the user paginates or
+  // scrolls, so the restore above has something to replay. rAF-throttled; the
+  // immediate save() also captures "Show more" count bumps even without a scroll.
+  useEffect(() => {
+    const save = () =>
+      writeSavedListState({ count: visibleCount, scrollY: window.scrollY });
+    save();
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        save();
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [visibleCount]);
 
   const MEMBER_ORG_SLUGS = new Set(["moose-lodge", "sequoia-woods", "blue-lake-springs"]);
   const memberOrgs = orgs.filter((o) => MEMBER_ORG_SLUGS.has(o.slug));
