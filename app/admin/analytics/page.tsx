@@ -37,6 +37,64 @@ async function loadDaily(): Promise<DailyRow[]> {
   return (data as DailyRow[] | null) ?? [];
 }
 
+type NewsletterClicks = {
+  campaignDate: string;
+  sentCount: number;
+  total: number;
+  perEvent: { name: string; clicks: number }[];
+};
+
+// Per-event clicks for the most recent SENT newsletter, from newsletter_clicks
+// (written by the /r/n redirect). Bot-filtered. See PRD-newsletter-click-tracking.md.
+async function loadNewsletterClicks(): Promise<NewsletterClicks | null> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return null;
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const { data: draft } = await supabase
+    .from("newsletter_drafts")
+    .select("id, target_send_date, sent_count")
+    .eq("status", "sent")
+    .order("target_send_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!draft) return null;
+
+  const { data: clicks } = await supabase
+    .from("newsletter_clicks")
+    .select("event_id, slug")
+    .eq("campaign_id", draft.id)
+    .eq("is_bot", false);
+  const rows = (clicks as { event_id: string | null; slug: string | null }[] | null) ?? [];
+
+  const counts = new Map<string, { slug: string | null; clicks: number }>();
+  for (const r of rows) {
+    const key = r.event_id ?? r.slug ?? "unknown";
+    const cur = counts.get(key) ?? { slug: r.slug, clicks: 0 };
+    cur.clicks++;
+    counts.set(key, cur);
+  }
+
+  const idKeys = [...counts.keys()].filter((k) => /^[0-9a-f-]{36}$/i.test(k));
+  const nameById = new Map<string, string>();
+  if (idKeys.length) {
+    const { data: evs } = await supabase.from("hwy4_events").select("id, name").in("id", idKeys);
+    for (const e of (evs as { id: string; name: string }[] | null) ?? []) nameById.set(e.id, e.name);
+  }
+
+  const perEvent = [...counts.entries()]
+    .map(([key, v]) => ({ name: nameById.get(key) ?? v.slug ?? "(unknown event)", clicks: v.clicks }))
+    .sort((a, b) => b.clicks - a.clicks);
+
+  return {
+    campaignDate: draft.target_send_date as string,
+    sentCount: (draft.sent_count as number) ?? 0,
+    total: rows.length,
+    perEvent,
+  };
+}
+
 // --- aggregation (rows are newest-first) ---------------------------------
 
 function sumLast(rows: DailyRow[], n: number) {
@@ -89,6 +147,8 @@ function fmtDay(iso: string): string {
 
 export default async function GrowthPage() {
   const rows = await loadDaily();
+  const newsletterClicks = await loadNewsletterClicks();
+  const nlMax = newsletterClicks ? Math.max(1, ...newsletterClicks.perEvent.map((e) => e.clicks)) : 1;
   const hasData = rows.some((r) => r.pageviews > 0);
 
   const last7 = sumLast(rows, 7);
@@ -197,6 +257,39 @@ export default async function GrowthPage() {
             Search-engine performance (Google/Bing) is tracked separately by the cockpit&rsquo;s SEO
             collector and surfaces in the nightly digest on <a href="/admin/today" style={{ color: "#2d5016" }}>Today</a>.
           </p>
+        </>
+      )}
+
+      {newsletterClicks && newsletterClicks.perEvent.length > 0 && (
+        <>
+          <SectionHeader>Newsletter clicks · {fmtDay(newsletterClicks.campaignDate)} send</SectionHeader>
+          <section style={cardStyle}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+              {newsletterClicks.perEvent.map((e, i) => (
+                <div key={i}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                    <span style={{ color: "#2d3a22", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {e.name}
+                    </span>
+                    <span style={{ color: "#2d5016", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{nf(e.clicks)}</span>
+                  </div>
+                  <div style={{ height: 4, background: "#f0ede8", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.round((e.clicks / nlMax) * 100)}%`, background: "#9bb87a", borderRadius: 2 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p style={{ color: "#999", fontSize: 12, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
+              {nf(newsletterClicks.total)} event-link click{newsletterClicks.total === 1 ? "" : "s"}
+              {newsletterClicks.sentCount > 0
+                ? ` across ${nf(newsletterClicks.sentCount)} recipients (~${Math.round(
+                    (newsletterClicks.total / newsletterClicks.sentCount) * 100
+                  )}% clicked an event)`
+                : ""}
+              . Bot-filtered and directional — email scanners pre-click links, so read it as a relative
+              ranking, not a precise count.
+            </p>
+          </section>
         </>
       )}
     </div>

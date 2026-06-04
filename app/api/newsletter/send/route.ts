@@ -10,6 +10,7 @@ import {
   getRecentBriefings,
   generateNewsletter,
   buildEmailHtml,
+  buildSlugToEventId,
   buildSubject,
   todayISO,
 } from "@/lib/newsletter";
@@ -63,12 +64,13 @@ export async function GET(request: Request) {
       const subject = buildSubject(todayISO());
       const resend = new Resend(resendApiKey);
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=test-token`;
+      const testTracking = { campaignId: "test", slugToEventId: buildSlugToEventId(events) };
       await resend.emails.send({
         from: `${SITE_NAME} <newsletter@hwy4events.com>`,
         replyTo: "robgabel@gmail.com",
         to: testEmail,
         subject,
-        html: buildEmailHtml(robNoteResult.body, content, unsubscribeUrl),
+        html: buildEmailHtml(robNoteResult.body, content, unsubscribeUrl, testTracking),
         headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
       });
       return NextResponse.json({ ok: true, test: true, sent: 1, subject });
@@ -112,11 +114,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, sent: 0, skipped: true, reason });
     }
 
-    const [subscribers, robNoteResult] = await Promise.all([
+    const [subscribers, robNoteResult, eventsForLinks] = await Promise.all([
       getActiveSubscribers(),
       getRobNote(),
+      getUpcomingEvents(),
     ]);
     const robNote = robNoteResult.body;
+    const tracking = { campaignId: draft.id, slugToEventId: buildSlugToEventId(eventsForLinks) };
 
     if (subscribers.length === 0) {
       return NextResponse.json({ ok: true, message: "No active subscribers", sent: 0 });
@@ -139,7 +143,7 @@ export async function GET(request: Request) {
           replyTo: "robgabel@gmail.com",
           to: sub.email,
           subject,
-          html: buildEmailHtml(robNote, content, unsubscribeUrl),
+          html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
           headers: {
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
           },
