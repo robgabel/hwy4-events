@@ -1,6 +1,6 @@
 # PRD — Event Poster Loop
 
-**Status:** Phase 1 + generator implemented in the worktree (2026-06-03) — see Implementation status below.
+**Status:** Phase 1 + generator (2026-06-03) and the organizer poster-swap / claim-upload (§10, 2026-06-04) shipped — see Implementation status below.
 **Owner:** Rob
 **Origin:** `/brain scott-belsky` working session + `/predict` cascade, 2026-06-02.
 
@@ -20,6 +20,17 @@ Production build passes; the poster renders live from the database (verified on 
 **To go live:** (1) apply `20260603_add_share_hits.sql` to the Hwy4Events Supabase; (2) commit + merge the branch → Vercel auto-deploys (`SUPABASE_SERVICE_ROLE_KEY` already set; fonts committed under `public/fonts/`).
 
 **Follow-ups (not blocking):** swap the styled-placeholder QR for a real encoder; finish the 8-category motif set (frog / chess / mic / bee / wine glass / Big-Tree fallback exist today); download-click attribution; the detail-page rail still prints "Community Submission" as the source label (already suppressed on the poster itself).
+
+### Organizer poster-swap / claim-upload (§10) — built + verified 2026-06-04
+
+The last workstream of the loop: an organizer swaps in their own poster, a human approves it, and the poster system shows their art untouched (`posterKind → "supplied"`). A "swap" is just setting `hwy4_events.image_url`.
+
+- **Data + storage** — `supabase/migrations/20260604_poster_submissions.sql`: `poster_submissions` table (RLS + service-role-only policy in the same migration) and a **public `event-posters` Storage bucket** (public read, 8 MB + image-MIME backstop). Uploads go through the API route as service-role, never anon-direct.
+- **Submit path** — an unobtrusive "Organizer? Swap in your own poster" link on the detail page → `app/events/[slug]/submit-poster/page.tsx` (shows the current poster next to an upload form, [components/SubmitPosterForm.tsx](components/SubmitPosterForm.tsx)) → [app/api/submit-poster/route.ts](app/api/submit-poster/route.ts) validates (type + ≤4 MB; the Vercel 4.5 MB body cap, since D1 routes the upload through the function), uploads to `event-posters`, inserts a `pending` row, and pings Slack `#hwy4events` with a `/admin/posters` link.
+- **Review path** — [app/admin/posters/page.tsx](app/admin/posters/page.tsx) + [actions.ts](app/admin/posters/actions.ts) behind the existing Basic Auth (nav badge with pending count). Shows the current poster next to the submitted one. **Approve** sets `image_url` + `poster_locked=true` on **every upcoming row of the event series** (matched via the shared `isSameEvent` with the date stripped, so a weekly event's many rows all get the art), marks the submission `approved`, and busts the `events` cache tag + affected detail paths. **Dismiss** marks it `rejected` and removes the orphaned upload.
+- **Verified locally:** production build (53 static pages); detail-page link + submit page render (generated poster shown as the "current" art); admin page renders behind auth (401 without); API route validation 400s with no side effects; the date-stripped `isSameEvent` proven to match recurring rows and reject different events.
+
+**To go live:** the migration is already applied to the shared Supabase (`uzediwokyshjbsymevtp`) and the bucket exists; just merge → Vercel auto-deploys (`SUPABASE_SERVICE_ROLE_KEY` + `SLACK_WEBHOOK_URL` already set). **v1 scope:** one-off submission per event, no organizer accounts; recurring events re-lock per new future row over time (same caveat as `poster_locked`).
 
 ---
 
