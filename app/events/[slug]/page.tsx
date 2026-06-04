@@ -421,6 +421,16 @@ export default async function EventPage({ params }: PageProps) {
                 </a>
               </p>
             )}
+
+            <p className="mt-4 text-sm text-stone">
+              See something off?{" "}
+              <Link
+                href={`/events/${slug}/report`}
+                className="font-medium text-pine underline underline-offset-2 hover:text-forest"
+              >
+                Suggest a fix
+              </Link>
+            </p>
           </div>
         </div>
 
