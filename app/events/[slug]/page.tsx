@@ -353,17 +353,19 @@ export default async function EventPage({ params }: PageProps) {
               )}
             </dl>
 
-            {/* actions — Share + Download are the loop's two doors */}
+            {/* Actions. Share is the primary door (the shared link is the growth loop);
+                download, calendar, and directions are secondary. */}
             <div className="mt-6 flex flex-wrap gap-2.5">
               <ShareButton
                 url={`${SITE_URL}/events/${slug}`}
                 title={event.name}
                 text={`${event.name} at ${event.venue_name} in ${event.town}`}
+                variant="primary"
               />
               <a
                 href={downloadHref}
                 download
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-sunset px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sunset/90"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest transition-colors hover:border-pine/30 hover:text-pine"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />

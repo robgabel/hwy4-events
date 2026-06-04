@@ -6,9 +6,10 @@ interface ShareButtonProps {
   url: string;
   title: string;
   text?: string;
+  variant?: "primary" | "secondary";
 }
 
-export default function ShareButton({ url, title, text }: ShareButtonProps) {
+export default function ShareButton({ url, title, text, variant = "secondary" }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
   // Tag the shared link so the recipient's landing is attributed to a share
@@ -43,11 +44,13 @@ export default function ShareButton({ url, title, text }: ShareButtonProps) {
     }
   }
 
+  const className =
+    variant === "primary"
+      ? "inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-sunset px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sunset/90"
+      : "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest hover:border-pine/30 hover:text-pine transition-colors";
+
   return (
-    <button
-      onClick={handleShare}
-      className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest hover:border-pine/30 hover:text-pine transition-colors"
-    >
+    <button onClick={handleShare} className={className}>
       {copied ? (
         <>
           <svg
