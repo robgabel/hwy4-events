@@ -279,44 +279,20 @@ export default function EventList({
     return null;
   }, [groups, now]);
 
-  // Progressive rendering: only hydrate a small initial batch, then load more
-  // as the user scrolls. This keeps hydration fast (<2s) even with 200+ events.
-  const INITIAL_EVENTS = 15;
-  const BATCH_SIZE = 20;
-  // Auto-load on scroll for the first couple of batches, then hand control
-  // back with an explicit "Show more" button. Pure infinite scroll never lets
-  // the page end, so the footer (town directory, what's-on links, submit CTA)
-  // becomes unreachable — the list keeps growing as you approach the bottom.
-  // Capping the auto-load gives the page a real terminus and locks the footer in.
-  const AUTO_LOAD_LIMIT = 55; // initial 15 + two auto-batches
+  // Progressive rendering: only hydrate a small initial batch, then load the
+  // rest in button-driven pages. This keeps hydration fast (<2s) even with
+  // 200+ events, and the explicit button gives the page a real terminus so the
+  // footer (town directory, what's-on links, submit CTA) is always reachable.
+  const INITIAL_EVENTS = 25;
+  const BATCH_SIZE = 50;
   const totalEvents = filtered.length;
   const [visibleCount, setVisibleCount] = useState(INITIAL_EVENTS);
-  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Reset visible count when filters change (show initial batch of new results)
   const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}-${freeOnly}`;
   useEffect(() => {
     setVisibleCount(INITIAL_EVENTS);
   }, [filteredKey]);
-
-  // IntersectionObserver to auto-load more events on scroll — but only up to
-  // AUTO_LOAD_LIMIT, so the infinite scroll terminates and the footer stays
-  // reachable. Past the limit, loading is driven by the "Show more" button.
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || visibleCount >= totalEvents || visibleCount >= AUTO_LOAD_LIMIT)
-      return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + BATCH_SIZE, totalEvents));
-        }
-      },
-      { rootMargin: "400px" }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [visibleCount, totalEvents]);
 
   // Slice groups to only include the visible event count
   const visibleGroups = useMemo(() => {
@@ -455,35 +431,26 @@ export default function EventList({
                 </section>
               </div>
             ))}
-            {/* List terminus: auto-load a couple of batches for an effortless
-             * browse, then require a click so the page ends and the footer
-             * (towns, what's-on, submit) is always reachable. */}
+            {/* List terminus: load each next page on an explicit click so the
+             * page ends and the footer (towns, what's-on, submit) is always
+             * reachable. */}
             {visibleCount < totalEvents ? (
-              visibleCount < AUTO_LOAD_LIMIT ? (
-                <div
-                  ref={sentinelRef}
-                  className="py-4 text-center text-sm text-stone"
+              <div className="flex flex-col items-center gap-3 py-8">
+                <button
+                  onClick={() =>
+                    setVisibleCount((prev) =>
+                      Math.min(prev + BATCH_SIZE, totalEvents)
+                    )
+                  }
+                  className="cursor-pointer rounded-lg bg-pine px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-forest"
                 >
-                  Loading more events…
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3 py-8">
-                  <button
-                    onClick={() =>
-                      setVisibleCount((prev) =>
-                        Math.min(prev + BATCH_SIZE, totalEvents)
-                      )
-                    }
-                    className="cursor-pointer rounded-lg bg-pine px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-forest"
-                  >
-                    Show {Math.min(BATCH_SIZE, totalEvents - visibleCount)} more
-                    events
-                  </button>
-                  <span className="text-xs text-stone">
-                    Showing {visibleCount} of {totalEvents}
-                  </span>
-                </div>
-              )
+                  Show {Math.min(BATCH_SIZE, totalEvents - visibleCount)} more
+                  events
+                </button>
+                <span className="text-xs text-stone">
+                  Showing {visibleCount} of {totalEvents}
+                </span>
+              </div>
             ) : (
               totalEvents > INITIAL_EVENTS && (
                 <p className="py-8 text-center text-sm text-stone">
