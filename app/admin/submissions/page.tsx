@@ -61,8 +61,8 @@ export default async function SubmissionsAdminPage({
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 24, margin: "0 0 4px" }}>Community submissions</h1>
-      <p style={{ color: "#666", fontSize: 14, margin: "0 0 24px", lineHeight: 1.5 }}>
+      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Community submissions</h1>
+      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
         Events neighbors sent in through the submit form. Review the details, fill in anything
         missing (venue and category are often blank), then publish to the site or dismiss.
       </p>
@@ -97,17 +97,17 @@ function SubmissionCard({ sub, isPast }: { sub: Submission; isPast: boolean }) {
       }}
     >
       <header style={{ marginBottom: 14 }}>
-        <h2 style={{ color: "#2d5016", fontSize: 17, margin: "0 0 4px", fontWeight: 600 }}>
+        <h2 style={{ color: "#2d5016", fontSize: 19, margin: "0 0 4px", fontWeight: 600 }}>
           {sub.event_name}
         </h2>
-        <p style={{ color: "#666", fontSize: 13, margin: 0 }}>
+        <p style={{ color: "#666", fontSize: 15, margin: 0 }}>
           <strong>{fmtDate(sub.event_date)}</strong>
           {sub.town ? ` · ${sub.town}` : ""}
           {sub.submitter_name ? ` · from ${sub.submitter_name}` : " · anonymous"}
           {sub.submitter_email ? ` (${sub.submitter_email})` : ""}
         </p>
         {isPast && (
-          <p style={{ color: "#922b21", fontSize: 12, margin: "6px 0 0", fontWeight: 600 }}>
+          <p style={{ color: "#922b21", fontSize: 14, margin: "6px 0 0", fontWeight: 600 }}>
             This date is today or already passed. Publish only if it is still relevant.
           </p>
         )}
@@ -149,7 +149,7 @@ function SubmissionCard({ sub, isPast }: { sub: Submission; isPast: boolean }) {
           <button type="submit" style={primaryBtn}>
             Publish to site
           </button>
-          <span style={{ fontSize: 12, color: "#999" }}>
+          <span style={{ fontSize: 14, color: "#999" }}>
             Inserts a public, community-sourced event.
           </span>
         </div>
@@ -232,7 +232,7 @@ function Banner({ tone, children }: { tone: "ok" | "error"; children: React.Reac
       ? { background: "#eaf7ea", border: "1px solid #b7e0b7", color: "#2d5016" }
       : { background: "#fdecea", border: "1px solid #f5b7b1", color: "#922b21" };
   return (
-    <div style={{ ...s, padding: "12px 16px", borderRadius: 8, fontSize: 14, marginBottom: 16 }}>
+    <div style={{ ...s, padding: "12px 16px", borderRadius: 8, fontSize: 16, marginBottom: 16 }}>
       {children}
     </div>
   );
@@ -249,10 +249,10 @@ function EmptyState() {
         textAlign: "center",
       }}
     >
-      <p style={{ color: "#2d5016", fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>
+      <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
         No pending submissions.
       </p>
-      <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
+      <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
         When neighbors submit events at /submit, they show up here for review.
       </p>
     </section>
@@ -261,7 +261,7 @@ function EmptyState() {
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: 11,
+  fontSize: 13,
   fontWeight: 600,
   textTransform: "uppercase",
   letterSpacing: "0.05em",
@@ -273,7 +273,7 @@ const inputStyle: React.CSSProperties = {
   padding: "8px 10px",
   border: "1px solid #d9d4cc",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   color: "#2d3a22",
   background: "#fff",
   boxSizing: "border-box",
@@ -289,7 +289,7 @@ const primaryBtn: React.CSSProperties = {
   color: "#fff",
   border: "none",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -299,7 +299,7 @@ const dangerBtn: React.CSSProperties = {
   color: "#922b21",
   border: "1px solid #e6b8b3",
   borderRadius: 8,
-  fontSize: 13,
+  fontSize: 15,
   fontWeight: 500,
   cursor: "pointer",
 };

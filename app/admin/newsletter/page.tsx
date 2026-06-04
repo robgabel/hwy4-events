@@ -62,10 +62,10 @@ export default async function NewsletterDraftAdminPage({
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 24, margin: "0 0 4px" }}>
+      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>
         Weekly Newsletter — Draft &amp; Approve
       </h1>
-      <p style={{ color: "#666", fontSize: 14, margin: "0 0 24px" }}>
+      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px" }}>
         Wednesday&rsquo;s cron drafts the weekly email. It{" "}
         <strong>auto-sends Thursday morning</strong> unless you <strong>veto</strong>{" "}
         it here first — you have ~24 hours. Edit freely; edits ship too. Only a
@@ -77,11 +77,11 @@ export default async function NewsletterDraftAdminPage({
 
       {!current ? (
         <section style={cardStyle}>
-          <p style={{ color: "#666", fontSize: 14, margin: 0 }}>
+          <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
             No draft yet. Wednesday&rsquo;s <code>/api/newsletter/prepare</code> cron
             will create one, or trigger it manually:
             <br />
-            <code style={{ fontSize: 12 }}>
+            <code style={{ fontSize: 14 }}>
               curl -H &quot;Authorization: Bearer $CRON_SECRET&quot;
               https://hwy4events.com/api/newsletter/prepare
             </code>
@@ -91,10 +91,10 @@ export default async function NewsletterDraftAdminPage({
         <section style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
             <StatusTag status={current.status} />
-            <span style={{ color: "#333", fontSize: 14, fontWeight: 600 }}>
+            <span style={{ color: "#333", fontSize: 16, fontWeight: 600 }}>
               Ships {fmtDate(current.target_send_date)}
             </span>
-            <span style={{ color: "#999", fontSize: 12 }}>
+            <span style={{ color: "#999", fontSize: 14 }}>
               {current.event_count ?? "?"} events
               {current.edited ? " · edited" : ""}
               {current.model ? ` · ${current.model}` : ""}
@@ -155,7 +155,7 @@ export default async function NewsletterDraftAdminPage({
                 Preview email →
               </a>
             </div>
-            <p style={{ color: "#999", fontSize: 12, margin: "10px 0 0" }}>
+            <p style={{ color: "#999", fontSize: 14, margin: "10px 0 0" }}>
               Note: Thursday&rsquo;s send ships exactly the text above. The
               &ldquo;From Rob&rdquo; block is managed separately under{" "}
               <a href="/admin/newsletter-note" style={{ color: "#2d5016" }}>Newsletter notes</a>.
@@ -166,7 +166,7 @@ export default async function NewsletterDraftAdminPage({
 
       {history.length > 0 && (
         <section style={{ marginTop: 8 }}>
-          <h2 style={{ color: "#2d5016", fontSize: 16, margin: "0 0 12px" }}>Recent</h2>
+          <h2 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 12px" }}>Recent</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {history.map((d) => (
               <div
@@ -183,10 +183,10 @@ export default async function NewsletterDraftAdminPage({
                 }}
               >
                 <StatusTag status={d.status} />
-                <span style={{ color: "#333", fontSize: 14 }}>{fmtDate(d.target_send_date)}</span>
-                <span style={{ color: "#666", fontSize: 13, flex: 1 }}>{d.subject}</span>
+                <span style={{ color: "#333", fontSize: 16 }}>{fmtDate(d.target_send_date)}</span>
+                <span style={{ color: "#666", fontSize: 15, flex: 1 }}>{d.subject}</span>
                 {d.status === "sent" && (
-                  <span style={{ color: "#999", fontSize: 12 }}>
+                  <span style={{ color: "#999", fontSize: 14 }}>
                     sent to {d.sent_count ?? "?"}
                   </span>
                 )}
@@ -216,7 +216,7 @@ function StatusTag({ status }: { status: Draft["status"] }) {
   return (
     <span
       style={{
-        fontSize: 11,
+        fontSize: 13,
         fontWeight: 700,
         letterSpacing: "0.06em",
         textTransform: "uppercase",
@@ -241,7 +241,7 @@ function Banner({ kind, children }: { kind: "ok" | "error"; children: React.Reac
         color: ok ? "#2d5016" : "#922b21",
         padding: "12px 16px",
         borderRadius: 8,
-        fontSize: 14,
+        fontSize: 16,
         marginBottom: 16,
       }}
     >
@@ -261,7 +261,7 @@ const cardStyle: React.CSSProperties = {
 const fieldLabelStyle: React.CSSProperties = {
   display: "block",
   color: "#333",
-  fontSize: 13,
+  fontSize: 15,
   fontWeight: 600,
   marginBottom: 4,
 };
@@ -271,7 +271,7 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "10px 12px",
-  fontSize: 14,
+  fontSize: 16,
   border: "1px solid #d4cdbf",
   borderRadius: 8,
   fontFamily: "inherit",
@@ -291,7 +291,7 @@ const primaryBtnStyle: React.CSSProperties = {
   color: "#fff",
   border: "none",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -302,7 +302,7 @@ const secondaryBtnStyle: React.CSSProperties = {
   color: "#2d5016",
   border: "1px solid #2d5016",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 500,
   cursor: "pointer",
 };
@@ -313,7 +313,7 @@ const dangerBtnStyle: React.CSSProperties = {
   color: "#922b21",
   border: "1px solid #e6b8b3",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 500,
   cursor: "pointer",
 };
@@ -324,7 +324,7 @@ const ghostBtnStyle: React.CSSProperties = {
   color: "#666",
   border: "1px solid #d4cdbf",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 500,
   cursor: "pointer",
 };
