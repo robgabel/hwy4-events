@@ -56,6 +56,8 @@ export interface Hwy4Event {
   importance: EventImportance | null;
   dedup_key: string | null;
   last_scraped_at: string | null;
+  /** DB-maintained row last-modified. Drives honest sitemap <lastmod>. */
+  updated_at?: string | null;
   image_url: string | null;
   robs_pick: boolean;
   is_weekly: boolean;

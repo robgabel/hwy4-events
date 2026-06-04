@@ -18,6 +18,7 @@ import { unstable_cache } from "next/cache";
 import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event } from "@/lib/types";
 import { dedupeEvents } from "@/lib/dedupe-events";
+import type { SitemapEventRow } from "@/lib/sitemap";
 
 export const EVENTS_CACHE_TAG = "events";
 const REVALIDATE_SECONDS = 1800; // 30 min upper bound on staleness
@@ -31,7 +32,7 @@ const EVENT_COLUMNS =
   "id, name, description, date, start_time, end_time, venue_name, town, " +
   "address, category, artists, status, price, cost_tier, event_url, " +
   "source_event_id, image_url, visibility, org_slug, robs_pick, is_weekly, " +
-  "verification_status, community_sourced, last_scraped_at";
+  "verification_status, community_sourced, last_scraped_at, updated_at";
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
   const today = new Date().toISOString().split("T")[0];
@@ -92,16 +93,17 @@ export async function getEventsInTown(
   return all.filter((e) => e.town === townName).slice(0, limit);
 }
 
-/** Minimal rows for sitemap URL generation. */
-export async function getUpcomingEventSlugRows(): Promise<
-  { id: string; name: string; date: string; town: string }[]
-> {
+/** Minimal rows for sitemap URL generation: identity + the recency/curation
+ *  signals the sitemap selector needs (honest lastmod, keep-curated-picks). */
+export async function getUpcomingEventSlugRows(): Promise<SitemapEventRow[]> {
   const all = await getUpcomingEvents();
   return all.map((e) => ({
     id: e.id,
     name: e.name,
     date: e.date,
     town: e.town,
+    updated_at: e.updated_at ?? null,
+    robs_pick: e.robs_pick,
   }));
 }
 
