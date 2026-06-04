@@ -8,7 +8,7 @@ import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
 import { buildEventOffer } from "@/lib/schema";
 import { findEventBySlug } from "@/lib/events";
-import { posterKind, posterImageUrl, generatedPosterPath, withSrc } from "@/lib/poster";
+import { posterKind, posterImageUrl, generatedPosterPath, withSrc, humanizeHost } from "@/lib/poster";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
@@ -310,9 +310,9 @@ export default async function EventPage({ params }: PageProps) {
             <h1 className="font-display text-3xl font-bold leading-tight text-forest sm:text-4xl">
               {event.name}
             </h1>
-            {event.source_name && !/gocalaveras/i.test(event.source_name) && (
+            {humanizeHost(event.source_name, event.name) && (
               <p className="mt-2 text-sm font-semibold uppercase tracking-wide text-earth">
-                {event.source_name}
+                {humanizeHost(event.source_name, event.name)}
               </p>
             )}
 

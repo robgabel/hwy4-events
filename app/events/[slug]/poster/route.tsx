@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
 import { format, parseISO } from "date-fns";
 import { findEventBySlug } from "@/lib/events";
-import { posterKind } from "@/lib/poster";
+import { posterKind, humanizeHost } from "@/lib/poster";
 import { resolveDisplayAddress } from "@/lib/address";
 import type { EventCategory, Hwy4Event } from "@/lib/types";
 import QRCode from "qrcode";
@@ -79,12 +79,16 @@ function motifSvg(cat: EventCategory): string {
         <path d="M14,46 Q128,104 242,46" fill="none" stroke="#3f6b4d" stroke-width="3"/>
         <g fill="#e3a72f" stroke="#3f6b4d" stroke-width="1.5"><circle cx="44" cy="62" r="7"/><circle cx="86" cy="80" r="7"/><circle cx="128" cy="88" r="7"/><circle cx="170" cy="80" r="7"/><circle cx="212" cy="62" r="7"/></g>
         <g transform="translate(6,40) scale(0.80)" fill="#1e3b2d"><path d="M249.66,46.34l-40-40a8,8,0,0,0-11.32,11.32L200.69,20,140.52,80.16C117.73,68.3,92.21,69.29,76.75,84.74a42.27,42.27,0,0,0-9.39,14.37A8.24,8.24,0,0,1,59.81,104c-14.59.49-27.26,5.72-36.65,15.11C11.08,131.22,6,148.6,8.74,168.07,11.4,186.7,21.07,205.15,36,220s33.34,24.56,52,27.22A71.13,71.13,0,0,0,98.1,248c15.32,0,28.83-5.23,38.76-15.16,9.39-9.39,14.62-22.06,15.11-36.65a8.24,8.24,0,0,1,4.92-7.55,42.22,42.22,0,0,0,14.37-9.39c15.45-15.46,16.44-41,4.58-63.77L236,55.31l2.34,2.35a8,8,0,0,0,11.32-11.32ZM135.8,159.79a28,28,0,1,1,0-39.59A28,28,0,0,1,135.8,159.79Z"/></g>`);
-    case "festival": // bunting + Phosphor tent + door
+    case "festival": // Ferris wheel — fair / celebration (clean primitives)
       return motifWrap("0 0 256 256", `
-        <path d="M14,52 Q128,34 242,52" fill="none" stroke="#1e3b2d" stroke-width="2.5"/>
-        <g stroke="#1e3b2d" stroke-width="1.5"><path d="M30,50 l20,2 l-12,18 Z" fill="#e3a72f"/><path d="M64,53 l20,1 l-11,18 Z" fill="#c8642f"/><path d="M98,54 l20,0 l-10,18 Z" fill="#5b8c5a"/><path d="M150,54 l20,0 l-10,18 Z" fill="#e3a72f"/><path d="M184,53 l20,-1 l-9,18 Z" fill="#c8642f"/><path d="M218,50 l20,-2 l-9,18 Z" fill="#5b8c5a"/></g>
-        <g transform="translate(0,18)" fill="#1e3b2d"><path d="M255.31,188.75l-64-144A8,8,0,0,0,184,40H72a8,8,0,0,0-7.31,4.75h0l0,.12v0L.69,188.75A8,8,0,0,0,8,200H248a8,8,0,0,0,7.31-11.25ZM64,184H20.31L64,85.7Zm16,0V85.7L123.69,184Z"/></g>
-        <path d="M104,200 v-26 a24,24 0 0 1 48,0 v26 Z" fill="#f4edda" transform="translate(0,18)"/>`);
+        <g stroke="#1e3b2d" stroke-width="8" stroke-linecap="round"><line x1="92" y1="222" x2="128" y2="120"/><line x1="164" y1="222" x2="128" y2="120"/></g>
+        <line x1="80" y1="224" x2="176" y2="224" stroke="#1e3b2d" stroke-width="8" stroke-linecap="round"/>
+        <circle cx="128" cy="116" r="76" fill="none" stroke="#1e3b2d" stroke-width="9"/>
+        <g stroke="#1e3b2d" stroke-width="4"><line x1="128" y1="116" x2="204" y2="116"/><line x1="128" y1="116" x2="182" y2="170"/><line x1="128" y1="116" x2="128" y2="192"/><line x1="128" y1="116" x2="74" y2="170"/><line x1="128" y1="116" x2="52" y2="116"/><line x1="128" y1="116" x2="74" y2="62"/><line x1="128" y1="116" x2="128" y2="40"/><line x1="128" y1="116" x2="182" y2="62"/></g>
+        <g stroke="#1e3b2d" stroke-width="2"><circle cx="204" cy="116" r="11" fill="#e3a72f"/><circle cx="182" cy="170" r="11" fill="#c8642f"/><circle cx="128" cy="192" r="11" fill="#5b8c5a"/><circle cx="74" cy="170" r="11" fill="#e3a72f"/><circle cx="52" cy="116" r="11" fill="#c8642f"/><circle cx="74" cy="62" r="11" fill="#5b8c5a"/><circle cx="128" cy="40" r="11" fill="#e3a72f"/><circle cx="182" cy="62" r="11" fill="#c8642f"/></g>
+        <circle cx="128" cy="116" r="10" fill="#1e3b2d"/>
+        <line x1="128" y1="40" x2="128" y2="20" stroke="#1e3b2d" stroke-width="3"/>
+        <path d="M128,20 l18,6 l-18,6 Z" fill="#c8642f"/>`);
     case "kids": // bespoke frog (kept)
       return motifWrap("0 0 200 168", `
         <path d="M28,150 q-14,-4 -6,-26 q6,-16 26,-12 q14,4 4,22 q-8,16 -24,16 Z" fill="#4f8a4c"/>
@@ -199,10 +203,7 @@ export async function GET(
   const end = formatTime(event.end_time);
   const timeStr = start ? (end ? `${start}–${end}` : start) : "All day";
   const addr = resolveDisplayAddress(event.address, event.town);
-  const host =
-    event.source_name && !/gocalaveras|community submission/i.test(event.source_name)
-      ? event.source_name
-      : null;
+  const host = humanizeHost(event.source_name, event.name);
   const free = event.cost_tier === "free";
   const firstSentence = (event.description || "").trim().split(/(?<=[.!?])\s/)[0] || "";
   const tagline = firstSentence
