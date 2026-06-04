@@ -179,7 +179,11 @@ export default async function EventPage({ params }: PageProps) {
 
   const orgs = await getCanonicalOrgs();
   const link = resolveEventLinkFromOrgs(event, orgs);
-  const offerUrl = link.href ?? `${SITE_URL}/events/${slug}`;
+  // JSON-LD offer.url uses the resolved link only when it's durable (organizer/
+  // venue/stable source). A non-durable aggregator fallback (GoCalaveras) renders
+  // as the visible CTA but never enters structured data — point schema at our own
+  // stable page instead, so a churnable permalink can't leak into JSON-LD.
+  const offerUrl = link.durable && link.href ? link.href : `${SITE_URL}/events/${slug}`;
 
   const dateObj = parseISO(event.date);
   const dateStr = format(dateObj, "EEEE, MMMM d, yyyy");

@@ -1,8 +1,10 @@
 # PRD: Event Link Resolution — Link to the Destination, Not the Provenance
 
-> The "external link" on an event page answers the wrong question. It stores **where the scraper found the event** and renders it as **where the user should go.** For ~69% of upcoming events those are the same fragile aggregator URL, and it rots. This is the fix: resolve the displayed link from event *identity* (organizer / venue), not scrape *provenance*.
+> **Update 2026-06-03 — GoCalaveras fallback re-enabled.** The original implementation suppressed GoCalaveras links entirely (`AGGREGATOR_FALLBACK = false`) on the premise that their EventON permalinks churn and 404. Browser-grade verification (Firecrawl, June 2026) found that the current permalinks — including incrementing recurring slugs — return HTTP 200 with correct, current content. The 403 is only against server-side validators (our CI), not a real user's browser. The fallback is now enabled: a GoCalaveras event with no organizer/venue match renders its GoCalaveras link as a **non-durable** CTA. Organizer/venue canonical still wins (primary source first). Community submissions excluded. GoCalaveras links kept out of JSON-LD (`durable:false`). Priority order: organizer → venue → stable-source → GoCalaveras (non-durable) → none.
+
+> The "external link" on an event page answers the wrong question. It stores **where the scraper found the event** and renders it as **where the user should go.** For ~69% of upcoming events those are the same aggregator URL. This is the fix: resolve the displayed link from event *identity* (organizer / venue), not scrape *provenance* — and fall back to the aggregator source link rather than showing nothing.
 >
-> Musk-algorithm framing: **make the requirement less dumb → delete → simplify → accelerate → automate.** The dumb requirement is "link to the page we scraped." Step 1 redefines it to "link to the most authoritative durable page for this event." Everything else follows.
+> Musk-algorithm framing: **make the requirement less dumb → delete → simplify → accelerate → automate.** The dumb requirement is "link to the page we scraped." Step 1 redefines it to "link to the most authoritative durable page for this event, and if there isn't one, show the source." Everything else follows.
 
 ## Context
 

@@ -1,35 +1,49 @@
 // The ONE definition of "where should this event's outbound link go."
 //
-// The bug this fixes: the UI used to link to `event_url` — *where the scraper
-// found the event*. For ~69% of upcoming events that's a GoCalaveras
-// (EventON/WordPress) permalink that mints a new slug per occurrence and
-// trashes the old one, so the link 404s days later (and gocalaveras.com 403s
-// any server trying to validate it). Provenance is not destination.
+// History: the UI used to link to `event_url` — *where the scraper found the
+// event*. For ~69% of upcoming events that's a GoCalaveras (EventON/WordPress)
+// permalink, and the original PRD suppressed those entirely on the belief they
+// churn slugs and 404. Re-verified 2026-06-03 with browser-grade fetches: the
+// current GoCalaveras permalinks (incl. the incrementing recurring slugs) return
+// 200 with correct, current content. The 403 is only against *server-side*
+// validators (our CI), not a real user's browser. So we now render a GoCalaveras
+// link as a best-effort, NON-DURABLE source CTA rather than no button at all.
 //
 // resolveEventLink answers destination from event *identity*, in priority order:
 //   1. organizer canonical  (hwy4_orgs.canonical_url, matched by slug or pattern)
 //   2. venue canonical      (registry URL, caller-supplied)
-//   3. stable-source link   (event_url, only if its host isn't a churning aggregator)
-//   4. none                 (render no outbound CTA — our own page is the destination)
+//   3. stable-source link   (event_url from a durable host, e.g. visitmurphys.com)
+//   4. aggregator fallback  (event_url from GoCalaveras — non-durable source link;
+//                            excluded for community submissions)
+//   5. none                 (community / no source — our own page is the destination)
+//
+// Primary source always wins: a GoCalaveras event that also matches an organizer
+// or venue keeps linking to that organizer/venue, NOT to GoCalaveras.
 //
 // Defined here once and imported by every surface that links out (the event
 // detail page, its JSON-LD, the patriotic detail layout) plus the org matcher
 // reused by /api/verify-events — so "where does this link go" can't drift.
 // Locked by scripts/test/event-link.test.ts.
 
-/** Hosts whose per-event permalinks are not durable (aggregators that churn
- *  slugs and/or bot-wall server validation). We never render these as the CTA
- *  unless AGGREGATOR_FALLBACK is flipped on. Compared case-insensitively with
- *  and without a leading "www.". */
+/** Aggregator hosts we render as a best-effort CTA but never *trust*: their
+ *  per-event permalinks 403 server-side validators and can churn slugs, so we
+ *  keep them out of JSON-LD and out of validateEventUrls, and mark the resolved
+ *  link non-durable. Rendered only when AGGREGATOR_FALLBACK is on (it is).
+ *  Compared case-insensitively with and without a leading "www.". */
 export const UNSTABLE_SOURCE_HOSTS: ReadonlySet<string> = new Set([
   "gocalaveras.com",
 ]);
 
-/** When false (default): an event whose only link is an unstable-host
- *  `event_url` resolves to kind:'none' (no outbound button) — be the
- *  destination, never ship a 404. Flip to true only if we add live,
- *  browser-grade validation for a specific aggregator. */
-export const AGGREGATOR_FALLBACK = false;
+/** When true: an event whose only link is an unstable-host `event_url`
+ *  (GoCalaveras) renders that link as a non-durable source CTA instead of no
+ *  button. Enabled 2026-06-03 after browser-grade fetches (Firecrawl) confirmed
+ *  the current permalinks — including the incrementing recurring slugs the
+ *  original PRD said churn — return 200 with correct, current content; the 403
+ *  is only against server-side validators, not a real user's browser. Community
+ *  submissions are still excluded (we're the source there). The link stays out
+ *  of JSON-LD (durable:false) so a rare stale permalink can't leak into schema.
+ *  See PRD-event-link-resolution.md (reversal note) + CLAUDE.md "Outbound Event Links". */
+export const AGGREGATOR_FALLBACK = true;
 
 export interface LinkOrg {
   slug: string;
@@ -49,6 +63,10 @@ export interface OrgMatchEvent {
 /** Minimal event shape the resolver reads. */
 export interface LinkEvent extends OrgMatchEvent {
   event_url: string | null;
+  /** Community submissions never get the aggregator fallback — we are the source
+   *  of record, so a bare submission stays buttonless rather than linking out to
+   *  an aggregator. Organizer/venue/durable-source links still apply to them. */
+  community_sourced?: boolean | null;
 }
 
 export type LinkKind = "organizer" | "venue" | "source" | "none";
@@ -61,7 +79,8 @@ export interface ResolvedLink {
   kind: LinkKind;
   /** True when the destination is authoritative + durable (organizer/venue, or
    *  a stable-host source). False only when AGGREGATOR_FALLBACK surfaces an
-   *  aggregator link. Consumers use this to decide JSON-LD offer URLs etc. */
+   *  aggregator link. Consumers use this to keep non-durable links out of
+   *  JSON-LD offer URLs and server-side validation. */
   durable: boolean;
 }
 
@@ -81,11 +100,11 @@ function hostOf(url: string): string | null {
   }
 }
 
-/** True if the URL's host is a churning/bot-walled aggregator we neither render
- *  nor server-validate (also true for an unparseable URL). */
+/** True if the URL's host is a churning/bot-walled aggregator we mark non-durable
+ *  and never server-validate (also true for an unparseable URL). */
 export function isUnstableHost(url: string): boolean {
   const h = hostOf(url);
-  if (!h) return true; // unparseable → don't render it
+  if (!h) return true; // unparseable → don't trust it
   return UNSTABLE_SOURCE_HOSTS.has(h) || UNSTABLE_SOURCE_HOSTS.has(`www.${h}`);
 }
 
@@ -127,7 +146,9 @@ export function resolveEventLink(
   ev: LinkEvent,
   opts?: { org?: LinkOrg | null; venueUrl?: string | null; venueName?: string | null }
 ): ResolvedLink {
-  // 1. Organizer canonical — the most authoritative, durable destination.
+  // 1. Organizer canonical — the most authoritative, durable destination. A
+  //    GoCalaveras event that matches an organizer keeps linking here, not to
+  //    GoCalaveras (primary source wins).
   const org = opts?.org;
   if (org?.canonical_url) {
     return {
@@ -148,13 +169,16 @@ export function resolveEventLink(
     };
   }
 
-  // 3. Scraped per-event link — only from a host we trust to be durable.
+  // 3. Scraped per-event link — from a host we trust to be durable.
   if (ev.event_url) {
     if (!isUnstableHost(ev.event_url)) {
       return { href: ev.event_url, label: "Visit Event Page", kind: "source", durable: true };
     }
-    // 3b. Unstable host (e.g. GoCalaveras): suppressed by default.
-    if (AGGREGATOR_FALLBACK) {
+    // 3b. Unstable host (e.g. GoCalaveras): rendered as a best-effort, non-durable
+    //     source link (live in-browser, 403s only server-side). Excluded for
+    //     community submissions (we're the source of record there) and for
+    //     unparseable junk (hostOf null) — only a real aggregator host renders.
+    if (AGGREGATOR_FALLBACK && !ev.community_sourced && hostOf(ev.event_url)) {
       return { href: ev.event_url, label: "Visit Event Page", kind: "source", durable: false };
     }
   }

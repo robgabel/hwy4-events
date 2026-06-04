@@ -1,6 +1,8 @@
 // Regression lock for the ONE "where does this event link to" rule
-// (lib/event-link.ts). The destination must come from event identity
-// (organizer/venue), never from a churning aggregator permalink.
+// (lib/event-link.ts). Primary source (organizer/venue/durable host) always
+// wins. A GoCalaveras permalink renders as a NON-DURABLE source link (verified
+// live in-browser 2026-06-03) — never for community submissions, and never in
+// JSON-LD (callers gate offer URLs on `durable`).
 //
 // Run: `cd scripts && npm test`  (node --test + tsx, zero extra deps)
 
@@ -45,7 +47,7 @@ const GOCAL: LinkOrg = {
 };
 const ORGS = [ART, BIGTREES, GOCAL];
 
-test("organizer canonical wins over a (dead) GoCalaveras event_url", () => {
+test("organizer canonical wins over a GoCalaveras event_url (primary source wins)", () => {
   const r = resolveEventLinkFromOrgs(
     ev({
       name: "Creek Critters @ Big Trees State Park",
@@ -79,13 +81,30 @@ test("direct org_slug match resolves to that org's canonical", () => {
   assert.equal(org?.slug, "arnold-rim-trail");
 });
 
-test("GoCalaveras-only event with no matching org → no outbound CTA", () => {
+test("GoCalaveras-only event with no matching org → non-durable source link", () => {
+  const url = "https://www.gocalaveras.com/events/some-random-vendor-fair-7/";
   const r = resolveEventLinkFromOrgs(
     ev({
       name: "Some Random Vendor Fair",
       venue_name: "Murphys Community Park",
       org_slug: "gocalaveras",
-      event_url: "https://www.gocalaveras.com/events/some-random-vendor-fair-7/",
+      event_url: url,
+    }),
+    ORGS
+  );
+  assert.equal(r.kind, "source");
+  assert.equal(r.href, url);
+  assert.equal(r.durable, false);
+});
+
+test("community submission with a GoCalaveras url stays buttonless (no aggregator fallback)", () => {
+  const r = resolveEventLinkFromOrgs(
+    ev({
+      name: "Neighbor Potluck",
+      venue_name: "Someone's Backyard",
+      org_slug: "gocalaveras",
+      event_url: "https://www.gocalaveras.com/events/neighbor-potluck/",
+      community_sourced: true,
     }),
     ORGS
   );
@@ -93,7 +112,19 @@ test("GoCalaveras-only event with no matching org → no outbound CTA", () => {
   assert.equal(r.href, null);
 });
 
-test("stable-host event_url (Visit Murphys) renders as a source link", () => {
+test("community exclusion is narrow: a durable (facebook) url still links out", () => {
+  const r = resolveEventLink(
+    ev({
+      name: "Show",
+      event_url: "https://www.facebook.com/events/123",
+      community_sourced: true,
+    })
+  );
+  assert.equal(r.kind, "source");
+  assert.equal(r.durable, true);
+});
+
+test("stable-host event_url (Visit Murphys) renders as a durable source link", () => {
   const r = resolveEventLink(
     ev({ name: "Wine Walk", event_url: "https://visitmurphys.com/events/wine-walk" })
   );
@@ -105,6 +136,7 @@ test("stable-host event_url (Visit Murphys) renders as a source link", () => {
 test("facebook event links are treated as a durable source (not aggregator-suppressed)", () => {
   const r = resolveEventLink(ev({ name: "Show", event_url: "https://www.facebook.com/events/123" }));
   assert.equal(r.kind, "source");
+  assert.equal(r.durable, true);
 });
 
 test("priority: organizer beats venue beats source", () => {
@@ -127,15 +159,18 @@ test("priority: organizer beats venue beats source", () => {
   assert.equal(r2.href, "https://venue.example/x");
 });
 
-test("www. and bare gocalaveras.com are both suppressed", () => {
+test("www. and bare gocalaveras.com both render as a non-durable source", () => {
   for (const url of [
     "https://gocalaveras.com/events/x/",
     "https://www.gocalaveras.com/events/x/",
   ]) {
-    assert.equal(resolveEventLink(ev({ name: "x", event_url: url })).kind, "none");
+    const r = resolveEventLink(ev({ name: "x", event_url: url }));
+    assert.equal(r.kind, "source");
+    assert.equal(r.durable, false);
+    assert.equal(r.href, url);
   }
 });
 
-test("unparseable event_url → none", () => {
+test("unparseable event_url → none (junk never renders as a link)", () => {
   assert.equal(resolveEventLink(ev({ name: "x", event_url: "not a url" })).kind, "none");
 });
