@@ -11,6 +11,7 @@ import {
   formatShortMonth,
   formatShortMonthDay,
 } from "@/lib/date-utils";
+import { isLocalImage } from "@/lib/images";
 import Image from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -152,6 +153,8 @@ export default function EventCard({
   const accentColor = CATEGORY_ACCENT_COLORS[event.category];
 
   const townHasPage = getTownContent(townSlug(event.town)) !== null;
+
+  const thumbnailSrc = getEventImage(event);
 
   return (
     <article
@@ -454,17 +457,30 @@ export default function EventCard({
         </div>
       </div>
 
-      {/* Thumbnail */}
+      {/* Thumbnail. Local category/venue art goes through next/image
+          (optimized); an external poster (event.image_url, arbitrary host)
+          renders with a plain <img> so an un-allowlisted host can't throw and
+          500 the page — see lib/images.ts and the matching detail-page hero. */}
       <div className="hidden shrink-0 sm:block">
         <div className="relative h-20 w-20 overflow-hidden rounded-lg">
-          <Image
-            src={getEventImage(event)}
-            alt=""
-            fill
-            className="object-cover"
-            sizes="80px"
-            loading="lazy"
-          />
+          {isLocalImage(thumbnailSrc) ? (
+            <Image
+              src={thumbnailSrc}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="80px"
+              loading="lazy"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumbnailSrc}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              loading="lazy"
+            />
+          )}
         </div>
       </div>
     </article>
