@@ -1,0 +1,100 @@
+name: Briefing Watchdog
+
+# Off-Vercel safety net for the daily briefing.
+#
+# Why this exists: the in-app self-healer (/api/check-briefing) is ITSELF a
+# Vercel cron, so when Vercel's scheduler stops firing (e.g. a plan/usage cap
+# pauses functions), the self-healer never runs either — exactly the failure on
+# 2026-06-04, where the homepage sat on a stale "Wednesday" briefing until a
+# human noticed. GitHub Actions is a completely separate scheduler, so this runs
+# even when every Vercel cron is dead.
+#
+# What it does: calls /api/check-briefing (which reports freshness AND self-heals
+# a stale briefing if functions are up), then:
+#   - fresh      -> pass quietly
+#   - recovered  -> WARN on Slack (briefing was stale; the Vercel cron missed its
+#                   run, so the scheduler likely needs a look) but don't fail
+#   - stale / non-200 / unreachable -> FAIL the job (GitHub emails repo admins)
+#                   and alert Slack: the briefing is broken and could not heal.
+#
+# Required repo secret:  CRON_SECRET            (same value as the Vercel env var)
+# Optional repo secret:  SLACK_WEBHOOK_URL      (same webhook /api/check-events uses)
+# Optional repo var:     SITE_URL               (defaults to https://hwy4events.com)
+#
+# NOTE: scheduled workflows only run from the default branch, so this starts
+# firing once merged to main. If you rotate CRON_SECRET, update this repo secret too.
+
+on:
+  schedule:
+    - cron: '30 17 * * *' # 17:30 UTC — after the 14:00 generate + 17:00 Vercel self-heal
+    - cron: '30 23 * * *' # 23:30 UTC — backstop later in the day
+  workflow_dispatch: {}
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check briefing freshness (self-heals if stale)
+        id: check
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://hwy4events.com' }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set. Add it under Settings → Secrets and variables → Actions (use the same value as the Vercel env var)."
+            exit 1
+          fi
+
+          resp=$(curl -sS -m 30 -w $'\n%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$SITE_URL/api/check-briefing" 2>/dev/null || true)
+          code=$(printf '%s' "$resp" | tail -n1)
+          body=$(printf '%s' "$resp" | sed '$d')
+
+          echo "HTTP $code"
+          echo "$body"
+
+          status=$(printf '%s' "$body" | jq -r '.status // "unknown"' 2>/dev/null || echo parse_error)
+          ok=$(printf '%s' "$body" | jq -r '.ok // false' 2>/dev/null || echo false)
+
+          echo "code=$code"     >> "$GITHUB_OUTPUT"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+          if [ "$code" = "200" ] && [ "$ok" = "true" ] && [ "$status" = "fresh" ]; then
+            echo "outcome=ok"   >> "$GITHUB_OUTPUT"
+          elif [ "$code" = "200" ] && [ "$ok" = "true" ] && [ "$status" = "recovered" ]; then
+            echo "outcome=warn" >> "$GITHUB_OUTPUT"
+          else
+            echo "outcome=fail" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Alert Slack
+        if: steps.check.outputs.outcome != 'ok'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          OUTCOME: ${{ steps.check.outputs.outcome }}
+          CODE: ${{ steps.check.outputs.code }}
+          STATUS: ${{ steps.check.outputs.status }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo "No SLACK_WEBHOOK_URL set; skipping Slack (job status still signals)."
+            exit 0
+          fi
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ "$OUTCOME" = "warn" ]; then
+            text=":warning: *Briefing watchdog* self-healed today's briefing (status: ${STATUS}, HTTP ${CODE}). The Vercel cron missed its run, so the scheduler is worth a look. <${run_url}|run log>"
+          else
+            text=":rotating_light: *Briefing watchdog FAILED* (status: ${STATUS}, HTTP ${CODE}). The daily briefing is stale and could NOT self-heal — Vercel functions/crons may be down. <${run_url}|run log>"
+          fi
+          curl -sS -m 15 -X POST -H 'Content-Type: application/json' \
+            --data "$(jq -nc --arg t "$text" '{text:$t}')" \
+            "$SLACK_WEBHOOK_URL" >/dev/null || true
+
+      - name: Fail if unrecoverable
+        if: steps.check.outputs.outcome == 'fail'
+        run: |
+          echo "::error::Briefing is stale and could not self-heal (status: ${{ steps.check.outputs.status }}, HTTP ${{ steps.check.outputs.code }})."
+          exit 1
