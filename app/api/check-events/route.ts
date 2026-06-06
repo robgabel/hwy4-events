@@ -1,7 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { findDuplicateClusters } from "@/lib/dedupe-events";
-import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
+import {
+  resolveEventLinkFromOrgs,
+  promotableVenueUrl,
+  isMultiTenantVenue,
+  type LinkOrg,
+} from "@/lib/event-link";
 
 export const maxDuration = 60;
 
@@ -86,6 +91,7 @@ interface EventRow {
   date: string;
   town: string;
   venue_name: string | null;
+  venue_key: string | null;
   address: string | null;
   start_time: string | null;
   end_time: string | null;
@@ -133,7 +139,7 @@ export async function GET(request: Request) {
   const { data: events, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, event_url, last_scraped_at, status"
+      "id, name, date, town, venue_name, venue_key, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, event_url, last_scraped_at, status"
     )
     .gte("date", today)
     .order("date", { ascending: true });
@@ -283,10 +289,25 @@ export async function GET(request: Request) {
       .select("slug, display_name, canonical_url, match_patterns")
       .not("canonical_url", "is", null);
     const orgs = (linkOrgs ?? []) as LinkOrg[];
+    // Registry venue websites feed the resolver's "venue canonical" path (#2), so
+    // the audit must see them too — otherwise it over-reports single-operator
+    // venues (Stevenot, the wine bar) that the detail page now resolves to a
+    // durable venue link. Keyed by venue_key, same as the page.
+    const { data: venueRows } = await supabase
+      .from("hwy4_venues")
+      .select("venue_key, canonical, website")
+      .not("website", "is", null);
+    const venueByKey = new Map(
+      (venueRows ?? []).map((v) => [
+        v.venue_key as string,
+        v as { canonical: string | null; website: string | null },
+      ])
+    );
     const gapByVenue = new Map<string, number>();
     let rawFallbacks = 0;
     for (const r of rows) {
       if (r.status === "cancelled" || !r.event_url) continue;
+      const venue = r.venue_key ? venueByKey.get(r.venue_key) : undefined;
       const link = resolveEventLinkFromOrgs(
         {
           name: r.name,
@@ -295,7 +316,8 @@ export async function GET(request: Request) {
           org_slug: r.org_slug,
           event_url: r.event_url,
         },
-        orgs
+        orgs,
+        { venueUrl: promotableVenueUrl(venue?.canonical, venue?.website) }
       );
       // Only count events whose best link is a non-durable aggregator fallback —
       // those have a button now, but upgrading them to a canonical org row would
@@ -307,8 +329,13 @@ export async function GET(request: Request) {
       gapByVenue.set(v, (gapByVenue.get(v) ?? 0) + 1);
     }
     aggregatorFallbackLinks = rawFallbacks;
+    // The actionable worklist is ONLY single-operator venues. A multi-tenant
+    // venue (park, community center, town square) has no single canonical events
+    // page, so a canonical org row isn't the fix — the aggregator fallback is the
+    // correct terminal state. Those still count in the raw trend number above, but
+    // they don't belong on a "go add an org row" list, so we drop them here.
     actionableLinkGaps = [...gapByVenue.entries()]
-      .filter(([, n]) => n >= GAP_VENUE_THRESHOLD)
+      .filter(([venue, n]) => n >= GAP_VENUE_THRESHOLD && !isMultiTenantVenue(venue))
       .map(([venue, count]) => ({ venue, count }))
       .sort((a, b) => b.count - a.count);
   } catch (err) {
@@ -398,7 +425,7 @@ export async function GET(request: Request) {
       lines.push(`\n_${mergesLast24h} duplicate merge(s) auto-healed in the last 24h (reversible via event_merge_log)._`);
     }
     if (actionableLinkGaps.length > 0) {
-      lines.push(`\n*${actionableLinkGaps.length} venue(s) worth a canonical link (≥${GAP_VENUE_THRESHOLD} upcoming events, aggregator-only link):*`);
+      lines.push(`\n*${actionableLinkGaps.length} single-operator venue(s) worth a canonical link (≥${GAP_VENUE_THRESHOLD} upcoming events, aggregator-only link):*`);
       for (const g of actionableLinkGaps.slice(0, 10)) {
         lines.push(`• ${g.venue} — ${g.count} events`);
       }

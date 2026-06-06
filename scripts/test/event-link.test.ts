@@ -12,6 +12,8 @@ import {
   resolveEventLink,
   resolveEventLinkFromOrgs,
   matchOrgForEvent,
+  promotableVenueUrl,
+  isMultiTenantVenue,
   type LinkEvent,
   type LinkOrg,
 } from "../../lib/event-link.js";
@@ -173,4 +175,75 @@ test("www. and bare gocalaveras.com both render as a non-durable source", () => 
 
 test("unparseable event_url → none (junk never renders as a link)", () => {
   assert.equal(resolveEventLink(ev({ name: "x", event_url: "not a url" })).kind, "none");
+});
+
+// --- Venue-canonical promotion guard (the resolver's priority-#2 path) ---
+
+test("promotableVenueUrl promotes a single-operator venue website", () => {
+  assert.equal(
+    promotableVenueUrl("Stevenot Winery", "https://www.stevenotwinery.com/"),
+    "https://www.stevenotwinery.com/"
+  );
+});
+
+test("promotableVenueUrl rejects multi-tenant venues (park / community center / town square)", () => {
+  assert.equal(promotableVenueUrl("Murphys Community Park", "https://murphyspark.com/"), null);
+  assert.equal(
+    promotableVenueUrl("Perry Walther Community Center", "https://bearvalleyparentsgroup.com/"),
+    null
+  );
+  assert.equal(promotableVenueUrl("Copperopolis Town Square", "https://example.com/"), null);
+});
+
+test("promotableVenueUrl rejects social pages and missing/junk urls", () => {
+  assert.equal(
+    promotableVenueUrl("Utica Park", "https://www.facebook.com/pages/Utica-Park/152740228072736/"),
+    null
+  );
+  assert.equal(promotableVenueUrl("My Bar", null), null);
+  assert.equal(promotableVenueUrl("My Bar", "not a url"), null);
+});
+
+test("isMultiTenantVenue: parks/centers yes, single operators no, no false positives", () => {
+  assert.equal(isMultiTenantVenue("Utica Park"), true);
+  assert.equal(isMultiTenantVenue("White Pines Community Park"), true);
+  assert.equal(isMultiTenantVenue("Stevenot Winery"), false);
+  assert.equal(isMultiTenantVenue("The Pour House"), false);
+  // \b guards against matching inside a longer word.
+  assert.equal(isMultiTenantVenue("Parkside Grill"), false);
+});
+
+test("GoCalaveras event at a single-operator venue resolves to the venue (durable), not the aggregator", () => {
+  const r = resolveEventLinkFromOrgs(
+    ev({
+      name: "Live Music",
+      venue_name: "Stevenot Winery",
+      org_slug: "gocalaveras",
+      event_url: "https://www.gocalaveras.com/events/live-music-stevenot/",
+    }),
+    ORGS,
+    {
+      venueUrl: promotableVenueUrl("Stevenot Winery", "https://www.stevenotwinery.com/"),
+      venueName: "Stevenot Winery",
+    }
+  );
+  assert.equal(r.kind, "venue");
+  assert.equal(r.href, "https://www.stevenotwinery.com/");
+  assert.equal(r.durable, true);
+  assert.equal(r.label, "Visit Stevenot Winery");
+});
+
+test("GoCalaveras event at a multi-tenant park keeps the non-durable aggregator fallback", () => {
+  const r = resolveEventLinkFromOrgs(
+    ev({
+      name: "Vendor Fair",
+      venue_name: "Murphys Community Park",
+      org_slug: "gocalaveras",
+      event_url: "https://www.gocalaveras.com/events/vendor-fair-9/",
+    }),
+    ORGS,
+    { venueUrl: promotableVenueUrl("Murphys Community Park", "https://murphyspark.com/") }
+  );
+  assert.equal(r.kind, "source");
+  assert.equal(r.durable, false);
 });

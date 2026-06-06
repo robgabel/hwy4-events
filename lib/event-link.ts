@@ -108,6 +108,48 @@ export function isUnstableHost(url: string): boolean {
   return UNSTABLE_SOURCE_HOSTS.has(h) || UNSTABLE_SOURCE_HOSTS.has(`www.${h}`);
 }
 
+/** Venues that host events from many independent organizers (parks, community
+ *  centers, town squares, fairgrounds, amphitheaters). Their own website is a
+ *  generic homepage, not an event page — a worse "more info" destination than the
+ *  aggregator's per-event permalink, and a bare aggregator link is the correct
+ *  terminal state for them. A multi-tenant name is also a useful "don't trust the
+ *  auto-matched Places website" signal: Perry Walther Community Center matched a
+ *  Bear Valley parents group, Utica Park matched a Facebook page. */
+const MULTI_TENANT_VENUE =
+  /\b(parks?|community center|town square|plaza|fairgrounds?|amphitheat(?:er|re))\b/i;
+
+/** True for parks/community-centers/town-squares/etc. — venues where no single
+ *  canonical events page exists, so the aggregator fallback is the right answer
+ *  and a canonical org row is NOT actionable. Shared by the link resolver's
+ *  callers and the /api/check-events link-gap audit so the page and the KPI
+ *  agree on what counts as a real gap. */
+export function isMultiTenantVenue(venueName: string | null | undefined): boolean {
+  return !!venueName && MULTI_TENANT_VENUE.test(venueName);
+}
+
+const SOCIAL_HOSTS: ReadonlySet<string> = new Set([
+  "facebook.com",
+  "instagram.com",
+  "twitter.com",
+  "x.com",
+]);
+
+/** A venue website we're willing to promote to a durable CTA (resolver
+ *  priority #2 — "venue canonical"). Null for multi-tenant venues, social pages
+ *  (not event-specific), and missing/unparseable URLs. Callers pass the result
+ *  straight into resolveEventLink's `venueUrl`, so the resolver stays pure and
+ *  this trust gate lives in exactly one place. */
+export function promotableVenueUrl(
+  venueName: string | null | undefined,
+  website: string | null | undefined
+): string | null {
+  if (!website) return null;
+  if (isMultiTenantVenue(venueName)) return null;
+  const h = hostOf(website);
+  if (!h || SOCIAL_HOSTS.has(h)) return null;
+  return website;
+}
+
 /**
  * Resolve an event to its organizer, given the org registry.
  *

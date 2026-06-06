@@ -22,7 +22,7 @@ import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import PatrioticBanner from "@/components/PatrioticBanner";
 import AdoptAPetBanner from "@/components/AdoptAPetBanner";
 import { isParadeEvent, isFourthFeatureEvent, isAdoptAPetEvent } from "@/lib/featured-events";
-import { resolveEventLinkFromOrgs, type LinkOrg } from "@/lib/event-link";
+import { resolveEventLinkFromOrgs, promotableVenueUrl, type LinkOrg } from "@/lib/event-link";
 
 export const revalidate = 3600;
 
@@ -179,8 +179,16 @@ export default async function EventPage({ params }: PageProps) {
   const event = await findEventBySlug(slug);
   if (!event) notFound();
 
+  // Load the venue row before resolving the link: its registry website is the
+  // durable "venue canonical" destination (resolver priority #2), but only for
+  // single-operator venues — promotableVenueUrl screens out multi-tenant parks
+  // and bad Google Places auto-matches.
+  const venue = event.venue_key ? await findVenue(event.venue_key) : null;
   const orgs = await getCanonicalOrgs();
-  const link = resolveEventLinkFromOrgs(event, orgs);
+  const link = resolveEventLinkFromOrgs(event, orgs, {
+    venueUrl: promotableVenueUrl(venue?.canonical, venue?.website),
+    venueName: venue?.canonical,
+  });
   // JSON-LD offer.url uses the resolved link only when it's durable (organizer/
   // venue/stable source). A non-durable aggregator fallback (GoCalaveras) renders
   // as the visible CTA but never enters structured data — point schema at our own
@@ -225,8 +233,6 @@ export default async function EventPage({ params }: PageProps) {
       </>
     );
   }
-
-  const venue = event.venue_key ? await findVenue(event.venue_key) : null;
 
   // The poster artifact: organizer's own art (untouched) if supplied, else the
   // generated screenprint. The page uses a relative src so it can be cached/ISR.
