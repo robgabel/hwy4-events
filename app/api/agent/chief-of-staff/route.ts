@@ -23,6 +23,8 @@ const SYSTEM_PROMPT = `You are the chief of staff for Hwy4Events.com, a one-pers
 
 You are given structured signals: real counts and samples. Summarize ONLY what you are given. Never invent numbers, events, issues, or trends. If a section has nothing, return an empty array for it.
 
+Community submissions: each pending submission may carry an agent triage verdict (in pending_submissions_sample): publish_new (a real new event to add), duplicate (already on the site), duplicate_needs_update (on the site but the submission adds info), or reject (spam / out of corridor / unverifiable), plus a one-line headline. Use these to tell Rob what is actually waiting: lead with the count that needs a real decision (publish_new and duplicate_needs_update), and note if any look like spam or duplicates he can clear fast. A submission with verdict still null has not been analyzed yet; say it is pending analysis, do not guess.
+
 Triage into three buckets:
 - needs_you: things that genuinely need Rob's decision today (events waiting in the verification queue, new community submissions to review, anything anomalous in the numbers). Each gets a one-line "why" stating what is at stake.
 - fyi: ran-fine confirmations and minor notes that need no action.
@@ -35,7 +37,7 @@ Voice: plain, direct, a little dry. Like a sharp operator briefing a peer, not a
 Output STRICT JSON only. No markdown fences, no preamble. Match this shape exactly:
 {"summary": string, "needs_you": [{"title": string, "detail": string, "why": string, "link"?: string}], "fyi": [{"title": string, "detail": string}], "watching": [{"title": string, "detail": string}]}
 
-Links: the ONLY admin page that exists is "/admin/verification", and it lists ONLY events flagged for date verification. Attach "link":"/admin/verification" to an item ONLY if that item is specifically about a date-verification-flagged event. Community submissions, SEO, merges, and everything else have NO admin page yet, so omit "link" for them entirely. A wrong link sends Rob to an empty page.`;
+Links: two admin pages exist. "/admin/verification" lists ONLY events flagged for date verification, so attach "link":"/admin/verification" only to a date-verification item. "/admin/submissions" is where community submissions are reviewed, so attach "link":"/admin/submissions" only to a community-submission item. SEO, merges, and everything else have NO admin page, so omit "link" for them entirely. A wrong link sends Rob to an empty page.`;
 
 async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
   const today = new Date().toISOString().split("T")[0];
@@ -58,7 +60,10 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
       .limit(15),
     supabase
       .from("event_submissions")
-      .select("event_name, event_date, town, submitter_name, created_at", { count: "exact" })
+      .select(
+        "event_name, event_date, town, submitter_name, created_at, ai_verdict, ai_confidence, ai_headline",
+        { count: "exact" }
+      )
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(15),
@@ -116,6 +121,9 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
       town: String(s.town ?? ""),
       submitter: (s.submitter_name as string | null) ?? null,
       submitted: String(s.created_at ?? ""),
+      verdict: (s.ai_verdict as string | null) ?? null,
+      confidence: (s.ai_confidence as string | null) ?? null,
+      headline: (s.ai_headline as string | null) ?? null,
     })),
     seo: { captured_at: seoCaptured, top: seoTop },
   };

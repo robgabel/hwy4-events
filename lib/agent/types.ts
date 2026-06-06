@@ -42,6 +42,10 @@ export type DigestContext = {
     town: string;
     submitter: string | null;
     submitted: string;
+    // Agent triage verdict for this submission, if it has been analyzed.
+    verdict: string | null; // publish_new | duplicate | duplicate_needs_update | reject
+    confidence: string | null;
+    headline: string | null;
   }[];
   seo: {
     captured_at: string | null;

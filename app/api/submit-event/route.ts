@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { TOWNS } from "@/lib/types";
+import { triageSubmissionById } from "@/lib/agent/submission-triage";
+
+// Allow the after() hook (web search + Sonnet) to run in the background of this
+// invocation after the fast response. If it overruns, the cron backstop catches it.
+export const maxDuration = 60;
 
 const VALID_CATEGORIES = [
   "live_music",
@@ -76,26 +81,42 @@ export async function POST(request: Request) {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  const { error } = await supabase.from("event_submissions").insert({
-    event_name: event_name.trim(),
-    event_date,
-    start_time: start_time?.trim() || null,
-    venue_name: venue_name?.trim() || null,
-    town,
-    description: description?.trim() || null,
-    category: category || null,
-    event_url: event_url?.trim() || null,
-    submitter_name: submitter_name?.trim() || null,
-    submitter_email: submitter_email?.trim() || null,
-  });
+  const { data: inserted, error } = await supabase
+    .from("event_submissions")
+    .insert({
+      event_name: event_name.trim(),
+      event_date,
+      start_time: start_time?.trim() || null,
+      venue_name: venue_name?.trim() || null,
+      town,
+      description: description?.trim() || null,
+      category: category || null,
+      event_url: event_url?.trim() || null,
+      submitter_name: submitter_name?.trim() || null,
+      submitter_email: submitter_email?.trim() || null,
+    })
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !inserted) {
     console.error("Failed to save event submission:", error);
     return NextResponse.json(
       { error: "Failed to save submission" },
       { status: 500 }
     );
   }
+
+  // Fire the agent triage in the background so an opinion is waiting at
+  // /admin/submissions when the owner reviews it. Best-effort: any failure is
+  // recorded on the row and re-tried by the /api/agent/triage-submissions cron.
+  const newId = inserted.id;
+  after(async () => {
+    try {
+      await triageSubmissionById(newId);
+    } catch (err) {
+      console.error("[submit-event] background triage failed:", err);
+    }
+  });
 
   return NextResponse.json({ ok: true });
 }
