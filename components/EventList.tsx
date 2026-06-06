@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from "react";
 import {
   Hwy4Event,
   Hwy4Org,
@@ -42,6 +42,10 @@ const ALL_CATEGORIES: EventCategory[] = [
   "other",
   "wine",
 ];
+
+// Insert the inline newsletter signup right after the 5th event in the list
+// (0-based index 4), regardless of which day that event falls on.
+const NEWSLETTER_AFTER_EVENT_INDEX = 4;
 
 function getBaseName(name: string): string {
   return name
@@ -388,6 +392,19 @@ export default function EventList({
     return result;
   }, [groups, visibleCount]);
 
+  // Running event count at the START of each visible group, so a flat "Nth event
+  // in the list" index can be recovered even though events are nested inside
+  // per-day sections. Drives the inline newsletter signup's fixed position.
+  const groupEventOffsets = useMemo(() => {
+    const offsets: number[] = [];
+    let acc = 0;
+    for (const group of visibleGroups) {
+      offsets.push(acc);
+      acc += group.events.length;
+    }
+    return offsets;
+  }, [visibleGroups]);
+
   // Replay the saved scroll offset once the list has grown back to its restored
   // length. We retry on a short timer until the page is tall enough to reach the
   // offset, since content can keep extending the page after the first paint.
@@ -524,8 +541,6 @@ export default function EventList({
           <>
             {visibleGroups.map((group, groupIndex) => (
               <div key={group.date}>
-                {/* Inline newsletter signup between day 2 and day 3 */}
-                {groupIndex === 2 && <NewsletterSignup variant="inline" />}
                 <section
                   className="animate-fadeIn"
                   style={{ animationDelay: `${groupIndex * 50}ms` }}
@@ -542,13 +557,25 @@ export default function EventList({
                     </h2>
                   </div>
                   <div className="space-y-3">
-                    {group.events.map((event) => (
-                      <EventCard
-                        key={event.id}
-                        event={event}
-                        isUpNext={event.id === upNextId}
-                      />
-                    ))}
+                    {group.events.map((event, eventIndex) => {
+                      // Flat position of this card across the whole list, so the
+                      // newsletter signup lands after the Nth event regardless of
+                      // how events split across days.
+                      const globalIndex =
+                        groupEventOffsets[groupIndex] + eventIndex;
+                      return (
+                        <Fragment key={event.id}>
+                          <EventCard
+                            event={event}
+                            isUpNext={event.id === upNextId}
+                          />
+                          {/* Inline newsletter signup after the 5th event */}
+                          {globalIndex === NEWSLETTER_AFTER_EVENT_INDEX && (
+                            <NewsletterSignup variant="inline" />
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </div>
                 </section>
               </div>
