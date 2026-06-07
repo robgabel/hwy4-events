@@ -8,6 +8,7 @@ import {
   mergeSubmission,
   reanalyzeSubmission,
   draftQuestionReply,
+  draftReplyForReviewed,
 } from "./actions";
 import { gmailComposeUrl, type SubmissionReply } from "@/lib/agent/submission-reply";
 
@@ -73,6 +74,18 @@ type RepliedSubmission = {
   ai_reply: SubmissionReply | null;
 };
 
+// A decided submission shown in the persistent "Recently reviewed" list, so the
+// drafted reply (and the path to email the submitter) is reachable any time, not
+// just in the one-shot banner right after the action.
+type ReviewedSubmission = {
+  id: string;
+  event_name: string;
+  status: string;
+  submitter_name: string | null;
+  submitter_email: string | null;
+  ai_reply: SubmissionReply | null;
+};
+
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EventCategory[];
 
 async function loadData(): Promise<{ submissions: Submission[]; matched: Map<string, MatchedEvent> }> {
@@ -114,6 +127,21 @@ async function loadReplied(id: string): Promise<RepliedSubmission | null> {
   return (data as RepliedSubmission | null) ?? null;
 }
 
+async function loadRecentlyReviewed(): Promise<ReviewedSubmission[]> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return [];
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const { data } = await supabase
+    .from("event_submissions")
+    .select("id, event_name, status, submitter_name, submitter_email, ai_reply")
+    .neq("status", "pending")
+    .order("reviewed_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(8);
+  return (data as ReviewedSubmission[] | null) ?? [];
+}
+
 function fmtDate(iso: string): string {
   return new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", {
     weekday: "short",
@@ -136,7 +164,10 @@ export default async function SubmissionsAdminPage({
   const flash = typeof params.flash === "string" ? params.flash : null;
   const repliedId = typeof params.replied === "string" ? params.replied : null;
   const { submissions, matched } = await loadData();
-  const repliedSub = repliedId ? await loadReplied(repliedId) : null;
+  const [repliedSub, reviewed] = await Promise.all([
+    repliedId ? loadReplied(repliedId) : Promise.resolve(null),
+    loadRecentlyReviewed(),
+  ]);
   const today = new Date().toISOString().split("T")[0];
 
   return (
@@ -152,10 +183,10 @@ export default async function SubmissionsAdminPage({
       {flash && <Banner tone="ok">{flash}</Banner>}
 
       {repliedSub?.ai_reply && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 20, border: "2px solid #2d5016", borderRadius: 12, padding: 4 }}>
           <ReplyPanel
             reply={repliedSub.ai_reply}
-            heading={`Suggested reply to ${repliedSub.submitter_name ?? repliedSub.ai_reply.to ?? "the submitter"}`}
+            heading={`✉ Email the submitter${repliedSub.submitter_name ? ` (${repliedSub.submitter_name})` : ""}`}
           />
         </div>
       )}
@@ -174,7 +205,84 @@ export default async function SubmissionsAdminPage({
           ))}
         </div>
       )}
+
+      {reviewed.length > 0 && (
+        <section style={{ marginTop: 36 }}>
+          <h2 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 4px" }}>Recently reviewed</h2>
+          <p style={{ color: "#777", fontSize: 14, margin: "0 0 14px", lineHeight: 1.5 }}>
+            Published or dismissed submissions. Draft or re-open the reply to the submitter here, any
+            time.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {reviewed.map((r) => (
+              <ReviewedRow key={r.id} sub={r} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
+  );
+}
+
+function ReviewedRow({ sub }: { sub: ReviewedSubmission }) {
+  const isApproved = sub.status === "approved";
+  const statusLabel = isApproved ? "Published" : sub.status === "rejected" ? "Dismissed" : sub.status;
+  return (
+    <article
+      style={{
+        background: "#fff",
+        border: "1px solid #e8e4de",
+        borderRadius: 12,
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 10,
+          flexWrap: "wrap",
+          alignItems: "baseline",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <strong style={{ color: "#2d5016", fontSize: 16 }}>{sub.event_name}</strong>
+          <span
+            style={{
+              background: isApproved ? "#eaf7ea" : "#f3f4f6",
+              color: isApproved ? "#2d5016" : "#6b7280",
+              fontSize: 12,
+              fontWeight: 700,
+              padding: "2px 8px",
+              borderRadius: 20,
+            }}
+          >
+            {statusLabel}
+          </span>
+        </div>
+        <span style={{ fontSize: 13, color: "#888" }}>
+          {sub.submitter_name ?? "anonymous"}
+          {sub.submitter_email ? ` · ${sub.submitter_email}` : ""}
+        </span>
+      </div>
+
+      {sub.ai_reply ? (
+        <div style={{ marginTop: 12 }}>
+          <ReplyPanel reply={sub.ai_reply} heading="✉ Drafted reply" />
+        </div>
+      ) : sub.submitter_email ? (
+        <form action={draftReplyForReviewed} style={{ marginTop: 12 }}>
+          <input type="hidden" name="id" value={sub.id} />
+          <button type="submit" style={questionBtn}>
+            Draft a reply to the submitter
+          </button>
+        </form>
+      ) : (
+        <p style={{ margin: "10px 0 0", fontSize: 13, color: "#999" }}>
+          No email on file for this submitter.
+        </p>
+      )}
+    </article>
   );
 }
 

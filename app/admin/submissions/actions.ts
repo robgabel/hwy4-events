@@ -100,6 +100,55 @@ export async function draftQuestionReply(formData: FormData) {
   redirect(`${ADMIN_PATH}?flash=${encodeURIComponent("Drafted a question for the submitter.")}`);
 }
 
+// Draft (or re-draft) a reply for an ALREADY-decided submission, reachable any
+// time from the "Recently reviewed" list. Outcome follows the decision: approved
+// -> "your event is live", rejected -> a gracious decline. This is the durable
+// path to email a submitter after the one-shot post-action banner is gone.
+export async function draftReplyForReviewed(formData: FormData) {
+  const id = requireId(formData);
+  const supabase = getServiceClient();
+  const { data } = await supabase
+    .from("event_submissions")
+    .select("status, review_note, published_event_id, merged_into_event_id, submitter_email")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) fail("Submission not found.");
+  const row = data as {
+    status: string;
+    review_note: string | null;
+    published_event_id: string | null;
+    merged_into_event_id: string | null;
+    submitter_email: string | null;
+  };
+  if (!row.submitter_email) {
+    fail("No email on file for this submitter, so there is no one to write to.");
+  }
+
+  const outcome: ReplyOutcome = row.status === "rejected" ? "declined" : "approved";
+  const ctx: { eventUrl?: string; reason?: string } = {};
+  const eventId = row.published_event_id ?? row.merged_into_event_id;
+  if (outcome === "approved" && eventId) {
+    const { data: ev } = await supabase
+      .from("hwy4_events")
+      .select("name, date, town")
+      .eq("id", eventId)
+      .maybeSingle();
+    const e = ev as { name: string; date: string; town: string } | null;
+    if (e) ctx.eventUrl = `${SITE_URL}/events/${generateEventSlug(e.name, e.date, e.town)}`;
+  }
+  if (outcome === "declined" && row.review_note) ctx.reason = row.review_note;
+
+  let ok = false;
+  try {
+    ok = await draftAndStoreReply(supabase, id, outcome, ctx);
+  } catch (err) {
+    fail(`Could not draft a reply: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  revalidatePath(ADMIN_PATH);
+  if (!ok) fail("Could not draft a reply.");
+  redirect(`${ADMIN_PATH}?flash=${encodeURIComponent("Drafted a reply.")}&replied=${id}`);
+}
+
 // Publish a community submission as a public, community-sourced event. The human
 // has reviewed and completed the fields in the form (venue/category are often
 // blank on submission) before this runs. Outward, editorial action: always a
