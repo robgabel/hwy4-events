@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { TOWNS, CATEGORY_LABELS, type EventCategory } from "@/lib/types";
+import { classifyEventCategory } from "@/lib/categorize";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL } from "@/lib/constants";
 import {
@@ -518,7 +519,14 @@ function SubmissionCard({
     sg.category && (CATEGORIES as string[]).includes(sg.category) ? sg.category : null;
   const subCat =
     sub.category && (CATEGORIES as string[]).includes(sub.category) ? sub.category : null;
-  const category = suggestedCat ?? subCat ?? "other";
+  // The /submit form collects no category, so rather than always defaulting to
+  // "other" we derive one from the title + description via the shared keyword
+  // classifier (e.g. "Karaoke at Murphys Irish Pub" → live_music). AI-triage
+  // suggestion and any submitted category still win; the reviewer can override.
+  const category =
+    suggestedCat ??
+    subCat ??
+    classifyEventCategory(`${sub.event_name} ${sub.description ?? ""}`);
 
   const showMerge = sub.ai_verdict === "duplicate_needs_update" && !!matched;
 
