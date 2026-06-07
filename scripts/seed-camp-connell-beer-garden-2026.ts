@@ -15,8 +15,8 @@
 // key matches the existing row, so it updates in place) while the rest are
 // attributed to the venue.
 //
-// Flyer facts baked in below: doors 5pm / music 6pm (Sun 7/5 is a 4pm show),
-// Sat & Fri cover $5, Sun cover $10, kids 12 & under free, Sierra Nevada beers +
+// Flyer facts baked in below: doors 5pm / music 6pm, Sat & Fri cover $5,
+// Sun cover $10, kids 12 & under free, Sierra Nevada beers +
 // wine + wood-fired pizza + s'mores bar for purchase.
 //
 // Run (real write, needs Supabase service-role env):
@@ -38,7 +38,7 @@ const SOURCE_URL = "https://www.campconnellgeneralstore.com/events";
 
 type Show = {
   date: string; // YYYY-MM-DD
-  start: string; // "HH:MM" — 6pm shows are 18:00; the Sun 7/5 show is 16:00
+  start: string; // "HH:MM" — all current shows are 18:00 (6pm)
   /** The act. null = announced date but act still TBA (placeholder row). */
   act: string | null;
   /** Title override — only used for the TBA placeholder (no act name to use). */
@@ -64,7 +64,7 @@ const SHOWS: Show[] = [
   },
   { date: "2026-07-03", start: "18:00", act: "Jill Warren", cover: "$5" }, // Fri (holiday wknd) — $5 per Rob
   { date: "2026-07-04", start: "18:00", act: "Mountain Crew", cover: "$5" },
-  { date: "2026-07-05", start: "16:00", act: "Jimbo Scott & Yesterdays Biscuits", cover: "$10" }, // Sun 4pm
+  { date: "2026-07-05", start: "18:00", act: "Jimbo Scott & Yesterdays Biscuits", cover: "$10" }, // Sun 6pm per updated poster
   { date: "2026-07-11", start: "18:00", act: "Hired Gunn", cover: "$5" },
   { date: "2026-07-18", start: "18:00", act: "Brian Jirka Project", cover: "$5" },
   { date: "2026-07-24", start: "18:00", act: "Hwy 4 Blues Band", cover: "$5" }, // Fri — added on the updated 2026 poster
