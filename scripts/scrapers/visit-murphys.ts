@@ -5,6 +5,7 @@ import { supabaseAdmin } from "../lib/supabase-admin.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
 import { TOWNS } from "../../lib/towns.js";
+import { classifyEventCategory } from "../../lib/categorize.js";
 
 /**
  * Visit Murphys runs The Events Calendar (Tribe) WordPress plugin. Its REST
@@ -94,27 +95,10 @@ function htmlToText(html: string): string {
 // ---------- Mapper ----------
 
 function pickCategory(tribeCats: Array<{ name: string; slug: string }> | undefined, title: string): string {
-  // Categories describe WHAT the event is, not WHERE. Order matters: most
-  // specific patterns first.
-  const haystack = `${title} ${(tribeCats ?? []).map((c) => c.name).join(" ")}`.toLowerCase();
-  if (/\b(live music|concert|dj|open mic|trio|band|acoustic|jazz|blues|karaoke)\b/.test(haystack)) {
-    return "live_music";
-  }
-  if (/\b(wine|vineyard|winery|tasting|mimosa|sip & |sip and )\b/.test(haystack)) return "wine";
-  if (/\b(hike|guided walk|nature walk|bird walk|trail run|fun run|5k|trail stewardship)\b/.test(haystack)) {
-    return "hike_walk";
-  }
-  if (/\b(kids|kid|children|family|day camp|summer camp|creek critters|easter egg|story time)\b/.test(haystack)) {
-    return "kids";
-  }
-  if (/\b(bingo|trivia|bocce|pool tournament|cribbage|card tournament|game night|poker)\b/.test(haystack)) {
-    return "games";
-  }
-  if (/\b(festival|fair|celebration|fest)\b/.test(haystack)) return "festival";
-  if (/\b(meeting|fundraiser|breakfast|luncheon|town hall|public hearing|council|board|farmers market|flea market|car show|car cruise)\b/.test(haystack)) {
-    return "civic";
-  }
-  return "other";
+  // Shared keyword classifier (lib/categorize.ts) is the single source of truth,
+  // reused by the /admin/submissions publish default. Feed it the title + the
+  // source's own category names.
+  return classifyEventCategory(`${title} ${(tribeCats ?? []).map((c) => c.name).join(" ")}`);
 }
 
 function splitDateTime(tribeDateTime: string, allDay: boolean): { date: string; time: string | null } {
