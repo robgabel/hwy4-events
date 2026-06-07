@@ -18,6 +18,7 @@ import { unstable_cache } from "next/cache";
 import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event } from "@/lib/types";
 import { dedupeEvents } from "@/lib/dedupe-events";
+import { pacificToday } from "@/lib/date-windows";
 import type { SitemapEventRow } from "@/lib/sitemap";
 
 export const EVENTS_CACHE_TAG = "events";
@@ -35,7 +36,11 @@ const EVENT_COLUMNS =
   "verification_status, community_sourced, last_scraped_at, updated_at";
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
-  const today = new Date().toISOString().split("T")[0];
+  // "Today" in the corridor's Pacific civil date, NOT UTC. Computing it in UTC
+  // rolls over to tomorrow at 5pm Pacific (4pm during PST), which dropped the
+  // whole evening's events from every list. pacificToday() is the same helper
+  // the /this-week|weekend|month pages already use.
+  const today = pacificToday().iso;
   let all: Hwy4Event[] = [];
   let from = 0;
 

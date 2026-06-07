@@ -35,7 +35,10 @@ export const findEventBySlug = cache(
       if (hit) return hit;
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    // Pacific civil date, not UTC — otherwise this fallback scan would skip an
+    // event happening today once it's past 5pm Pacific (UTC midnight).
+    const { pacificToday } = await import("./date-windows");
+    const today = pacificToday().iso;
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data, error } = await supabase
         .from("hwy4_events")
