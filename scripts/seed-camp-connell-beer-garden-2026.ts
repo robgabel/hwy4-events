@@ -67,6 +67,7 @@ const SHOWS: Show[] = [
   { date: "2026-07-05", start: "16:00", act: "Jimbo Scott & Yesterdays Biscuits", cover: "$10" }, // Sun 4pm
   { date: "2026-07-11", start: "18:00", act: "Hired Gunn", cover: "$5" },
   { date: "2026-07-18", start: "18:00", act: "Brian Jirka Project", cover: "$5" },
+  { date: "2026-07-24", start: "18:00", act: "Hwy 4 Blues Band", cover: "$5" }, // Fri — added on the updated 2026 poster
   { date: "2026-07-25", start: "18:00", act: "Blowbacks", cover: "$5" },
   { date: "2026-08-01", start: "18:00", act: null, name: "Live Music at the Beer Garden (Act TBA)", cover: "$5" },
   { date: "2026-08-08", start: "18:00", act: "Flashback", cover: "$5" },
