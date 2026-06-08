@@ -206,11 +206,27 @@ export async function GET(
   const host = humanizeHost(event.source_name, event.name);
   const free = event.cost_tier === "free";
   const firstSentence = (event.description || "").trim().split(/(?<=[.!?])\s/)[0] || "";
+  // Teaser line: keep the whole first sentence when it's a sensible length (it
+  // wraps to ~2 lines on the poster) and only truncate genuinely long ones —
+  // always on a word boundary so a venue / proper noun never gets chopped
+  // mid-word ("…at the Murphys…"). Longer taglines scale down to stay ~2 lines.
+  const TAGLINE_MAX = 116;
   const tagline = firstSentence
-    ? firstSentence.length > 72
-      ? firstSentence.slice(0, 72).replace(/\s+\S*$/, "") + "…"
+    ? firstSentence.length > TAGLINE_MAX
+      ? firstSentence.slice(0, TAGLINE_MAX).replace(/\s+\S*$/, "") + "…"
       : firstSentence
     : null;
+  const taglineSize = tagline && tagline.length > 66 ? 32 : 38;
+
+  // Venue ("Where" fact): word-boundary truncate only very long names and scale
+  // the type down so the full venue wraps to two lines and reads in full
+  // ("Murphys Volunteer Library") instead of "Murphys Volunte…".
+  const venueName = event.venue_name || "";
+  const venueDisplay =
+    venueName.length > 34
+      ? venueName.slice(0, 34).replace(/\s+\S*$/, "") + "…"
+      : venueName;
+  const venueSize = venueDisplay.length > 14 ? 28 : 38;
 
   const labelStyle = {
     fontFamily: "DMSans",
@@ -327,7 +343,7 @@ export async function GET(
 
           {/* tagline */}
           {tagline && (
-            <div style={{ display: "flex", justifyContent: "center", marginTop: 16, fontFamily: "Bitter", fontWeight: 700, fontSize: 38, color: C.pine, textAlign: "center", lineHeight: 1.1 }}>
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 16, fontFamily: "Bitter", fontWeight: 700, fontSize: taglineSize, color: C.pine, textAlign: "center", lineHeight: 1.1 }}>
               {tagline}
             </div>
           )}
@@ -338,15 +354,15 @@ export async function GET(
           <div style={{ display: "flex", height: 4, backgroundColor: C.ink, opacity: 0.8, marginBottom: 30 }} />
 
           {/* facts */}
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            {[
-              ["When", `${dow}, ${md}`, year],
-              ["Time", timeStr, ""],
-              ["Where", event.venue_name.length > 16 ? event.venue_name.slice(0, 15) + "…" : event.venue_name, ""],
-            ].map(([k, v, sub], i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flexGrow: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            {([
+              ["When", `${dow}, ${md}`, year, 38],
+              ["Time", timeStr, "", 38],
+              ["Where", venueDisplay, "", venueSize],
+            ] as [string, string, string, number][]).map(([k, v, sub, fs], i) => (
+              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flexGrow: 1, flexBasis: 0, maxWidth: "34%" }}>
                 <div style={labelStyle}>{k}</div>
-                <div style={{ fontFamily: "Bitter", fontWeight: 700, fontSize: 38, color: C.ink, marginTop: 6 }}>{v}</div>
+                <div style={{ fontFamily: "Bitter", fontWeight: 700, fontSize: fs, color: C.ink, marginTop: 6, textAlign: "center", lineHeight: 1.05 }}>{v}</div>
                 {sub ? <div style={{ fontFamily: "DMSans", fontWeight: 600, fontSize: 25, color: C.inkMuted }}>{sub}</div> : null}
               </div>
             ))}
