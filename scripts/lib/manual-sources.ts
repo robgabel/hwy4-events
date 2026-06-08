@@ -40,6 +40,13 @@ const MANUAL_VENUE_PATTERNS: readonly string[] = [
   // calendar the scrapers can read; this keeps an aggregator from later
   // re-listing storytime with wrong/flattened dates over the curated rows.
   "arnold library",
+  // The Murphys Senior Center publishes its monthly schedule only as image files
+  // (a calendar grid PNG + newsletter PNG on https://murphyscenter.com/calendar/),
+  // which the scrapers can't parse. Its events are curated by hand and watched by
+  // /api/check-murphys-senior-center-schedule. This keeps an aggregator from later
+  // re-listing them with wrong/flattened dates over the curated rows. Matches the
+  // venue_name ("Murphys Senior Center") on every variant.
+  "murphys senior center",
 ];
 
 export interface MatchableEvent {

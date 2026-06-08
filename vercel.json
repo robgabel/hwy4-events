@@ -69,6 +69,10 @@
       "schedule": "30 17 * * 1"
     },
     {
+      "path": "/api/check-murphys-senior-center-schedule",
+      "schedule": "0 18 * * 1"
+    },
+    {
       "path": "/api/agent/collect-seo",
       "schedule": "0 11 * * *"
     },
