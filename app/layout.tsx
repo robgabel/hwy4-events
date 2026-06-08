@@ -12,6 +12,7 @@ import LastChecked from "@/components/LastChecked";
 import Link from "next/link";
 import { Suspense } from "react";
 import CloudflareAnalytics from "@/components/CloudflareAnalytics";
+import PageViewTracker from "@/components/PageViewTracker";
 import { Bitter, DM_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -116,6 +117,7 @@ export default function RootLayout({
         <JsonLd data={buildWebSite()} />
         <JsonLd data={buildOrganization()} />
         {cfBeaconToken && <CloudflareAnalytics token={cfBeaconToken} />}
+        <PageViewTracker />
         {children}
         <footer className="border-t border-stone-light/50 bg-warm-white py-10 text-center">
           <div className="mx-auto max-w-5xl px-4">

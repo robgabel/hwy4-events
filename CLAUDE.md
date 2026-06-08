@@ -165,6 +165,15 @@ The event detail page shows a venue section: a **local-voice blurb** (what the p
 - **`places_locked`** — when `true`, `/api/sync-venue-facts` skips the venue entirely. Set it (and null the facts) for venues with no *correct* Places listing so the weekly sync can't re-match a wrong one: permanently-closed venues (Twisted Oak), venues with no distinct listing (The Poor House), and private/no-own-listing spots (the Blue Lake Springs amphitheater/pool/lake, which otherwise all collapse onto the one HOA listing). Mirrors `hwy4_events.price_locked` / `description_locked`. To pin a *correct* listing instead, set `place_id` + null `places_synced_at` and let the next sync re-fetch.
 - **Adding/refreshing a venue:** add it to `scripts/lib/venues.ts`, then `cd scripts && npm run seed-venues` (registry → `hwy4_venues`), `npm run draft-venue-blurbs -- --apply` (blurb), and let the weekly cron (or a manual `curl .../api/sync-venue-facts`) fill the Places facts. Re-run `npm run backfill-venue-keys -- --apply` so existing events link to the new venue.
 
+## First-party engagement tracking (Gate 0)
+
+Cloudflare RUM can't answer the two questions `BUSINESS-PLAN.md` calls Gate 0: **visitor vs local**, and **business-referral clicks**. A lightweight first-party beacon fills the gap (shipped 2026-06-08).
+
+- **`site_events`** (migration `20260608_gate0_site_events.sql`) — one row per page view or outbound business click. RLS on, **service-role only** (no public read). Written exclusively by `/api/track`.
+- **`/api/track`** ([app/api/track/route.ts](app/api/track/route.ts)) — best-effort POST, never errors to the client (mirrors `/api/track-share`). Classifies **visitor vs local** server-side from Vercel's `x-vercel-ip-*` geo headers via [lib/geo.ts](lib/geo.ts) (`classifyVisitor` — a generous corridor bounding box + city-name match; **directional**, since rural IP geo often places locals in a regional hub). UA-flags obvious bots; non-JS bots never fire the beacon at all.
+- **Client beacons** ([lib/track.ts](lib/track.ts), `navigator.sendBeacon`): `PageViewTracker` (mounted in `app/layout.tsx`) fires one geo-classified view per session+path, skipping `/admin`; `OutboundTracker` (mounted on the event detail page) is a delegated click listener that fires on any `a[data-otrack]` — the "More info" CTA, Get Directions, and a venue's website/phone/maps (data attributes live in `app/events/[slug]/page.tsx`, `components/VenueInfo.tsx`, `components/DirectionsLink.tsx`).
+- **Read-out:** the `/admin/analytics` **Growth** tab shows the visitor-vs-local split (7d/30d visitor share) and business-referral clicks (by type + top events), both labeled directional. No new env vars (uses the existing service-role key + automatic Vercel geo headers).
+
 ## Environment Variables
 
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`

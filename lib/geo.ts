@@ -1,0 +1,93 @@
+// Visitor-vs-local classification for Gate 0 (BUSINESS-PLAN.md §15).
+//
+// Signal source: Vercel's edge geo headers (x-vercel-ip-*), read server-side in
+// /api/track. The client never sends a location. This is DIRECTIONAL, not exact:
+// rural ISPs often geolocate corridor residents to a regional hub (Sonora,
+// Stockton, Sacramento, Modesto), so some locals read as "visitor". We classify
+// "local" generously (a bounding box around the Hwy 4 corridor OR a corridor
+// city name) and treat anything else with a known country as "visitor". No geo
+// at all (e.g. local dev) -> "unknown". Good for the trend; never quoted as exact.
+
+export type VisitorClass = "local" | "visitor" | "unknown";
+
+export interface RequestGeo {
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+// Corridor + immediate Calaveras towns (lowercased), matched against the IP city
+// when present.
+const CORRIDOR_CITIES = new Set([
+  "arnold",
+  "murphys",
+  "angels camp",
+  "angels",
+  "avery",
+  "copperopolis",
+  "dorrington",
+  "white pines",
+  "camp connell",
+  "vallecito",
+  "douglas flat",
+  "hathaway pines",
+  "bear valley",
+  "mountain ranch",
+  "san andreas",
+]);
+
+// Generous bounding box around the Hwy 4 / Calaveras corridor.
+const BOX = { latMin: 37.9, latMax: 38.6, lngMin: -120.75, lngMax: -119.95 };
+
+export function classifyVisitor(geo: RequestGeo): VisitorClass {
+  const { country, region, city, latitude, longitude } = geo;
+
+  const inBox =
+    latitude != null &&
+    longitude != null &&
+    latitude >= BOX.latMin &&
+    latitude <= BOX.latMax &&
+    longitude >= BOX.lngMin &&
+    longitude <= BOX.lngMax;
+  if (inBox) return "local";
+
+  if (
+    country &&
+    country.toUpperCase() === "US" &&
+    region &&
+    region.toUpperCase() === "CA"
+  ) {
+    const c = (city ?? "").toLowerCase().trim();
+    if (c && CORRIDOR_CITIES.has(c)) return "local";
+  }
+
+  if (country) return "visitor";
+  return "unknown";
+}
+
+// Parse Vercel's edge geo headers off a Request. Vercel sets these on every
+// request; city is URL-encoded. Returns nulls when absent (e.g. local dev).
+export function geoFromHeaders(h: Headers): RequestGeo {
+  const num = (v: string | null) => {
+    if (!v) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const dec = (v: string | null) => {
+    if (!v) return null;
+    try {
+      return decodeURIComponent(v);
+    } catch {
+      return v;
+    }
+  };
+  return {
+    country: h.get("x-vercel-ip-country"),
+    region: h.get("x-vercel-ip-country-region"),
+    city: dec(h.get("x-vercel-ip-city")),
+    latitude: num(h.get("x-vercel-ip-latitude")),
+    longitude: num(h.get("x-vercel-ip-longitude")),
+  };
+}

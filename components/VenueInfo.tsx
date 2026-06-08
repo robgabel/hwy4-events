@@ -61,6 +61,7 @@ export default function VenueInfo({ venue }: { venue: Hwy4Venue }) {
               href={venue.maps_url ?? undefined}
               target="_blank"
               rel="noopener noreferrer"
+              data-otrack="venue_maps"
               className="inline-flex items-center gap-1 font-medium text-forest hover:underline"
               title="View on Google Maps"
             >
@@ -86,6 +87,7 @@ export default function VenueInfo({ venue }: { venue: Hwy4Venue }) {
           {venue.phone && (
             <a
               href={`tel:${venue.phone.replace(/[^\d+]/g, "")}`}
+              data-otrack="venue_phone"
               className="font-medium text-pine hover:underline"
             >
               {venue.phone}
@@ -97,6 +99,7 @@ export default function VenueInfo({ venue }: { venue: Hwy4Venue }) {
               href={venue.website}
               target="_blank"
               rel="noopener noreferrer"
+              data-otrack="venue_website"
               className="font-medium text-pine hover:underline"
             >
               {websiteLabel(venue.website)}

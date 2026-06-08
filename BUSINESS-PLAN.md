@@ -152,7 +152,7 @@ Goal 3 is "I'll put in more energy if I see high usage." Make that a ladder, not
 
 | Gate | Prove what | Example threshold | Unlocks |
 |---|---|---|---|
-| **0. Instrument** | We can see visitor vs local + business clicks | Segmentation + outbound tracking live | The ability to read every gate below |
+| **0. Instrument** ✅ | We can see visitor vs local + business clicks | **Live (2026-06-08):** `site_events` + `/api/track`, read on the Growth tab | The ability to read every gate below |
 | **1. Habit** | Locals come back | ~50+ weekly returning locals; newsletter open rate > 35% | Keep investing in core + newsletter |
 | **2. Visitor pull** | Visitors find it and it grows | Visitor share > 30% and rising; AEO citations climbing | Invest in editorial + trip-planning utility |
 | **3. Economic proof** | It drives real local spend | Measurable, growing business click-throughs / "found via Hwy4" signal | **The proof that justifies the port**, and the case study to sell into it |
@@ -241,7 +241,7 @@ Everything in Calaveras is a retention product (no profit product here, by desig
 
 Sequenced to light up the gates, each tied to a behavior change:
 
-1. **Instrument the loop (Gate 0).** Segment traffic into visitor vs local (geo + referrer), and track outbound clicks to businesses/venues, "Get Directions" taps, and calls. *Behavior visible: the money behavior + the seed behavior.* Nothing else can be measured until this exists, and both core goals are invisible without it. Highest priority.
+1. **Instrument the loop (Gate 0). ✅ Shipped 2026-06-08.** `site_events` table + `/api/track` beacon: every page view is geo-classified visitor vs local (server-side from Vercel IP geo, directional), and outbound business clicks (the "More info" CTA, Get Directions, a venue's website/phone) are logged from the event page. Read-out lives on the `/admin/analytics` Growth tab. *Behavior now visible: the money behavior + the seed behavior.* This was the prerequisite for reading every gate below.
 2. **Make returning a habit + ship the data-out / embed play.** Sharpen "This Weekend" and get the newsletter to a reliably great weekly cadence (locals/habit). In parallel, build the calendar feed + embeddable "what's on" widget + "powered by Hwy4Events," and pitch the Chamber, Visit Calaveras, lodging sites, and (as a 30A dry-run) any local rental manager. *Behavior: locals return; third parties embed → backlinks + reflexive default.* This is also the live rehearsal for the ported-market wedge.
 3. **Run the credibility flywheel and keep the architecture portable.** Commit to a build-in-public cadence on the milestones, write the one "how it's built" piece, and adopt region-parameterization as a standing design rule so the port stays a config job. *Behavior: the build generates reach + inbound; the codebase stays portable.*
 

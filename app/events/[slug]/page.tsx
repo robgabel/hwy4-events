@@ -17,6 +17,7 @@ import LinkifiedText from "@/components/LinkifiedText";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
 import ShareTracker from "@/components/ShareTracker";
+import OutboundTracker from "@/components/OutboundTracker";
 import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import PatrioticBanner from "@/components/PatrioticBanner";
@@ -251,6 +252,7 @@ export default async function EventPage({ params }: PageProps) {
       <Suspense fallback={null}>
         <ShareTracker slug={slug} />
       </Suspense>
+      <OutboundTracker eventId={event.id} />
 
       <nav aria-label="Breadcrumb" className="mb-6 text-sm text-stone">
         <ol className="flex items-center gap-1.5">
@@ -406,6 +408,7 @@ export default async function EventPage({ params }: PageProps) {
                 href={directionsHref}
                 target="_blank"
                 rel="noopener noreferrer"
+                data-otrack="directions"
                 className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest transition-colors hover:border-pine/30 hover:text-pine"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -423,6 +426,7 @@ export default async function EventPage({ params }: PageProps) {
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
+                  data-otrack="more_info"
                   className="font-medium text-pine underline underline-offset-2 hover:text-forest"
                 >
                   {link.label}
