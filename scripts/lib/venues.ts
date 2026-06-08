@@ -78,6 +78,18 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Murphys",
     address: "151 Main St, Murphys, CA 95247",
   },
+  "murphys-senior-center": {
+    canonical: "Murphys Senior Center",
+    aliases: [
+      "murphys senior center",
+      "murphy's senior center",
+      "murphys sr center",
+      "murphys sr. center",
+      "senior center murphys",
+    ],
+    town: "Murphys",
+    address: "65 Mitchler St, Murphys, CA 95247",
+  },
   "branding-iron": {
     canonical: "Branding Iron Saloon",
     aliases: [
