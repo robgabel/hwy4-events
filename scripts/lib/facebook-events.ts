@@ -4,6 +4,7 @@ import { decodeEventFields } from "./extract.js";
 import { applyVenueDetection } from "./venue-matcher.js";
 import { TOWNS, TOWN_ADDRESS_ALIASES } from "../../lib/towns.js";
 import { runApifyActorSync } from "./apify-client.js";
+import { classifyEventCategory } from "../../lib/categorize.js";
 
 /**
  * Facebook Events Discover scraper.
@@ -27,6 +28,7 @@ const VALID_CATEGORIES = [
   "kids",
   "wine",
   "games",
+  "fine_arts",
   "other",
 ] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
@@ -319,6 +321,12 @@ async function classifyCategoriesBatch(
 ): Promise<ExtractedEvent[]> {
   if (events.length === 0) return events;
 
+  // Deterministic floor (shared lib/categorize.ts): seed every event from
+  // keywords so an LLM failure/whiff can't silently leave it at "other".
+  for (const e of events) {
+    e.category = classifyEventCategory(`${e.name} ${e.description ?? ""}`);
+  }
+
   const client = new Anthropic();
   const items = events.map((e, i) => ({
     i,
@@ -335,7 +343,8 @@ async function classifyCategoriesBatch(
 - kids: kid-focused activities and camps (day camps, kids' contests, family activities for young children)
 - wine: wine tastings, wine blending, vineyard/winery events
 - games: social/pub games like bingo, trivia, pool, bocce, cribbage, card tournaments
-- other: anything else (theater, golf, sports, workshops, classes)
+- fine_arts: theater/plays, comedy, and visual/craft arts (pottery, ceramics, painting, drawing classes)
+- other: anything else (golf, sports, fitness, cooking classes)
 
 Return ONLY a JSON array of {i: number, category: string} — one entry per event.
 
@@ -363,7 +372,13 @@ ${JSON.stringify(items, null, 2)}`;
 
     return events.map((e, i) => {
       const cat = byIndex.get(i);
-      if (cat && (VALID_CATEGORIES as readonly string[]).includes(cat)) {
+      // Upgrade-only: take the LLM's specific category, but never let it
+      // overwrite a keyword-derived specific category back down to "other".
+      if (
+        cat &&
+        cat !== "other" &&
+        (VALID_CATEGORIES as readonly string[]).includes(cat)
+      ) {
         return { ...e, category: cat as Category };
       }
       return e;

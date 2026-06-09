@@ -5,6 +5,7 @@ import { supabaseAdmin } from "../lib/supabase-admin.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
 import { isNonCorridorAddress } from "../lib/corridor.js";
+import { classifyEventCategory } from "../../lib/categorize.js";
 
 const EVENTS_URL = "https://www.gocalaveras.com/events/";
 const AJAX_URL = "https://www.gocalaveras.com/wp-admin/admin-ajax.php";
@@ -696,6 +697,16 @@ async function enrichEvents(events: ExtractedEvent[]): Promise<void> {
  * Much cheaper than full LLM extraction since we only need classification.
  */
 async function classifyEvents(events: ExtractedEvent[]): Promise<void> {
+  // Deterministic floor: seed every event from the shared keyword classifier
+  // (lib/categorize.ts — the single source of truth, also used by Visit Murphys
+  // and /admin/submissions). If the LLM call below fails, times out, or whiffs
+  // an obvious one to "other", this baseline survives instead of a silent
+  // batch-wide "other" fallback. The LLM then only *upgrades* to a more specific
+  // category and adds artists.
+  for (const e of events) {
+    e.category = classifyEventCategory(`${e.name} ${e.description ?? ""}`);
+  }
+
   const eventList = events
     .map(
       (e, i) =>
@@ -707,7 +718,7 @@ async function classifyEvents(events: ExtractedEvent[]): Promise<void> {
 
 For each event, return a JSON array of objects with:
 - i: event index number
-- category: one of: live_music, festival, civic, hike_walk, kids, wine, games, other
+- category: one of: live_music, festival, civic, hike_walk, kids, wine, games, fine_arts, other
   (categories describe WHAT the event is, not WHERE it happens)
   - "live_music" for concerts, music nights, DJ sets, open mic, karaoke
   - "festival" for multi-day community events, fairs, seasonal celebrations
@@ -716,7 +727,8 @@ For each event, return a JSON array of objects with:
   - "kids" for kid-focused activities and camps (day camps, creek critters, kids' contests)
   - "wine" for wine tastings, wine blending, vineyard/winery events
   - "games" for social/pub games: bingo, trivia, pool, bocce, cribbage, card tournaments
-  - "other" for everything else (theater, golf, sports, classes, etc.)
+  - "fine_arts" for theater/plays, comedy, and visual/craft arts (pottery, ceramics, painting, drawing classes)
+  - "other" for everything else (golf, fitness, cooking classes, etc.)
 - artists: array of performer/artist names if it's live music, else null
 - town: if the town is "Unknown", infer it from the venue name if possible. Use one of: ${HWY4_TOWN_LIST.join(", ")}. If you can't determine it, return "Unknown".
 
@@ -752,13 +764,18 @@ Return ONLY the JSON array, no other text.`;
       "kids",
       "wine",
       "games",
+      "fine_arts",
       "other",
     ];
     for (const c of classifications) {
       if (c.i >= 0 && c.i < events.length) {
-        events[c.i].category = VALID_CATEGORIES.includes(c.category)
-          ? c.category
-          : "other";
+        // Only let the LLM *upgrade* to a specific category. If it returns a
+        // valid non-"other" type, take it; if it returns "other" (or junk),
+        // keep the deterministic-floor baseline set above — which may already
+        // be specific (e.g. "Live Music @ Stevenot" → live_music).
+        if (VALID_CATEGORIES.includes(c.category) && c.category !== "other") {
+          events[c.i].category = c.category;
+        }
         events[c.i].artists = c.artists;
         if (c.town && c.town !== "Unknown" && events[c.i].town === "Unknown") {
           events[c.i].town = c.town;
@@ -766,7 +783,8 @@ Return ONLY the JSON array, no other text.`;
       }
     }
   } catch (err) {
-    console.warn("Category classification failed, using defaults:", err);
+    // Baseline from the deterministic floor already stands — log and move on.
+    console.warn("Category classification (LLM) failed, using keyword floor:", err);
   }
 }
 

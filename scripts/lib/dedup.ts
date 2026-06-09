@@ -222,6 +222,10 @@ function buildStrongMatchUpdate(
     event_url: pick(event.event_url, existing.event_url),
     address: pick(event.address, existing.address),
     ...(existing.poster_locked ? {} : { image_url: pick(event.image_url ?? null, existing.image_url) }),
+    // Self-heal category, upgrade-only (never write "other" over a specific type).
+    ...(event.category && event.category !== "other"
+      ? { category: event.category }
+      : {}),
     artists: artistSet.size > 0 ? [...artistSet] : null,
     dedup_key: dedupKey,
     ...(event.source_event_id && { source_event_id: event.source_event_id }),
@@ -230,7 +234,7 @@ function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, dedup_key, source_event_id, price_locked, description_locked, poster_locked";
+  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked";
 
 type ExistingRow = {
   id: string;
@@ -244,6 +248,7 @@ type ExistingRow = {
   address: string | null;
   town: string;
   image_url: string | null;
+  category?: string | null;
   dedup_key?: string | null;
   source_event_id?: string | null;
   // When true, the field is human-set — no scrape write may touch it.
@@ -264,6 +269,10 @@ function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
     existing.event_url !== event.event_url ||
     existing.address !== event.address ||
     existing.town !== event.town ||
+    // Self-heal: a specific incoming category that differs from the stored one
+    // counts as a change (so a stuck "other" row updates). Never a downgrade —
+    // the update payload itself refuses to write "other" over a specific value.
+    (event.category !== "other" && existing.category !== event.category) ||
     (!existing.poster_locked && existing.image_url !== (event.image_url ?? null))
   );
 }
@@ -566,6 +575,7 @@ export async function upsertEvents(
       address: string | null;
       town: string;
       image_url: string | null;
+      category?: string | null;
       price_locked?: boolean | null;
       description_locked?: boolean | null;
       poster_locked?: boolean | null;
@@ -575,7 +585,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked, description_locked, poster_locked"
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -586,7 +596,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, price_locked, description_locked, poster_locked"
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -608,6 +618,7 @@ export async function upsertEvents(
         existing.event_url !== event.event_url ||
         existing.address !== event.address ||
         existing.town !== event.town ||
+        (event.category !== "other" && existing.category !== event.category) ||
         (!existing.poster_locked && existing.image_url !== (event.image_url ?? null));
 
       if (changed) {
@@ -625,6 +636,13 @@ export async function upsertEvents(
             event_url: event.event_url,
             address: event.address,
             town: event.town,
+            // Self-heal category on re-scrape so a row that once landed in
+            // "other" (e.g. a failed classify run) gets corrected when a later
+            // run classifies it. Only ever *upgrade*: never overwrite a specific
+            // category with "other" (avoids the reverse ratchet).
+            ...(event.category && event.category !== "other"
+              ? { category: event.category }
+              : {}),
             ...(existing.poster_locked ? {} : { image_url: event.image_url ?? null }),
             // Keep dedup_key in sync with the (possibly-changed) town so
             // dedup_key lookups still find this row if source_event_id
