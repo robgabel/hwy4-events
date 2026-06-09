@@ -78,8 +78,8 @@ function FlaggedRowCard({ row }: { row: FlaggedRow }) {
     <article
       style={{
         background: "#fff",
-        border: "1px solid #e8e4de",
-        borderLeft: "4px solid #d97706",
+        border: "1px solid #E7E0D5",
+        borderLeft: "4px solid #C4922A",
         borderRadius: 12,
         padding: "14px 16px",
         display: "flex",

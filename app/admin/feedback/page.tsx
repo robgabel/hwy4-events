@@ -119,7 +119,7 @@ function FeedbackCard({ f }: { f: Feedback }) {
         style={{
           margin: "0 0 14px",
           padding: "12px 14px",
-          background: "#faf9f6",
+          background: "#FDF8F3",
           borderRadius: 8,
           color: "#2d3a22",
           fontSize: 16,

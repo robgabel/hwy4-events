@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { readFlash } from "@/lib/admin/flash";
-import { Banner } from "@/components/admin/ui";
+import { Banner, adminBtn } from "@/components/admin/ui";
 import { TodayBriefing } from "./TodayBriefing";
 import { GrowthBriefing } from "./GrowthBriefing";
+import { runBriefing } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,19 @@ export default async function BriefingsPage({
         style={{
           display: "flex",
           gap: 4,
+          alignItems: "flex-end",
           marginBottom: 24,
-          borderBottom: "1px solid #e8e4de",
+          borderBottom: "1px solid #E7E0D5",
         }}
       >
         <Tab href="/admin/briefings" label="Today" sub="daily ops" active={view === "today"} />
         <Tab href="/admin/briefings?view=growth" label="Growth memo" sub="weekly" active={view === "growth"} />
+        <form action={runBriefing} style={{ marginLeft: "auto", marginBottom: 6 }}>
+          <input type="hidden" name="view" value={view} />
+          <button type="submit" style={{ ...adminBtn.secondary, fontSize: 14, padding: "6px 14px" }}>
+            Run now
+          </button>
+        </form>
       </div>
 
       {error && <Banner tone="error">{error}</Banner>}
@@ -61,10 +69,10 @@ function Tab({
       style={{
         padding: "8px 16px 12px",
         marginBottom: -1,
-        color: active ? "#2d5016" : "#999",
+        color: active ? "#1B3A2D" : "#999",
         fontWeight: active ? 700 : 500,
         fontSize: 16,
-        borderBottom: `2px solid ${active ? "#2d5016" : "transparent"}`,
+        borderBottom: `2px solid ${active ? "#1B3A2D" : "transparent"}`,
         textDecoration: "none",
         whiteSpace: "nowrap",
       }}

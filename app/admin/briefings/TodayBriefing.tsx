@@ -44,7 +44,7 @@ export async function TodayBriefing() {
 
   return (
     <>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Today</h1>
+      <h1 style={{ color: "#1B3A2D", fontSize: 26, margin: "0 0 4px" }}>Today</h1>
       <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
         Your nightly digest. The chief of staff reads the audit, the verification queue, new
         submissions, and search trends, then flags what needs a human. Clear-cut submissions you
@@ -149,10 +149,10 @@ function VitalsStrip({ vitals }: { vitals: Vitals }) {
       {stats.map((s) => (
         <div
           key={s.label}
-          style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 10, padding: "12px 14px" }}
+          style={{ background: "#fff", border: "1px solid #E7E0D5", borderRadius: 10, padding: "12px 14px" }}
         >
           <p style={{ ...labelStyle, margin: "0 0 4px" }}>{s.label}</p>
-          <p style={{ color: "#2d5016", fontSize: 24, fontWeight: 700, margin: 0 }}>{s.value}</p>
+          <p style={{ color: "#1B3A2D", fontSize: 24, fontWeight: 700, margin: 0 }}>{s.value}</p>
         </div>
       ))}
     </div>
@@ -160,18 +160,18 @@ function VitalsStrip({ vitals }: { vitals: Vitals }) {
 }
 
 function ItemCard({ item, variant }: { item: DigestItem; variant: "needs" | "fyi" | "watching" }) {
-  const accent = variant === "needs" ? "#d97706" : variant === "watching" ? "#5a8fa8" : "#e8e4de";
+  const accent = variant === "needs" ? "#C4922A" : variant === "watching" ? "#5a8fa8" : "#E7E0D5";
   return (
     <article
       style={{
         background: "#fff",
-        border: "1px solid #e8e4de",
+        border: "1px solid #E7E0D5",
         borderLeft: `4px solid ${accent}`,
         borderRadius: 12,
         padding: 18,
       }}
     >
-      <h3 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 6px", fontWeight: 600 }}>{item.title}</h3>
+      <h3 style={{ color: "#1B3A2D", fontSize: 18, margin: "0 0 6px", fontWeight: 600 }}>{item.title}</h3>
       <p style={{ color: "#3a3a3a", fontSize: 16, lineHeight: 1.55, margin: 0 }}>{item.detail}</p>
       {item.why && (
         <div
@@ -198,11 +198,11 @@ function ItemCard({ item, variant }: { item: DigestItem; variant: "needs" | "fyi
 
 function EmptyState() {
   return (
-    <section style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 12, padding: 32, textAlign: "center" }}>
-      <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>No digest yet.</p>
+    <section style={{ background: "#fff", border: "1px solid #E7E0D5", borderRadius: 12, padding: 32, textAlign: "center" }}>
+      <p style={{ color: "#1B3A2D", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>No digest yet.</p>
       <p style={{ color: "#666", fontSize: 16, margin: 0, lineHeight: 1.5 }}>
-        The chief of staff runs nightly, after the evening audit. Check back in the morning, or
-        trigger a run by hand to see one now.
+        The chief of staff runs nightly, after the evening audit. Check back in the morning, or use
+        Run now (top right) to generate one.
       </p>
     </section>
   );
@@ -212,7 +212,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
     <h2
       style={{
-        color: "#2d5016",
+        color: "#1B3A2D",
         fontSize: 15,
         fontWeight: 700,
         textTransform: "uppercase",
@@ -232,7 +232,7 @@ function CardList({ children }: { children: React.ReactNode }) {
 function Banner({ tone, title, children }: { tone: "ok" | "error"; title: string; children: React.ReactNode }) {
   const styles =
     tone === "ok"
-      ? { background: "#eaf7ea", border: "1px solid #b7e0b7", color: "#2d5016" }
+      ? { background: "#eaf7ea", border: "1px solid #b7e0b7", color: "#1B3A2D" }
       : { background: "#fdecea", border: "1px solid #f5b7b1", color: "#922b21" };
   return (
     <section style={{ ...styles, borderRadius: 12, padding: "14px 18px" }}>
@@ -253,7 +253,7 @@ const labelStyle: React.CSSProperties = {
 const pillStyle: React.CSSProperties = {
   display: "inline-block",
   background: "#eef2e9",
-  color: "#2d5016",
+  color: "#1B3A2D",
   fontSize: 13,
   fontWeight: 600,
   padding: "1px 8px",
@@ -261,9 +261,9 @@ const pillStyle: React.CSSProperties = {
 };
 
 const summaryCardStyle: React.CSSProperties = {
-  background: "#faf9f6",
-  border: "1px solid #e8e4de",
-  borderLeft: "4px solid #2d5016",
+  background: "#FDF8F3",
+  border: "1px solid #E7E0D5",
+  borderLeft: "4px solid #1B3A2D",
   borderRadius: 12,
   padding: "16px 18px",
   marginBottom: 4,
@@ -273,9 +273,9 @@ const linkBtnStyle: React.CSSProperties = {
   display: "inline-block",
   marginTop: 12,
   padding: "7px 12px",
-  background: "#faf9f6",
-  color: "#2d5016",
-  border: "1px solid #2d5016",
+  background: "#FDF8F3",
+  color: "#1B3A2D",
+  border: "1px solid #1B3A2D",
   borderRadius: 8,
   fontSize: 15,
   fontWeight: 500,

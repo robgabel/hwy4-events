@@ -203,8 +203,8 @@ function FlaggedEventRow({ event, orgs }: { event: FlaggedEvent; orgs: Map<strin
           </summary>
           <pre
             style={{
-              background: "#faf9f6",
-              border: "1px solid #e8e4de",
+              background: "#FDF8F3",
+              border: "1px solid #E7E0D5",
               borderRadius: 6,
               padding: 10,
               marginTop: 8,

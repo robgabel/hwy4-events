@@ -2,21 +2,29 @@ import type { CSSProperties, ReactNode } from "react";
 
 // Shared admin building blocks. Every /admin queue page used to redefine its own
 // Banner, button styles, card shell, and empty state inline; this is the one copy.
-
-export const INK = "#2d5016";
-export const MUTED = "#666";
-export const ACCENT = "#d97706";
-export const DANGER = "#922b21";
+//
+// Color comes from the site's real brand tokens (mirror of app/globals.css @theme),
+// not the old ad-hoc admin palette. Change a value here and the whole admin tree
+// (every page that imports the kit) re-brands at once.
+export const INK = "#1B3A2D"; // forest — headings, links, primary buttons
+export const MUTED = "#6E6153"; // stone — body / meta text (WCAG-AA on cream)
+export const SUBTLE = "#8A7B66"; // stone-light — labels, placeholders
+export const ACCENT = "#C4922A"; // gold — "needs review" accents + nav badge
+export const DANGER = "#922b21"; // destructive actions (no brand red; kept)
+export const BORDER = "#E7E0D5"; // one warm hairline border value
+export const PAGE_BG = "#FDF8F3"; // cream — page background
+export const CARD_BG = "#FFFFFF";
+export const SUBTLE_BG = "#F7F2EA"; // cream-tinted fill (secondary buttons, tiles)
 export const ADMIN_MAX_WIDTH = 940;
 
 export const adminInput: CSSProperties = {
   width: "100%",
   padding: "8px 10px",
-  border: "1px solid #d9d4cc",
+  border: `1px solid ${BORDER}`,
   borderRadius: 8,
   fontSize: 16,
-  color: "#2d3a22",
-  background: "#fff",
+  color: INK,
+  background: CARD_BG,
   boxSizing: "border-box",
 };
 
@@ -33,7 +41,7 @@ export const adminBtn: Record<"primary" | "secondary" | "danger", CSSProperties>
   },
   secondary: {
     padding: "10px 16px",
-    background: "#faf9f6",
+    background: SUBTLE_BG,
     color: INK,
     border: `1px solid ${INK}`,
     borderRadius: 8,
@@ -56,7 +64,7 @@ export const adminBtn: Record<"primary" | "secondary" | "danger", CSSProperties>
 export function Banner({ tone, children }: { tone: "ok" | "error"; children: ReactNode }) {
   const s =
     tone === "ok"
-      ? { background: "#eaf7ea", border: "1px solid #b7e0b7", color: INK }
+      ? { background: "#eaf3ea", border: "1px solid #b7d3b7", color: INK }
       : { background: "#fdecea", border: "1px solid #f5b7b1", color: DANGER };
   return (
     <div style={{ ...s, padding: "12px 16px", borderRadius: 8, fontSize: 16, marginBottom: 16 }}>
@@ -95,8 +103,8 @@ export function EmptyCard({ heading, sub }: { heading: string; sub: ReactNode })
   return (
     <section
       style={{
-        background: "#fff",
-        border: "1px solid #e8e4de",
+        background: CARD_BG,
+        border: `1px solid ${BORDER}`,
         borderRadius: 12,
         padding: 32,
         textAlign: "center",
@@ -114,13 +122,13 @@ export function CardList({ children }: { children: ReactNode }) {
 }
 
 // White card with the standard accent left-border. Each queue passes its own
-// accent (orange for "needs review", green for organizer, etc.).
+// accent (gold for "needs review", forest for organizer, etc.).
 export function QueueCard({ accent = ACCENT, children }: { accent?: string; children: ReactNode }) {
   return (
     <article
       style={{
-        background: "#fff",
-        border: "1px solid #e8e4de",
+        background: CARD_BG,
+        border: `1px solid ${BORDER}`,
         borderLeft: `4px solid ${accent}`,
         borderRadius: 12,
         padding: 20,
@@ -159,8 +167,8 @@ export function LinkBox({
       rel={external ? "noopener noreferrer" : undefined}
       style={{
         display: "block",
-        background: "#faf9f6",
-        border: "1px solid #e8e4de",
+        background: SUBTLE_BG,
+        border: `1px solid ${BORDER}`,
         borderRadius: 8,
         padding: "8px 12px",
         textDecoration: "none",
@@ -173,7 +181,7 @@ export function LinkBox({
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "0.06em",
-          color: "#888",
+          color: SUBTLE,
           margin: "0 0 2px",
         }}
       >

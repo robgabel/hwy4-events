@@ -106,7 +106,7 @@ async function postSlack(digest: GrowthDigest): Promise<void> {
   const lines = [
     `*Hwy4 growth memo — ${header}*`,
     digest.north_star.headline || digest.summary,
-    `→ ${SITE_URL}/admin/growth-memo`,
+    `→ ${SITE_URL}/admin/briefings?view=growth`,
   ];
   try {
     await fetch(webhook, {

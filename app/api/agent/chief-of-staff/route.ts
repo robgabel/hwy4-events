@@ -193,7 +193,7 @@ async function postSlack(digest: Digest): Promise<void> {
   if (!webhook) return;
   const n = digest.needs_you.length;
   const header = n > 0 ? `${n} thing(s) need you` : "all quiet";
-  const lines = [`*Hwy4 chief of staff — ${header}*`, digest.summary, `→ ${SITE_URL}/admin/today`];
+  const lines = [`*Hwy4 chief of staff — ${header}*`, digest.summary, `→ ${SITE_URL}/admin/briefings`];
   try {
     await fetch(webhook, {
       method: "POST",
