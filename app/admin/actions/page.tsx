@@ -12,11 +12,11 @@ import {
   adminBtn,
   adminInput,
 } from "@/components/admin/ui";
-import type { AgentActionRow } from "@/lib/agent/policy";
-import { approveAction, rejectAction, revertExecuted, scanForActions } from "./actions";
+import type { AgentActionRow, AgentPolicyRow } from "@/lib/agent/policy";
+import { approveAction, rejectAction, revertExecuted, scanForActions, setPolicy } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // scanForActions / approveAction touch the DB + executor
+export const maxDuration = 120; // scanForActions web-researches each new proposal
 
 async function loadActions(): Promise<AgentActionRow[]> {
   const supabase = getAdminClientOrNull();
@@ -27,6 +27,35 @@ async function loadActions(): Promise<AgentActionRow[]> {
     .order("created_at", { ascending: false })
     .limit(60);
   return (data as AgentActionRow[] | null) ?? [];
+}
+
+async function loadPolicy(): Promise<AgentPolicyRow[]> {
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("agent_policy")
+    .select("action_type, auto_execute, min_clean_weeks, notes")
+    .order("action_type");
+  return (data as AgentPolicyRow[] | null) ?? [];
+}
+
+// Canary stat per action type: how often a human approved it, over how long. The
+// graduation bar is ~100% approval for min_clean_weeks. reverted = approved then
+// undone — a regret signal, surfaced separately.
+function policyStats(actions: AgentActionRow[], type: string) {
+  const decided = actions.filter((a) => a.type === type && a.decided_at);
+  const executed = decided.filter((a) => a.status === "executed").length;
+  const reverted = decided.filter((a) => a.status === "reverted").length;
+  const rejected = decided.filter((a) => a.status === "rejected").length;
+  const approved = executed + reverted;
+  const n = approved + rejected;
+  const rate = n > 0 ? approved / n : null;
+  const dates = decided.map((a) => a.decided_at as string).sort();
+  const weeks =
+    dates.length >= 2
+      ? Math.round(((Date.parse(dates[dates.length - 1]) - Date.parse(dates[0])) / (7 * 86400000)) * 10) / 10
+      : 0;
+  return { executed, reverted, rejected, n, rate, weeks };
 }
 
 const STATUS: Record<string, { label: string; bg: string; fg: string }> = {
@@ -55,6 +84,7 @@ export default async function ActionsPage({
 }) {
   const { error, flash } = readFlash(await searchParams);
   const all = await loadActions();
+  const policies = await loadPolicy();
   const proposed = all.filter((a) => a.status === "proposed");
   const recent = all.filter((a) => a.status !== "proposed").slice(0, 15);
 
@@ -109,7 +139,90 @@ export default async function ActionsPage({
           </CardList>
         </>
       )}
+
+      {policies.length > 0 && <PolicyPanel policies={policies} actions={all} />}
     </QueueShell>
+  );
+}
+
+function PolicyPanel({
+  policies,
+  actions,
+}: {
+  policies: AgentPolicyRow[];
+  actions: AgentActionRow[];
+}) {
+  return (
+    <>
+      <SectionHeader>
+        Autonomy policy <span style={{ color: MUTED, fontWeight: 400 }}>· Stage 2</span>
+      </SectionHeader>
+      <p style={{ color: MUTED, fontSize: 14, lineHeight: 1.5, margin: "0 0 12px" }}>
+        Graduate a type to autonomous only after its approval rate holds ~100% for{" "}
+        <code>min_clean_weeks</code>. Even then, only low-blast, reversible, internal,{" "}
+        <em>ready</em> proposals auto-run (create_org_row needs a high-confidence researched URL).
+        Outward-facing types can never graduate.
+      </p>
+      <CardList>
+        {policies.map((pol) => {
+          const st = policyStats(actions, pol.action_type);
+          const ratePct = st.rate == null ? "—" : `${Math.round(st.rate * 100)}%`;
+          const atBar = st.rate === 1 && st.weeks >= pol.min_clean_weeks && st.n > 0;
+          return (
+            <article
+              style={{
+                background: "#fff",
+                border: "1px solid #e8e4de",
+                borderLeft: `4px solid ${pol.auto_execute ? "#2d5016" : "#d9d4cc"}`,
+                borderRadius: 12,
+                padding: "14px 16px",
+                display: "flex",
+                gap: 14,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+              key={pol.action_type}
+            >
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ color: INK, fontSize: 16, fontWeight: 600 }}>{pol.action_type}</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      color: pol.auto_execute ? "#2d5016" : "#4b5563",
+                      background: pol.auto_execute ? "#eaf7ea" : "#f3f4f6",
+                      border: `1px solid ${pol.auto_execute ? "#b7e0b7" : "#d8dce2"}`,
+                      padding: "2px 8px",
+                      borderRadius: 6,
+                    }}
+                  >
+                    {pol.auto_execute ? "autonomous" : "human-approved"}
+                  </span>
+                </div>
+                <p style={{ color: MUTED, fontSize: 13, margin: "4px 0 0" }}>
+                  Approval {ratePct} ({st.n} decided{st.reverted ? `, ${st.reverted} reverted` : ""}) ·{" "}
+                  {st.weeks} wk of data · bar: 100% for {pol.min_clean_weeks} wk
+                  {atBar ? " · ✓ at bar" : ""}
+                </p>
+              </div>
+              <form action={setPolicy} style={{ margin: 0 }}>
+                <input type="hidden" name="action_type" value={pol.action_type} />
+                <input type="hidden" name="auto_execute" value={pol.auto_execute ? "false" : "true"} />
+                <button
+                  type="submit"
+                  style={pol.auto_execute ? { ...adminBtn.secondary, padding: "8px 14px" } : { ...adminBtn.primary, padding: "8px 14px", fontSize: 15 }}
+                >
+                  {pol.auto_execute ? "Pause autonomy" : "Graduate to autonomous"}
+                </button>
+              </form>
+            </article>
+          );
+        })}
+      </CardList>
+    </>
   );
 }
 
@@ -139,6 +252,14 @@ function Badges({ action }: { action: AgentActionRow }) {
   );
 }
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 function ProposedCard({ action }: { action: AgentActionRow }) {
   const p = action.payload as {
     slug?: string;
@@ -146,12 +267,39 @@ function ProposedCard({ action }: { action: AgentActionRow }) {
     canonical_url?: string;
     match_patterns?: string[];
     town?: string;
+    research?: { confidence?: string; sources?: { title: string; url: string }[]; notes?: string };
   };
+  const research = p.research;
+  const confColor =
+    research?.confidence === "high" ? "#2d5016" : research?.confidence === "medium" ? "#92400e" : "#922b21";
 
   return (
     <QueueCard>
       <Badges action={action} />
       <CardHeader title={action.title ?? action.type} meta={action.rationale ?? undefined} />
+
+      {action.type === "create_org_row" && research && (
+        <p style={{ fontSize: 13, color: MUTED, margin: "-4px 0 12px" }}>
+          Agent research:{" "}
+          <strong style={{ color: confColor }}>{research.confidence ?? "low"}</strong> confidence
+          {research.sources && research.sources.length > 0 && (
+            <>
+              {" · "}
+              {research.sources.slice(0, 3).map((s, i) => (
+                <a
+                  key={i}
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#2d5a3d", marginRight: 8 }}
+                >
+                  {hostOf(s.url)} ↗
+                </a>
+              ))}
+            </>
+          )}
+        </p>
+      )}
 
       {action.type === "create_org_row" ? (
         <form action={approveAction}>

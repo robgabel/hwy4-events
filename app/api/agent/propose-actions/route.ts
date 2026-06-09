@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { proposeLinkGapActions } from "@/lib/agent/propose-link-gaps";
+import { runAutoExecutor } from "@/lib/agent/auto-runner";
 import { SITE_URL } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120; // each new proposal does one web-research call
 
 // Agent Cockpit Stage 1 proposer (PRD-agent-cockpit.md). Drains the actionable
 // link-gap worklist into `proposed` agent_actions rows for a human to approve at
@@ -27,23 +28,27 @@ export async function GET(request: Request) {
 
   try {
     const result = await proposeLinkGapActions(supabase);
+    // Stage 2: auto-execute any proposals whose type has graduated (no-op while
+    // every agent_policy.auto_execute is false). Covers proposals from prior runs too.
+    const auto = await runAutoExecutor(supabase);
 
     const webhook = process.env.SLACK_WEBHOOK_URL;
-    if (webhook && result.proposed > 0) {
+    if (webhook && (result.proposed > 0 || auto.executed > 0)) {
+      const bits: string[] = [];
+      if (result.proposed > 0) bits.push(`${result.proposed} new link-gap action(s) proposed`);
+      if (auto.executed > 0) bits.push(`${auto.executed} auto-executed`);
       try {
         await fetch(webhook, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: `*Cockpit:* ${result.proposed} new link-gap action(s) proposed → ${SITE_URL}/admin/actions`,
-          }),
+          body: JSON.stringify({ text: `*Cockpit:* ${bits.join(", ")} → ${SITE_URL}/admin/actions` }),
         });
       } catch (err) {
         console.error("[propose-actions] Slack post failed:", err);
       }
     }
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result, auto });
   } catch (err) {
     console.error("[propose-actions] failed:", err);
     return NextResponse.json(

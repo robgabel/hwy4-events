@@ -6,6 +6,7 @@ import { failRedirect, flashRedirect, field, requireField } from "@/lib/admin/fl
 import { executeAction, revertAction } from "@/lib/agent/actions-executor";
 import type { AgentActionRow } from "@/lib/agent/policy";
 import { proposeLinkGapActions } from "@/lib/agent/propose-link-gaps";
+import { runAutoExecutor } from "@/lib/agent/auto-runner";
 
 const ADMIN_PATH = "/admin/actions";
 
@@ -123,15 +124,45 @@ export async function revertExecuted(formData: FormData) {
 }
 
 // Manual trigger for the proposer (the cron's twin). Drains the link-gap worklist
-// into fresh `proposed` rows; idempotent, so safe to click any time.
+// into fresh `proposed` rows (web-researching each), then runs the auto-executor
+// for any graduated types. Idempotent, so safe to click any time.
 export async function scanForActions() {
   const supabase = getAdminClient();
   const result = await proposeLinkGapActions(supabase);
+  const auto = await runAutoExecutor(supabase);
   revalidatePath(ADMIN_PATH);
+  if (auto.executed > 0) revalidatePath("/");
+  const autoBit = auto.executed > 0 ? `, ${auto.executed} auto-executed` : "";
   flashRedirect(
     ADMIN_PATH,
-    `Scan complete: ${result.proposed} new proposal(s) from ${result.gaps} gap venue(s)${
-      result.skipped ? `, ${result.skipped} already queued/existing` : ""
-    }.`
+    `Scan: ${result.proposed} new proposal(s) from ${result.gaps} gap venue(s) (${result.researched} web-researched)${autoBit}.`
   );
+}
+
+// Stage 2 graduation toggle: flip a type's autonomy. Turning it ON immediately runs
+// the auto-executor over already-staged proposals (the guardrail + readiness checks
+// still gate each one). Outward-facing types can't be graduated meaningfully — the
+// canAutoExecute guardrail forbids them no matter what this flag says.
+export async function setPolicy(formData: FormData) {
+  const actionType = requireField(formData, "action_type", ADMIN_PATH, "action type");
+  const on = field(formData, "auto_execute") === "true";
+  const supabase = getAdminClient();
+  const { error } = await supabase
+    .from("agent_policy")
+    .update({ auto_execute: on, updated_at: new Date().toISOString() })
+    .eq("action_type", actionType);
+  if (error) failRedirect(ADMIN_PATH, error.message);
+
+  let note = on
+    ? `Graduated "${actionType}" to autonomous.`
+    : `Paused autonomy for "${actionType}".`;
+  if (on) {
+    const auto = await runAutoExecutor(supabase);
+    if (auto.executed > 0) {
+      revalidatePath("/");
+      note += ` ${auto.executed} eligible proposal(s) auto-executed.`;
+    }
+  }
+  revalidatePath(ADMIN_PATH);
+  flashRedirect(ADMIN_PATH, note);
 }
