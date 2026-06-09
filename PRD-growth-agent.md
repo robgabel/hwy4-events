@@ -61,7 +61,41 @@ Every number is real and queried; the model may only summarize what it's handed 
 - **Phase 1 — read-only growth reframe (this PR).** New reasoner + context pack + digest shape + cockpit page + weekly cron. Executes nothing, drafts copy. Grade the memo weekly for a month, exactly as Stage 0 shipped report-only. Cadence decision: **weekly Friday memo is the flagship (Rob has weekend time to act on it); the daily chief-of-staff stays the ops pulse** (option B).
 - **Phase 2 — drafted artifacts (already seeded).** The `draft` field + copy/Gmail UI are live; widen the kinds the agent reaches for (organizer outreach, build-in-public post, subject A/B). Still human-sent.
 - **Phase 3 — experiment memory (built 2026-06-09).** `growth_experiments` table (name, hypothesis, metric, baseline, status, result, dates; migration `20260609b_growth_experiments.sql`). The signal pack now carries the running + recently-concluded rows, and the memo prompt reports an early read on each (one item per running experiment) instead of inventing tests. `/admin/experiments` (page + `actions.ts`, Basic Auth) lets Rob log and conclude them with no SQL. Seeded with the two tests already in flight (newsletter box after event 5; the /hosts QR kit). This is what makes it a *growth* agent and not a weekly dashboard.
-- **Phase 4 — measurement plumbing.** Wire `?src=host` / share `src` into `site_events` so acquisition channels (host cards) are countable; define WRR more precisely if a persistent (privacy-respecting) visitor id is ever added. Until then the proxy stands, labeled directional.
+- **Phase 4 — measurement plumbing and beyond.** The agent can only reason over what it is handed, so the forward work is mostly *widening the signal pack* (and the human Growth surface). Laid out in the Roadmap below.
+
+## Roadmap (the data the agent still needs)
+
+Ordered by leverage. Each item widens `lib/agent/growth-context.ts` (what the memo reasons over) and usually adds a matching panel to the `/admin/analytics` Growth tab. Driven by the gap analysis: a growth agent optimizes *rates and channels*, but today it sees mostly counts.
+
+### R1 — Newsletter signal upgrade (near-term, one cheap PR; all in the signup write path)
+
+The newsletter is the owned audience, so its signal should be the richest. No new table — `newsletter_subscribers` already carries `created_at` / `confirmed_at` / `unsubscribed_at`, so the full daily history is derivable on the fly (cheap into the low thousands).
+
+- **R1a — Daily series + running total.** A shared `lib/newsletter-stats.ts` derives per-day `{signups, confirmed, unsubs, net}` + cumulative active. Surfaced in the memo context (the agent reads *trend shape*, not two 7-day buckets) **and** as a Newsletter panel on the Growth tab (total + a CSS sparkline; no chart lib). Directly reads out the two live placement experiments.
+- **R1b — Signup source.** Capture `src` (homepage / town / event page / post-event-5 box / `?src=host`) on the subscriber row at write time. The cheapest down payment on attribution; measures the placement experiments directly.
+- **R1c — Signup local vs visitor.** Classify each new subscriber at signup via the existing `geoFromHeaders` + `classifyVisitor` (the route already has Vercel geo headers). Store **`visitor_class` only** — not city/region, since a subscriber row is tied to an email (PII), and we never store the raw IP. Tells the agent *who the list is*: locals = retention / North Star, visitors = demand wedge. **Known blind spot:** a visitor signing up from inside their rental geolocates as `local`, so geo-at-signup *undercounts the host kit's own visitors* — which is exactly why R1b (`src=host`) is the complementary channel-truth signal. Use both.
+
+### R2 — Source attribution across the board (Phase 4 proper; the channel-truth unlock)
+
+Capture `src` / query on `site_events` views (host card, QR, share, newsletter), since the beacon currently records `path` but drops the query string. Until this lands, *"which channel do I push this week?"* — the agent's central question — is a guess. Highest-leverage non-trivial build.
+
+### R3 — Real returning measurement (the North Star upgrade)
+
+Today WRR is proxied by weekly local *sessions* because `site_events` has only a per-session id. Add a **first-party, anonymous, opaque visitor id** — recommended: a `localStorage` UUID sent in the existing beacon (no third-party service, no `Set-Cookie`/consent friction, data stays ours; PostHog is the only turnkey "buy" that fits but is overkill, and Plausible/Fathom/Vercel are cookieless and cannot measure returning). Stamp `visitor_id` on `site_events` → compute true week-over-week returning cohorts. Turns the proxy into a measured North Star. Label it a per-device proxy (ITP / incognito reset it).
+
+### R4 — Funnel, supply, and engagement depth
+
+- **Newsletter open rate** via a Resend webhook (deliverability + subject resonance; clicks alone miss a staling list).
+- **Funnel conversion rates** (visit→signup, visit→business-referral), not just the raw counts at each stage.
+- **Supply-side health** (new submissions/week, % published, organizer repeat rate). Supply is half the marketplace; a thin calendar quietly kills demand, and the agent should flag a supply dip as loudly as a traffic dip.
+- **Event / town / category demand aggregation** (which content actually converts visitors) — the fuel for both editorial strategy and organizer targeting.
+- **Visitor-origin geography** (is the Bay Area actually showing up?) — `site_events` has `region`/`city`; surface it for the visitor wedge.
+
+### R5 — Context and targets
+
+- **Off-site reach input** (LinkedIn / FB groups / IG) — manual weekly input first (pairs with the cockpit FB sensor) so the agent can connect off-site effort to on-site lift; these are Rob's real acquisition channels and the agent is blind to them today.
+- **Per-metric goals/targets** so "+7 subs" reads as "+7, behind pace" — a tiny input, big interpretive upgrade.
+- **GSC month-over-month** query movement once `GOOGLE_SEARCH_CONSOLE_SA_JSON` is set (not just the latest capture).
 
 ## Critical files
 
@@ -84,6 +118,5 @@ None new. Reuses `ANTHROPIC_API_KEY`, `CRON_SECRET`, `SLACK_WEBHOOK_URL`, `SUPAB
 
 ## Open items
 - [ ] Reasoner model: Sonnet (assumed) vs Opus if the move-of-the-week judgment needs to be top-tier editorial.
-- [ ] Phase 3 `growth_experiments` schema + a way to log a change (manual insert vs a tiny admin form).
-- [ ] Phase 4: capture `src` in `site_events` so host-card / share channels are measurable.
-- [ ] Once GSC is live, have the memo report month-over-month query movement, not just the latest capture.
+- [ ] First-party returning id (R3): `localStorage` (recommended, cookieless) vs an httpOnly edge cookie vs PostHog. Confirm the privacy posture (anonymous, no PII) before building.
+- [ ] R1 is the recommended next build (newsletter daily + total + source + local/visitor) — small, in the signup write path, and it reads out the two live experiments.
