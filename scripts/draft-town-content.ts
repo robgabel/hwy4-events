@@ -20,6 +20,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { withVoice } from "../lib/voice.js";
 
 // --- args ---
 
@@ -210,7 +211,7 @@ async function main() {
   const response = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 8192,
-    system: SYSTEM_PROMPT,
+    system: withVoice(SYSTEM_PROMPT),
     messages: [{ role: "user", content: USER_PROMPT }],
   });
 

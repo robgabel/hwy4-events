@@ -122,7 +122,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       {
         question: "Where do locals eat in Murphys?",
         answer:
-          "Grounds on Main, run by Chef/Owner River Klass since 1992, for breakfast and dinner that punches above its weight. Alchemy across the street for the deep beer-and-wine list and group meals. V Restaurant in the back of Grounds' building (Suite L), opened by Michael and Melissa Ninos in 2004, for special occasions and the most upscale room in the county. The Watering Hole on Big Trees Road for craft beer and pub food on a creek-side patio.",
+          "Grounds on Main, run by Chef/Owner River Klass since 1992, for breakfast and the kind of dinner you don't expect from a Main Street storefront. Alchemy across the street for the deep beer-and-wine list and group meals. V Restaurant in the back of Grounds' building (Suite L), opened by Michael and Melissa Ninos in 2004, for special occasions and the most upscale room in the county. The Watering Hole on Big Trees Road for craft beer and pub food on a creek-side patio.",
       },
       {
         question: "Is Murphys family-friendly or more of a wine-tasting trip?",
@@ -233,7 +233,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "Wassup Dawg moved from Grizzly Plaza to the Meadowmont Pharmacy parking lot. Mon–Fri 11am until sold out, usually around 2pm. $10 combo.",
       "Snowshoe Brewery is an easy afternoon, especially the dog-friendly beer garden in summer. It's quieter than it used to be and the old energy has thinned out, but they refreshed the beer a few years back, a few of them are genuinely good, and the people are kind. The menu's pretty big, too, and you can grab growlers to go.",
       "Hinterhaus has a quiet locals' move: unless it's a busy weekend, ask for the three mini-cocktails as a taster. Absolutely fantastic. The merch wall is unusually good too, both Hinterhaus-branded and unbranded gear at quality you don't expect from a tasting-room gift shop.",
-      "Arnold Ace Hardware's home section punches way above what the sign suggests. Locals come here for wall art and seasonal decor, not just for hardware and propane.",
+      "Arnold Ace Hardware's home section is bigger than the sign suggests. Locals come here for wall art and seasonal decor, not just for hardware and propane.",
       "The Chevron in town (Grizzly Station, 1075 Hwy 4) makes sandwiches to order inside. Real food, not warming-tray sad. Worth a stop if you're rolling through and don't feel like sitting down.",
       "Bistro Espresso makes its own ketchup. Larry Geiger has run the place since 2005 and the details show up everywhere: that's why it functions as the town's living room.",
       "Local secret at Giant Burger: the breakfast burritos. Not on the marquee, but locals order them.",
@@ -290,7 +290,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "Avery is a CDP, not a town in the city-hall sense. Population 636, ZIP 95224, named after George J. Avery, the first postmaster (post office opened 1885). It's the last named stop before you hit Arnold, which is why old marketing copy calls it the gateway to Calaveras Big Trees. Locals just call it the stretch with the hotel and the skull bar. There are a few more reasons to know it than that, though.",
       "The Historic Avery Hotel started life as a family home in 1851, became a hotel in 1853 under Peter and Nancy Avery, and was known for decades as the Half Way House because it sat midway between the Murphys gold fields and the giant sequoias. The Gotelli family bought it in 1992 and renovated heavily. Today it sleeps 23+ overnight and handles events up to 150, with two bars, a billiards room, a formal dining room, and a wood stage. Call (209) 517-2465 to check what's on the calendar before you assume anything.",
       "Howard's Mystic Saloon at 4529 CA-4 is the other anchor. Curt and Tana Howard lease the old Avery Saloon building and run it in a black goth / mystic style year-round, not just at Halloween. Skull chandeliers, themed decor, table shuffleboard, pool tables, a juke box, and occasional live music. Drinks only, no food. Worth a stop and a drink for the vibe. People behind the bar are friendlier than the decor suggests, and it photographs better than any other bar on the corridor.",
-      "Two more things people miss about Avery. Day-O Espresso at 68 Avery Hotel Rd is a drive-thru coffee hut that punches above its weight, and the fancy toasts are the real move (cinnamon toast on thick bread). And JC Power Equipment, opened January 2019 by Jim and Nancy Conway, is the small-engine repair shop the whole corridor relies on for weed eaters, snowblowers, generators, and chainsaws. They also sell ethanol-free fuel. When the power went out the first time, Jim said, people were lined up."
+      "Two more things people miss about Avery. Day-O Espresso at 68 Avery Hotel Rd is a drive-thru coffee hut where the fancy toasts are the real move (cinnamon toast on thick bread). And JC Power Equipment, opened January 2019 by Jim and Nancy Conway, is the small-engine repair shop the whole corridor relies on for weed eaters, snowblowers, generators, and chainsaws. They also sell ethanol-free fuel. When the power went out the first time, Jim said, people were lined up."
     ],
     "personaNotes": [
       "If you're pouring wine in Murphys and your shift just ended, Howard's Mystic Saloon is 15 to 20 minutes up the 4 and worth the drive for the vibe alone. Drinks only, eat before you come.",
@@ -512,7 +512,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       },
       {
         "question": "Is Copperopolis worth a stop on the way up Highway 4?",
-        "answer": "Yes if you need food, gas, or an EV charge before the climb. Griff's BBQ and Gold Dust Pizza are solid casual options, and Tipsy Frog is open seven days for wine. It's not a destination wine town like Murphys, but it's a legitimate dinner stop and the Square is walkable."
+        "answer": "Yes if you need food, gas, or an EV charge before the climb. Griff's BBQ and Gold Dust Pizza are solid casual options, and Tipsy Frog is open seven days for wine. It's not a destination wine town like Murphys, but it's a proper dinner stop and the Square is walkable."
       }
     ],
     "lastVerified": "2026-05-27",

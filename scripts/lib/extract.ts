@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { applyVenueDetection } from "./venue-matcher.js";
+import { withVoice } from "../../lib/voice.js";
 
 export interface ExtractedEvent {
   name: string;
@@ -127,6 +128,11 @@ ${content}`;
     // ships straight to the map — so accuracy beats the per-call cost savings.
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
+    // Accuracy first: extraction must never invent facts. The voice constitution
+    // governs ONLY how the free-text `description` field is phrased.
+    system: withVoice(
+      "You extract events from a venue's page into JSON. Accuracy is paramount: never invent or alter facts (dates, prices, venues, performers). The voice rules below govern ONLY how you phrase the free-text `description` field; keep descriptions plain and specific, and if the source copy already reads well, preserve it rather than rewriting.",
+    ),
     messages: [{ role: "user", content: prompt }],
   });
 
