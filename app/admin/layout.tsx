@@ -6,11 +6,12 @@ export const dynamic = "force-dynamic";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   // Badge counts for the review queues. countPending returns 0 (never throws) on
   // a misconfigured env so the whole admin tree can't 500 over a missing badge.
-  const [verification, submissions, posters, feedback] = await Promise.all([
+  const [verification, submissions, posters, feedback, proposedActions] = await Promise.all([
     countPending("hwy4_events", "verification_status", "needs_verification"),
     countPending("event_submissions", "status", "pending"),
     countPending("poster_submissions", "status", "pending"),
     countPending("event_feedback", "status", "pending"),
+    countPending("agent_actions", "status", "proposed"),
   ]);
 
   return (
@@ -47,9 +48,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           >
             Admin
           </span>
-          {/* Agent briefings (read-only) — unified tabbed route */}
+          {/* Agent cockpit — briefings (read-only) + the action queue */}
           <NavLink href="/admin/briefings">Today</NavLink>
           <NavLink href="/admin/briefings?view=growth">Growth memo</NavLink>
+          <NavLink href="/admin/actions" badge={proposedActions}>
+            Actions
+          </NavLink>
           <NavDivider />
           {/* Growth */}
           <NavLink href="/admin/experiments">Experiments</NavLink>

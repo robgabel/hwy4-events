@@ -1,12 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { findDuplicateClusters } from "@/lib/dedupe-events";
-import {
-  resolveEventLinkFromOrgs,
-  promotableVenueUrl,
-  isMultiTenantVenue,
-  type LinkOrg,
-} from "@/lib/event-link";
+import { computeActionableLinkGaps, GAP_VENUE_THRESHOLD } from "@/lib/link-gaps";
 
 export const maxDuration = 60;
 
@@ -280,65 +275,14 @@ export async function GET(request: Request) {
   // fallback (trend signal); `actionableCanonicalGaps` is the worklist of venues
   // at/above the threshold — each is worth one hwy4_orgs row (~10 min).
   // Deliberately NO auto-discovery (see "Outbound Event Links" in CLAUDE.md).
-  // Guarded so a failure here never breaks the audit.
-  const GAP_VENUE_THRESHOLD = 5;
+  // Shared with the cockpit's create_org_row proposer via lib/link-gaps.ts so the
+  // audit and the proposer can't drift. Guarded so a failure never breaks the audit.
   let aggregatorFallbackLinks: number | null = null;
   let actionableLinkGaps: { venue: string; count: number }[] = [];
   try {
-    const { data: linkOrgs } = await supabase
-      .from("hwy4_orgs")
-      .select("slug, display_name, canonical_url, match_patterns")
-      .not("canonical_url", "is", null);
-    const orgs = (linkOrgs ?? []) as LinkOrg[];
-    // Registry venue websites feed the resolver's "venue canonical" path (#2), so
-    // the audit must see them too — otherwise it over-reports single-operator
-    // venues (Stevenot, the wine bar) that the detail page now resolves to a
-    // durable venue link. Keyed by venue_key, same as the page.
-    const { data: venueRows } = await supabase
-      .from("hwy4_venues")
-      .select("venue_key, canonical, website")
-      .not("website", "is", null);
-    const venueByKey = new Map(
-      (venueRows ?? []).map((v) => [
-        v.venue_key as string,
-        v as { canonical: string | null; website: string | null },
-      ])
-    );
-    const gapByVenue = new Map<string, number>();
-    let rawFallbacks = 0;
-    for (const r of rows) {
-      if (r.status === "cancelled" || !r.event_url) continue;
-      const venue = r.venue_key ? venueByKey.get(r.venue_key) : undefined;
-      const link = resolveEventLinkFromOrgs(
-        {
-          name: r.name,
-          description: r.description,
-          venue_name: r.venue_name ?? "",
-          org_slug: r.org_slug,
-          event_url: r.event_url,
-        },
-        orgs,
-        { venueUrl: promotableVenueUrl(venue?.canonical, venue?.website) }
-      );
-      // Only count events whose best link is a non-durable aggregator fallback —
-      // those have a button now, but upgrading them to a canonical org row would
-      // make them durable. Events with no link at all (community / no source)
-      // are correctly buttonless and excluded.
-      if (link.kind === "none" || link.durable) continue;
-      rawFallbacks++;
-      const v = r.venue_name?.trim() || "(no venue)";
-      gapByVenue.set(v, (gapByVenue.get(v) ?? 0) + 1);
-    }
-    aggregatorFallbackLinks = rawFallbacks;
-    // The actionable worklist is ONLY single-operator venues. A multi-tenant
-    // venue (park, community center, town square) has no single canonical events
-    // page, so a canonical org row isn't the fix — the aggregator fallback is the
-    // correct terminal state. Those still count in the raw trend number above, but
-    // they don't belong on a "go add an org row" list, so we drop them here.
-    actionableLinkGaps = [...gapByVenue.entries()]
-      .filter(([venue, n]) => n >= GAP_VENUE_THRESHOLD && !isMultiTenantVenue(venue))
-      .map(([venue, count]) => ({ venue, count }))
-      .sort((a, b) => b.count - a.count);
+    const report = await computeActionableLinkGaps(supabase, rows);
+    aggregatorFallbackLinks = report.rawFallbackCount;
+    actionableLinkGaps = report.actionable.map((a) => ({ venue: a.venue, count: a.count }));
   } catch (err) {
     console.error("[check-events] link-gap computation failed:", err);
   }

@@ -5,6 +5,10 @@
       "schedule": "0 16 * * 5"
     },
     {
+      "path": "/api/agent/propose-actions",
+      "schedule": "30 19 * * 1"
+    },
+    {
       "path": "/api/generate-briefing",
       "schedule": "0 14 * * *"
     },
