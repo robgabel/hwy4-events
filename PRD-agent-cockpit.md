@@ -182,6 +182,18 @@ This encodes "humans stay in the driver's seat for consequential decisions" as a
 
 Risk is concentrated where it belongs: the executor's writes (all reversible via `before_snapshot`) and the newsletter send (gated). Everything else proposes-then-waits. Outward and editorial decisions never graduate. **Net effect: the cockpit makes the system *more* supervised than it is today** — it puts the one unsupervised outward action behind a gate while letting the safe internal toil earn its way to autonomous.
 
+## Next Moves (after the Stage 1 submissions rail — shipped 2026-06-09)
+
+**Shipped 2026-06-09** (commit on `main`): the `/admin` tree was consolidated onto shared primitives (`lib/admin/{db,flash}.ts`, `components/admin/{ui,ConfirmSubmit}.tsx`), `/admin/today` + `/admin/growth-memo` merged into a tabbed **`/admin/briefings`** (old routes kept as redirects), `/admin/newsletter-note` folded into `/admin/newsletter`, and the **first "act from the briefing" surface** landed: a submissions action rail on the Today tab that reads each pending submission's stored triage verdict and lets a human **dismiss the clear `reject`/`duplicate` passes in place** (reused `dismissSubmission` via a validated `returnTo` — a reversible status flip, no email). Publish/merge stay a reviewed click; nothing auto-runs.
+
+Prioritized from here:
+
+- [ ] **Verification queue inline (next, cheapest).** Extend the same `returnTo` pattern to `dismissEvent`/`confirmEvent` so the verification queue is actionable from `/admin/briefings` too — the chief-of-staff already reads that queue. Same one-click-reversible-internal shape as the submissions rail.
+- [ ] **Build the combined "Signups vs Visitors" analytics panel.** Already specced (Path A: normalize both series to UTC, Cloudflare `visits` as denominator, daily signups overlay + visit→signup conversion line, `site_events` local/visitor split as the directional cut) in **[PRD-growth-agent.md](PRD-growth-agent.md) → "Analytics: combined Signups vs Visitors panel (specced, not built)"**. Files: `lib/newsletter-stats.ts` (add a `tz` param), `app/admin/analytics/page.tsx` (new panel, reuse existing sparkline/`StatStrip`, no chart lib).
+- [ ] **The real Stage 2 infra — `agent_actions` table + `agent_policy` graduation.** Only needed for *novel* proposals that aren't already a row in an existing queue (e.g. `create_org_row` to drain `actionable_link_gaps`, `flag_spam_submission`). The submissions/verification rails don't need it — the verdict already lives on the row. Build this when the first such proposal type exists, not before (don't build speculative infra).
+- [ ] **Finish the dedup tail (cleanup, no behavior change).** The `submissions` + `analytics` page loaders still build their Supabase client inline (3–4 loaders each with differing empty-state fallbacks). And the two briefing tabs (`app/admin/briefings/{Today,Growth}Briefing.tsx`) still each render their own `VitalsStrip`/`ItemCard`/title-`Banner` — extract a shared digest kit if it earns its keep.
+- [ ] **Doc sync.** `/admin/today` and `/admin/growth-memo` now redirect to `/admin/briefings`; update the stale references in `CLAUDE.md` (cron table, agent-cockpit notes) and `PRD-growth-agent.md` "Critical files" (lists `app/admin/growth-memo/page.tsx`, now a redirect — rendering moved to `app/admin/briefings/GrowthBriefing.tsx`).
+
 ## Open Items
 - [ ] Newsletter gate UX: hard approval vs. "auto-send unless vetoed within 24h"?
 - [ ] Pick the FB tool (trial Devi AI vs GroupsWatcher); confirm it has a webhook/Zapier out.
