@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, Fragment } from "react";
 import {
-  Hwy4Event,
+  EventListItem,
   Hwy4Org,
   EventCategory,
   CollapsedEvent,
@@ -56,8 +56,8 @@ function getBaseName(name: string): string {
     .trim();
 }
 
-function collapseMultiDayEvents(events: Hwy4Event[]): CollapsedEvent[] {
-  const baseNameMap = new Map<string, Hwy4Event[]>();
+function collapseMultiDayEvents(events: EventListItem[]): CollapsedEvent[] {
+  const baseNameMap = new Map<string, EventListItem[]>();
 
   for (const event of events) {
     const baseName = getBaseName(event.name);
@@ -68,7 +68,7 @@ function collapseMultiDayEvents(events: Hwy4Event[]): CollapsedEvent[] {
   }
 
   const collapsedIds = new Set<string>();
-  const collapsedGroups = new Map<string, Hwy4Event[]>();
+  const collapsedGroups = new Map<string, EventListItem[]>();
 
   for (const [baseName, groupEvents] of baseNameMap) {
     if (groupEvents.length > 1) {
@@ -220,7 +220,7 @@ export default function EventList({
   initialEvents,
   orgs,
 }: {
-  initialEvents: Hwy4Event[];
+  initialEvents: EventListItem[];
   orgs: Hwy4Org[];
 }) {
   const [selectedCategories, setSelectedCategories] = useState<

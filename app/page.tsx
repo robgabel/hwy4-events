@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Hwy4Org } from "@/lib/types";
-import { getUpcomingEvents } from "@/lib/events-data";
+import { getUpcomingEvents, toListEvents } from "@/lib/events-data";
 import { JsonLd, buildItemList } from "@/lib/schema";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
@@ -127,7 +127,11 @@ export default async function Home() {
               weekendLabel={weekendBriefing.label}
             />
           )}
-          <EventList initialEvents={events} orgs={orgs} />
+          {/* Project to the lightweight list shape (trimmed description, no
+           * scrape-only columns): the page ships the whole upcoming set into the
+           * client for filtering, so only what a card renders should cross the
+           * wire. JSON-LD above still uses the full rows. */}
+          <EventList initialEvents={toListEvents(events)} orgs={orgs} />
         </section>
       </div>
     </main>
