@@ -20,6 +20,7 @@ async function loadLatestRun(): Promise<AgentRun | null> {
   const { data } = await supabase
     .from("agent_runs")
     .select("ran_at, status, model, digest, context_in, error")
+    .eq("run_type", "chief_of_staff")
     .order("ran_at", { ascending: false })
     .limit(1);
   return (data?.[0] as AgentRun | undefined) ?? null;

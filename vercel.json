@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/agent/growth-memo",
+      "schedule": "0 16 * * 1"
+    },
+    {
       "path": "/api/generate-briefing",
       "schedule": "0 14 * * *"
     },
