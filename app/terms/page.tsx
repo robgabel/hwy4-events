@@ -5,7 +5,7 @@ import { SITE_URL } from "@/lib/constants";
 export const metadata: Metadata = {
   title: "Terms of Use",
   description:
-    "Terms of use for Hwy 4 Events — a community event listing for the Highway 4 corridor in the California Sierra Nevada foothills.",
+    "Terms of use for Hwy 4 Events, a community event listing for the Highway 4 corridor in the California Sierra Nevada foothills.",
   alternates: { canonical: "/terms" },
 };
 
@@ -92,11 +92,11 @@ export default function TermsPage() {
               Informational purposes only
             </h2>
             <p>
-              Event details — dates, times, locations, prices — are gathered from
-              public sources and may not always be accurate or up to date. Always
-              confirm details with the event organizer before making plans. I do
-              my best to keep things current, but I can&apos;t guarantee
-              everything is 100% right.
+              Event details like dates, times, locations, and prices are
+              gathered from public sources and may not always be accurate or up
+              to date. Always confirm with the event organizer before making
+              plans. I do my best to keep things current, but I can&apos;t
+              guarantee everything is right.
             </p>
           </section>
 
@@ -106,10 +106,9 @@ export default function TermsPage() {
             </h2>
             <p>
               This site is provided &ldquo;as is&rdquo; without any warranties
-              of any kind. I&apos;m not responsible for any issues that arise
-              from using the information on this site — like showing up to an
-              event that got cancelled, or driving to a venue that moved
-              locations.
+              of any kind. I&apos;m not responsible for issues that arise from
+              using the information here, like showing up to an event that got
+              cancelled, or driving to a venue that moved.
             </p>
           </section>
 
@@ -147,13 +146,13 @@ export default function TermsPage() {
               Changes to these terms
             </h2>
             <p>
-              I may update these terms from time to time. Nothing dramatic — just
-              keeping things honest and clear as the site evolves.
+              I may update these terms from time to time. Nothing dramatic, just
+              keeping things honest and clear as the site grows.
             </p>
           </section>
 
           <p className="text-sm text-stone-light">
-            Last updated: March 2026
+            Last updated: June 2026
           </p>
         </div>
 

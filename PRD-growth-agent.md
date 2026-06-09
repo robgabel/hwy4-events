@@ -97,6 +97,29 @@ Today WRR is proxied by weekly local *sessions* because `site_events` has only a
 - **Per-metric goals/targets** so "+7 subs" reads as "+7, behind pace" — a tiny input, big interpretive upgrade.
 - **GSC month-over-month** query movement once `GOOGLE_SEARCH_CONSOLE_SA_JSON` is set (not just the latest capture).
 
+## Analytics: combined "Signups vs Visitors" panel (specced, not built)
+
+A Growth-tab panel that plots daily newsletter signups against daily visitors on **one time-aligned axis**, plus a conversion rate, so a traffic change can be read against a signup change at a glance. Specced in a session on 2026-06-09; left for a follow-up.
+
+**What already exists (do not rebuild):**
+- Daily signups: `lib/newsletter-stats.ts` → `getNewsletterStats().days` (`signups` / `net` / `cumulative_active`). Currently buckets **Pacific**.
+- Daily visitors: `analytics_daily` (Cloudflare RUM) → `pageviews` / `visits`, stored as **full UTC days** (one rollup per UTC day; no sub-day grain retained).
+- Local vs visitor: `site_events` (Gate 0), raw `timestamptz`, bucketable to any tz.
+
+**Decision — Path A (normalize both to UTC).** Cloudflare is already UTC and *cannot* be re-bucketed to Pacific (only daily rollups were stored), so re-bucket the newsletter series to UTC to match → exact day-for-day alignment, zero migration. Add a `tz` param to `getNewsletterStats` (default Pacific for the standalone panel; pass UTC here). Label the axis UTC (the existing pageviews chart is already implicitly UTC).
+
+**The panel:**
+1. Aligned 30-day chart: Cloudflare `visits` bars + daily signups overlaid line, same UTC axis.
+2. Conversion line: daily (or 7-day rolling) **signups ÷ visits** = visit→signup rate (the first slice of R4).
+3. Local vs visitor split underneath, from `site_events` (UTC-bucketed), labeled the **directional** cut (Cloudflare can't produce it).
+
+**Honesty caveats to surface in the UI:**
+- Visitor denominator = Cloudflare (mature, months of history). Use `site_events` only for the local/visitor *split*, not as the absolute total — yet.
+- B (`site_events`) vs A (Cloudflare) is **uncalibrated**: only ~2 overlap days exist and day one was the beacon's launch ramp (B was ~11% of A on 2026-06-08, a deployment artifact). Competing forces: our beacon fires post-hydration via `sendBeacon` (loses fast-bouncers, pulls B down) vs first-party dodging the ad-blockers that eat Cloudflare's third-party beacon (pulls B up). Expect steady-state B ~60–100% of A, but do **not** quote a ratio until ~1–2 clean overlapping weeks exist.
+- Day-boundary alignment is directional, not exact same-day attribution.
+
+**Files:** `lib/newsletter-stats.ts` (`tz` param), `app/admin/analytics/page.tsx` (new panel, reuse the existing bar/sparkline + `StatStrip` patterns, no chart lib), optional small `site_events` daily-by-class loader. **Follow-on:** once `site_events` banks 1–2 clean weeks, show a B/A calibration ratio and let the chart toggle denominators (adjacent to R2 `?src` capture and R4 funnel).
+
 ## Critical files
 
 - **New:** `app/api/agent/growth-memo/route.ts`, `lib/agent/growth-context.ts`, `app/admin/growth-memo/page.tsx`, `components/GrowthDraft.tsx`, `supabase/migrations/20260609_growth_memo.sql` (adds `agent_runs.run_type`).

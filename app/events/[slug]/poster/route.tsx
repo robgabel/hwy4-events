@@ -39,6 +39,7 @@ const SKINS: Record<EventCategory, Skin> = {
   civic: { accent: C.moss, sky: "#e1e8d6" },
   hike_walk: { accent: C.pine, sky: "#dde7df" },
   wine: { accent: C.wine, sky: "#ece0e4" },
+  fine_arts: { accent: C.gold, sky: "#efe6cf" },
   other: { accent: C.earth, sky: "#e9e2d2" },
 };
 
@@ -114,6 +115,11 @@ function motifSvg(cat: EventCategory): string {
     case "civic": // Phosphor "three people" — no neck gaps
       return motifWrap("0 0 256 256", `
         <path transform="translate(0,10) scale(0.96)" fill="#1e3b2d" d="M64.12,147.8a4,4,0,0,1-4,4.2H16a8,8,0,0,1-7.8-6.17,8.35,8.35,0,0,1,1.62-6.93A67.79,67.79,0,0,1,37,117.51a40,40,0,1,1,66.46-35.8,3.94,3.94,0,0,1-2.27,4.18A64.08,64.08,0,0,0,64,144C64,145.28,64,146.54,64.12,147.8Zm182-8.91A67.76,67.76,0,0,0,219,117.51a40,40,0,1,0-66.46-35.8,3.94,3.94,0,0,0,2.27,4.18A64.08,64.08,0,0,1,192,144c0,1.28,0,2.54-.12,3.8a4,4,0,0,0,4,4.2H240a8,8,0,0,0,7.8-6.17A8.33,8.33,0,0,0,246.17,138.89Zm-89,43.18a48,48,0,1,0-58.37,0A72.13,72.13,0,0,0,65.07,212,8,8,0,0,0,72,224H184a8,8,0,0,0,6.93-12A72.15,72.15,0,0,0,157.19,182.07Z"/>`);
+    case "fine_arts": // painter's palette + brush (theater, pottery, painting)
+      return motifWrap("0 0 256 256", `
+        <path d="M128,28 C68,28 24,68 24,120 c0,40 32,60 60,60 16,0 22,-10 22,-22 0,-8 -6,-12 -6,-22 0,-12 10,-20 24,-20 h26 c40,0 54,-26 54,-52 C228,62 184,28 128,28 Z" fill="#1e3b2d"/>
+        <g stroke="#1e3b2d" stroke-width="1.5"><circle cx="78" cy="86" r="11" fill="#c8642f"/><circle cx="120" cy="68" r="11" fill="#e3a72f"/><circle cx="166" cy="78" r="11" fill="#5b8c5a"/><circle cx="80" cy="132" r="11" fill="#7d3350"/></g>
+        <g transform="translate(150,150) rotate(40 0 0)"><rect x="-6" y="0" width="12" height="70" rx="5" fill="#8a4b2f"/><path d="M-9,-22 h18 l-3,22 h-12 Z" fill="#e3a72f"/><rect x="-9" y="-30" width="18" height="10" rx="3" fill="#1e3b2d"/></g>`);
     default: // Big-Trees sequoia (bespoke, brand landmark) — wine/other fall here too
       return motifWrap("0 0 200 200", `
         <rect x="88" y="120" width="24" height="62" rx="4" fill="#8a4b2f"/>

@@ -8,6 +8,7 @@ import { EventCategory, CATEGORY_LABELS, TOWNS, Hwy4Org } from "@/lib/types";
 const ALL_CATEGORIES: EventCategory[] = [
   "civic",
   "festival",
+  "fine_arts",
   "games",
   "hike_walk",
   "kids",

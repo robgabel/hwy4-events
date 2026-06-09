@@ -5,7 +5,7 @@ import { SITE_URL } from "@/lib/constants";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "Privacy policy for Hwy 4 Events — a community event listing for the Highway 4 corridor in the California Sierra Nevada foothills.",
+    "Privacy policy for Hwy 4 Events, a community event listing for the Highway 4 corridor in the California Sierra Nevada foothills.",
   alternates: { canonical: "/privacy" },
 };
 
@@ -82,9 +82,8 @@ export default function PrivacyPage() {
 
         <div className="space-y-6 leading-relaxed text-stone">
           <p>
-            Hwy 4 Events is a simple, community-focused site. Your privacy
-            matters, and the good news is: there&apos;s not much to worry about
-            here.
+            Hwy 4 Events is a simple, community site. Your privacy matters, and
+            honestly there&apos;s not much to worry about here.
           </p>
 
           <section>
@@ -104,12 +103,11 @@ export default function PrivacyPage() {
             </h2>
             <p>
               If you sign up for the newsletter, I store your email address
-              securely in a reputable email service provider. They can&apos;t
-              share or resell it, and their business depends on staying secure.
-              But it&apos;s still just your email — there&apos;s no pixel-based
-              open tracking, no click tracking, no advertising, no sharing your
-              address with anyone else. Every email has a one-click unsubscribe
-              link at the bottom, and you can unsubscribe any time.
+              securely with a reputable email service provider. They can&apos;t
+              share or resell it. It&apos;s still just your email: no pixel-based
+              open tracking, no click tracking, no advertising, and no sharing
+              your address with anyone else. Every email has a one-click
+              unsubscribe link at the bottom, and you can unsubscribe any time.
             </p>
           </section>
 
@@ -118,10 +116,10 @@ export default function PrivacyPage() {
               Analytics
             </h2>
             <p>
-              I use basic, privacy-friendly web analytics to understand how many
-              people visit the site and which pages are popular. This data is
-              aggregated and anonymous — I don&apos;t track individual visitors
-              or build any profiles.
+              I use basic, privacy-friendly web analytics to see how many people
+              visit the site and which pages are popular. The data is aggregated
+              and anonymous. I don&apos;t track individual visitors or build
+              profiles.
             </p>
           </section>
 
@@ -163,7 +161,7 @@ export default function PrivacyPage() {
           </section>
 
           <p className="text-sm text-stone-light">
-            Last updated: May 2026
+            Last updated: June 2026
           </p>
         </div>
 
