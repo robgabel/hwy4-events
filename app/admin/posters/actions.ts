@@ -1,34 +1,13 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { isSameEvent, type EventIdentity } from "@/lib/event-identity";
 import { EVENTS_CACHE_TAG } from "@/lib/events-data";
 import { generateEventSlug } from "@/lib/slugs";
+import { getAdminClient } from "@/lib/admin/db";
+import { failRedirect, flashRedirect, field, requireField } from "@/lib/admin/flash";
 
 const ADMIN_PATH = "/admin/posters";
-
-function getServiceClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) throw new Error("Missing Supabase credentials");
-  return createClient(supabaseUrl, serviceKey);
-}
-
-function fail(message: string): never {
-  redirect(`${ADMIN_PATH}?error=${encodeURIComponent(message)}`);
-}
-
-function field(formData: FormData, name: string): string {
-  return ((formData.get(name) as string | null) ?? "").trim();
-}
-
-function requireId(formData: FormData): string {
-  const id = field(formData, "id");
-  if (!id) fail("Missing submission id.");
-  return id;
-}
 
 type EventRow = {
   id: string;
@@ -68,19 +47,22 @@ function seriesIdentity(e: EventRow): EventIdentity {
 // untouched (posterKind → "supplied"). Outward, editorial action: always a human
 // click, never the agent (PRD-event-poster-loop.md §10).
 export async function approvePosterSubmission(formData: FormData) {
-  const id = requireId(formData);
+  const id = requireField(formData, "id", ADMIN_PATH, "submission id");
   const note = field(formData, "review_note") || null;
-  const supabase = getServiceClient();
+  const supabase = getAdminClient();
 
   const { data: submission, error: subErr } = await supabase
     .from("poster_submissions")
     .select("id, event_id, event_slug, image_url, status")
     .eq("id", id)
     .single();
-  if (subErr || !submission) fail("Could not load that submission.");
-  if (!submission.image_url) fail("This submission has no uploaded image.");
+  if (subErr || !submission) failRedirect(ADMIN_PATH, "Could not load that submission.");
+  if (!submission.image_url) failRedirect(ADMIN_PATH, "This submission has no uploaded image.");
   if (!submission.event_id) {
-    fail("The original event no longer exists, so there's nothing to swap. Dismiss it instead.");
+    failRedirect(
+      ADMIN_PATH,
+      "The original event no longer exists, so there's nothing to swap. Dismiss it instead."
+    );
   }
 
   // Anchor: the exact event the organizer submitted from.
@@ -90,7 +72,10 @@ export async function approvePosterSubmission(formData: FormData) {
     .eq("id", submission.event_id)
     .single();
   if (anchorErr || !anchorData) {
-    fail("The original event no longer exists, so there's nothing to swap. Dismiss it instead.");
+    failRedirect(
+      ADMIN_PATH,
+      "The original event no longer exists, so there's nothing to swap. Dismiss it instead."
+    );
   }
   const anchor = anchorData as unknown as EventRow;
 
@@ -116,14 +101,14 @@ export async function approvePosterSubmission(formData: FormData) {
     .from("hwy4_events")
     .update({ image_url: submission.image_url, poster_locked: true })
     .in("id", ids);
-  if (updErr) fail(`Failed to apply the poster: ${updErr.message}`);
+  if (updErr) failRedirect(ADMIN_PATH, `Failed to apply the poster: ${updErr.message}`);
 
   const { error: markErr } = await supabase
     .from("poster_submissions")
     .update({ status: "approved", reviewed_at: new Date().toISOString(), review_note: note })
     .eq("id", id);
   if (markErr) {
-    fail(`Poster applied, but failed to mark the submission approved: ${markErr.message}`);
+    failRedirect(ADMIN_PATH, `Poster applied, but failed to mark the submission approved: ${markErr.message}`);
   }
 
   // A swapped image must show on the public pages: bust the shared events cache
@@ -136,19 +121,18 @@ export async function approvePosterSubmission(formData: FormData) {
   revalidatePath(ADMIN_PATH);
 
   const n = ids.length;
-  redirect(
-    `${ADMIN_PATH}?flash=${encodeURIComponent(
-      `Poster applied to ${n} ${n === 1 ? "date" : "dates"} of "${anchor.name}".`
-    )}`
+  flashRedirect(
+    ADMIN_PATH,
+    `Poster applied to ${n} ${n === 1 ? "date" : "dates"} of "${anchor.name}".`
   );
 }
 
 // Decline a poster swap. No event changes; the uploaded file is removed so the
 // bucket doesn't accrete rejected images.
 export async function rejectPosterSubmission(formData: FormData) {
-  const id = requireId(formData);
+  const id = requireField(formData, "id", ADMIN_PATH, "submission id");
   const note = field(formData, "review_note") || null;
-  const supabase = getServiceClient();
+  const supabase = getAdminClient();
 
   const { data: submission } = await supabase
     .from("poster_submissions")
@@ -160,7 +144,7 @@ export async function rejectPosterSubmission(formData: FormData) {
     .from("poster_submissions")
     .update({ status: "rejected", reviewed_at: new Date().toISOString(), review_note: note })
     .eq("id", id);
-  if (error) fail(error.message);
+  if (error) failRedirect(ADMIN_PATH, error.message);
 
   // Best-effort cleanup of the orphaned upload (path is everything after the
   // public bucket prefix in the stored URL).
@@ -173,5 +157,5 @@ export async function rejectPosterSubmission(formData: FormData) {
   }
 
   revalidatePath(ADMIN_PATH);
-  redirect(`${ADMIN_PATH}?flash=${encodeURIComponent("Dismissed.")}`);
+  flashRedirect(ADMIN_PATH, "Dismissed.");
 }

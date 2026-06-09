@@ -1,62 +1,16 @@
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { countPending } from "@/lib/admin/db";
 
 export const dynamic = "force-dynamic";
 
-async function loadPendingCount(): Promise<number> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return 0;
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { count } = await supabase
-    .from("hwy4_events")
-    .select("id", { count: "exact", head: true })
-    .eq("verification_status", "needs_verification");
-  return count ?? 0;
-}
-
-async function loadPendingSubmissionsCount(): Promise<number> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return 0;
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { count } = await supabase
-    .from("event_submissions")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
-  return count ?? 0;
-}
-
-async function loadPendingPostersCount(): Promise<number> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return 0;
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { count } = await supabase
-    .from("poster_submissions")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
-  return count ?? 0;
-}
-
-async function loadPendingFeedbackCount(): Promise<number> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return 0;
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { count } = await supabase
-    .from("event_feedback")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
-  return count ?? 0;
-}
-
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [pending, pendingSubs, pendingPosters, pendingFeedback] = await Promise.all([
-    loadPendingCount(),
-    loadPendingSubmissionsCount(),
-    loadPendingPostersCount(),
-    loadPendingFeedbackCount(),
+  // Badge counts for the review queues. countPending returns 0 (never throws) on
+  // a misconfigured env so the whole admin tree can't 500 over a missing badge.
+  const [verification, submissions, posters, feedback] = await Promise.all([
+    countPending("hwy4_events", "verification_status", "needs_verification"),
+    countPending("event_submissions", "status", "pending"),
+    countPending("poster_submissions", "status", "pending"),
+    countPending("event_feedback", "status", "pending"),
   ]);
 
   return (
@@ -72,102 +26,50 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <nav
           style={{
             display: "flex",
-            gap: 8,
+            gap: 6,
             alignItems: "center",
+            flexWrap: "wrap",
+            rowGap: 8,
             fontSize: 15,
             color: "#666",
             paddingBottom: 16,
             borderBottom: "1px solid #e8e4de",
           }}
         >
-          <span style={{ fontSize: 13, color: "#999", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>
+          <span
+            style={{
+              fontSize: 13,
+              color: "#999",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginRight: 4,
+            }}
+          >
             Admin
           </span>
-          <NavLink href="/admin/today">Today</NavLink>
-          <NavLink href="/admin/growth-memo">Growth memo</NavLink>
+          {/* Agent briefings (read-only) — unified tabbed route */}
+          <NavLink href="/admin/briefings">Today</NavLink>
+          <NavLink href="/admin/briefings?view=growth">Growth memo</NavLink>
+          <NavDivider />
+          {/* Growth */}
           <NavLink href="/admin/experiments">Experiments</NavLink>
           <NavLink href="/admin/analytics">Growth</NavLink>
+          <NavDivider />
+          {/* Content */}
           <NavLink href="/admin/newsletter">Newsletter</NavLink>
-          <NavLink href="/admin/newsletter-note">Newsletter notes</NavLink>
-          <NavLink href="/admin/submissions">
+          <NavDivider />
+          {/* Human review queues (badged with pending counts) */}
+          <NavLink href="/admin/submissions" badge={submissions}>
             Submissions
-            {pendingSubs > 0 && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginLeft: 6,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: "#d97706",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.4,
-                }}
-              >
-                {pendingSubs}
-              </span>
-            )}
           </NavLink>
-          <NavLink href="/admin/posters">
+          <NavLink href="/admin/posters" badge={posters}>
             Posters
-            {pendingPosters > 0 && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginLeft: 6,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: "#d97706",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.4,
-                }}
-              >
-                {pendingPosters}
-              </span>
-            )}
           </NavLink>
-          <NavLink href="/admin/verification">
+          <NavLink href="/admin/verification" badge={verification}>
             Verification
-            {pending > 0 && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginLeft: 6,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: "#d97706",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.4,
-                }}
-              >
-                {pending}
-              </span>
-            )}
           </NavLink>
-          <NavLink href="/admin/feedback">
+          <NavLink href="/admin/feedback" badge={feedback}>
             Feedback
-            {pendingFeedback > 0 && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginLeft: 6,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: "#d97706",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.4,
-                }}
-              >
-                {pendingFeedback}
-              </span>
-            )}
           </NavLink>
         </nav>
       </div>
@@ -176,7 +78,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   );
 }
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+function NavLink({
+  href,
+  children,
+  badge,
+}: {
+  href: string;
+  children: React.ReactNode;
+  badge?: number;
+}) {
   return (
     <Link
       href={href}
@@ -186,9 +96,36 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
         color: "#2d5016",
         textDecoration: "none",
         fontWeight: 500,
+        whiteSpace: "nowrap",
       }}
     >
       {children}
+      {badge != null && badge > 0 && (
+        <span
+          style={{
+            display: "inline-block",
+            marginLeft: 6,
+            padding: "1px 7px",
+            borderRadius: 10,
+            background: "#d97706",
+            color: "#fff",
+            fontSize: 13,
+            fontWeight: 700,
+            lineHeight: 1.4,
+          }}
+        >
+          {badge}
+        </span>
+      )}
     </Link>
+  );
+}
+
+function NavDivider() {
+  return (
+    <span
+      aria-hidden
+      style={{ width: 1, height: 18, background: "#e8e4de", margin: "0 2px" }}
+    />
   );
 }

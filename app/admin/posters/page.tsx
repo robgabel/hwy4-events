@@ -1,5 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
 import { generateEventSlug } from "@/lib/slugs";
+import { getAdminClientOrNull } from "@/lib/admin/db";
+import { readFlash, type SearchParams } from "@/lib/admin/flash";
+import {
+  QueueShell,
+  CardList,
+  QueueCard,
+  EmptyCard,
+  CardHeader,
+  INK,
+  adminBtn,
+  adminInput,
+} from "@/components/admin/ui";
 import { approvePosterSubmission, rejectPosterSubmission } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +35,8 @@ type EventRow = {
 };
 
 async function loadData(): Promise<{ submissions: Submission[]; events: Map<string, EventRow> }> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return { submissions: [], events: new Map() };
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return { submissions: [], events: new Map() };
 
   const { data } = await supabase
     .from("poster_submissions")
@@ -67,43 +76,39 @@ function fmtWhen(iso: string): string {
   });
 }
 
-type SearchParams = { [key: string]: string | string[] | undefined };
-
 export default async function PostersAdminPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const params = await searchParams;
-  const errorMsg = typeof params.error === "string" ? params.error : null;
-  const flash = typeof params.flash === "string" ? params.flash : null;
+  const { error, flash } = readFlash(await searchParams);
   const { submissions, events } = await loadData();
 
   return (
-    <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Poster submissions</h1>
-      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
-        Posters organizers sent in for their events. Approve to swap the art onto every
-        upcoming date of that event (we show it untouched), or dismiss it.
-      </p>
-
-      {errorMsg && <Banner tone="error">{errorMsg}</Banner>}
-      {flash && <Banner tone="ok">{flash}</Banner>}
-
+    <QueueShell
+      title="Poster submissions"
+      intro={
+        <>
+          Posters organizers sent in for their events. Approve to swap the art onto every upcoming
+          date of that event (we show it untouched), or dismiss it.
+        </>
+      }
+      error={error}
+      flash={flash}
+    >
       {submissions.length === 0 ? (
-        <EmptyState />
+        <EmptyCard
+          heading="No pending poster submissions."
+          sub="When an organizer uploads their poster from an event page, it shows up here for review."
+        />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <CardList>
           {submissions.map((s) => (
-            <SubmissionCard
-              key={s.id}
-              sub={s}
-              event={s.event_id ? events.get(s.event_id) ?? null : null}
-            />
+            <SubmissionCard key={s.id} sub={s} event={s.event_id ? events.get(s.event_id) ?? null : null} />
           ))}
-        </div>
+        </CardList>
       )}
-    </div>
+    </QueueShell>
   );
 }
 
@@ -113,49 +118,41 @@ function SubmissionCard({ sub, event }: { sub: Submission; event: EventRow | nul
   const eventHadOwnPoster = Boolean(event?.image_url);
 
   return (
-    <article
-      style={{
-        background: "#fff",
-        border: "1px solid #e8e4de",
-        borderLeft: "4px solid #2d5016",
-        borderRadius: 12,
-        padding: 20,
-      }}
-    >
-      <header style={{ marginBottom: 14 }}>
-        <h2 style={{ color: "#2d5016", fontSize: 19, margin: "0 0 4px", fontWeight: 600 }}>
-          {event ? event.name : sub.event_slug || "Unknown event"}
-        </h2>
-        <p style={{ color: "#666", fontSize: 15, margin: 0 }}>
-          {event ? (
-            <>
-              <strong>{fmtDate(event.date)}</strong> · {event.town}
-            </>
-          ) : (
-            <span style={{ color: "#922b21" }}>Original event not found (may have been removed)</span>
-          )}
-          {" · "}
-          {sub.submitter_name || "anonymous"}
-          {sub.submitter_email ? ` (${sub.submitter_email})` : ""}
-          {" · "}
-          <span style={{ color: "#999" }}>submitted {fmtWhen(sub.created_at)}</span>
+    <QueueCard accent={INK}>
+      <CardHeader
+        title={event ? event.name : sub.event_slug || "Unknown event"}
+        meta={
+          <>
+            {event ? (
+              <>
+                <strong>{fmtDate(event.date)}</strong> · {event.town}
+              </>
+            ) : (
+              <span style={{ color: "#922b21" }}>Original event not found (may have been removed)</span>
+            )}
+            {" · "}
+            {sub.submitter_name || "anonymous"}
+            {sub.submitter_email ? ` (${sub.submitter_email})` : ""}
+            {" · "}
+            <span style={{ color: "#999" }}>submitted {fmtWhen(sub.created_at)}</span>
+          </>
+        }
+      />
+      {sub.note && (
+        <p
+          style={{
+            color: "#444",
+            fontSize: 15,
+            margin: "-4px 0 14px",
+            padding: "8px 12px",
+            background: "#faf9f6",
+            borderRadius: 8,
+            borderLeft: "3px solid #d9d4cc",
+          }}
+        >
+          “{sub.note}”
         </p>
-        {sub.note && (
-          <p
-            style={{
-              color: "#444",
-              fontSize: 15,
-              margin: "8px 0 0",
-              padding: "8px 12px",
-              background: "#faf9f6",
-              borderRadius: 8,
-              borderLeft: "3px solid #d9d4cc",
-            }}
-          >
-            “{sub.note}”
-          </p>
-        )}
-      </header>
+      )}
 
       <div
         style={{
@@ -176,13 +173,11 @@ function SubmissionCard({ sub, event }: { sub: Submission; event: EventRow | nul
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <form action={approvePosterSubmission} style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input type="hidden" name="id" value={sub.id} />
-          <button type="submit" style={primaryBtn} disabled={!event}>
+          <button type="submit" style={adminBtn.primary} disabled={!event}>
             Approve &amp; swap in
           </button>
         </form>
-        <span style={{ fontSize: 14, color: "#999" }}>
-          Applies to all upcoming dates of this event.
-        </span>
+        <span style={{ fontSize: 14, color: "#999" }}>Applies to all upcoming dates of this event.</span>
       </div>
 
       <form
@@ -198,12 +193,12 @@ function SubmissionCard({ sub, event }: { sub: Submission; event: EventRow | nul
         }}
       >
         <input type="hidden" name="id" value={sub.id} />
-        <input name="review_note" placeholder="Reason (optional)" style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
-        <button type="submit" style={dangerBtn}>
+        <input name="review_note" placeholder="Reason (optional)" style={{ ...adminInput, flex: 1, minWidth: 180 }} />
+        <button type="submit" style={adminBtn.danger}>
           Dismiss
         </button>
       </form>
-    </article>
+    </QueueCard>
   );
 }
 
@@ -216,7 +211,7 @@ function Poster({ label, src, highlight }: { label: string; src: string | null; 
           fontWeight: 700,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
-          color: highlight ? "#2d5016" : "#999",
+          color: highlight ? INK : "#999",
           margin: "0 0 6px",
         }}
       >
@@ -227,7 +222,7 @@ function Poster({ label, src, highlight }: { label: string; src: string | null; 
           borderRadius: 10,
           overflow: "hidden",
           background: "#faf9f6",
-          border: highlight ? "2px solid #2d5016" : "1px solid #e8e4de",
+          border: highlight ? `2px solid ${INK}` : "1px solid #e8e4de",
           aspectRatio: "4 / 5",
           display: "flex",
           alignItems: "center",
@@ -236,11 +231,7 @@ function Poster({ label, src, highlight }: { label: string; src: string | null; 
       >
         {src ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={src}
-            alt={label}
-            style={{ width: "100%", height: "100%", objectFit: "contain" }}
-          />
+          <img src={src} alt={label} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
         ) : (
           <span style={{ color: "#bbb", fontSize: 14 }}>No poster</span>
         )}
@@ -248,67 +239,3 @@ function Poster({ label, src, highlight }: { label: string; src: string | null; 
     </div>
   );
 }
-
-function Banner({ tone, children }: { tone: "ok" | "error"; children: React.ReactNode }) {
-  const s =
-    tone === "ok"
-      ? { background: "#eaf7ea", border: "1px solid #b7e0b7", color: "#2d5016" }
-      : { background: "#fdecea", border: "1px solid #f5b7b1", color: "#922b21" };
-  return (
-    <div style={{ ...s, padding: "12px 16px", borderRadius: 8, fontSize: 16, marginBottom: 16 }}>
-      {children}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <section
-      style={{
-        background: "#fff",
-        border: "1px solid #e8e4de",
-        borderRadius: 12,
-        padding: 32,
-        textAlign: "center",
-      }}
-    >
-      <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
-        No pending poster submissions.
-      </p>
-      <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
-        When an organizer uploads their poster from an event page, it shows up here for review.
-      </p>
-    </section>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 10px",
-  border: "1px solid #d9d4cc",
-  borderRadius: 8,
-  fontSize: 16,
-  color: "#2d3a22",
-  background: "#fff",
-  boxSizing: "border-box",
-};
-const primaryBtn: React.CSSProperties = {
-  padding: "10px 18px",
-  background: "#2d5016",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  fontSize: 16,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-const dangerBtn: React.CSSProperties = {
-  padding: "8px 14px",
-  background: "#fff",
-  color: "#922b21",
-  border: "1px solid #e6b8b3",
-  borderRadius: 8,
-  fontSize: 15,
-  fontWeight: 500,
-  cursor: "pointer",
-};

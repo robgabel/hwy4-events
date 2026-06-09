@@ -1,17 +1,11 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { getAdminClient } from "@/lib/admin/db";
+import { failRedirect, flashRedirect, field } from "@/lib/admin/flash";
 
-const ADMIN_PATH = "/admin/newsletter-note";
-
-function getServiceClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) throw new Error("Missing Supabase credentials");
-  return createClient(supabaseUrl, serviceKey);
-}
+// "From Rob" note scheduling, folded into /admin/newsletter (was its own page).
+const ADMIN_PATH = "/admin/newsletter";
 
 function parseFields(formData: FormData): {
   body: string;
@@ -19,9 +13,9 @@ function parseFields(formData: FormData): {
   ends_at: string;
   error?: string;
 } {
-  const body = (formData.get("body") as string | null)?.trim() ?? "";
-  const starts_at = (formData.get("starts_at") as string | null)?.trim() ?? "";
-  const ends_at = (formData.get("ends_at") as string | null)?.trim() ?? "";
+  const body = field(formData, "body");
+  const starts_at = field(formData, "starts_at");
+  const ends_at = field(formData, "ends_at");
 
   if (!body) return { body, starts_at, ends_at, error: "Note body is required." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(starts_at) || !/^\d{4}-\d{2}-\d{2}$/.test(ends_at)) {
@@ -44,35 +38,32 @@ function errorFromPg(err: unknown): string {
   return msg;
 }
 
+function noteId(formData: FormData): number {
+  const raw = formData.get("id");
+  const id = raw ? Number(raw) : NaN;
+  if (!Number.isFinite(id)) failRedirect(ADMIN_PATH, "Missing note id.");
+  return id;
+}
+
 export async function addNote(formData: FormData) {
   const parsed = parseFields(formData);
-  if (parsed.error) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent(parsed.error)}`);
-  }
-  const supabase = getServiceClient();
+  if (parsed.error) failRedirect(ADMIN_PATH, parsed.error);
+  const supabase = getAdminClient();
   const { error } = await supabase.from("newsletter_notes").insert({
     body: parsed.body,
     starts_at: parsed.starts_at,
     ends_at: parsed.ends_at,
   });
-  if (error) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent(errorFromPg(error))}`);
-  }
+  if (error) failRedirect(ADMIN_PATH, errorFromPg(error));
   revalidatePath(ADMIN_PATH);
-  redirect(`${ADMIN_PATH}?added=1`);
+  flashRedirect(ADMIN_PATH, "Note added.");
 }
 
 export async function updateNote(formData: FormData) {
-  const idRaw = formData.get("id");
-  const id = idRaw ? Number(idRaw) : NaN;
-  if (!Number.isFinite(id)) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent("Missing note id.")}`);
-  }
+  const id = noteId(formData);
   const parsed = parseFields(formData);
-  if (parsed.error) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent(parsed.error)}`);
-  }
-  const supabase = getServiceClient();
+  if (parsed.error) failRedirect(ADMIN_PATH, parsed.error);
+  const supabase = getAdminClient();
   const { error } = await supabase
     .from("newsletter_notes")
     .update({
@@ -82,24 +73,16 @@ export async function updateNote(formData: FormData) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  if (error) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent(errorFromPg(error))}`);
-  }
+  if (error) failRedirect(ADMIN_PATH, errorFromPg(error));
   revalidatePath(ADMIN_PATH);
-  redirect(`${ADMIN_PATH}?updated=1`);
+  flashRedirect(ADMIN_PATH, "Note updated.");
 }
 
 export async function deleteNote(formData: FormData) {
-  const idRaw = formData.get("id");
-  const id = idRaw ? Number(idRaw) : NaN;
-  if (!Number.isFinite(id)) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent("Missing note id.")}`);
-  }
-  const supabase = getServiceClient();
+  const id = noteId(formData);
+  const supabase = getAdminClient();
   const { error } = await supabase.from("newsletter_notes").delete().eq("id", id);
-  if (error) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent(errorFromPg(error))}`);
-  }
+  if (error) failRedirect(ADMIN_PATH, errorFromPg(error));
   revalidatePath(ADMIN_PATH);
-  redirect(`${ADMIN_PATH}?deleted=1`);
+  flashRedirect(ADMIN_PATH, "Note deleted.");
 }

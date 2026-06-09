@@ -1,70 +1,63 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { getAdminClient } from "@/lib/admin/db";
+import { field } from "@/lib/admin/flash";
 
 // Server actions for /admin/experiments (PRD-growth-agent.md, Phase 3). Lets Rob
 // log and conclude growth experiments without raw SQL; the growth memo reads
-// these rows as ground truth. Mirrors the admin/verification/actions.ts pattern
-// (service client behind Basic Auth via middleware.ts).
+// these rows as ground truth. Service client runs behind Basic Auth (middleware.ts).
 
-function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Supabase service credentials missing");
-  return createClient(url, key);
-}
-
-const str = (v: FormDataEntryValue | null) => (typeof v === "string" ? v.trim() : "");
+const ADMIN_PATH = "/admin/experiments";
 
 export async function addExperiment(formData: FormData) {
-  const name = str(formData.get("name"));
+  const name = field(formData, "name");
   if (!name) return;
-  const supabase = serviceClient();
+  const supabase = getAdminClient();
   await supabase.from("growth_experiments").insert({
     name,
-    hypothesis: str(formData.get("hypothesis")) || null,
-    metric: str(formData.get("metric")) || null,
-    baseline: str(formData.get("baseline")) || null,
+    hypothesis: field(formData, "hypothesis") || null,
+    metric: field(formData, "metric") || null,
+    baseline: field(formData, "baseline") || null,
     status: "running",
   });
-  revalidatePath("/admin/experiments");
+  revalidatePath(ADMIN_PATH);
 }
 
 const CONCLUDE = new Set(["won", "lost", "inconclusive", "abandoned"]);
 
 export async function concludeExperiment(formData: FormData) {
-  const id = str(formData.get("id"));
-  const status = str(formData.get("status"));
+  const id = field(formData, "id");
+  const status = field(formData, "status");
   if (!id || !CONCLUDE.has(status)) return;
-  const supabase = serviceClient();
+  const supabase = getAdminClient();
   await supabase
     .from("growth_experiments")
     .update({
       status,
-      result: str(formData.get("result")) || null,
+      result: field(formData, "result") || null,
       concluded_on: new Date().toISOString().split("T")[0],
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  revalidatePath("/admin/experiments");
+  revalidatePath(ADMIN_PATH);
 }
 
 export async function reopenExperiment(formData: FormData) {
-  const id = str(formData.get("id"));
+  const id = field(formData, "id");
   if (!id) return;
-  const supabase = serviceClient();
+  const supabase = getAdminClient();
   await supabase
     .from("growth_experiments")
     .update({ status: "running", concluded_on: null, updated_at: new Date().toISOString() })
     .eq("id", id);
-  revalidatePath("/admin/experiments");
+  revalidatePath(ADMIN_PATH);
 }
 
 export async function deleteExperiment(formData: FormData) {
-  const id = str(formData.get("id"));
+  const id = field(formData, "id");
   if (!id) return;
-  const supabase = serviceClient();
+  const supabase = getAdminClient();
   await supabase.from("growth_experiments").delete().eq("id", id);
-  revalidatePath("/admin/experiments");
+  revalidatePath(ADMIN_PATH);
 }

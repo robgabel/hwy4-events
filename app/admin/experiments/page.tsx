@@ -1,4 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClientOrNull } from "@/lib/admin/db";
+import { QueueShell } from "@/components/admin/ui";
+import { ConfirmSubmit } from "@/components/admin/ConfirmSubmit";
 import {
   addExperiment,
   concludeExperiment,
@@ -21,10 +23,8 @@ type Experiment = {
 };
 
 async function loadExperiments(): Promise<Experiment[]> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return [];
-  const supabase = createClient(url, key);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
   const { data } = await supabase
     .from("growth_experiments")
     .select("id, name, hypothesis, metric, status, baseline, result, started_on, concluded_on")
@@ -52,14 +52,16 @@ export default async function ExperimentsPage() {
   const running = experiments.filter((e) => e.status === "running");
 
   return (
-    <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Experiments</h1>
-      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
-        The growth agent&rsquo;s memory. Log a deliberate growth change with a hypothesis and the
-        metric to watch; the weekly memo reads the running ones and reports an early read on each.
-        Conclude them when you have a verdict. {running.length} running.
-      </p>
-
+    <QueueShell
+      title="Experiments"
+      intro={
+        <>
+          The growth agent&rsquo;s memory. Log a deliberate growth change with a hypothesis and the
+          metric to watch; the weekly memo reads the running ones and reports an early read on each.
+          Conclude them when you have a verdict. {running.length} running.
+        </>
+      }
+    >
       {/* Log a new experiment */}
       <section style={cardStyle}>
         <h2 style={{ color: "#2d5016", fontSize: 17, margin: "0 0 12px" }}>Log a new experiment</h2>
@@ -83,7 +85,7 @@ export default async function ExperimentsPage() {
           ))}
         </div>
       )}
-    </div>
+    </QueueShell>
   );
 }
 
@@ -149,7 +151,9 @@ function ExperimentCard({ e }: { e: Experiment }) {
           </form>
           <form action={deleteExperiment}>
             <input type="hidden" name="id" value={e.id} />
-            <button type="submit" style={dangerBtn}>Delete</button>
+            <ConfirmSubmit message={`Delete experiment "${e.name}"? This cannot be undone.`} style={dangerBtn}>
+              Delete
+            </ConfirmSubmit>
           </form>
         </div>
       )}

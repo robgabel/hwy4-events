@@ -1,5 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
 import { generateEventSlug } from "@/lib/slugs";
+import { getAdminClientOrNull } from "@/lib/admin/db";
+import { readFlash, type SearchParams } from "@/lib/admin/flash";
+import {
+  QueueShell,
+  CardList,
+  QueueCard,
+  EmptyCard,
+  CardHeader,
+  LinkBox,
+  adminBtn,
+} from "@/components/admin/ui";
+import { ConfirmSubmit } from "@/components/admin/ConfirmSubmit";
 import { confirmEvent, dismissEvent, hideEvent, deleteEvent } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -28,10 +39,8 @@ type OrgRow = {
 };
 
 async function loadData(): Promise<{ events: FlaggedEvent[]; orgs: Map<string, OrgRow> }> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return { events: [], orgs: new Map() };
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return { events: [], orgs: new Map() };
 
   const { data: events } = await supabase
     .from("hwy4_events")
@@ -81,116 +90,53 @@ function fmtChecked(iso: string | null): string {
   });
 }
 
-type SearchParams = { [key: string]: string | string[] | undefined };
-
 export default async function VerificationAdminPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const params = await searchParams;
-  const errorMsg = typeof params.error === "string" ? params.error : null;
-  const flash = typeof params.flash === "string" ? params.flash : null;
-
+  const { error, flash } = readFlash(await searchParams);
   const { events, orgs } = await loadData();
 
   return (
-    <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>
-        Event verification queue
-      </h1>
-      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px" }}>
-        Events whose dates didn&rsquo;t match the organizer&rsquo;s canonical events page. Confirm
-        the ones that are fine, dismiss false positives, hide or delete the rest.
-      </p>
-
-      {errorMsg && (
-        <div
-          style={{
-            background: "#fdecea",
-            border: "1px solid #f5b7b1",
-            color: "#922b21",
-            padding: "12px 16px",
-            borderRadius: 8,
-            fontSize: 16,
-            marginBottom: 16,
-          }}
-        >
-          {errorMsg}
-        </div>
-      )}
-      {flash && (
-        <div
-          style={{
-            background: "#eaf7ea",
-            border: "1px solid #b7e0b7",
-            color: "#2d5016",
-            padding: "12px 16px",
-            borderRadius: 8,
-            fontSize: 16,
-            marginBottom: 16,
-          }}
-        >
-          {flash}
-        </div>
-      )}
-
+    <QueueShell
+      title="Event verification queue"
+      intro={
+        <>
+          Events whose dates didn&rsquo;t match the organizer&rsquo;s canonical events page. Confirm
+          the ones that are fine, dismiss false positives, hide or delete the rest.
+        </>
+      }
+      error={error}
+      flash={flash}
+    >
       {events.length === 0 ? (
-        <section
-          style={{
-            background: "#fff",
-            border: "1px solid #e8e4de",
-            borderRadius: 12,
-            padding: 32,
-            textAlign: "center",
-          }}
-        >
-          <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
-            All clear.
-          </p>
-          <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
-            No events are currently flagged for verification.
-          </p>
-        </section>
+        <EmptyCard heading="All clear." sub="No events are currently flagged for verification." />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <CardList>
           {events.map((ev) => (
             <FlaggedEventRow key={ev.id} event={ev} orgs={orgs} />
           ))}
-        </div>
+        </CardList>
       )}
-    </div>
+    </QueueShell>
   );
 }
 
-function FlaggedEventRow({
-  event,
-  orgs,
-}: {
-  event: FlaggedEvent;
-  orgs: Map<string, OrgRow>;
-}) {
+function FlaggedEventRow({ event, orgs }: { event: FlaggedEvent; orgs: Map<string, OrgRow> }) {
   const org = event.org_slug ? orgs.get(event.org_slug) : undefined;
 
   return (
-    <article
-      style={{
-        background: "white",
-        border: "1px solid #e8e4de",
-        borderLeft: "4px solid #d97706",
-        borderRadius: 12,
-        padding: 20,
-      }}
-    >
-      <header style={{ marginBottom: 12 }}>
-        <h2 style={{ color: "#2d5016", fontSize: 19, margin: "0 0 4px", fontWeight: 600 }}>
-          {event.name}
-        </h2>
-        <p style={{ color: "#666", fontSize: 15, margin: 0 }}>
-          <strong>{fmtDate(event.date)}</strong>
-          {fmtTime(event.start_time)} · {event.venue_name}, {event.town}
-        </p>
-      </header>
+    <QueueCard>
+      <CardHeader
+        title={event.name}
+        meta={
+          <>
+            <strong>{fmtDate(event.date)}</strong>
+            {fmtTime(event.start_time)} · {event.venue_name}, {event.town}
+          </>
+        }
+      />
 
       {event.description && (
         <p style={{ color: "#3a3a3a", fontSize: 15, lineHeight: 1.55, margin: "0 0 12px" }}>
@@ -243,12 +189,7 @@ function FlaggedEventRow({
         />
         <LinkBox label="Source" href={event.source_url} note={event.source_name ?? "Where scraped"} external />
         {org?.canonical_url && (
-          <LinkBox
-            label="Organizer canonical"
-            href={org.canonical_url}
-            note={org.display_name}
-            external
-          />
+          <LinkBox label="Organizer canonical" href={org.canonical_url} note={org.display_name} external />
         )}
         {event.event_url && (
           <LinkBox label="Event URL" href={event.event_url} note="Direct event link" external />
@@ -257,14 +198,7 @@ function FlaggedEventRow({
 
       {event.verification_snapshot && (
         <details style={{ marginBottom: 14 }}>
-          <summary
-            style={{
-              fontSize: 14,
-              color: "#666",
-              cursor: "pointer",
-              userSelect: "none",
-            }}
-          >
+          <summary style={{ fontSize: 14, color: "#666", cursor: "pointer", userSelect: "none" }}>
             Canonical page snapshot ({event.verification_snapshot.length.toLocaleString()} chars)
           </summary>
           <pre
@@ -291,120 +225,32 @@ function FlaggedEventRow({
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
         <form action={confirmEvent} style={{ display: "inline" }}>
           <input type="hidden" name="id" value={event.id} />
-          <button type="submit" style={primaryBtnStyle}>
+          <button type="submit" style={adminBtn.primary}>
             Confirm date
           </button>
         </form>
         <form action={dismissEvent} style={{ display: "inline" }}>
           <input type="hidden" name="id" value={event.id} />
-          <button type="submit" style={secondaryBtnStyle}>
+          <button type="submit" style={adminBtn.secondary}>
             Dismiss flag
           </button>
         </form>
         <form action={hideEvent} style={{ display: "inline" }}>
           <input type="hidden" name="id" value={event.id} />
-          <button type="submit" style={secondaryBtnStyle}>
+          <button type="submit" style={adminBtn.secondary}>
             Hide event
           </button>
         </form>
         <form action={deleteEvent} style={{ display: "inline" }}>
           <input type="hidden" name="id" value={event.id} />
-          <button
-            type="submit"
-            style={dangerBtnStyle}
-            formNoValidate
+          <ConfirmSubmit
+            message={`Delete "${event.name}" permanently? This cannot be undone.`}
+            style={adminBtn.danger}
           >
             Delete event
-          </button>
+          </ConfirmSubmit>
         </form>
       </div>
-    </article>
+    </QueueCard>
   );
 }
-
-function LinkBox({
-  label,
-  href,
-  note,
-  external = false,
-}: {
-  label: string;
-  href: string;
-  note: string;
-  external?: boolean;
-}) {
-  return (
-    <a
-      href={href}
-      target={external ? "_blank" : undefined}
-      rel={external ? "noopener noreferrer" : undefined}
-      style={{
-        display: "block",
-        background: "#faf9f6",
-        border: "1px solid #e8e4de",
-        borderRadius: 8,
-        padding: "8px 12px",
-        textDecoration: "none",
-        color: "#2d5016",
-      }}
-    >
-      <p
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          color: "#888",
-          margin: "0 0 2px",
-        }}
-      >
-        {label} {external && "↗"}
-      </p>
-      <p
-        style={{
-          fontSize: 15,
-          color: "#2d5016",
-          margin: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {note}
-      </p>
-    </a>
-  );
-}
-
-const primaryBtnStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  background: "#2d5016",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  fontSize: 15,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  background: "#faf9f6",
-  color: "#2d5016",
-  border: "1px solid #2d5016",
-  borderRadius: 8,
-  fontSize: 15,
-  fontWeight: 500,
-  cursor: "pointer",
-};
-
-const dangerBtnStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  background: "#fff",
-  color: "#922b21",
-  border: "1px solid #e6b8b3",
-  borderRadius: 8,
-  fontSize: 15,
-  fontWeight: 500,
-  cursor: "pointer",
-};
