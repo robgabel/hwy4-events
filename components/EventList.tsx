@@ -232,6 +232,9 @@ export default function EventList({
   const [enabledOrgs, setEnabledOrgs] = useState<Set<string>>(new Set());
   const [weekendOnly, setWeekendOnly] = useState(false);
   const [freeOnly, setFreeOnly] = useState(false);
+  // Category quick filter (Kids / Live Music). Mutually exclusive — an event
+  // can't be both, so picking one clears the other.
+  const [categoryQuick, setCategoryQuick] = useState<EventCategory | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const [filterHeight, setFilterHeight] = useState(0);
 
@@ -304,10 +307,11 @@ export default function EventList({
         if (e.date < weekendRange.start || e.date > weekendRange.end) return false;
       }
       if (freeOnly && e.cost_tier !== "free") return false;
+      if (categoryQuick && e.category !== categoryQuick) return false;
       return true;
     });
     return collapseMultiDayEvents(visible);
-  }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange, freeOnly]);
+  }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange, freeOnly, categoryQuick]);
 
   // Drop events that have already ended (today's morning slots, mostly). Until
   // the clock is known (`now === null`, i.e. server + first paint) show the full
@@ -353,7 +357,7 @@ export default function EventList({
   const pendingScrollRef = useRef<number | null>(null);
 
   // Reset visible count when filters change (show initial batch of new results)
-  const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}-${freeOnly}`;
+  const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}-${freeOnly}-${categoryQuick ?? ""}`;
   useEffect(() => {
     setVisibleCount(INITIAL_EVENTS);
   }, [filteredKey]);
@@ -483,11 +487,38 @@ export default function EventList({
           >
             Free
           </button>
-          {(weekendOnly || freeOnly) && (
+          <button
+            onClick={() =>
+              setCategoryQuick((prev) => (prev === "kids" ? null : "kids"))
+            }
+            className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              categoryQuick === "kids"
+                ? "border-pine bg-pine text-white"
+                : "border-stone-light/40 bg-white text-stone hover:border-pine hover:text-pine"
+            }`}
+          >
+            Kids
+          </button>
+          <button
+            onClick={() =>
+              setCategoryQuick((prev) =>
+                prev === "live_music" ? null : "live_music"
+              )
+            }
+            className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              categoryQuick === "live_music"
+                ? "border-pine bg-pine text-white"
+                : "border-stone-light/40 bg-white text-stone hover:border-pine hover:text-pine"
+            }`}
+          >
+            Live Music
+          </button>
+          {(weekendOnly || freeOnly || categoryQuick) && (
             <button
               onClick={() => {
                 setWeekendOnly(false);
                 setFreeOnly(false);
+                setCategoryQuick(null);
               }}
               className="cursor-pointer text-xs text-stone hover:text-pine"
             >
@@ -531,6 +562,7 @@ export default function EventList({
                 setEnabledOrgs(new Set());
                 setWeekendOnly(false);
                 setFreeOnly(false);
+                setCategoryQuick(null);
               }}
               className="mt-2 cursor-pointer text-sm font-medium text-pine hover:underline"
             >
