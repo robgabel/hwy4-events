@@ -4,6 +4,7 @@ import { SITE_URL } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
+import NewsletterSignup from "@/components/NewsletterSignup";
 import ShareButton from "@/components/ShareButton";
 
 const NAVY = "#3C3B6E"; // Old Glory Blue
@@ -207,6 +208,11 @@ export default function PatrioticEventDetail({
           </p>
         </div>
       </section>
+
+      {/* Newsletter signup, right before the map */}
+      <div className="mt-7">
+        <NewsletterSignup variant="inline" />
+      </div>
 
       {/* Map */}
       <section className="mt-7">
