@@ -53,6 +53,7 @@ export async function gatherGrowthContext(
     posterPending,
     pendingSubs,
     needsVerif,
+    growthExperiments,
   ] = await Promise.all([
     supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).eq("confirmed", true).is("unsubscribed_at", null),
     supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).gte("confirmed_at", d7),
@@ -73,6 +74,15 @@ export async function gatherGrowthContext(
     supabase.from("poster_submissions").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("event_submissions").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("hwy4_events").select("id", { count: "exact", head: true }).eq("verification_status", "needs_verification"),
+    // Logged experiments: all running ones, plus any concluded in the last 30d
+    // (so a just-decided test still gets one last mention). The memo reads these
+    // as ground truth instead of inventing experiments.
+    supabase
+      .from("growth_experiments")
+      .select("name, hypothesis, metric, status, baseline, result, started_on, concluded_on")
+      .or(`status.eq.running,concluded_on.gte.${d30.split("T")[0]}`)
+      .order("started_on", { ascending: false })
+      .limit(20),
   ]);
 
   // ── newsletter last-send clicks ─────────────────────────────────────────
@@ -180,9 +190,21 @@ export async function gatherGrowthContext(
     pageviews_7d: pv7,
   };
 
+  const experiments = rows(growthExperiments).map((e) => ({
+    name: String(e.name ?? ""),
+    hypothesis: (e.hypothesis as string | null) ?? null,
+    metric: (e.metric as string | null) ?? null,
+    status: String(e.status ?? "running"),
+    baseline: (e.baseline as string | null) ?? null,
+    result: (e.result as string | null) ?? null,
+    started_on: String(e.started_on ?? ""),
+    concluded_on: (e.concluded_on as string | null) ?? null,
+  }));
+
   return {
     date: today,
     vitals,
+    experiments,
     newsletter: {
       active: active.count ?? 0,
       new_confirmed_7d: newConfirmed7,

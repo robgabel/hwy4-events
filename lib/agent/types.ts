@@ -101,9 +101,23 @@ export type GrowthVitals = {
   pageviews_7d: number;
 };
 
+// A logged growth experiment (growth_experiments). The agent reads these as
+// ground truth and reports an early read; it does not invent experiments.
+export type GrowthExperimentRow = {
+  name: string;
+  hypothesis: string | null;
+  metric: string | null;
+  status: string; // running | won | lost | inconclusive | abandoned
+  baseline: string | null;
+  result: string | null;
+  started_on: string;
+  concluded_on: string | null;
+};
+
 export type GrowthContext = {
   date: string;
   vitals: GrowthVitals;
+  experiments: GrowthExperimentRow[];
   newsletter: {
     active: number;
     new_confirmed_7d: number;
