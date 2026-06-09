@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClientOrNull } from "@/lib/admin/db";
 import type { CountRow } from "@/lib/cloudflare-analytics";
 import { getNewsletterStats, type NewsletterStats } from "@/lib/newsletter-stats";
 
@@ -26,10 +26,8 @@ const WINDOW_DAYS = 30;
 const TREND_DAYS = 14;
 
 async function loadDaily(): Promise<DailyRow[]> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return [];
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
   const { data } = await supabase
     .from("analytics_daily")
     .select("date, pageviews, visits, top_pages, referrers, countries, devices, browsers, ai_referrals, synced_at")
@@ -48,10 +46,8 @@ type NewsletterClicks = {
 // Per-event clicks for the most recent SENT newsletter, from newsletter_clicks
 // (written by the /r/n redirect). Bot-filtered. See PRD-newsletter-click-tracking.md.
 async function loadNewsletterClicks(): Promise<NewsletterClicks | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return null;
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return null;
 
   const { data: draft } = await supabase
     .from("newsletter_drafts")
@@ -117,10 +113,8 @@ async function loadGate0(): Promise<Gate0> {
     topEvents: [],
     hasData: false,
   };
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return empty;
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return empty;
 
   const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
   const since7 = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -247,11 +241,27 @@ function fmtDay(iso: string): string {
 }
 
 async function loadNewsletterStats(): Promise<NewsletterStats | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return null;
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return null;
   return getNewsletterStats(supabase, 60);
+}
+
+// "Signups vs Visitors" series (PRD-growth-agent.md, Path A). Cloudflare stores
+// only UTC daily rollups and can't be re-bucketed, so we re-bucket the newsletter
+// series to UTC to match — exact day-for-day alignment, no migration. Each day
+// pairs that UTC day's confirmed signups with that UTC day's Cloudflare visits.
+type SvvDay = { date: string; visits: number; signups: number };
+
+async function loadSignupsVsVisitors(rows: DailyRow[]): Promise<SvvDay[]> {
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
+  const stats = await getNewsletterStats(supabase, WINDOW_DAYS, "UTC");
+  const visitsByDate = new Map(rows.map((r) => [r.date, r.visits]));
+  return stats.days.map((d) => ({
+    date: d.date,
+    signups: d.signups,
+    visits: visitsByDate.get(d.date) ?? 0,
+  }));
 }
 
 export default async function GrowthPage() {
@@ -259,6 +269,7 @@ export default async function GrowthPage() {
   const newsletterClicks = await loadNewsletterClicks();
   const newsletter = await loadNewsletterStats();
   const gate0 = await loadGate0();
+  const svv = await loadSignupsVsVisitors(rows);
   const nlMax = newsletterClicks ? Math.max(1, ...newsletterClicks.perEvent.map((e) => e.clicks)) : 1;
   const hasData = rows.some((r) => r.pageviews > 0);
 
@@ -277,7 +288,7 @@ export default async function GrowthPage() {
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Growth</h1>
+      <h1 style={{ color: "#1B3A2D", fontSize: 26, margin: "0 0 4px" }}>Growth</h1>
       <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
         Traffic from Cloudflare Web Analytics, snapshotted nightly into the site&rsquo;s own
         history. Privacy-first and cookieless, so the numbers run a touch lower than ad-tech
@@ -288,7 +299,7 @@ export default async function GrowthPage() {
 
       {!hasData ? (
         <section style={emptyCardStyle}>
-          <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
+          <p style={{ color: "#1B3A2D", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
             No traffic data yet.
           </p>
           <p style={{ color: "#666", fontSize: 16, margin: 0, lineHeight: 1.5 }}>
@@ -319,7 +330,7 @@ export default async function GrowthPage() {
                     style={{
                       height: `${Math.round((r.pageviews / trendMax) * 100)}%`,
                       minHeight: r.pageviews > 0 ? 3 : 0,
-                      background: "#2d5016",
+                      background: "#1B3A2D",
                       borderRadius: "3px 3px 0 0",
                       opacity: r.pageviews > 0 ? 1 : 0.15,
                     }}
@@ -338,7 +349,7 @@ export default async function GrowthPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 }}>
               {ai.map((e) => (
                 <div key={e.key} style={{ textAlign: "center", padding: "8px 4px" }}>
-                  <p style={{ color: e.visits > 0 ? "#2d5016" : "#bbb", fontSize: 24, fontWeight: 700, margin: "0 0 2px" }}>
+                  <p style={{ color: e.visits > 0 ? "#1B3A2D" : "#bbb", fontSize: 24, fontWeight: 700, margin: "0 0 2px" }}>
                     {nf(e.visits)}
                   </p>
                   <p style={{ ...labelStyle, margin: 0 }}>{e.label}</p>
@@ -368,10 +379,12 @@ export default async function GrowthPage() {
           <p style={{ color: "#aaa", fontSize: 14, margin: "28px 0 0", lineHeight: 1.5 }}>
             Source: Cloudflare Web Analytics (RUM){lastSynced ? ` · snapshot updated ${new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}.
             Search-engine performance (Google/Bing) is tracked separately by the cockpit&rsquo;s SEO
-            collector and surfaces in the nightly digest on <a href="/admin/today" style={{ color: "#2d5016" }}>Today</a>.
+            collector and surfaces in the nightly digest on <a href="/admin/briefings" style={{ color: "#1B3A2D" }}>Today</a>.
           </p>
         </>
       )}
+
+      <SignupsVsVisitorsPanel days={svv} gate0={gate0} />
 
       {newsletter && newsletter.total_active > 0 && <NewsletterSignupsPanel stats={newsletter} />}
 
@@ -386,7 +399,7 @@ export default async function GrowthPage() {
                     <span style={{ color: "#2d3a22", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {e.name}
                     </span>
-                    <span style={{ color: "#2d5016", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{nf(e.clicks)}</span>
+                    <span style={{ color: "#1B3A2D", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{nf(e.clicks)}</span>
                   </div>
                   <div style={{ height: 4, background: "#f0ede8", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${Math.round((e.clicks / nlMax) * 100)}%`, background: "#9bb87a", borderRadius: 2 }} />
@@ -426,9 +439,9 @@ const pct = (part: number, total: number) =>
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 10, padding: "12px 14px" }}>
+    <div style={{ background: "#fff", border: "1px solid #E7E0D5", borderRadius: 10, padding: "12px 14px" }}>
       <p style={{ ...labelStyle, margin: "0 0 4px" }}>{label}</p>
-      <p style={{ color: "#2d5016", fontSize: 24, fontWeight: 700, margin: 0 }}>{value}</p>
+      <p style={{ color: "#1B3A2D", fontSize: 24, fontWeight: 700, margin: 0 }}>{value}</p>
       {sub && <p style={{ color: "#999", fontSize: 12, margin: "2px 0 0" }}>{sub}</p>}
     </div>
   );
@@ -486,7 +499,7 @@ function Gate0Section({ data }: { data: Gate0 }) {
                 <div key={i}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
                     <span style={{ color: "#2d3a22", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
-                    <span style={{ color: "#2d5016", fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{nf(e.clicks)}</span>
+                    <span style={{ color: "#1B3A2D", fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{nf(e.clicks)}</span>
                   </div>
                   <div style={{ height: 4, background: "#f0ede8", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${Math.round((e.clicks / clickMax) * 100)}%`, background: "#9bb87a", borderRadius: 2 }} />
@@ -502,6 +515,152 @@ function Gate0Section({ data }: { data: Gate0 }) {
           spend&rdquo; (the economic flywheel). Directional, not exact attribution.
         </p>
       </section>
+    </>
+  );
+}
+
+function SignupsVsVisitorsPanel({ days, gate0 }: { days: SvvDay[]; gate0: Gate0 }) {
+  const totalVisits = days.reduce((a, d) => a + d.visits, 0);
+  const totalSignups = days.reduce((a, d) => a + d.signups, 0);
+  // Needs visits to correlate against; the standalone signups panel covers the
+  // signups-only case.
+  if (days.length === 0 || totalVisits === 0) return null;
+
+  const W = 720;
+  const H = 140;
+  const padX = 6;
+  const padTop = 10;
+  const padBot = 4;
+  const plotH = H - padTop - padBot;
+  const n = days.length;
+  const step = (W - padX * 2) / n;
+  const barW = Math.max(1.5, step * 0.6);
+  const maxV = Math.max(1, ...days.map((d) => d.visits));
+  const maxS = Math.max(1, ...days.map((d) => d.signups));
+  const cx = (i: number) => padX + step * (i + 0.5);
+
+  const signupLine = days
+    .map((d, i) => `${cx(i).toFixed(1)},${(padTop + plotH - (d.signups / maxS) * plotH).toFixed(1)}`)
+    .join(" ");
+
+  const conv = totalSignups / totalVisits;
+
+  // 7-day rolling visit->signup rate (the conversion line).
+  const rolling = days.map((_, i) => {
+    let s = 0;
+    let v = 0;
+    for (let j = Math.max(0, i - 6); j <= i; j++) {
+      s += days[j].signups;
+      v += days[j].visits;
+    }
+    return v > 0 ? s / v : 0;
+  });
+  const maxRoll = Math.max(0.0001, ...rolling);
+  const RH = 54;
+  const rPad = 6;
+  const rPlotH = RH - rPad * 2;
+  const rollLine = rolling
+    .map((r, i) => `${cx(i).toFixed(1)},${(rPad + rPlotH - (r / maxRoll) * rPlotH).toFixed(1)}`)
+    .join(" ");
+  const latestRoll = rolling[rolling.length - 1] ?? 0;
+
+  const vw = gate0.views;
+  const located = vw.local + vw.visitor;
+  const splitTotal = Math.max(1, vw.local + vw.visitor + vw.unknown);
+  const split = [
+    { key: "local", label: "Local", value: vw.local, color: "#1B3A2D" },
+    { key: "visitor", label: "Visitor", value: vw.visitor, color: "#5a8fa8" },
+    { key: "unknown", label: "Unknown", value: vw.unknown, color: "#c9c2b6" },
+  ];
+
+  const convStr = (x: number) => `${(x * 100).toFixed(x < 0.1 ? 2 : 1)}%`;
+
+  return (
+    <>
+      <SectionHeader>Signups vs visitors · 30d (UTC-aligned)</SectionHeader>
+      <section style={cardStyle}>
+        <div style={{ display: "flex", gap: 18, marginBottom: 12, fontSize: 13, color: "#666", flexWrap: "wrap" }}>
+          <span>
+            <span style={{ display: "inline-block", width: 11, height: 11, background: "#d4e2c8", borderRadius: 2, marginRight: 6, verticalAlign: "middle" }} />
+            Visits (Cloudflare)
+          </span>
+          <span>
+            <span style={{ display: "inline-block", width: 15, height: 3, background: "#1B3A2D", borderRadius: 2, marginRight: 6, verticalAlign: "middle" }} />
+            Confirmed signups
+          </span>
+        </div>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Daily visits and confirmed signups, UTC-aligned">
+          {days.map((d, i) => {
+            const h = (d.visits / maxV) * plotH;
+            return (
+              <rect
+                key={d.date}
+                x={(cx(i) - barW / 2).toFixed(1)}
+                y={(padTop + plotH - h).toFixed(1)}
+                width={barW.toFixed(1)}
+                height={Math.max(0, h).toFixed(1)}
+                fill="#d4e2c8"
+                rx="1"
+              >
+                <title>{`${fmtDay(d.date)} (UTC): ${nf(d.visits)} visits · ${d.signups} signup${d.signups === 1 ? "" : "s"}`}</title>
+              </rect>
+            );
+          })}
+          <polyline points={signupLine} fill="none" stroke="#1B3A2D" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+          <span style={axisStyle}>{fmtDay(days[0].date)} (UTC)</span>
+          <span style={axisStyle}>{fmtDay(days[n - 1].date)}</span>
+        </div>
+      </section>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 4 }}>
+        <Stat label="Visits · 30d (UTC)" value={nf(totalVisits)} />
+        <Stat label="Signups · 30d (UTC)" value={nf(totalSignups)} />
+        <Stat label="Visit→signup · 30d" value={convStr(conv)} sub={`${nf(totalSignups)} ÷ ${nf(totalVisits)}`} />
+        <Stat label="Local share of visits" value={located ? `${pct(vw.local, located)}%` : "—"} sub="directional" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
+        <section style={cardStyle}>
+          <p style={{ ...labelStyle, margin: "0 0 8px" }}>
+            7-day rolling visit→signup rate · latest {convStr(latestRoll)}
+          </p>
+          <svg viewBox={`0 0 ${W} ${RH}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Seven-day rolling conversion rate">
+            <polyline points={rollLine} fill="none" stroke="#c4922a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          </svg>
+        </section>
+
+        <section style={cardStyle}>
+          <p style={{ ...labelStyle, margin: "0 0 10px" }}>Of those visits · who (directional)</p>
+          <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
+            {split.map((s) => (
+              <div key={s.key} title={`${s.label}: ${nf(s.value)}`} style={{ width: `${(s.value / splitTotal) * 100}%`, background: s.color }} />
+            ))}
+          </div>
+          {split.map((s) => (
+            <div key={s.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#2d3a22", marginBottom: 3 }}>
+              <span>
+                <span style={{ display: "inline-block", width: 9, height: 9, background: s.color, borderRadius: 2, marginRight: 6 }} />
+                {s.label}
+              </span>
+              <span style={{ fontWeight: 600 }}>
+                {nf(s.value)} · {Math.round((s.value / splitTotal) * 100)}%
+              </span>
+            </div>
+          ))}
+        </section>
+      </div>
+
+      <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "12px 0 0" }}>
+        Both series bucketed by <strong>UTC day</strong> so they line up exactly (Cloudflare stores
+        only UTC rollups and can&rsquo;t be re-bucketed). Visits are the Cloudflare denominator
+        (mature, months of history); the local/visitor split is the first-party beacon
+        (<code>site_events</code>) and is the <strong>directional</strong> cut only, not the absolute
+        total yet. The two sources aren&rsquo;t calibrated against each other until
+        <code>site_events</code> banks a clean week or two. Day-boundary alignment is directional, not
+        exact same-day attribution.
+      </p>
     </>
   );
 }
@@ -559,7 +718,7 @@ function NewsletterSignupsPanel({ stats }: { stats: NewsletterStats }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
         <section style={cardStyle}>
           <p style={{ ...labelStyle, margin: "0 0 10px" }}>Who the list is</p>
-          {([["local", "Local", "#2d5016"], ["visitor", "Visitor", "#5a8fa8"], ["unknown", "Unknown", "#c9c2b6"]] as const).map(
+          {([["local", "Local", "#1B3A2D"], ["visitor", "Visitor", "#5a8fa8"], ["unknown", "Unknown", "#c9c2b6"]] as const).map(
             ([k, label, color]) => {
               const v = comp[k];
               const pctv = Math.round((v / compTotal) * 100);
@@ -609,9 +768,9 @@ function StatStrip({ stats }: { stats: Array<{ label: string; value: number }> }
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 4 }}>
       {stats.map((s) => (
-        <div key={s.label} style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 10, padding: "12px 14px" }}>
+        <div key={s.label} style={{ background: "#fff", border: "1px solid #E7E0D5", borderRadius: 10, padding: "12px 14px" }}>
           <p style={{ ...labelStyle, margin: "0 0 4px" }}>{s.label}</p>
-          <p style={{ color: "#2d5016", fontSize: 24, fontWeight: 700, margin: 0 }}>{nf(s.value)}</p>
+          <p style={{ color: "#1B3A2D", fontSize: 24, fontWeight: 700, margin: 0 }}>{nf(s.value)}</p>
         </div>
       ))}
     </div>
@@ -636,7 +795,7 @@ function RankedList({ title, rows, kind }: { title: string; rows: CountRow[]; ki
                   <span style={{ color: "#2d3a22", fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {display}
                   </span>
-                  <span style={{ color: "#2d5016", fontSize: 15, fontWeight: 600, flexShrink: 0 }}>
+                  <span style={{ color: "#1B3A2D", fontSize: 15, fontWeight: 600, flexShrink: 0 }}>
                     {nf(r.visits)}
                   </span>
                 </div>
@@ -654,7 +813,7 @@ function RankedList({ title, rows, kind }: { title: string; rows: CountRow[]; ki
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h2 style={{ color: "#2d5016", fontSize: 15, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", margin: "28px 0 12px" }}>
+    <h2 style={{ color: "#1B3A2D", fontSize: 15, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", margin: "28px 0 12px" }}>
       {children}
     </h2>
   );
@@ -662,14 +821,14 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 const cardStyle: React.CSSProperties = {
   background: "#fff",
-  border: "1px solid #e8e4de",
+  border: "1px solid #E7E0D5",
   borderRadius: 12,
   padding: 18,
 };
 
 const emptyCardStyle: React.CSSProperties = {
   background: "#fff",
-  border: "1px solid #e8e4de",
+  border: "1px solid #E7E0D5",
   borderRadius: 12,
   padding: 32,
   textAlign: "center",

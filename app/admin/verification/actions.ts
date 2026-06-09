@@ -1,45 +1,32 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { getAdminClient } from "@/lib/admin/db";
+import { failRedirect, flashRedirect, requireField, safeReturnTo } from "@/lib/admin/flash";
 
 const ADMIN_PATH = "/admin/verification";
 
-function getServiceClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) throw new Error("Missing Supabase credentials");
-  return createClient(supabaseUrl, serviceKey);
-}
-
-function requireId(formData: FormData): string {
-  const id = (formData.get("id") as string | null)?.trim();
-  if (!id) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent("Missing event id.")}`);
-  }
-  return id as string;
-}
-
+// `returnTo` lets the briefings verification rail confirm/dismiss in place and
+// stay on /admin/briefings; the verification page omits it and falls back here.
 async function applyAction(
   id: string,
   patch: Record<string, unknown>,
-  flash: string
+  flash: string,
+  returnTo: string = ADMIN_PATH
 ) {
-  const supabase = getServiceClient();
+  const supabase = getAdminClient();
   const { error } = await supabase.from("hwy4_events").update(patch).eq("id", id);
-  if (error) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent(error.message)}`);
-  }
+  if (error) failRedirect(returnTo, error.message);
   revalidatePath(ADMIN_PATH);
+  if (returnTo !== ADMIN_PATH) revalidatePath(returnTo);
   revalidatePath("/");
-  redirect(`${ADMIN_PATH}?flash=${encodeURIComponent(flash)}`);
+  flashRedirect(returnTo, flash);
 }
 
 // Confirm: admin checked manually, the date IS correct. Mark verified so it
 // stops appearing in the queue.
 export async function confirmEvent(formData: FormData) {
-  const id = requireId(formData);
+  const id = requireField(formData, "id", ADMIN_PATH, "event id");
   await applyAction(
     id,
     {
@@ -47,14 +34,15 @@ export async function confirmEvent(formData: FormData) {
       verification_reason: "Manually confirmed by admin.",
       verification_checked_at: new Date().toISOString(),
     },
-    "Confirmed."
+    "Confirmed.",
+    safeReturnTo(formData, ADMIN_PATH)
   );
 }
 
 // Dismiss: admin doesn't want to act on this flag (false positive, or doesn't
 // care). Stops the verifier from re-checking it.
 export async function dismissEvent(formData: FormData) {
-  const id = requireId(formData);
+  const id = requireField(formData, "id", ADMIN_PATH, "event id");
   await applyAction(
     id,
     {
@@ -62,14 +50,15 @@ export async function dismissEvent(formData: FormData) {
       verification_reason: "Dismissed by admin.",
       verification_checked_at: new Date().toISOString(),
     },
-    "Dismissed."
+    "Dismissed.",
+    safeReturnTo(formData, ADMIN_PATH)
   );
 }
 
 // Hide: pull the event off the public site without deleting (visibility=private).
 // Leaves the verification flag in place so it stays out of the queue too.
 export async function hideEvent(formData: FormData) {
-  const id = requireId(formData);
+  const id = requireField(formData, "id", ADMIN_PATH, "event id");
   await applyAction(
     id,
     {
@@ -84,13 +73,11 @@ export async function hideEvent(formData: FormData) {
 
 // Delete: hard delete. Use when the event is plainly wrong and not worth keeping.
 export async function deleteEvent(formData: FormData) {
-  const id = requireId(formData);
-  const supabase = getServiceClient();
+  const id = requireField(formData, "id", ADMIN_PATH, "event id");
+  const supabase = getAdminClient();
   const { error } = await supabase.from("hwy4_events").delete().eq("id", id);
-  if (error) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent(error.message)}`);
-  }
+  if (error) failRedirect(ADMIN_PATH, error.message);
   revalidatePath(ADMIN_PATH);
   revalidatePath("/");
-  redirect(`${ADMIN_PATH}?flash=${encodeURIComponent("Event deleted.")}`);
+  flashRedirect(ADMIN_PATH, "Event deleted.");
 }

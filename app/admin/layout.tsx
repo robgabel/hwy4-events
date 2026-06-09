@@ -1,194 +1,44 @@
-import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { Suspense } from "react";
+import { countPending } from "@/lib/admin/db";
+import { ADMIN_MAX_WIDTH, PAGE_BG } from "@/components/admin/ui";
+import AdminNav from "@/components/admin/AdminNav";
 
 export const dynamic = "force-dynamic";
 
-async function loadPendingCount(): Promise<number> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return 0;
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { count } = await supabase
-    .from("hwy4_events")
-    .select("id", { count: "exact", head: true })
-    .eq("verification_status", "needs_verification");
-  return count ?? 0;
-}
-
-async function loadPendingSubmissionsCount(): Promise<number> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return 0;
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { count } = await supabase
-    .from("event_submissions")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
-  return count ?? 0;
-}
-
-async function loadPendingPostersCount(): Promise<number> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return 0;
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { count } = await supabase
-    .from("poster_submissions")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
-  return count ?? 0;
-}
-
-async function loadPendingFeedbackCount(): Promise<number> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return 0;
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { count } = await supabase
-    .from("event_feedback")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
-  return count ?? 0;
-}
-
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [pending, pendingSubs, pendingPosters, pendingFeedback] = await Promise.all([
-    loadPendingCount(),
-    loadPendingSubmissionsCount(),
-    loadPendingPostersCount(),
-    loadPendingFeedbackCount(),
+  // Badge counts for the review queues. countPending returns 0 (never throws) on
+  // a misconfigured env so the whole admin tree can't 500 over a missing badge.
+  const [verification, submissions, posters, feedback, proposedActions] = await Promise.all([
+    countPending("hwy4_events", "verification_status", "needs_verification"),
+    countPending("event_submissions", "status", "pending"),
+    countPending("poster_submissions", "status", "pending"),
+    countPending("event_feedback", "status", "pending"),
+    countPending("agent_actions", "status", "proposed"),
   ]);
 
   return (
     <main
       style={{
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        background: "#faf9f6",
+        background: PAGE_BG,
         minHeight: "100vh",
         padding: "32px 20px",
       }}
     >
-      <div style={{ maxWidth: 940, margin: "0 auto 20px" }}>
-        <nav
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            fontSize: 15,
-            color: "#666",
-            paddingBottom: 16,
-            borderBottom: "1px solid #e8e4de",
-          }}
-        >
-          <span style={{ fontSize: 13, color: "#999", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>
-            Admin
-          </span>
-          <NavLink href="/admin/today">Today</NavLink>
-          <NavLink href="/admin/growth-memo">Growth memo</NavLink>
-          <NavLink href="/admin/experiments">Experiments</NavLink>
-          <NavLink href="/admin/analytics">Growth</NavLink>
-          <NavLink href="/admin/newsletter">Newsletter</NavLink>
-          <NavLink href="/admin/newsletter-note">Newsletter notes</NavLink>
-          <NavLink href="/admin/submissions">
-            Submissions
-            {pendingSubs > 0 && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginLeft: 6,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: "#d97706",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.4,
-                }}
-              >
-                {pendingSubs}
-              </span>
-            )}
-          </NavLink>
-          <NavLink href="/admin/posters">
-            Posters
-            {pendingPosters > 0 && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginLeft: 6,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: "#d97706",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.4,
-                }}
-              >
-                {pendingPosters}
-              </span>
-            )}
-          </NavLink>
-          <NavLink href="/admin/verification">
-            Verification
-            {pending > 0 && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginLeft: 6,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: "#d97706",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.4,
-                }}
-              >
-                {pending}
-              </span>
-            )}
-          </NavLink>
-          <NavLink href="/admin/feedback">
-            Feedback
-            {pendingFeedback > 0 && (
-              <span
-                style={{
-                  display: "inline-block",
-                  marginLeft: 6,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: "#d97706",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  lineHeight: 1.4,
-                }}
-              >
-                {pendingFeedback}
-              </span>
-            )}
-          </NavLink>
-        </nav>
+      <div style={{ maxWidth: ADMIN_MAX_WIDTH, margin: "0 auto 20px" }}>
+        <Suspense fallback={<div style={{ height: 36 }} />}>
+          <AdminNav
+            badges={{
+              actions: proposedActions,
+              submissions,
+              posters,
+              verification,
+              feedback,
+            }}
+          />
+        </Suspense>
       </div>
       {children}
     </main>
-  );
-}
-
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        padding: "6px 12px",
-        borderRadius: 6,
-        color: "#2d5016",
-        textDecoration: "none",
-        fontWeight: 500,
-      }}
-    >
-      {children}
-    </Link>
   );
 }

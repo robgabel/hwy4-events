@@ -1,4 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClientOrNull } from "@/lib/admin/db";
+import { readFlash, type SearchParams } from "@/lib/admin/flash";
+import {
+  QueueShell,
+  CardList,
+  QueueCard,
+  EmptyCard,
+  CardHeader,
+  INK,
+  ACCENT,
+  adminBtn,
+  adminInput,
+} from "@/components/admin/ui";
 import { resolveFeedback, dismissFeedback } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -15,10 +27,8 @@ type Feedback = {
 };
 
 async function loadPending(): Promise<Feedback[]> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return [];
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
   const { data } = await supabase
     .from("event_feedback")
     .select(
@@ -38,39 +48,39 @@ function fmtWhen(iso: string): string {
   });
 }
 
-type SearchParams = { [key: string]: string | string[] | undefined };
-
 export default async function FeedbackAdminPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const params = await searchParams;
-  const errorMsg = typeof params.error === "string" ? params.error : null;
-  const flash = typeof params.flash === "string" ? params.flash : null;
+  const { error, flash } = readFlash(await searchParams);
   const items = await loadPending();
 
   return (
-    <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Event feedback</h1>
-      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
-        Corrections sent from event pages via &ldquo;Suggest a fix.&rdquo; Apply the change to the
-        event the usual way, then mark it resolved, or dismiss it.
-      </p>
-
-      {errorMsg && <Banner tone="error">{errorMsg}</Banner>}
-      {flash && <Banner tone="ok">{flash}</Banner>}
-
+    <QueueShell
+      title="Event feedback"
+      intro={
+        <>
+          Corrections sent from event pages via &ldquo;Suggest a fix.&rdquo; Apply the change to the
+          event the usual way, then mark it resolved, or dismiss it.
+        </>
+      }
+      error={error}
+      flash={flash}
+    >
       {items.length === 0 ? (
-        <EmptyState />
+        <EmptyCard
+          heading="No pending feedback."
+          sub={<>When someone uses &ldquo;Suggest a fix&rdquo; on an event page, it shows up here.</>}
+        />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <CardList>
           {items.map((f) => (
             <FeedbackCard key={f.id} f={f} />
           ))}
-        </div>
+        </CardList>
       )}
-    </div>
+    </QueueShell>
   );
 }
 
@@ -82,42 +92,34 @@ function FeedbackCard({ f }: { f: Feedback }) {
       ? "visitor"
       : "role n/a";
   return (
-    <article
-      style={{
-        background: "#fff",
-        border: "1px solid #e8e4de",
-        borderLeft: `4px solid ${isOrganizer ? "#2d5016" : "#d97706"}`,
-        borderRadius: 12,
-        padding: 20,
-      }}
-    >
-      <header style={{ marginBottom: 12 }}>
-        <h2 style={{ color: "#2d5016", fontSize: 19, margin: "0 0 4px", fontWeight: 600 }}>
-          {f.event_name || f.event_slug}
-        </h2>
-        <p style={{ color: "#666", fontSize: 15, margin: 0 }}>
-          <strong>{fmtWhen(f.created_at)}</strong>
-          {` · ${roleLabel}`}
-          {f.submitter_name ? ` · ${f.submitter_name}` : ""}
-          {f.submitter_email ? ` (${f.submitter_email})` : ""}
-        </p>
-        <p style={{ margin: "4px 0 0" }}>
-          <a
-            href={`/events/${f.event_slug}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#2d5a3d", fontSize: 14 }}
-          >
-            View event &#8599;
-          </a>
-        </p>
-      </header>
+    <QueueCard accent={isOrganizer ? INK : ACCENT}>
+      <CardHeader
+        title={f.event_name || f.event_slug}
+        meta={
+          <>
+            <strong>{fmtWhen(f.created_at)}</strong>
+            {` · ${roleLabel}`}
+            {f.submitter_name ? ` · ${f.submitter_name}` : ""}
+            {f.submitter_email ? ` (${f.submitter_email})` : ""}
+          </>
+        }
+      />
+      <p style={{ margin: "-8px 0 12px" }}>
+        <a
+          href={`/events/${f.event_slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "#2d5a3d", fontSize: 14 }}
+        >
+          View event &#8599;
+        </a>
+      </p>
 
       <blockquote
         style={{
           margin: "0 0 14px",
           padding: "12px 14px",
-          background: "#faf9f6",
+          background: "#FDF8F3",
           borderRadius: 8,
           color: "#2d3a22",
           fontSize: 16,
@@ -131,7 +133,7 @@ function FeedbackCard({ f }: { f: Feedback }) {
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <form action={resolveFeedback} style={{ margin: 0 }}>
           <input type="hidden" name="id" value={f.id} />
-          <button type="submit" style={primaryBtn}>
+          <button type="submit" style={adminBtn.primary}>
             Mark resolved
           </button>
         </form>
@@ -143,77 +145,13 @@ function FeedbackCard({ f }: { f: Feedback }) {
           <input
             name="review_note"
             placeholder="Reason (optional)"
-            style={{ ...inputStyle, flex: 1, minWidth: 140 }}
+            style={{ ...adminInput, flex: 1, minWidth: 140 }}
           />
-          <button type="submit" style={dangerBtn}>
+          <button type="submit" style={adminBtn.danger}>
             Dismiss
           </button>
         </form>
       </div>
-    </article>
+    </QueueCard>
   );
 }
-
-function Banner({ tone, children }: { tone: "ok" | "error"; children: React.ReactNode }) {
-  const s =
-    tone === "ok"
-      ? { background: "#eaf7ea", border: "1px solid #b7e0b7", color: "#2d5016" }
-      : { background: "#fdecea", border: "1px solid #f5b7b1", color: "#922b21" };
-  return (
-    <div style={{ ...s, padding: "12px 16px", borderRadius: 8, fontSize: 16, marginBottom: 16 }}>
-      {children}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <section
-      style={{
-        background: "#fff",
-        border: "1px solid #e8e4de",
-        borderRadius: 12,
-        padding: 32,
-        textAlign: "center",
-      }}
-    >
-      <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
-        No pending feedback.
-      </p>
-      <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
-        When someone uses &ldquo;Suggest a fix&rdquo; on an event page, it shows up here.
-      </p>
-    </section>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 10px",
-  border: "1px solid #d9d4cc",
-  borderRadius: 8,
-  fontSize: 16,
-  color: "#2d3a22",
-  background: "#fff",
-  boxSizing: "border-box",
-};
-const primaryBtn: React.CSSProperties = {
-  padding: "10px 18px",
-  background: "#2d5016",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  fontSize: 16,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-const dangerBtn: React.CSSProperties = {
-  padding: "8px 14px",
-  background: "#fff",
-  color: "#922b21",
-  border: "1px solid #e6b8b3",
-  borderRadius: 8,
-  fontSize: 15,
-  fontWeight: 500,
-  cursor: "pointer",
-};

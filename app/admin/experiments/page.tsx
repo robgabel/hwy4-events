@@ -1,4 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClientOrNull } from "@/lib/admin/db";
+import { QueueShell } from "@/components/admin/ui";
+import { ConfirmSubmit } from "@/components/admin/ConfirmSubmit";
 import {
   addExperiment,
   concludeExperiment,
@@ -21,10 +23,8 @@ type Experiment = {
 };
 
 async function loadExperiments(): Promise<Experiment[]> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return [];
-  const supabase = createClient(url, key);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
   const { data } = await supabase
     .from("growth_experiments")
     .select("id, name, hypothesis, metric, status, baseline, result, started_on, concluded_on")
@@ -52,17 +52,19 @@ export default async function ExperimentsPage() {
   const running = experiments.filter((e) => e.status === "running");
 
   return (
-    <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Experiments</h1>
-      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
-        The growth agent&rsquo;s memory. Log a deliberate growth change with a hypothesis and the
-        metric to watch; the weekly memo reads the running ones and reports an early read on each.
-        Conclude them when you have a verdict. {running.length} running.
-      </p>
-
+    <QueueShell
+      title="Experiments"
+      intro={
+        <>
+          The growth agent&rsquo;s memory. Log a deliberate growth change with a hypothesis and the
+          metric to watch; the weekly memo reads the running ones and reports an early read on each.
+          Conclude them when you have a verdict. {running.length} running.
+        </>
+      }
+    >
       {/* Log a new experiment */}
       <section style={cardStyle}>
-        <h2 style={{ color: "#2d5016", fontSize: 17, margin: "0 0 12px" }}>Log a new experiment</h2>
+        <h2 style={{ color: "#1B3A2D", fontSize: 17, margin: "0 0 12px" }}>Log a new experiment</h2>
         <form action={addExperiment} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Field label="Name (what changed)" name="name" placeholder="e.g. Newsletter signup on event detail pages" required />
           <Field label="Hypothesis (what you expect to move and why)" name="hypothesis" textarea placeholder="Adding the signup box to high-intent event pages lifts net adds because readers there already care." />
@@ -83,7 +85,7 @@ export default async function ExperimentsPage() {
           ))}
         </div>
       )}
-    </div>
+    </QueueShell>
   );
 }
 
@@ -93,7 +95,7 @@ function ExperimentCard({ e }: { e: Experiment }) {
   return (
     <article style={{ ...cardStyle, borderLeft: `4px solid ${color}`, marginBottom: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <h3 style={{ color: "#2d5016", fontSize: 18, margin: 0, fontWeight: 600 }}>{e.name}</h3>
+        <h3 style={{ color: "#1B3A2D", fontSize: 18, margin: 0, fontWeight: 600 }}>{e.name}</h3>
         <span
           style={{
             flexShrink: 0,
@@ -149,7 +151,9 @@ function ExperimentCard({ e }: { e: Experiment }) {
           </form>
           <form action={deleteExperiment}>
             <input type="hidden" name="id" value={e.id} />
-            <button type="submit" style={dangerBtn}>Delete</button>
+            <ConfirmSubmit message={`Delete experiment "${e.name}"? This cannot be undone.`} style={dangerBtn}>
+              Delete
+            </ConfirmSubmit>
           </form>
         </div>
       )}
@@ -204,7 +208,7 @@ function Empty() {
 
 const cardStyle = {
   background: "#fff",
-  border: "1px solid #e8e4de",
+  border: "1px solid #E7E0D5",
   borderRadius: 12,
   padding: 20,
   marginBottom: 12,
@@ -229,7 +233,7 @@ const textareaStyle = { ...inputStyle, resize: "vertical" as const, width: "100%
 const selectStyle = { ...inputStyle, cursor: "pointer" };
 const primaryBtn = {
   cursor: "pointer",
-  background: "#2d5016",
+  background: "#1B3A2D",
   color: "#fff",
   border: "none",
   borderRadius: 8,
@@ -240,8 +244,8 @@ const primaryBtn = {
 const secondaryBtn = {
   cursor: "pointer",
   background: "#fff",
-  color: "#2d5016",
-  border: "1px solid #2d5016",
+  color: "#1B3A2D",
+  border: "1px solid #1B3A2D",
   borderRadius: 8,
   padding: "7px 14px",
   fontSize: 14,

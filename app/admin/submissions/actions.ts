@@ -1,7 +1,5 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { generateDedupKey } from "@/lib/event-identity";
 import { EVENTS_CACHE_TAG } from "@/lib/events-data";
@@ -18,29 +16,14 @@ import {
   type ReplyOutcome,
   type SubmissionForReply,
 } from "@/lib/agent/submission-reply";
+import { getAdminClient } from "@/lib/admin/db";
+import { failRedirect, flashRedirect, field, requireField, safeReturnTo } from "@/lib/admin/flash";
 
 const ADMIN_PATH = "/admin/submissions";
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EventCategory[];
 
-function getServiceClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) throw new Error("Missing Supabase credentials");
-  return createClient(supabaseUrl, serviceKey);
-}
-
-function fail(message: string): never {
-  redirect(`${ADMIN_PATH}?error=${encodeURIComponent(message)}`);
-}
-
-function field(formData: FormData, name: string): string {
-  return ((formData.get(name) as string | null) ?? "").trim();
-}
-
 function requireId(formData: FormData): string {
-  const id = field(formData, "id");
-  if (!id) fail("Missing submission id.");
-  return id;
+  return requireField(formData, "id", ADMIN_PATH, "submission id");
 }
 
 // Draft a reply to the submitter and store it on the row (the CRM loop). Returns
@@ -49,7 +32,7 @@ function requireId(formData: FormData): string {
 // underlying publish/dismiss action is never blocked by the email step. The human
 // sends the draft from their own Gmail via the compose deep-link in the UI.
 async function draftAndStoreReply(
-  supabase: ReturnType<typeof getServiceClient>,
+  supabase: ReturnType<typeof getAdminClient>,
   submissionId: string,
   outcome: ReplyOutcome,
   ctx: { eventUrl?: string; reason?: string } = {},
@@ -79,25 +62,25 @@ async function draftAndStoreReply(
 // write a follow-up targeting the exact gaps it found, then stores it for review.
 export async function draftQuestionReply(formData: FormData) {
   const id = requireId(formData);
-  const supabase = getServiceClient();
+  const supabase = getAdminClient();
   const { data } = await supabase
     .from("event_submissions")
     .select("submitter_email")
     .eq("id", id)
     .maybeSingle();
-  if (!data) fail("Submission not found.");
+  if (!data) failRedirect(ADMIN_PATH, "Submission not found.");
   if (!(data as { submitter_email: string | null }).submitter_email) {
-    fail("No email on file for this submitter, so there is no one to write to.");
+    failRedirect(ADMIN_PATH, "No email on file for this submitter, so there is no one to write to.");
   }
   let ok = false;
   try {
     ok = await draftAndStoreReply(supabase, id, "questions");
   } catch (err) {
-    fail(`Could not draft a reply: ${err instanceof Error ? err.message : String(err)}`);
+    failRedirect(ADMIN_PATH, `Could not draft a reply: ${err instanceof Error ? err.message : String(err)}`);
   }
   revalidatePath(ADMIN_PATH);
-  if (!ok) fail("Could not draft a reply.");
-  redirect(`${ADMIN_PATH}?flash=${encodeURIComponent("Drafted a question for the submitter.")}`);
+  if (!ok) failRedirect(ADMIN_PATH, "Could not draft a reply.");
+  flashRedirect(ADMIN_PATH, "Drafted a question for the submitter.");
 }
 
 // Draft (or re-draft) a reply for an ALREADY-decided submission, reachable any
@@ -106,13 +89,13 @@ export async function draftQuestionReply(formData: FormData) {
 // path to email a submitter after the one-shot post-action banner is gone.
 export async function draftReplyForReviewed(formData: FormData) {
   const id = requireId(formData);
-  const supabase = getServiceClient();
+  const supabase = getAdminClient();
   const { data } = await supabase
     .from("event_submissions")
     .select("status, review_note, published_event_id, merged_into_event_id, submitter_email")
     .eq("id", id)
     .maybeSingle();
-  if (!data) fail("Submission not found.");
+  if (!data) failRedirect(ADMIN_PATH, "Submission not found.");
   const row = data as {
     status: string;
     review_note: string | null;
@@ -121,7 +104,7 @@ export async function draftReplyForReviewed(formData: FormData) {
     submitter_email: string | null;
   };
   if (!row.submitter_email) {
-    fail("No email on file for this submitter, so there is no one to write to.");
+    failRedirect(ADMIN_PATH, "No email on file for this submitter, so there is no one to write to.");
   }
 
   const outcome: ReplyOutcome = row.status === "rejected" ? "declined" : "approved";
@@ -142,11 +125,11 @@ export async function draftReplyForReviewed(formData: FormData) {
   try {
     ok = await draftAndStoreReply(supabase, id, outcome, ctx);
   } catch (err) {
-    fail(`Could not draft a reply: ${err instanceof Error ? err.message : String(err)}`);
+    failRedirect(ADMIN_PATH, `Could not draft a reply: ${err instanceof Error ? err.message : String(err)}`);
   }
   revalidatePath(ADMIN_PATH);
-  if (!ok) fail("Could not draft a reply.");
-  redirect(`${ADMIN_PATH}?flash=${encodeURIComponent("Drafted a reply.")}&replied=${id}`);
+  if (!ok) failRedirect(ADMIN_PATH, "Could not draft a reply.");
+  flashRedirect(ADMIN_PATH, "Drafted a reply.", { replied: id });
 }
 
 // Publish a community submission as a public, community-sourced event. The human
@@ -161,12 +144,12 @@ export async function publishSubmission(formData: FormData) {
   const town = field(formData, "town");
   const category = field(formData, "category") as EventCategory;
 
-  if (!name) fail("Event name is required.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) fail("Date must be YYYY-MM-DD.");
-  if (!(TOWNS as readonly string[]).includes(town)) fail(`Unknown town: ${town}`);
-  if (!CATEGORIES.includes(category)) fail(`Unknown category: ${category}`);
+  if (!name) failRedirect(ADMIN_PATH, "Event name is required.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) failRedirect(ADMIN_PATH, "Date must be YYYY-MM-DD.");
+  if (!(TOWNS as readonly string[]).includes(town)) failRedirect(ADMIN_PATH, `Unknown town: ${town}`);
+  if (!CATEGORIES.includes(category)) failRedirect(ADMIN_PATH, `Unknown category: ${category}`);
 
-  const supabase = getServiceClient();
+  const supabase = getAdminClient();
 
   const row = {
     name,
@@ -200,13 +183,14 @@ export async function publishSubmission(formData: FormData) {
     // 23505 = unique_violation on dedup_key: the event already exists (published
     // earlier or scraped). Surface it plainly; do NOT mark the submission approved.
     if (insertErr.code === "23505") {
-      fail(
+      failRedirect(
+        ADMIN_PATH,
         "An event with this name, date, and town already exists. It may already be published or scraped."
       );
     }
-    fail(insertErr.message);
+    failRedirect(ADMIN_PATH, insertErr.message);
   }
-  if (!inserted) fail("Publish failed: the event insert returned no row.");
+  if (!inserted) failRedirect(ADMIN_PATH, "Publish failed: the event insert returned no row.");
 
   const { error: updErr } = await supabase
     .from("event_submissions")
@@ -218,7 +202,7 @@ export async function publishSubmission(formData: FormData) {
     .eq("id", id);
 
   if (updErr) {
-    fail(`Event published, but failed to mark the submission approved: ${updErr.message}`);
+    failRedirect(ADMIN_PATH, `Event published, but failed to mark the submission approved: ${updErr.message}`);
   }
 
   // Draft a "your event is live" reply for the submitter (best-effort; never block
@@ -238,9 +222,7 @@ export async function publishSubmission(formData: FormData) {
   revalidatePath("/");
   revalidatePath(`/towns/${townSlug(town)}`);
   revalidatePath(ADMIN_PATH);
-  const q = new URLSearchParams({ flash: `Published "${name}".` });
-  if (replied) q.set("replied", id);
-  redirect(`${ADMIN_PATH}?${q.toString()}`);
+  flashRedirect(ADMIN_PATH, `Published "${name}".`, replied ? { replied: id } : undefined);
 }
 
 // Re-run the agent triage for one submission on demand (the "Re-analyze" button).
@@ -251,9 +233,9 @@ export async function reanalyzeSubmission(formData: FormData) {
   const result = await triageSubmissionById(id, { force: true });
   revalidatePath(ADMIN_PATH);
   if (!result.ok && result.error) {
-    redirect(`${ADMIN_PATH}?error=${encodeURIComponent(`Analysis failed: ${result.error}`)}`);
+    failRedirect(ADMIN_PATH, `Analysis failed: ${result.error}`);
   }
-  redirect(`${ADMIN_PATH}?flash=${encodeURIComponent("Re-analyzed.")}`);
+  flashRedirect(ADMIN_PATH, "Re-analyzed.");
 }
 
 function isBlank(v: unknown): boolean {
@@ -270,9 +252,9 @@ function isBlank(v: unknown): boolean {
 export async function mergeSubmission(formData: FormData) {
   const id = requireId(formData);
   const eventId = field(formData, "event_id");
-  if (!eventId) fail("Missing target event id for merge.");
+  if (!eventId) failRedirect(ADMIN_PATH, "Missing target event id for merge.");
 
-  const supabase = getServiceClient();
+  const supabase = getAdminClient();
 
   const { data: subRow } = await supabase
     .from("event_submissions")
@@ -281,7 +263,7 @@ export async function mergeSubmission(formData: FormData) {
     )
     .eq("id", id)
     .maybeSingle();
-  if (!subRow) fail("Submission not found.");
+  if (!subRow) failRedirect(ADMIN_PATH, "Submission not found.");
   const sub = subRow as {
     event_name: string;
     start_time: string | null;
@@ -298,8 +280,8 @@ export async function mergeSubmission(formData: FormData) {
     .select("*")
     .eq("id", eventId)
     .maybeSingle();
-  if (evErr) fail(evErr.message);
-  if (!eventRow) fail("Target event no longer exists; cannot merge.");
+  if (evErr) failRedirect(ADMIN_PATH, evErr.message);
+  if (!eventRow) failRedirect(ADMIN_PATH, "Target event no longer exists; cannot merge.");
   const ev = eventRow as Record<string, unknown>;
 
   const updates: Record<string, unknown> = {};
@@ -343,7 +325,7 @@ export async function mergeSubmission(formData: FormData) {
   if (filled.length > 0) {
     updates.updated_at = new Date().toISOString();
     const { error: upd } = await supabase.from("hwy4_events").update(updates).eq("id", eventId);
-    if (upd) fail(`Merge failed updating the event: ${upd.message}`);
+    if (upd) failRedirect(ADMIN_PATH, `Merge failed updating the event: ${upd.message}`);
   }
 
   const note =
@@ -363,7 +345,7 @@ export async function mergeSubmission(formData: FormData) {
       review_note: note,
     })
     .eq("id", id);
-  if (subUpd) fail(`Event updated, but failed to close the submission: ${subUpd.message}`);
+  if (subUpd) failRedirect(ADMIN_PATH, `Event updated, but failed to close the submission: ${subUpd.message}`);
 
   // Thank the submitter; their details are now on the (existing) listing.
   let replied = false;
@@ -383,16 +365,18 @@ export async function mergeSubmission(formData: FormData) {
     if (typeof ev.town === "string") revalidatePath(`/towns/${townSlug(ev.town)}`);
   }
   revalidatePath(ADMIN_PATH);
-  const q = new URLSearchParams({ flash: note });
-  if (replied) q.set("replied", id);
-  redirect(`${ADMIN_PATH}?${q.toString()}`);
+  flashRedirect(ADMIN_PATH, note, replied ? { replied: id } : undefined);
 }
 
 // Decline a submission (spam, duplicate, or not a fit). No event is created.
+// Reversible (a status flip, the row + data stay intact). `returnTo` lets the
+// briefings action rail dismiss in place and stay on /admin/briefings; the
+// submissions page omits it and falls back here.
 export async function dismissSubmission(formData: FormData) {
   const id = requireId(formData);
+  const returnTo = safeReturnTo(formData, ADMIN_PATH);
   const note = field(formData, "review_note") || null;
-  const supabase = getServiceClient();
+  const supabase = getAdminClient();
   const { error } = await supabase
     .from("event_submissions")
     .update({
@@ -401,10 +385,11 @@ export async function dismissSubmission(formData: FormData) {
       review_note: note,
     })
     .eq("id", id);
-  if (error) fail(error.message);
+  if (error) failRedirect(returnTo, error.message);
 
   // Draft a gracious decline ONLY when a reason was given (the owner's signal to
-  // respond) and the agent did not flag it as spam. Best-effort.
+  // respond) and the agent did not flag it as spam. Best-effort. The rail dismisses
+  // with no note, so no email is drafted — a pure, reversible status flip.
   let replied = false;
   if (note) {
     try {
@@ -415,7 +400,6 @@ export async function dismissSubmission(formData: FormData) {
   }
 
   revalidatePath(ADMIN_PATH);
-  const q = new URLSearchParams({ flash: "Dismissed." });
-  if (replied) q.set("replied", id);
-  redirect(`${ADMIN_PATH}?${q.toString()}`);
+  if (returnTo !== ADMIN_PATH) revalidatePath(returnTo);
+  flashRedirect(returnTo, "Dismissed.", replied ? { replied: id } : undefined);
 }

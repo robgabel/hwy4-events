@@ -76,6 +76,8 @@ Every table gets RLS **enabled + a service-role policy in the same migration** (
 
 ### Stage 1 — Propose, human disposes
 
+**Built 2026-06-09.** Migration `agent_cockpit_stage1.sql` (`agent_actions` + `agent_policy`, RLS service-role). Guardrail `lib/agent/policy.ts` `canAutoExecute`, locked by `scripts/test/agent-policy.test.ts`. Reversible executor `lib/agent/actions-executor.ts`. Cockpit `app/admin/actions/{page,actions}.tsx` (approve→execute→snapshot, reject, revert, "Scan now"). First type `create_org_row`, proposed by `lib/agent/propose-link-gaps.ts` + `/api/agent/propose-actions` (Mondays) off the shared `lib/link-gaps.ts` worklist. `flag_spam_submission` has an executor handler but no proposer yet (the submissions rail covers spam triage). Everything is human-approved; `agent_policy.auto_execute` stays false (that's Stage 2).
+
 - Add `agent_actions` + approve/reject **server actions** (mirror `app/admin/verification/actions.ts`).
 - The reasoner now emits concrete proposed actions via one `propose_action` tool, each tagged `blast_radius` / `reversible` / `outward_facing`.
 - `app/admin/actions/page.tsx` — the Action Queue. Each card shows the rationale + tags + **Approve / Reject**. Approve runs an **executor** that performs the same write you would do by hand, **after** snapshotting prior state into `before_snapshot`.
@@ -85,6 +87,8 @@ Every table gets RLS **enabled + a service-role policy in the same migration** (
 - Measure **approval rate per action type**. This is the canary data.
 
 ### Stage 2 — Graduate trusted types (canary → live)
+
+**Built 2026-06-09.** The auto-runner `lib/agent/auto-runner.ts` executes graduated proposals, gated by `canAutoExecute` AND an `isAutoReady` check (create_org_row needs a present, high-confidence researched URL — medium/low waits for a human even when graduated). Wired into the proposer cron, the "Scan now" button, and the graduate toggle. `/admin/actions` shows the **autonomy-policy panel**: per-type approval-rate canary + a graduate/pause toggle (`setPolicy`). Both seeded types stay `auto_execute=false` — graduation is a deliberate human click once the canary holds. The newsletter retrofit shipped earlier (2026-06-02, the veto gate). Not done: `draft_fb_reply` (no FB collector yet).
 
 - Add `agent_policy`. The executor's gate is one boolean: **auto-run iff `blast_radius='low'` AND `reversible` AND NOT `outward_facing` AND `policy.auto_execute`.** Otherwise queue for a click.
 - Flip a type's `auto_execute` **only after its approval rate holds ~100% for `min_clean_weeks` (default 4 — reuse `reconcile`'s clean-streak clock). One type at a time, each with its own clock.**
@@ -181,6 +185,22 @@ This encodes "humans stay in the driver's seat for consequential decisions" as a
 6. **Growth/traffic track (parallel to the stages above, per `PRD-cloudflare-analytics.md`):** build `lib/cloudflare-analytics.ts` + `app/api/snapshot-analytics` + `analytics_daily`, lead with **AEO referral auto-fill** (it closes a measurement loop already committed to in `AEO-SEO-MEASUREMENT.md`), then surface it as the Growth tab alongside the GSC/SEO board. Note: that PRD's "is `/admin` protected?" open question is **already resolved** — `middleware.ts` Basic Auth covers `/admin/:path*`, so the analytics/Growth page inherits the gate for free.
 
 Risk is concentrated where it belongs: the executor's writes (all reversible via `before_snapshot`) and the newsletter send (gated). Everything else proposes-then-waits. Outward and editorial decisions never graduate. **Net effect: the cockpit makes the system *more* supervised than it is today** — it puts the one unsupervised outward action behind a gate while letting the safe internal toil earn its way to autonomous.
+
+## Next Moves (after the Stage 1 submissions rail — shipped 2026-06-09)
+
+**Shipped 2026-06-09** (commit on `main`): the `/admin` tree was consolidated onto shared primitives (`lib/admin/{db,flash}.ts`, `components/admin/{ui,ConfirmSubmit}.tsx`), `/admin/today` + `/admin/growth-memo` merged into a tabbed **`/admin/briefings`** (old routes kept as redirects), `/admin/newsletter-note` folded into `/admin/newsletter`, and the **first "act from the briefing" surface** landed: a submissions action rail on the Today tab that reads each pending submission's stored triage verdict and lets a human **dismiss the clear `reject`/`duplicate` passes in place** (reused `dismissSubmission` via a validated `returnTo` — a reversible status flip, no email). Publish/merge stay a reviewed click; nothing auto-runs.
+
+Prioritized from here:
+
+- [x] **Verification queue inline** (shipped 2026-06-09). `VerificationRail` on the Today tab; `confirmEvent`/`dismissEvent` take a validated `returnTo` so confirm/dismiss happen in place. Hide/delete stay on `/admin/verification`.
+- [x] **Combined "Signups vs Visitors" analytics panel** (shipped 2026-06-09). Path A; `getNewsletterStats` `tz` param + `SignupsVsVisitorsPanel` in `app/admin/analytics/page.tsx`. See [PRD-growth-agent.md](PRD-growth-agent.md) → "Analytics: combined Signups vs Visitors panel".
+- [x] **Stage 1 action queue built** (2026-06-09): `agent_actions` + `agent_policy`, the `canAutoExecute` guardrail (test-locked), the reversible executor, and `create_org_row` end-to-end (proposer → `/admin/actions` approve/reject/revert). Human-approved; nothing auto-runs.
+- [x] **Stage 2 — graduation auto-runner** (2026-06-09): `lib/agent/auto-runner.ts` + the `/admin/actions` autonomy-policy panel (`setPolicy` toggle + per-type approval canary). Gated by `canAutoExecute` + readiness; both types still human-approved (`auto_execute=false`) until the canary earns the flip.
+- [x] **Web-research auto-fill for `create_org_row`** (2026-06-09): `lib/agent/research-org.ts` (Sonnet + `web_search`) pre-fills the canonical URL on each proposal; the human verifies + approves. Only high-confidence research is eligible for Stage 2 auto-run.
+- [ ] **The actual graduation.** Run create_org_row human-approved for a few weeks; once the panel shows ~100% approval over `min_clean_weeks`, flip it on. (Operational, not code.)
+- [ ] **FB/AEO collectors** (`fb_candidates` + `draft_fb_reply`, `aeo_results`) — still pending; `draft_fb_reply` is outward, so it never graduates.
+- [ ] **Finish the dedup tail (cleanup, no behavior change).** The `submissions` + `analytics` page loaders still build their Supabase client inline (3–4 loaders each with differing empty-state fallbacks). And the two briefing tabs (`app/admin/briefings/{Today,Growth}Briefing.tsx`) still each render their own `VitalsStrip`/`ItemCard`/title-`Banner` — extract a shared digest kit if it earns its keep.
+- [ ] **Doc sync.** `/admin/today` and `/admin/growth-memo` now redirect to `/admin/briefings`; update the stale references in `CLAUDE.md` (cron table, agent-cockpit notes) and `PRD-growth-agent.md` "Critical files" (lists `app/admin/growth-memo/page.tsx`, now a redirect — rendering moved to `app/admin/briefings/GrowthBriefing.tsx`).
 
 ## Open Items
 - [ ] Newsletter gate UX: hard approval vs. "auto-send unless vetoed within 24h"?

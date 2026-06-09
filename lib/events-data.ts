@@ -16,9 +16,9 @@
 
 import { unstable_cache } from "next/cache";
 import { getSupabase } from "@/lib/supabase";
-import { Hwy4Event } from "@/lib/types";
+import { Hwy4Event, EventListItem } from "@/lib/types";
 import { dedupeEvents } from "@/lib/dedupe-events";
-import { pacificToday } from "@/lib/date-windows";
+import { pacificToday, addDays } from "@/lib/date-windows";
 import type { SitemapEventRow } from "@/lib/sitemap";
 
 export const EVENTS_CACHE_TAG = "events";
@@ -79,6 +79,70 @@ export const getUpcomingEvents = unstable_cache(
   ["hwy4-upcoming-events"],
   { revalidate: REVALIDATE_SECONDS, tags: [EVENTS_CACHE_TAG] }
 );
+
+// The homepage is a near-term "what's on" feed, not the full catalog. The whole
+// upcoming set (~1,000 rows stretching to 2028, including ~300 weekly-recurrence
+// instances) is shipped into the client for filtering, so bounding it to a
+// horizon is the single biggest payload cut — and a horizon naturally trims both
+// the far-future one-offs and the weekly-recurrence tail in one move. The deep
+// catalog stays fully reachable on /this-week, /this-month, the town pages, and
+// the sitemap, all of which read the uncapped getUpcomingEvents above. Curated
+// robs_pick highlights bypass the cap so an event further out is never hidden
+// from the homepage. Tune the window with this one constant.
+const HOMEPAGE_HORIZON_DAYS = 60;
+
+export async function getHomepageEvents(): Promise<Hwy4Event[]> {
+  const all = await getUpcomingEvents();
+  const cutoff = addDays(pacificToday().iso, HOMEPAGE_HORIZON_DAYS);
+  return all.filter((e) => e.date <= cutoff || e.robs_pick);
+}
+
+// The homepage (and other list views) renders ~25 cards at a time but holds the
+// whole upcoming set in the client for instant filtering. Shipping every row's
+// full `description` (the card clamps it to 2-3 lines) plus scrape-only columns
+// (address, event_url, source_event_id, last_scraped_at, updated_at) bloated the
+// document to ~1.6MB for ~1,000 events. `toListEvents` projects each row to the
+// display shape and trims the description, so only what a card shows crosses the
+// wire. Full rows stay available for JSON-LD (buildItemList) and the detail page.
+const LIST_DESCRIPTION_MAX = 280;
+
+function truncateForList(text: string | null): string | null {
+  if (!text || text.length <= LIST_DESCRIPTION_MAX) return text;
+  const slice = text.slice(0, LIST_DESCRIPTION_MAX);
+  const lastSpace = slice.lastIndexOf(" ");
+  // Prefer a word boundary, but don't backtrack so far we lose half the teaser.
+  const cut =
+    lastSpace > LIST_DESCRIPTION_MAX * 0.6 ? slice.slice(0, lastSpace) : slice;
+  return cut.trimEnd() + "…";
+}
+
+/** Project full event rows to the lightweight shape the card/list render path
+ *  reads, with the description trimmed. Use for any client list that receives
+ *  the upcoming superset (homepage). */
+export function toListEvents(events: Hwy4Event[]): EventListItem[] {
+  return events.map((e) => ({
+    id: e.id,
+    name: e.name,
+    description: truncateForList(e.description),
+    date: e.date,
+    start_time: e.start_time,
+    end_time: e.end_time,
+    venue_name: e.venue_name,
+    town: e.town,
+    category: e.category,
+    artists: e.artists,
+    status: e.status,
+    price: e.price,
+    cost_tier: e.cost_tier,
+    image_url: e.image_url,
+    visibility: e.visibility,
+    org_slug: e.org_slug,
+    robs_pick: e.robs_pick,
+    is_weekly: e.is_weekly,
+    verification_status: e.verification_status,
+    community_sourced: e.community_sourced,
+  }));
+}
 
 /** Events whose date falls within [start, end] inclusive (ISO YYYY-MM-DD). */
 export async function getEventsInRange(
