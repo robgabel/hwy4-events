@@ -60,3 +60,18 @@ export function isPatrioticCard(
 export function isAdoptAPetEvent(event: Pick<Hwy4Event, "id">): boolean {
   return ADOPT_A_PET_EVENT_IDS.has(event.id);
 }
+
+// 4. CLASSIC ROCK NIGHT — Flashback at the Ebbetts Pass Moose Lodge gets a
+//    vinyl-and-amp skin: a bespoke list card + a banner atop its OWN detail page
+//    (it keeps its real poster/description/map). Keyed by a name + venue
+//    PREDICATE rather than an event id on purpose: this concert is written by
+//    several scrapers (the lodge calendar, GoCalaveras) that churn the row, so
+//    the surviving id is not stable. Matching on "flashback" + "moose lodge"
+//    lands on whichever row wins the read-time dedupe collapse.
+export function isClassicRockEvent(
+  event: Pick<Hwy4Event, "name" | "venue_name">
+): boolean {
+  const name = (event.name ?? "").toLowerCase();
+  const venue = (event.venue_name ?? "").toLowerCase();
+  return name.includes("flashback") && venue.includes("moose");
+}
