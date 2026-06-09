@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GrowthContext, GrowthVitals } from "./types";
+import { getNewsletterStats } from "@/lib/newsletter-stats";
 
 // Gathers the growth signal pack handed to the Head-of-Growth reasoner
 // (PRD-growth-agent.md). Every number here is real and queried; the model may
@@ -36,13 +37,7 @@ export async function gatherGrowthContext(
   const d30 = iso(30 * DAY);
 
   const [
-    active,
-    newConf7,
-    newConfPrev7,
-    unsub7,
-    pendingUnconf,
-    created30,
-    confirmed30,
+    nlStats,
     lastSend,
     views14,
     outbound30,
@@ -55,13 +50,8 @@ export async function gatherGrowthContext(
     needsVerif,
     growthExperiments,
   ] = await Promise.all([
-    supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).eq("confirmed", true).is("unsubscribed_at", null),
-    supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).gte("confirmed_at", d7),
-    supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).gte("confirmed_at", d14).lt("confirmed_at", d7),
-    supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).gte("unsubscribed_at", d7),
-    supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).eq("confirmed", false).is("unsubscribed_at", null).gte("created_at", d30),
-    supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).gte("created_at", d30),
-    supabase.from("newsletter_subscribers").select("id", { count: "exact", head: true }).gte("created_at", d30).eq("confirmed", true),
+    // Newsletter trend + composition, single source of truth (lib/newsletter-stats).
+    getNewsletterStats(supabase, 60),
     supabase.from("newsletter_drafts").select("id, target_send_date, sent_at, sent_count").eq("status", "sent").order("sent_at", { ascending: false }).limit(1),
     // Pull 14d of local + visitor views to derive weekly session proxies.
     supabase.from("site_events").select("session_id, visitor_class, created_at").eq("kind", "view").eq("is_bot", false).gte("created_at", d14).limit(20000),
@@ -175,15 +165,10 @@ export async function gatherGrowthContext(
     shareBySrc[k] = (shareBySrc[k] ?? 0) + 1;
   }
 
-  const created30Count = created30.count ?? 0;
-  const confirmRate = created30Count > 0 ? (confirmed30.count ?? 0) / created30Count : null;
-  const newConfirmed7 = newConf7.count ?? 0;
-  const unsubCount7 = unsub7.count ?? 0;
-
   const vitals: GrowthVitals = {
-    newsletter_active: active.count ?? 0,
-    newsletter_net_7d: newConfirmed7 - unsubCount7,
-    newsletter_confirm_rate_30d: confirmRate,
+    newsletter_active: nlStats.total_active,
+    newsletter_net_7d: nlStats.net_7d,
+    newsletter_confirm_rate_30d: nlStats.confirm_rate_30d,
     local_sessions_7d: localStats7.distinct,
     local_sessions_prev_7d: localStatsPrev7.distinct,
     business_referrals_7d: out7.length,
@@ -206,12 +191,20 @@ export async function gatherGrowthContext(
     vitals,
     experiments,
     newsletter: {
-      active: active.count ?? 0,
-      new_confirmed_7d: newConfirmed7,
-      new_confirmed_prev_7d: newConfPrev7.count ?? 0,
-      unsub_7d: unsubCount7,
-      pending_unconfirmed: pendingUnconf.count ?? 0,
-      confirm_rate_30d: confirmRate,
+      active: nlStats.total_active,
+      net_7d: nlStats.net_7d,
+      net_30d: nlStats.net_30d,
+      pending_unconfirmed: nlStats.pending_unconfirmed,
+      confirm_rate_30d: nlStats.confirm_rate_30d,
+      by_class: nlStats.by_class,
+      by_source: nlStats.by_source,
+      // Trim the 60d series to the last 30 for the prompt; keep it compact.
+      daily: nlStats.days.slice(-30).map((d) => ({
+        date: d.date,
+        signups: d.signups,
+        net: d.net,
+        cumulative_active: d.cumulative_active,
+      })),
       last_send: {
         date: (sendRow?.target_send_date as string | null) ?? (sendRow?.sent_at as string | null) ?? null,
         sent_count: (sendRow?.sent_count as number | null) ?? null,

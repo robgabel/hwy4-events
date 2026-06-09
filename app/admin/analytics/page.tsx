@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { CountRow } from "@/lib/cloudflare-analytics";
+import { getNewsletterStats, type NewsletterStats } from "@/lib/newsletter-stats";
 
 export const dynamic = "force-dynamic";
 
@@ -245,9 +246,18 @@ function fmtDay(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+async function loadNewsletterStats(): Promise<NewsletterStats | null> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return null;
+  const supabase = createClient(supabaseUrl, serviceKey);
+  return getNewsletterStats(supabase, 60);
+}
+
 export default async function GrowthPage() {
   const rows = await loadDaily();
   const newsletterClicks = await loadNewsletterClicks();
+  const newsletter = await loadNewsletterStats();
   const gate0 = await loadGate0();
   const nlMax = newsletterClicks ? Math.max(1, ...newsletterClicks.perEvent.map((e) => e.clicks)) : 1;
   const hasData = rows.some((r) => r.pageviews > 0);
@@ -362,6 +372,8 @@ export default async function GrowthPage() {
           </p>
         </>
       )}
+
+      {newsletter && newsletter.total_active > 0 && <NewsletterSignupsPanel stats={newsletter} />}
 
       {newsletterClicks && newsletterClicks.perEvent.length > 0 && (
         <>
@@ -490,6 +502,105 @@ function Gate0Section({ data }: { data: Gate0 }) {
           spend&rdquo; (the economic flywheel). Directional, not exact attribution.
         </p>
       </section>
+    </>
+  );
+}
+
+function NewsletterSignupsPanel({ stats }: { stats: NewsletterStats }) {
+  const trend = stats.days.slice(-45); // chronological (oldest -> newest)
+  const trendMax = Math.max(1, ...trend.map((d) => d.signups));
+  const comp = stats.by_class;
+  const compTotal = Math.max(1, comp.local + comp.visitor + comp.unknown);
+  const sources = Object.entries(stats.by_source)
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+  const srcMax = Math.max(1, ...sources.map((s) => s.count));
+
+  return (
+    <>
+      <SectionHeader>Newsletter signups</SectionHeader>
+      <StatStrip
+        stats={[
+          { label: "Subscribers", value: stats.total_active },
+          { label: "Net · 7d", value: stats.net_7d },
+          { label: "Net · 30d", value: stats.net_30d },
+          { label: "Confirm % · 30d", value: Math.round((stats.confirm_rate_30d ?? 0) * 100) },
+        ]}
+      />
+
+      <section style={cardStyle}>
+        <p style={{ ...labelStyle, margin: "0 0 8px" }}>Confirmed signups · last {trend.length} days</p>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 90 }}>
+          {trend.map((d) => (
+            <div
+              key={d.date}
+              title={`${fmtDay(d.date)}: ${d.signups} signup${d.signups === 1 ? "" : "s"} (total ${d.cumulative_active})`}
+              style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}
+            >
+              <div
+                style={{
+                  height: `${Math.round((d.signups / trendMax) * 100)}%`,
+                  minHeight: d.signups > 0 ? 3 : 0,
+                  background: "#9bb87a",
+                  borderRadius: "3px 3px 0 0",
+                  opacity: d.signups > 0 ? 1 : 0.15,
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+          <span style={axisStyle}>{trend.length ? fmtDay(trend[0].date) : ""}</span>
+          <span style={axisStyle}>{trend.length ? fmtDay(trend[trend.length - 1].date) : ""}</span>
+        </div>
+      </section>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
+        <section style={cardStyle}>
+          <p style={{ ...labelStyle, margin: "0 0 10px" }}>Who the list is</p>
+          {([["local", "Local", "#2d5016"], ["visitor", "Visitor", "#5a8fa8"], ["unknown", "Unknown", "#c9c2b6"]] as const).map(
+            ([k, label, color]) => {
+              const v = comp[k];
+              const pctv = Math.round((v / compTotal) * 100);
+              return (
+                <div key={k} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#2d3a22" }}>
+                    <span>{label}</span>
+                    <span style={{ fontWeight: 600 }}>{nf(v)} · {pctv}%</span>
+                  </div>
+                  <div style={{ height: 5, background: "#f0ede8", borderRadius: 3, marginTop: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pctv}%`, background: color }} />
+                  </div>
+                </div>
+              );
+            }
+          )}
+          <p style={{ color: "#999", fontSize: 12, lineHeight: 1.5, margin: "8px 0 0" }}>
+            Classified at signup from coarse IP geo. Directional: a visitor signing up from inside a
+            rental reads as local.
+          </p>
+        </section>
+
+        <section style={cardStyle}>
+          <p style={{ ...labelStyle, margin: "0 0 10px" }}>Where signups come from</p>
+          {sources.length === 0 ? (
+            <p style={{ color: "#999", fontSize: 13 }}>No source tags yet.</p>
+          ) : (
+            sources.map((s) => (
+              <div key={s.key} style={{ marginBottom: 7 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#2d3a22" }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.key}</span>
+                  <span style={{ fontWeight: 600 }}>{nf(s.count)}</span>
+                </div>
+                <div style={{ height: 4, background: "#f0ede8", borderRadius: 2, marginTop: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.round((s.count / srcMax) * 100)}%`, background: "#9bb87a" }} />
+                </div>
+              </div>
+            ))
+          )}
+        </section>
+      </div>
     </>
   );
 }

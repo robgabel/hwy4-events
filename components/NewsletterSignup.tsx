@@ -6,6 +6,7 @@ export default function NewsletterSignup({
   variant = "default",
   heading,
   description,
+  source,
 }: {
   variant?: "default" | "inline";
   /** Override the default-variant heading. Falls back to "Weekly newsletter". */
@@ -13,6 +14,9 @@ export default function NewsletterSignup({
   /** Override the default-variant description text. Falls back to the
    *  Thursday roundup line. */
   description?: string;
+  /** Short placement code stored on the subscriber for attribution (R1b),
+   *  e.g. "homepage_event5", "temporal_weekend", "town_murphys". */
+  source?: string;
 }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -27,7 +31,7 @@ export default function NewsletterSignup({
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), source }),
       });
       const data = await res.json();
       if (!res.ok) {

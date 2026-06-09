@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
+import { classifyVisitor, geoFromHeaders } from "@/lib/geo";
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,6 +30,14 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+
+  // R1b/R1c enrichment: where the signup came from + whether they look local or
+  // a visitor. visitor_class is classified server-side from Vercel geo headers;
+  // we store the class only, never the IP or city/region (the row is tied to an
+  // email). signup_source is a short placement code passed by the form.
+  const signupSource =
+    typeof body.source === "string" ? body.source.trim().slice(0, 64) || null : null;
+  const visitorClass = classifyVisitor(geoFromHeaders(request.headers));
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
@@ -84,7 +93,12 @@ export async function POST(request: Request) {
   // Insert new subscriber
   const { data: newSub, error } = await supabase
     .from("newsletter_subscribers")
-    .insert({ email, last_confirmation_sent_at: new Date().toISOString() })
+    .insert({
+      email,
+      last_confirmation_sent_at: new Date().toISOString(),
+      signup_source: signupSource,
+      visitor_class: visitorClass,
+    })
     .select("unsubscribe_token")
     .single();
 

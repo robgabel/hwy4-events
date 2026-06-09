@@ -482,7 +482,7 @@ export default async function EventPage({ params }: PageProps) {
 
         {/* Newsletter signup, right before the map */}
         <div className="mt-8">
-          <NewsletterSignup variant="inline" />
+          <NewsletterSignup variant="inline" source="event_detail" />
         </div>
 
         {/* Where */}

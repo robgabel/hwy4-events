@@ -120,11 +120,16 @@ export type GrowthContext = {
   experiments: GrowthExperimentRow[];
   newsletter: {
     active: number;
-    new_confirmed_7d: number;
-    new_confirmed_prev_7d: number;
-    unsub_7d: number;
+    net_7d: number; // confirmed minus unsubscribed, last 7d
+    net_30d: number;
     pending_unconfirmed: number; // signed up but never clicked confirm — the leak
     confirm_rate_30d: number | null;
+    // Who the list is (R1c): active subscribers by visitor class at signup.
+    by_class: { local: number; visitor: number; unknown: number };
+    // Where signups came from (R1b): active subscribers by placement code.
+    by_source: Record<string, number>;
+    // Daily confirmed signups + running total, last ~30d (R1a). Trend, not buckets.
+    daily: { date: string; signups: number; net: number; cumulative_active: number }[];
     last_send: {
       date: string | null;
       sent_count: number | null;

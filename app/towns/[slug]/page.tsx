@@ -215,7 +215,7 @@ export default async function TownPage({ params }: PageProps) {
         </h2>
         {events.length > 0 ? (
           <>
-            <SimpleEventList events={events.slice(0, 10)} newsletterAfterIndex={4} />
+            <SimpleEventList events={events.slice(0, 10)} newsletterAfterIndex={4} newsletterSource={`town_${slug}`} />
             {events.length > 10 && (
               <p className="mt-4 text-sm text-stone">
                 <Link
@@ -277,6 +277,7 @@ export default async function TownPage({ params }: PageProps) {
        * to opt in. Town-specific framing keeps the value prop concrete. */}
       <section className="mb-10">
         <NewsletterSignup
+          source={`town_${slug}`}
           heading="Want a Thursday heads-up?"
           description={`One email Thursday morning with what's coming up in ${town.name} and the rest of the corridor. No spam, no ads.`}
         />

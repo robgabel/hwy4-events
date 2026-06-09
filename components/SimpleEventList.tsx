@@ -20,9 +20,12 @@ import NewsletterSignup from "./NewsletterSignup";
 export default function SimpleEventList({
   events,
   newsletterAfterIndex,
+  newsletterSource,
 }: {
   events: Hwy4Event[];
   newsletterAfterIndex?: number;
+  /** Attribution code for the inline signup (R1b), e.g. "town_murphys". */
+  newsletterSource?: string;
 }) {
   if (events.length === 0) return null;
   return (
@@ -30,7 +33,9 @@ export default function SimpleEventList({
       {events.map((e, i) => (
         <Fragment key={e.id}>
           <EventCard event={e as CollapsedEvent} />
-          {i === newsletterAfterIndex && <NewsletterSignup variant="inline" />}
+          {i === newsletterAfterIndex && (
+            <NewsletterSignup variant="inline" source={newsletterSource} />
+          )}
         </Fragment>
       ))}
     </div>

@@ -603,7 +603,7 @@ export default function EventList({
                           />
                           {/* Inline newsletter signup after the 5th event */}
                           {globalIndex === NEWSLETTER_AFTER_EVENT_INDEX && (
-                            <NewsletterSignup variant="inline" />
+                            <NewsletterSignup variant="inline" source="homepage_event5" />
                           )}
                         </Fragment>
                       );

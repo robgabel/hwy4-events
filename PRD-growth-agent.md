@@ -67,9 +67,9 @@ Every number is real and queried; the model may only summarize what it's handed 
 
 Ordered by leverage. Each item widens `lib/agent/growth-context.ts` (what the memo reasons over) and usually adds a matching panel to the `/admin/analytics` Growth tab. Driven by the gap analysis: a growth agent optimizes *rates and channels*, but today it sees mostly counts.
 
-### R1 — Newsletter signal upgrade (near-term, one cheap PR; all in the signup write path)
+### R1 — Newsletter signal upgrade (built 2026-06-09)
 
-The newsletter is the owned audience, so its signal should be the richest. No new table — `newsletter_subscribers` already carries `created_at` / `confirmed_at` / `unsubscribed_at`, so the full daily history is derivable on the fly (cheap into the low thousands).
+The newsletter is the owned audience, so its signal should be the richest. No new table — `newsletter_subscribers` already carries `created_at` / `confirmed_at` / `unsubscribed_at`, so the full daily history is derivable on the fly (cheap into the low thousands). **Shipped:** `lib/newsletter-stats.ts` (`getNewsletterStats`, the single source of truth) + migration `20260609c_newsletter_signup_enrichment.sql` (`signup_source` + `visitor_class` columns) + capture in `/api/newsletter/subscribe` + a `source` prop threaded through every `NewsletterSignup` placement (homepage_event5, temporal_*, town_*, event_detail, about) + the memo signal pack (`newsletter.daily` / `by_class` / `by_source`) + a **Newsletter signups panel on the Growth tab** (subscribers, net 7d/30d, confirm %, daily sparkline, list composition, source breakdown). Composition shows 100% unknown until new signups land (existing rows predate the columns).
 
 - **R1a — Daily series + running total.** A shared `lib/newsletter-stats.ts` derives per-day `{signups, confirmed, unsubs, net}` + cumulative active. Surfaced in the memo context (the agent reads *trend shape*, not two 7-day buckets) **and** as a Newsletter panel on the Growth tab (total + a CSS sparkline; no chart lib). Directly reads out the two live placement experiments.
 - **R1b — Signup source.** Capture `src` (homepage / town / event page / post-event-5 box / `?src=host`) on the subscriber row at write time. The cheapest down payment on attribution; measures the placement experiments directly.

@@ -145,6 +145,7 @@ export default async function TemporalEventsView({
                   <SimpleEventList
                     events={dayEvents}
                     newsletterAfterIndex={newsletterAfterIndex}
+                    newsletterSource={`temporal_${windowKey}`}
                   />
                 </section>
               );
@@ -164,6 +165,7 @@ export default async function TemporalEventsView({
       {/* Newsletter */}
       <section className="mb-10">
         <NewsletterSignup
+          source={`temporal_${windowKey}`}
           heading="Want a Thursday heads-up?"
           description="One email Thursday morning with what's coming up across the corridor, Angels Camp to Bear Valley. No spam, no ads."
         />

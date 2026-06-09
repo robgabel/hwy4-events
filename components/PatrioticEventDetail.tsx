@@ -211,7 +211,7 @@ export default function PatrioticEventDetail({
 
       {/* Newsletter signup, right before the map */}
       <div className="mt-7">
-        <NewsletterSignup variant="inline" />
+        <NewsletterSignup variant="inline" source="event_detail" />
       </div>
 
       {/* Map */}

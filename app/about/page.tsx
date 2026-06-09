@@ -231,7 +231,7 @@ export default async function AboutPage() {
       </div>
 
       {/* Who this is for */}
-      <NewsletterSignup variant="inline" />
+      <NewsletterSignup variant="inline" source="about" />
       <section className="mb-10">
         <h2 className="font-display mb-4 text-xl font-semibold text-forest">
           This is for you if...
