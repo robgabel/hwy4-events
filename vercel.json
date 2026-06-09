@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/agent/growth-memo",
-      "schedule": "0 16 * * 1"
+      "schedule": "0 16 * * 5"
     },
     {
       "path": "/api/generate-briefing",

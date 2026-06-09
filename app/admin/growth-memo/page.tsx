@@ -283,7 +283,7 @@ function EmptyState() {
     <section style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 12, padding: 32, textAlign: "center" }}>
       <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>No memo yet.</p>
       <p style={{ color: "#666", fontSize: 16, margin: 0, lineHeight: 1.5 }}>
-        The growth memo runs weekly on Monday morning. Check back then, or trigger a run by hand to
+        The growth memo runs weekly on Friday morning. Check back then, or trigger a run by hand to
         see one now.
       </p>
     </section>

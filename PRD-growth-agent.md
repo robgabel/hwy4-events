@@ -11,7 +11,7 @@
 | Optimizes | clean ops (lagging, internal) | **North Star = Weekly Returning Residents**; secondary = visitor→business referrals |
 | Output | `needs_you / fyi / watching` | `north_star / move_of_the_week / experiments / watching / ops` |
 | Produces | a summary | a summary **+ a drafted artifact** (outreach email, post, subject line) |
-| Cadence | daily | **weekly (Monday)** — the flagship; daily ops stays as-is |
+| Cadence | daily | **weekly (Friday)** — the flagship; daily ops stays as-is |
 
 The chief-of-staff digest is **not** removed. It stays the daily ops pulse, demoted to a footer of the larger story. Growth becomes the agent's identity.
 
@@ -58,7 +58,7 @@ Every number is real and queried; the model may only summarize what it's handed 
 
 ## Staging (mirrors the cockpit's dry-run → canary → live arc)
 
-- **Phase 1 — read-only growth reframe (this PR).** New reasoner + context pack + digest shape + cockpit page + weekly cron. Executes nothing, drafts copy. Grade the memo weekly for a month, exactly as Stage 0 shipped report-only. Cadence decision: **weekly Monday memo is the flagship; the daily chief-of-staff stays the ops pulse** (option B).
+- **Phase 1 — read-only growth reframe (this PR).** New reasoner + context pack + digest shape + cockpit page + weekly cron. Executes nothing, drafts copy. Grade the memo weekly for a month, exactly as Stage 0 shipped report-only. Cadence decision: **weekly Friday memo is the flagship (Rob has weekend time to act on it); the daily chief-of-staff stays the ops pulse** (option B).
 - **Phase 2 — drafted artifacts (already seeded).** The `draft` field + copy/Gmail UI are live; widen the kinds the agent reaches for (organizer outreach, build-in-public post, subject A/B). Still human-sent.
 - **Phase 3 — experiment memory (built 2026-06-09).** `growth_experiments` table (name, hypothesis, metric, baseline, status, result, dates; migration `20260609b_growth_experiments.sql`). The signal pack now carries the running + recently-concluded rows, and the memo prompt reports an early read on each (one item per running experiment) instead of inventing tests. `/admin/experiments` (page + `actions.ts`, Basic Auth) lets Rob log and conclude them with no SQL. Seeded with the two tests already in flight (newsletter box after event 5; the /hosts QR kit). This is what makes it a *growth* agent and not a weekly dashboard.
 - **Phase 4 — measurement plumbing.** Wire `?src=host` / share `src` into `site_events` so acquisition channels (host cards) are countable; define WRR more precisely if a persistent (privacy-respecting) visitor id is ever added. Until then the proxy stands, labeled directional.
@@ -66,7 +66,7 @@ Every number is real and queried; the model may only summarize what it's handed 
 ## Critical files
 
 - **New:** `app/api/agent/growth-memo/route.ts`, `lib/agent/growth-context.ts`, `app/admin/growth-memo/page.tsx`, `components/GrowthDraft.tsx`, `supabase/migrations/20260609_growth_memo.sql` (adds `agent_runs.run_type`).
-- **Edit:** `lib/agent/types.ts` (growth types, additive), `app/admin/today/page.tsx` (scope to `run_type='chief_of_staff'`), `app/admin/layout.tsx` (nav), `vercel.json` (Monday 16:00 UTC cron), `CLAUDE.md` (cron table + index).
+- **Edit:** `lib/agent/types.ts` (growth types, additive), `app/admin/today/page.tsx` (scope to `run_type='chief_of_staff'`), `app/admin/layout.tsx` (nav), `vercel.json` (Friday 16:00 UTC cron), `CLAUDE.md` (cron table + index).
 - **Reuse, unchanged:** `agent_runs` plumbing, `middleware.ts` Basic Auth, the `generate-briefing` Anthropic pattern, the submission-reply copy/Gmail-deep-link UX.
 
 ## Environment variables
