@@ -8,6 +8,7 @@ import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
 import { buildEventOffer } from "@/lib/schema";
 import { findEventBySlug } from "@/lib/events";
+import { truncateMeta } from "@/lib/description-quality";
 import { posterKind, posterImageUrl, generatedPosterPath, withSrc, humanizeHost } from "@/lib/poster";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
@@ -91,8 +92,10 @@ export async function generateMetadata({
 
   const dateStr = format(parseISO(event.date), "MMMM d, yyyy");
   const title = `${event.name} — ${dateStr} in ${event.town}`;
+  // event.description is already gated (sanitized clean text or null) by
+  // findEventBySlug. truncateMeta guarantees we never cut mid-word in the SERP.
   const description = event.description
-    ? event.description.slice(0, 155)
+    ? truncateMeta(event.description)
     : `${event.name} at ${event.venue_name} in ${event.town}, CA on ${dateStr}.`;
 
   // The poster is the share image: organizer's own art if supplied, else the

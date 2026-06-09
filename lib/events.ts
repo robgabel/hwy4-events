@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { generateEventSlug } from "./slugs";
+import { gateEventDescription } from "./description-quality";
 import type { Hwy4Event } from "./types";
 
 // Shared by the event detail page and the generated-poster route so the slug →
@@ -32,7 +33,7 @@ export const findEventBySlug = cache(
         .eq("date", dateMatch[0])
         .neq("status", "cancelled");
       const hit = matchSlug(data as unknown as Hwy4Event[] | null, slug);
-      if (hit) return hit;
+      if (hit) return gateEventDescription(hit);
     }
 
     // Pacific civil date, not UTC — otherwise this fallback scan would skip an
@@ -49,7 +50,7 @@ export const findEventBySlug = cache(
         .range(from, from + PAGE_SIZE - 1);
       if (error || !data) break;
       const hit = matchSlug(data as unknown as Hwy4Event[], slug);
-      if (hit) return hit;
+      if (hit) return gateEventDescription(hit);
       if (data.length < PAGE_SIZE) break;
     }
     return null;

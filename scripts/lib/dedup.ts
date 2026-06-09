@@ -11,6 +11,7 @@ import {
   normalizeTown,
   generateDedupKey,
 } from "../../lib/event-identity.js";
+import { sanitizeDescription } from "../../lib/description-quality.js";
 
 // Re-exported for scripts that import these from this module.
 export { normalizeName, generateDedupKey };
@@ -95,6 +96,13 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
   if (!looksLikeStreetAddress(event.address)) {
     const registered = findRegisteredAddress(event.venue_name);
     if (registered) event.address = registered;
+  }
+  // Strip calendar-widget junk (Add to calendar / Google Calendar / iCal / …) at
+  // the write boundary so it's never stored. This is the per-event normalize hook
+  // both upsert paths call, so it covers every upsertEvents source. Empty after
+  // cleaning collapses to null. See lib/description-quality.ts.
+  if (event.description) {
+    event.description = sanitizeDescription(event.description) || null;
   }
 }
 
