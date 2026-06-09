@@ -2,17 +2,25 @@
 
 import { revalidatePath } from "next/cache";
 import { getAdminClient } from "@/lib/admin/db";
-import { failRedirect, flashRedirect, requireField } from "@/lib/admin/flash";
+import { failRedirect, flashRedirect, requireField, safeReturnTo } from "@/lib/admin/flash";
 
 const ADMIN_PATH = "/admin/verification";
 
-async function applyAction(id: string, patch: Record<string, unknown>, flash: string) {
+// `returnTo` lets the briefings verification rail confirm/dismiss in place and
+// stay on /admin/briefings; the verification page omits it and falls back here.
+async function applyAction(
+  id: string,
+  patch: Record<string, unknown>,
+  flash: string,
+  returnTo: string = ADMIN_PATH
+) {
   const supabase = getAdminClient();
   const { error } = await supabase.from("hwy4_events").update(patch).eq("id", id);
-  if (error) failRedirect(ADMIN_PATH, error.message);
+  if (error) failRedirect(returnTo, error.message);
   revalidatePath(ADMIN_PATH);
+  if (returnTo !== ADMIN_PATH) revalidatePath(returnTo);
   revalidatePath("/");
-  flashRedirect(ADMIN_PATH, flash);
+  flashRedirect(returnTo, flash);
 }
 
 // Confirm: admin checked manually, the date IS correct. Mark verified so it
@@ -26,7 +34,8 @@ export async function confirmEvent(formData: FormData) {
       verification_reason: "Manually confirmed by admin.",
       verification_checked_at: new Date().toISOString(),
     },
-    "Confirmed."
+    "Confirmed.",
+    safeReturnTo(formData, ADMIN_PATH)
   );
 }
 
@@ -41,7 +50,8 @@ export async function dismissEvent(formData: FormData) {
       verification_reason: "Dismissed by admin.",
       verification_checked_at: new Date().toISOString(),
     },
-    "Dismissed."
+    "Dismissed.",
+    safeReturnTo(formData, ADMIN_PATH)
   );
 }
 

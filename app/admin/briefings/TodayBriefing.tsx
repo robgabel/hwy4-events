@@ -1,6 +1,7 @@
 import { getAdminClientOrNull } from "@/lib/admin/db";
 import type { Digest, DigestItem, Vitals } from "@/lib/agent/types";
 import { SubmissionsRail } from "./SubmissionsRail";
+import { VerificationRail } from "./VerificationRail";
 
 // The daily chief-of-staff digest, rendered as the "Today" tab of /admin/briefings.
 // Loads its own run so the tab only fetches when it's the one being viewed.
@@ -50,9 +51,10 @@ export async function TodayBriefing() {
         can act on right here; the agent advises, you decide.
       </p>
 
-      {/* Act-from-the-briefing rail: pending submissions with the agent's verdict,
-          actionable in place. The narrative digest below is the read surface. */}
+      {/* Act-from-the-briefing rails: pending submissions (with the agent's verdict)
+          and flagged dates, actionable in place. The narrative digest is the read surface. */}
       <SubmissionsRail />
+      <VerificationRail />
 
       {!run && <EmptyState />}
 

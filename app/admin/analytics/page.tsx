@@ -254,11 +254,32 @@ async function loadNewsletterStats(): Promise<NewsletterStats | null> {
   return getNewsletterStats(supabase, 60);
 }
 
+// "Signups vs Visitors" series (PRD-growth-agent.md, Path A). Cloudflare stores
+// only UTC daily rollups and can't be re-bucketed, so we re-bucket the newsletter
+// series to UTC to match — exact day-for-day alignment, no migration. Each day
+// pairs that UTC day's confirmed signups with that UTC day's Cloudflare visits.
+type SvvDay = { date: string; visits: number; signups: number };
+
+async function loadSignupsVsVisitors(rows: DailyRow[]): Promise<SvvDay[]> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return [];
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const stats = await getNewsletterStats(supabase, WINDOW_DAYS, "UTC");
+  const visitsByDate = new Map(rows.map((r) => [r.date, r.visits]));
+  return stats.days.map((d) => ({
+    date: d.date,
+    signups: d.signups,
+    visits: visitsByDate.get(d.date) ?? 0,
+  }));
+}
+
 export default async function GrowthPage() {
   const rows = await loadDaily();
   const newsletterClicks = await loadNewsletterClicks();
   const newsletter = await loadNewsletterStats();
   const gate0 = await loadGate0();
+  const svv = await loadSignupsVsVisitors(rows);
   const nlMax = newsletterClicks ? Math.max(1, ...newsletterClicks.perEvent.map((e) => e.clicks)) : 1;
   const hasData = rows.some((r) => r.pageviews > 0);
 
@@ -368,10 +389,12 @@ export default async function GrowthPage() {
           <p style={{ color: "#aaa", fontSize: 14, margin: "28px 0 0", lineHeight: 1.5 }}>
             Source: Cloudflare Web Analytics (RUM){lastSynced ? ` · snapshot updated ${new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}.
             Search-engine performance (Google/Bing) is tracked separately by the cockpit&rsquo;s SEO
-            collector and surfaces in the nightly digest on <a href="/admin/today" style={{ color: "#2d5016" }}>Today</a>.
+            collector and surfaces in the nightly digest on <a href="/admin/briefings" style={{ color: "#2d5016" }}>Today</a>.
           </p>
         </>
       )}
+
+      <SignupsVsVisitorsPanel days={svv} gate0={gate0} />
 
       {newsletter && newsletter.total_active > 0 && <NewsletterSignupsPanel stats={newsletter} />}
 
@@ -502,6 +525,152 @@ function Gate0Section({ data }: { data: Gate0 }) {
           spend&rdquo; (the economic flywheel). Directional, not exact attribution.
         </p>
       </section>
+    </>
+  );
+}
+
+function SignupsVsVisitorsPanel({ days, gate0 }: { days: SvvDay[]; gate0: Gate0 }) {
+  const totalVisits = days.reduce((a, d) => a + d.visits, 0);
+  const totalSignups = days.reduce((a, d) => a + d.signups, 0);
+  // Needs visits to correlate against; the standalone signups panel covers the
+  // signups-only case.
+  if (days.length === 0 || totalVisits === 0) return null;
+
+  const W = 720;
+  const H = 140;
+  const padX = 6;
+  const padTop = 10;
+  const padBot = 4;
+  const plotH = H - padTop - padBot;
+  const n = days.length;
+  const step = (W - padX * 2) / n;
+  const barW = Math.max(1.5, step * 0.6);
+  const maxV = Math.max(1, ...days.map((d) => d.visits));
+  const maxS = Math.max(1, ...days.map((d) => d.signups));
+  const cx = (i: number) => padX + step * (i + 0.5);
+
+  const signupLine = days
+    .map((d, i) => `${cx(i).toFixed(1)},${(padTop + plotH - (d.signups / maxS) * plotH).toFixed(1)}`)
+    .join(" ");
+
+  const conv = totalSignups / totalVisits;
+
+  // 7-day rolling visit->signup rate (the conversion line).
+  const rolling = days.map((_, i) => {
+    let s = 0;
+    let v = 0;
+    for (let j = Math.max(0, i - 6); j <= i; j++) {
+      s += days[j].signups;
+      v += days[j].visits;
+    }
+    return v > 0 ? s / v : 0;
+  });
+  const maxRoll = Math.max(0.0001, ...rolling);
+  const RH = 54;
+  const rPad = 6;
+  const rPlotH = RH - rPad * 2;
+  const rollLine = rolling
+    .map((r, i) => `${cx(i).toFixed(1)},${(rPad + rPlotH - (r / maxRoll) * rPlotH).toFixed(1)}`)
+    .join(" ");
+  const latestRoll = rolling[rolling.length - 1] ?? 0;
+
+  const vw = gate0.views;
+  const located = vw.local + vw.visitor;
+  const splitTotal = Math.max(1, vw.local + vw.visitor + vw.unknown);
+  const split = [
+    { key: "local", label: "Local", value: vw.local, color: "#2d5016" },
+    { key: "visitor", label: "Visitor", value: vw.visitor, color: "#5a8fa8" },
+    { key: "unknown", label: "Unknown", value: vw.unknown, color: "#c9c2b6" },
+  ];
+
+  const convStr = (x: number) => `${(x * 100).toFixed(x < 0.1 ? 2 : 1)}%`;
+
+  return (
+    <>
+      <SectionHeader>Signups vs visitors · 30d (UTC-aligned)</SectionHeader>
+      <section style={cardStyle}>
+        <div style={{ display: "flex", gap: 18, marginBottom: 12, fontSize: 13, color: "#666", flexWrap: "wrap" }}>
+          <span>
+            <span style={{ display: "inline-block", width: 11, height: 11, background: "#d4e2c8", borderRadius: 2, marginRight: 6, verticalAlign: "middle" }} />
+            Visits (Cloudflare)
+          </span>
+          <span>
+            <span style={{ display: "inline-block", width: 15, height: 3, background: "#2d5016", borderRadius: 2, marginRight: 6, verticalAlign: "middle" }} />
+            Confirmed signups
+          </span>
+        </div>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Daily visits and confirmed signups, UTC-aligned">
+          {days.map((d, i) => {
+            const h = (d.visits / maxV) * plotH;
+            return (
+              <rect
+                key={d.date}
+                x={(cx(i) - barW / 2).toFixed(1)}
+                y={(padTop + plotH - h).toFixed(1)}
+                width={barW.toFixed(1)}
+                height={Math.max(0, h).toFixed(1)}
+                fill="#d4e2c8"
+                rx="1"
+              >
+                <title>{`${fmtDay(d.date)} (UTC): ${nf(d.visits)} visits · ${d.signups} signup${d.signups === 1 ? "" : "s"}`}</title>
+              </rect>
+            );
+          })}
+          <polyline points={signupLine} fill="none" stroke="#2d5016" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+          <span style={axisStyle}>{fmtDay(days[0].date)} (UTC)</span>
+          <span style={axisStyle}>{fmtDay(days[n - 1].date)}</span>
+        </div>
+      </section>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 4 }}>
+        <Stat label="Visits · 30d (UTC)" value={nf(totalVisits)} />
+        <Stat label="Signups · 30d (UTC)" value={nf(totalSignups)} />
+        <Stat label="Visit→signup · 30d" value={convStr(conv)} sub={`${nf(totalSignups)} ÷ ${nf(totalVisits)}`} />
+        <Stat label="Local share of visits" value={located ? `${pct(vw.local, located)}%` : "—"} sub="directional" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
+        <section style={cardStyle}>
+          <p style={{ ...labelStyle, margin: "0 0 8px" }}>
+            7-day rolling visit→signup rate · latest {convStr(latestRoll)}
+          </p>
+          <svg viewBox={`0 0 ${W} ${RH}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Seven-day rolling conversion rate">
+            <polyline points={rollLine} fill="none" stroke="#c4922a" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          </svg>
+        </section>
+
+        <section style={cardStyle}>
+          <p style={{ ...labelStyle, margin: "0 0 10px" }}>Of those visits · who (directional)</p>
+          <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
+            {split.map((s) => (
+              <div key={s.key} title={`${s.label}: ${nf(s.value)}`} style={{ width: `${(s.value / splitTotal) * 100}%`, background: s.color }} />
+            ))}
+          </div>
+          {split.map((s) => (
+            <div key={s.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#2d3a22", marginBottom: 3 }}>
+              <span>
+                <span style={{ display: "inline-block", width: 9, height: 9, background: s.color, borderRadius: 2, marginRight: 6 }} />
+                {s.label}
+              </span>
+              <span style={{ fontWeight: 600 }}>
+                {nf(s.value)} · {Math.round((s.value / splitTotal) * 100)}%
+              </span>
+            </div>
+          ))}
+        </section>
+      </div>
+
+      <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "12px 0 0" }}>
+        Both series bucketed by <strong>UTC day</strong> so they line up exactly (Cloudflare stores
+        only UTC rollups and can&rsquo;t be re-bucketed). Visits are the Cloudflare denominator
+        (mature, months of history); the local/visitor split is the first-party beacon
+        (<code>site_events</code>) and is the <strong>directional</strong> cut only, not the absolute
+        total yet. The two sources aren&rsquo;t calibrated against each other until
+        <code>site_events</code> banks a clean week or two. Day-boundary alignment is directional, not
+        exact same-day attribution.
+      </p>
     </>
   );
 }

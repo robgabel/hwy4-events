@@ -97,9 +97,11 @@ Today WRR is proxied by weekly local *sessions* because `site_events` has only a
 - **Per-metric goals/targets** so "+7 subs" reads as "+7, behind pace" — a tiny input, big interpretive upgrade.
 - **GSC month-over-month** query movement once `GOOGLE_SEARCH_CONSOLE_SA_JSON` is set (not just the latest capture).
 
-## Analytics: combined "Signups vs Visitors" panel (specced, not built)
+## Analytics: combined "Signups vs Visitors" panel (BUILT 2026-06-09)
 
-A Growth-tab panel that plots daily newsletter signups against daily visitors on **one time-aligned axis**, plus a conversion rate, so a traffic change can be read against a signup change at a glance. Specced in a session on 2026-06-09; left for a follow-up.
+A Growth-tab panel that plots daily newsletter signups against daily visitors on **one time-aligned axis**, plus a conversion rate, so a traffic change can be read against a signup change at a glance.
+
+**Built 2026-06-09** (Path A, as specced below): `getNewsletterStats` gained a `tz` param (default Pacific; the panel passes `"UTC"`) so the signup series re-buckets to UTC and lines up day-for-day with Cloudflare. `SignupsVsVisitorsPanel` in `app/admin/analytics/page.tsx` renders the aligned 30-day chart (Cloudflare `visits` bars + confirmed-signups line, inline SVG, no chart lib), a 7-day rolling visit→signup line, the 30d conversion + local-share stats, and the directional `site_events` local/visitor split — with the calibration caveats below surfaced in the UI. Original spec follows.
 
 **What already exists (do not rebuild):**
 - Daily signups: `lib/newsletter-stats.ts` → `getNewsletterStats().days` (`signups` / `net` / `cumulative_active`). Currently buckets **Pacific**.

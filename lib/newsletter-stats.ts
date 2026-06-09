@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // the growth-memo signal pack so the two can never disagree.
 
 export type NewsletterDay = {
-  date: string; // YYYY-MM-DD (Pacific civil date)
+  date: string; // YYYY-MM-DD (civil date in the requested tz; default Pacific)
   signups: number; // confirmed signups that day
   unsubs: number; // unsubscribes that day
   net: number; // signups - unsubs
@@ -35,22 +35,18 @@ type SubRow = {
   signup_source: string | null;
 };
 
-const TZ = "America/Los_Angeles";
+const DEFAULT_TZ = "America/Los_Angeles";
 
-/** Pacific civil date (YYYY-MM-DD) for an ISO timestamp. Signups are bucketed by
- *  the local day they happened, matching the rest of the site's date math. */
-function pacificDay(iso: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
+/** Civil date (YYYY-MM-DD) for an ISO timestamp in the given IANA tz. Signups are
+ *  bucketed by the local day they happened. Default Pacific (matches the rest of
+ *  the site's date math); pass "UTC" to align with Cloudflare's UTC-day analytics. */
+function civilDay(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date(iso));
-  return parts; // en-CA yields YYYY-MM-DD
-}
-
-function pacificTodayISO(): string {
-  return pacificDay(new Date().toISOString());
+  }).format(new Date(iso)); // en-CA yields YYYY-MM-DD
 }
 
 function addDays(iso: string, n: number): string {
@@ -61,7 +57,8 @@ function addDays(iso: string, n: number): string {
 
 export async function getNewsletterStats(
   supabase: SupabaseClient,
-  days = 60
+  days = 60,
+  tz: string = DEFAULT_TZ
 ): Promise<NewsletterStats> {
   // Pull the whole table once and derive everything. RLS-bypassing service role.
   const { data } = await supabase
@@ -70,7 +67,7 @@ export async function getNewsletterStats(
     .limit(100000);
   const rows = (data ?? []) as SubRow[];
 
-  const today = pacificTodayISO();
+  const today = civilDay(new Date().toISOString(), tz);
   const windowStart = addDays(today, -(days - 1));
   const d7 = addDays(today, -6);
   const d30 = addDays(today, -29);
@@ -102,7 +99,7 @@ export async function getNewsletterStats(
 
     // confirmed signup day
     if (r.confirmed && r.confirmed_at) {
-      const day = pacificDay(r.confirmed_at);
+      const day = civilDay(r.confirmed_at, tz);
       const b = byDay.get(day);
       if (b) b.signups++;
       if (day >= d7) net_7d++;
@@ -110,7 +107,7 @@ export async function getNewsletterStats(
     }
     // unsubscribe day
     if (r.unsubscribed_at) {
-      const day = pacificDay(r.unsubscribed_at);
+      const day = civilDay(r.unsubscribed_at, tz);
       const b = byDay.get(day);
       if (b) b.unsubs++;
       if (day >= d7) net_7d--;
@@ -118,7 +115,7 @@ export async function getNewsletterStats(
     }
     // confirm-rate leak over last 30d of *created* rows
     if (r.created_at) {
-      const cday = pacificDay(r.created_at);
+      const cday = civilDay(r.created_at, tz);
       if (cday >= d30) {
         created_30d++;
         if (r.confirmed) confirmed_of_created_30d++;
@@ -131,8 +128,8 @@ export async function getNewsletterStats(
   // of the day BEFORE the window, then walk forward applying each day's net.
   const netBeforeWindow = rows.reduce((acc, r) => {
     let n = acc;
-    if (r.confirmed && r.confirmed_at && pacificDay(r.confirmed_at) < windowStart) n++;
-    if (r.unsubscribed_at && pacificDay(r.unsubscribed_at) < windowStart) n--;
+    if (r.confirmed && r.confirmed_at && civilDay(r.confirmed_at, tz) < windowStart) n++;
+    if (r.unsubscribed_at && civilDay(r.unsubscribed_at, tz) < windowStart) n--;
     return n;
   }, 0);
 
