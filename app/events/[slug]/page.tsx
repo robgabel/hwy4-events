@@ -22,7 +22,8 @@ import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import PatrioticBanner from "@/components/PatrioticBanner";
 import AdoptAPetBanner from "@/components/AdoptAPetBanner";
-import { isParadeEvent, isFourthFeatureEvent, isAdoptAPetEvent } from "@/lib/featured-events";
+import ClassicRockBanner from "@/components/ClassicRockBanner";
+import { isParadeEvent, isFourthFeatureEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
 import { resolveEventLinkFromOrgs, promotableVenueUrl, type LinkOrg } from "@/lib/event-link";
 
 export const revalidate = 3600;
@@ -268,6 +269,7 @@ export default async function EventPage({ params }: PageProps) {
 
       {isFourthFeatureEvent(event) && <PatrioticBanner town={event.town} />}
       {isAdoptAPetEvent(event) && <AdoptAPetBanner town={event.town} />}
+      {isClassicRockEvent(event) && <ClassicRockBanner town={event.town} />}
 
       <article>
         {/* HERO — poster + action rail */}

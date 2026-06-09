@@ -96,6 +96,22 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
     defaultAddress: "3431 Highway 4, Dorrington, CA 95223",
   },
   {
+    // The lodge's monthly PDF calendar (mostly member events, some public) is
+    // scraped separately by /api/scrape-moose-lodge. THIS source is the public
+    // "Upcoming events" page, where the lodge posts its marquee public events
+    // (concerts, the car show, etc.) as flyer images with a heading per event.
+    // Firecrawl reads the headings + image alt-text; the extractor turns them
+    // into public events. Reuses the existing "moose-lodge" org slug (FK).
+    slug: "moose-lodge",
+    name: "Ebbetts Pass Moose Lodge",
+    pageTitle: "Ebbetts Pass Moose Lodge Public Events",
+    url: "https://ebbettspassmoose.com/events",
+    defaultVenue: "Ebbetts Pass Moose Lodge",
+    defaultTown: "Arnold",
+    defaultAddress: "1965 Blagen Rd, Arnold, CA 95223",
+    dumpOnEmpty: true,
+  },
+  {
     slug: "murphys-irish-pub",
     name: "Murphys Irish Pub",
     pageTitle: "Murphys Irish Pub Events",

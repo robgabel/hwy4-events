@@ -1,8 +1,9 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
-import { isPatrioticCard, isAdoptAPetEvent } from "@/lib/featured-events";
+import { isPatrioticCard, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
 import PatrioticEventCard from "@/components/PatrioticEventCard";
 import AdoptAPetEventCard from "@/components/AdoptAPetEventCard";
+import ClassicRockEventCard from "@/components/ClassicRockEventCard";
 import { getTownContent } from "@/app/towns/town-content";
 import {
   parseDate,
@@ -129,6 +130,11 @@ export default function EventCard({
   // Adopt-a-Pet Day gets its own warm, dogs-and-cats card.
   if (isAdoptAPetEvent(event)) {
     return <AdoptAPetEventCard event={event} isUpNext={isUpNext} />;
+  }
+
+  // The Flashback concert at the Moose Lodge gets a classic-rock card.
+  if (isClassicRockEvent(event)) {
+    return <ClassicRockEventCard event={event} isUpNext={isUpNext} />;
   }
 
   const isPrivate = event.visibility === "private";
