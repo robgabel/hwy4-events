@@ -10,6 +10,7 @@ import {
 } from "@/lib/types";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import EventCard from "./EventCard";
 import {
   parseDate,
@@ -636,7 +637,15 @@ export default function EventList({
             ) : (
               totalEvents > INITIAL_EVENTS && (
                 <p className="py-8 text-center text-sm text-stone">
-                  That&apos;s the whole calendar for now.
+                  That&apos;s what&apos;s coming up on the 4. Looking further
+                  out?{" "}
+                  <Link
+                    href="/this-month"
+                    className="font-medium text-pine hover:underline"
+                  >
+                    Browse this month
+                  </Link>{" "}
+                  or pick a town from the footer.
                 </p>
               )
             )}

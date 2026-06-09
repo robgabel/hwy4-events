@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Hwy4Org } from "@/lib/types";
-import { getUpcomingEvents, toListEvents } from "@/lib/events-data";
+import { getHomepageEvents, toListEvents } from "@/lib/events-data";
 import { JsonLd, buildItemList } from "@/lib/schema";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
@@ -93,7 +93,7 @@ async function getOrgs(): Promise<Hwy4Org[]> {
 
 export default async function Home() {
   const [events, orgs, greeting, briefing, weekendBriefing] = await Promise.all([
-    getUpcomingEvents(),
+    getHomepageEvents(),
     getOrgs(),
     getGreeting(),
     getBriefing(),

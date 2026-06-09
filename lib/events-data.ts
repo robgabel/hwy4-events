@@ -18,7 +18,7 @@ import { unstable_cache } from "next/cache";
 import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event, EventListItem } from "@/lib/types";
 import { dedupeEvents } from "@/lib/dedupe-events";
-import { pacificToday } from "@/lib/date-windows";
+import { pacificToday, addDays } from "@/lib/date-windows";
 import type { SitemapEventRow } from "@/lib/sitemap";
 
 export const EVENTS_CACHE_TAG = "events";
@@ -79,6 +79,23 @@ export const getUpcomingEvents = unstable_cache(
   ["hwy4-upcoming-events"],
   { revalidate: REVALIDATE_SECONDS, tags: [EVENTS_CACHE_TAG] }
 );
+
+// The homepage is a near-term "what's on" feed, not the full catalog. The whole
+// upcoming set (~1,000 rows stretching to 2028, including ~300 weekly-recurrence
+// instances) is shipped into the client for filtering, so bounding it to a
+// horizon is the single biggest payload cut — and a horizon naturally trims both
+// the far-future one-offs and the weekly-recurrence tail in one move. The deep
+// catalog stays fully reachable on /this-week, /this-month, the town pages, and
+// the sitemap, all of which read the uncapped getUpcomingEvents above. Curated
+// robs_pick highlights bypass the cap so an event further out is never hidden
+// from the homepage. Tune the window with this one constant.
+const HOMEPAGE_HORIZON_DAYS = 60;
+
+export async function getHomepageEvents(): Promise<Hwy4Event[]> {
+  const all = await getUpcomingEvents();
+  const cutoff = addDays(pacificToday().iso, HOMEPAGE_HORIZON_DAYS);
+  return all.filter((e) => e.date <= cutoff || e.robs_pick);
+}
 
 // The homepage (and other list views) renders ~25 cards at a time but holds the
 // whole upcoming set in the client for instant filtering. Shipping every row's
