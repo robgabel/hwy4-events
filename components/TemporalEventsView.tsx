@@ -124,14 +124,32 @@ export default async function TemporalEventsView({
       {/* Events grouped by day */}
       {grouped.length > 0 ? (
         <div className="mb-10 space-y-8">
-          {grouped.map(([date, dayEvents]) => (
-            <section key={date}>
-              <h2 className="font-display mb-3 border-b border-stone-light/30 pb-1 text-lg font-semibold text-forest">
-                {format(parseISO(date), "EEEE, MMMM d")}
-              </h2>
-              <SimpleEventList events={dayEvents} />
-            </section>
-          ))}
+          {(() => {
+            // Drop the inline newsletter after the 5th event overall (index 4),
+            // matching the homepage/SEO pages. Events are split across day
+            // groups, so track a running offset and hand the local index to
+            // whichever day group the 5th event lands in.
+            let priorCount = 0;
+            return grouped.map(([date, dayEvents]) => {
+              const localIdx = 4 - priorCount;
+              priorCount += dayEvents.length;
+              const newsletterAfterIndex =
+                localIdx >= 0 && localIdx < dayEvents.length
+                  ? localIdx
+                  : undefined;
+              return (
+                <section key={date}>
+                  <h2 className="font-display mb-3 border-b border-stone-light/30 pb-1 text-lg font-semibold text-forest">
+                    {format(parseISO(date), "EEEE, MMMM d")}
+                  </h2>
+                  <SimpleEventList
+                    events={dayEvents}
+                    newsletterAfterIndex={newsletterAfterIndex}
+                  />
+                </section>
+              );
+            });
+          })()}
         </div>
       ) : (
         <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">

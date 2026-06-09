@@ -7,6 +7,7 @@ import { townSlug } from "@/lib/slugs";
 import { getPublishedTownSlugs } from "@/app/towns/town-content";
 import { getSupabase } from "@/lib/supabase";
 import FeedbackForm from "@/components/FeedbackForm";
+import NewsletterSignup from "@/components/NewsletterSignup";
 
 export const metadata: Metadata = {
   title: "About Hwy 4 Events",
@@ -230,6 +231,7 @@ export default async function AboutPage() {
       </div>
 
       {/* Who this is for */}
+      <NewsletterSignup variant="inline" />
       <section className="mb-10">
         <h2 className="font-display mb-4 text-xl font-semibold text-forest">
           This is for you if...
