@@ -215,7 +215,7 @@ export default async function TownPage({ params }: PageProps) {
         </h2>
         {events.length > 0 ? (
           <>
-            <SimpleEventList events={events.slice(0, 10)} />
+            <SimpleEventList events={events.slice(0, 10)} newsletterAfterIndex={4} />
             {events.length > 10 && (
               <p className="mt-4 text-sm text-stone">
                 <Link

@@ -12,6 +12,7 @@ import { posterKind, posterImageUrl, generatedPosterPath, withSrc, humanizeHost 
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
+import NewsletterSignup from "@/components/NewsletterSignup";
 import VenueInfo from "@/components/VenueInfo";
 import LinkifiedText from "@/components/LinkifiedText";
 import LiveBadge from "@/components/LiveBadge";
@@ -478,6 +479,11 @@ export default async function EventPage({ params }: PageProps) {
             </ul>
           </section>
         )}
+
+        {/* Newsletter signup, right before the map */}
+        <div className="mt-8">
+          <NewsletterSignup variant="inline" />
+        </div>
 
         {/* Where */}
         <section className="mt-8">
