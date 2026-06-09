@@ -12,6 +12,7 @@ const VALID_CATEGORIES = [
   "kids",
   "wine",
   "games",
+  "fine_arts",
   "other",
 ] as const;
 

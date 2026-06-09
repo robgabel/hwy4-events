@@ -93,6 +93,10 @@ body {
   background-color: color-mix(in srgb, var(--color-sky) 18%, transparent);
   color: var(--color-sky);
 }
+.badge-fine_arts {
+  background-color: color-mix(in srgb, var(--color-gold) 20%, transparent);
+  color: var(--color-bark);
+}
 .badge-other {
   background-color: color-mix(in srgb, var(--color-stone) 15%, transparent);
   color: var(--color-stone);

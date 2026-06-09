@@ -26,11 +26,22 @@ export function classifyEventCategory(text: string): EventCategory {
   if (/\b(hike|guided walk|nature walk|bird walk|trail run|fun run|5k|trail stewardship)\b/.test(haystack)) {
     return "hike_walk";
   }
-  if (/\b(kids|kid|children|family|day camp|summer camp|creek critters|easter egg|story time)\b/.test(haystack)) {
+  // Strong performing-arts signals run BEFORE "kids": a play's blurb often
+  // mentions "family"/"children" ("Henry V", "What the Constitution Means to
+  // Me"), which would otherwise misroute the production into "kids".
+  if (/\b(theater|theatre|playhouse|shakespeare|broadway|matinee|one-act|opera|ballet)\b/.test(haystack)) {
+    return "fine_arts";
+  }
+  if (/\b(kids|kid|children|family|youth|day camp|summer camp|adventure camp|forest school|creek critters|easter egg|story time)\b/.test(haystack)) {
     return "kids";
   }
   if (/\b(bingo|trivia|bocce|pool tournament|cribbage|card tournament|game night|poker)\b/.test(haystack)) {
     return "games";
+  }
+  // Remaining Fine Arts: comedy/improv and visual/craft arts (pottery, painting,
+  // drawing). After "kids" so a kids art/pottery camp still lands in "kids".
+  if (/\b(improv|drama|comedy|stand-?up|art gallery|art exhibit|art show|painting|drawing|sketching|pottery|ceramic|ceramics|wheel throwing|sculpt|paint (?:and|&) sip|sip (?:and|&) paint|open studio)\b/.test(haystack)) {
+    return "fine_arts";
   }
   if (/\b(festival|fair|celebration|fest)\b/.test(haystack)) return "festival";
   if (/\b(meeting|fundraiser|breakfast|luncheon|town hall|public hearing|council|board|farmers market|flea market|car show|car cruise)\b/.test(haystack)) {
