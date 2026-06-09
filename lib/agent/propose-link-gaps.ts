@@ -1,22 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeActionableLinkGaps } from "@/lib/link-gaps";
-import { researchOrgCanonical, type OrgResearch } from "@/lib/agent/research-org";
+import { researchOrgCanonical } from "@/lib/agent/research-org";
+import type { AgentActionRow } from "@/lib/agent/policy";
 
 // The create_org_row proposer (PRD-agent-cockpit.md, Stage 1). Reads the shared
 // actionable-link-gaps worklist and writes one `proposed` agent_actions row per
-// single-operator venue that needs a durable link. It WEB-RESEARCHES each new
-// venue's canonical events page (Sonnet + web_search) so the proposal arrives
-// pre-filled — the human verifies and approves rather than researching from
-// scratch. Research is best-effort: a miss just leaves canonical_url blank for the
-// human. Idempotent: re-running never duplicates a venue with an org row or an open
-// proposal. Capped per run so the web-research latency stays bounded.
-
-const NEW_PROPOSALS_PER_RUN = 6;
+// single-operator venue that needs a durable link.
+//
+// Proposing is FAST and deterministic — pure DB queries + inserts, no LLM. The web
+// research that finds each venue's canonical URL is a SEPARATE step (one Anthropic
+// call per venue), driven on-demand by the "Research URL" button in the cockpit and
+// in small batches by the cron. This split keeps the user-facing "Scan" button
+// instant: batching 6 web-search calls into one click took ~30-120s and timed out.
+//
+// Idempotent: re-running never duplicates a venue with an org row or an open proposal.
 
 export type ProposeResult = {
   gaps: number;
   proposed: number;
-  researched: number;
   skipped: number;
 };
 
@@ -31,7 +32,7 @@ function slugify(s: string): string {
 
 export async function proposeLinkGapActions(supabase: SupabaseClient): Promise<ProposeResult> {
   const { actionable } = await computeActionableLinkGaps(supabase);
-  if (actionable.length === 0) return { gaps: 0, proposed: 0, researched: 0, skipped: 0 };
+  if (actionable.length === 0) return { gaps: 0, proposed: 0, skipped: 0 };
 
   // Don't propose an org that already exists (by slug).
   const { data: orgRows } = await supabase.from("hwy4_orgs").select("slug");
@@ -49,69 +50,104 @@ export async function proposeLinkGapActions(supabase: SupabaseClient): Promise<P
       .filter((s): s is string => Boolean(s))
   );
 
-  let proposed = 0;
-  let researched = 0;
-  let skipped = 0;
+  const toInsert = [];
   for (const g of actionable) {
     const slug = slugify(g.venue);
-    if (!slug || existingSlugs.has(slug) || queuedSlugs.has(slug)) {
-      skipped++;
-      continue;
-    }
-    // Bound web-research latency: defer the rest of the backlog to the next run.
-    if (proposed >= NEW_PROPOSALS_PER_RUN) {
-      skipped++;
-      continue;
-    }
-
-    let research: OrgResearch = {
-      canonical_url: null,
-      confidence: "low",
-      display_name: null,
-      notes: null,
-      sources: [],
-    };
-    try {
-      research = await researchOrgCanonical(g.venue, g.town);
-      researched++;
-    } catch (err) {
-      console.error(`[propose-link-gaps] research failed for "${g.venue}":`, err);
-    }
-
-    const base = `${g.count} upcoming events at ${g.venue} resolve only to the non-durable GoCalaveras link. An hwy4_orgs row with the organizer's canonical events URL upgrades all of them to a durable link.`;
-    const rationale = research.canonical_url
-      ? `${base} Researched canonical (${research.confidence} confidence): ${research.canonical_url}`
-      : `${base} Couldn't auto-find a canonical URL — paste the organizer's events page before approving.`;
-
-    const row = {
+    if (!slug || existingSlugs.has(slug) || queuedSlugs.has(slug)) continue;
+    queuedSlugs.add(slug);
+    toInsert.push({
       type: "create_org_row",
       title: `Add an org row for "${g.venue}"`,
-      rationale,
+      rationale: `${g.count} upcoming events at ${g.venue} resolve only to the non-durable GoCalaveras link. An hwy4_orgs row with the organizer's canonical events URL upgrades all of them to a durable link. Click "Research URL" to auto-find the organizer's events page, or paste it before approving.`,
       payload: {
         slug,
         display_name: g.venue.trim(),
-        canonical_url: research.canonical_url ?? "",
+        canonical_url: "",
         match_patterns: [g.venue.trim()],
         town: g.town,
-        research: {
-          confidence: research.confidence,
-          sources: research.sources,
-          notes: research.notes,
-        },
+        research: null,
       },
       blast_radius: "low",
       reversible: true,
       outward_facing: false,
       status: "proposed",
-    };
-    const { error } = await supabase.from("agent_actions").insert(row);
-    if (error) {
-      skipped++;
-      continue;
-    }
-    proposed++;
-    queuedSlugs.add(slug);
+    });
   }
 
-  return { gaps: actionable.length, proposed, researched, skipped };
+  let proposed = 0;
+  if (toInsert.length > 0) {
+    const { error, count } = await supabase
+      .from("agent_actions")
+      .insert(toInsert, { count: "exact" });
+    if (!error) proposed = count ?? toInsert.length;
+  }
+
+  return {
+    gaps: actionable.length,
+    proposed,
+    skipped: actionable.length - proposed,
+  };
+}
+
+// Research ONE proposed create_org_row action's canonical URL (one Anthropic call).
+// Fast enough to run from a button click (the proven "Re-analyze" pattern). Fills
+// payload.canonical_url + the research blob; safe to re-run.
+export async function researchActionById(
+  supabase: SupabaseClient,
+  id: string
+): Promise<{ ok: boolean; confidence?: string; url?: string | null; error?: string }> {
+  const { data } = await supabase.from("agent_actions").select("*").eq("id", id).maybeSingle();
+  if (!data) return { ok: false, error: "Action not found." };
+  const action = data as AgentActionRow;
+  if (action.type !== "create_org_row") return { ok: false, error: "Not a create_org_row action." };
+  if (action.status !== "proposed") return { ok: false, error: `Action is "${action.status}", not researchable.` };
+
+  const p = action.payload as { display_name?: string; town?: string; canonical_url?: string };
+  const venue = (p.display_name ?? "").trim();
+  if (!venue) return { ok: false, error: "Proposal has no venue name to research." };
+
+  let research;
+  try {
+    research = await researchOrgCanonical(venue, p.town ?? null);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  const payload = {
+    ...action.payload,
+    canonical_url: research.canonical_url ?? p.canonical_url ?? "",
+    research: {
+      confidence: research.confidence,
+      sources: research.sources,
+      notes: research.notes,
+    },
+  };
+  const { error } = await supabase.from("agent_actions").update({ payload }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, confidence: research.confidence, url: research.canonical_url };
+}
+
+// Cron helper: research up to `max` proposed create_org_row actions that still have
+// a blank URL. Bounded so the cron can't time out (each call ~15-25s).
+export async function researchPendingProposals(
+  supabase: SupabaseClient,
+  max = 3
+): Promise<{ researched: number }> {
+  const { data } = await supabase
+    .from("agent_actions")
+    .select("id, payload")
+    .eq("type", "create_org_row")
+    .eq("status", "proposed")
+    .order("created_at", { ascending: true })
+    .limit(20);
+  const blanks = ((data ?? []) as { id: string; payload: { canonical_url?: string } }[])
+    .filter((a) => !(a.payload?.canonical_url ?? "").trim())
+    .slice(0, max);
+
+  let researched = 0;
+  for (const a of blanks) {
+    const r = await researchActionById(supabase, a.id);
+    if (r.ok) researched++;
+  }
+  return { researched };
 }

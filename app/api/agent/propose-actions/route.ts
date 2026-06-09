@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { proposeLinkGapActions } from "@/lib/agent/propose-link-gaps";
+import { proposeLinkGapActions, researchPendingProposals } from "@/lib/agent/propose-link-gaps";
 import { runAutoExecutor } from "@/lib/agent/auto-runner";
 import { SITE_URL } from "@/lib/constants";
 
@@ -28,6 +28,9 @@ export async function GET(request: Request) {
 
   try {
     const result = await proposeLinkGapActions(supabase);
+    // Research a bounded batch of blank-URL proposals (each ~15-25s; capped so the
+    // cron can't time out). The rest get researched next run or on-demand in the UI.
+    const research = await researchPendingProposals(supabase, 3);
     // Stage 2: auto-execute any proposals whose type has graduated (no-op while
     // every agent_policy.auto_execute is false). Covers proposals from prior runs too.
     const auto = await runAutoExecutor(supabase);
@@ -48,7 +51,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, ...result, auto });
+    return NextResponse.json({ ok: true, ...result, research, auto });
   } catch (err) {
     console.error("[propose-actions] failed:", err);
     return NextResponse.json(

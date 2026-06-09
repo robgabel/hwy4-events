@@ -5,7 +5,7 @@ import { getAdminClient } from "@/lib/admin/db";
 import { failRedirect, flashRedirect, field, requireField } from "@/lib/admin/flash";
 import { executeAction, revertAction } from "@/lib/agent/actions-executor";
 import type { AgentActionRow } from "@/lib/agent/policy";
-import { proposeLinkGapActions } from "@/lib/agent/propose-link-gaps";
+import { proposeLinkGapActions, researchActionById } from "@/lib/agent/propose-link-gaps";
 import { runAutoExecutor } from "@/lib/agent/auto-runner";
 
 const ADMIN_PATH = "/admin/actions";
@@ -123,9 +123,10 @@ export async function revertExecuted(formData: FormData) {
   flashRedirect(ADMIN_PATH, "Reverted.");
 }
 
-// Manual trigger for the proposer (the cron's twin). Drains the link-gap worklist
-// into fresh `proposed` rows (web-researching each), then runs the auto-executor
-// for any graduated types. Idempotent, so safe to click any time.
+// Manual trigger for the proposer (the cron's twin). Stages fresh `proposed` rows
+// from the link-gap worklist, then runs the auto-executor for any graduated types.
+// FAST — proposing is pure DB work; the web research is a separate per-card click
+// (see researchAction). Idempotent, so safe to click any time.
 export async function scanForActions() {
   const supabase = getAdminClient();
   const result = await proposeLinkGapActions(supabase);
@@ -135,7 +136,23 @@ export async function scanForActions() {
   const autoBit = auto.executed > 0 ? `, ${auto.executed} auto-executed` : "";
   flashRedirect(
     ADMIN_PATH,
-    `Scan: ${result.proposed} new proposal(s) from ${result.gaps} gap venue(s) (${result.researched} web-researched)${autoBit}.`
+    `Scan: ${result.proposed} new proposal(s) from ${result.gaps} gap venue(s)${autoBit}. Use "Research URL" on a card to auto-find its link.`
+  );
+}
+
+// Per-card: web-research one proposal's canonical URL (one Anthropic call, ~15-25s).
+// The slow step, isolated to a single card so it can't time out a batch.
+export async function researchAction(formData: FormData) {
+  const id = requireField(formData, "id", ADMIN_PATH, "action id");
+  const supabase = getAdminClient();
+  const result = await researchActionById(supabase, id);
+  revalidatePath(ADMIN_PATH);
+  if (!result.ok) failRedirect(ADMIN_PATH, `Research failed: ${result.error}`);
+  flashRedirect(
+    ADMIN_PATH,
+    result.url
+      ? `Found a ${result.confidence}-confidence URL — review and approve.`
+      : "Couldn't find a canonical URL; paste the organizer's events page manually."
   );
 }
 

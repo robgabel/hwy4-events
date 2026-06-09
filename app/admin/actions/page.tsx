@@ -13,7 +13,14 @@ import {
   adminInput,
 } from "@/components/admin/ui";
 import type { AgentActionRow, AgentPolicyRow } from "@/lib/agent/policy";
-import { approveAction, rejectAction, revertExecuted, scanForActions, setPolicy } from "./actions";
+import {
+  approveAction,
+  rejectAction,
+  revertExecuted,
+  scanForActions,
+  setPolicy,
+  researchAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120; // scanForActions web-researches each new proposal
@@ -278,27 +285,49 @@ function ProposedCard({ action }: { action: AgentActionRow }) {
       <Badges action={action} />
       <CardHeader title={action.title ?? action.type} meta={action.rationale ?? undefined} />
 
-      {action.type === "create_org_row" && research && (
-        <p style={{ fontSize: 13, color: MUTED, margin: "-4px 0 12px" }}>
-          Agent research:{" "}
-          <strong style={{ color: confColor }}>{research.confidence ?? "low"}</strong> confidence
-          {research.sources && research.sources.length > 0 && (
-            <>
-              {" · "}
-              {research.sources.slice(0, 3).map((s, i) => (
-                <a
-                  key={i}
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: "#2d5a3d", marginRight: 8 }}
-                >
-                  {hostOf(s.url)} ↗
-                </a>
-              ))}
-            </>
+      {action.type === "create_org_row" && (
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            flexWrap: "wrap",
+            margin: "-4px 0 12px",
+          }}
+        >
+          <form action={researchAction} style={{ margin: 0 }}>
+            <input type="hidden" name="id" value={action.id} />
+            <button type="submit" style={{ ...adminBtn.secondary, padding: "6px 12px", fontSize: 14 }}>
+              🔍 {research ? "Re-research URL" : "Research URL"}
+            </button>
+          </form>
+          {research ? (
+            <span style={{ fontSize: 13, color: MUTED }}>
+              Agent research:{" "}
+              <strong style={{ color: confColor }}>{research.confidence ?? "low"}</strong> confidence
+              {research.sources && research.sources.length > 0 && (
+                <>
+                  {" · "}
+                  {research.sources.slice(0, 3).map((s, i) => (
+                    <a
+                      key={i}
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#2d5a3d", marginRight: 8 }}
+                    >
+                      {hostOf(s.url)} ↗
+                    </a>
+                  ))}
+                </>
+              )}
+            </span>
+          ) : (
+            <span style={{ fontSize: 13, color: MUTED }}>
+              No URL yet — click Research (~20s), or paste the organizer&rsquo;s events page below.
+            </span>
           )}
-        </p>
+        </div>
       )}
 
       {action.type === "create_org_row" ? (
