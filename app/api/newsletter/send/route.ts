@@ -166,24 +166,53 @@ export async function GET(request: Request) {
     let sent = 0;
     const errors: string[] = [];
 
-    // Send individually so each email has a personalized unsubscribe link
-    for (const sub of subscribers) {
+    // One message per subscriber, each with its own personalized unsubscribe link.
+    const messages = subscribers.map((sub) => {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
+      return {
+        from: `${SITE_NAME} <newsletter@hwy4events.com>`,
+        // Replies go to Gmail until ImprovMX forwarding for the domain is live.
+        replyTo: "robgabel@gmail.com",
+        to: sub.email,
+        subject,
+        html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
+        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+      };
+    });
+
+    // Resend's Batch API sends up to 100 messages per request, so the whole
+    // newsletter ships in ONE HTTP call and never trips Resend's 5 req/sec rate
+    // limit. The previous code looped one `emails.send` per recipient AND ignored
+    // the SDK's `{ error }` return (it does NOT throw on a 429); on 2026-06-04
+    // Resend 429'd 42 of 72 sends while the loop counted all 72 as "sent". We now
+    // (a) batch, and (b) only count messages Resend actually accepted.
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+      const chunk = messages.slice(i, i + BATCH_SIZE);
       try {
-        await resend.emails.send({
-          from: `${SITE_NAME} <newsletter@hwy4events.com>`,
-          // Replies go to Gmail until ImprovMX forwarding for the domain is live.
-          replyTo: "robgabel@gmail.com",
-          to: sub.email,
-          subject,
-          html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
-          headers: {
-            "List-Unsubscribe": `<${unsubscribeUrl}>`,
-          },
-        });
-        sent++;
+        const { data, error } = await resend.batch.send(chunk);
+        if (error) {
+          // Whole-batch rejection (e.g. one malformed entry). Fall back to
+          // per-message sends, throttled under the rate limit, so a single bad
+          // recipient can't drop the entire batch — and inspect each result.
+          for (const msg of chunk) {
+            const res = await resend.emails.send(msg);
+            if (res.error) {
+              errors.push(`${msg.to}: ${res.error.message ?? "send error"}`);
+            } else {
+              sent++;
+            }
+            await new Promise((r) => setTimeout(r, 220)); // ~4.5/sec, under the 5/sec cap
+          }
+        } else {
+          // Resend returns one id per accepted message.
+          const ids = (data as { data?: unknown[] } | null)?.data;
+          sent += Array.isArray(ids) ? ids.length : chunk.length;
+        }
       } catch (err) {
-        errors.push(`${sub.email}: ${err instanceof Error ? err.message : "unknown error"}`);
+        errors.push(
+          `batch ${Math.floor(i / BATCH_SIZE) + 1}: ${err instanceof Error ? err.message : "unknown error"}`
+        );
       }
     }
 
@@ -207,6 +236,27 @@ export async function GET(request: Request) {
         { key: "latest_newsletter_date", value: new Date().toISOString() },
         { onConflict: "key" }
       );
+
+    // Never fail silently again: if any recipient didn't make it, alert on Slack.
+    if (sent < subscribers.length || errors.length > 0) {
+      const webhook = process.env.SLACK_WEBHOOK_URL;
+      if (webhook) {
+        try {
+          await fetch(webhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text:
+                `*⚠️ Newsletter send incomplete (${today})* — delivered ${sent}/${subscribers.length}.\n` +
+                (errors.length ? `First errors: ${errors.slice(0, 5).join("; ")}\n` : "") +
+                `Review + re-send the gap at ${SITE_URL}/admin/newsletter.`,
+            }),
+          });
+        } catch (e) {
+          console.error("[newsletter/send] Slack alert failed:", e);
+        }
+      }
+    }
 
     return NextResponse.json({
       ok: true,
