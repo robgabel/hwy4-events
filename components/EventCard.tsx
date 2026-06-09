@@ -67,6 +67,7 @@ const CATEGORY_IMAGES: Record<EventCategory, string> = {
   kids: "/images/kids.svg",
   wine: "/images/wine.svg",
   games: "/images/games.svg",
+  fine_arts: "/images/fine_arts.svg",
   other: "/images/other.svg",
 };
 
@@ -78,6 +79,7 @@ const CATEGORY_ACCENT_COLORS: Record<EventCategory, string> = {
   kids: "#E0A33E",
   wine: "#8B3A4E",
   games: "#4E6E8B",
+  fine_arts: "#C4922A",
   other: "#C4B8AA",
 };
 

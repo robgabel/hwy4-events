@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#D8B25A"/>
+      <stop offset="100%" stop-color="#A9762E"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <!-- Soft sun -->
+  <circle cx="150" cy="52" r="16" fill="#F2E9CC" opacity="0.6"/>
+  <!-- Painter's palette -->
+  <g transform="translate(40 78) rotate(-8 60 45)">
+    <path d="M60 0 C20 0 0 26 0 50 C0 70 16 86 38 86 C50 86 56 78 56 70 C56 62 50 58 50 50 C50 40 60 34 72 34 L92 34 C120 34 120 6 96 0 C84 -3 72 0 60 0 Z" fill="#F5EEDC" stroke="#4A3826" stroke-width="3"/>
+    <circle cx="30" cy="30" r="8" fill="#C8642F" stroke="#4A3826" stroke-width="1.5"/>
+    <circle cx="56" cy="20" r="8" fill="#5B8C5A" stroke="#4A3826" stroke-width="1.5"/>
+    <circle cx="82" cy="22" r="8" fill="#5A8FA8" stroke="#4A3826" stroke-width="1.5"/>
+    <circle cx="30" cy="58" r="8" fill="#8B3A4E" stroke="#4A3826" stroke-width="1.5"/>
+  </g>
+  <!-- Brush -->
+  <g transform="translate(120 96) rotate(38 0 0)">
+    <rect x="-5" y="0" width="10" height="64" rx="4" fill="#7E5A34"/>
+    <path d="M-7 -18 h14 l-3 18 h-8 Z" fill="#E0A33E"/>
+    <rect x="-7" y="-26" width="14" height="9" rx="3" fill="#4A3826"/>
+  </g>
+</svg>

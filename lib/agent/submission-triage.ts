@@ -36,6 +36,7 @@ const CATEGORIES: EventCategory[] = [
   "kids",
   "wine",
   "games",
+  "fine_arts",
   "other",
 ];
 const COST_TIERS: EventCostTier[] = ["free", "paid", "donation", "varies", "unknown"];
@@ -203,7 +204,7 @@ Decide ONE verdict:
 - duplicate_needs_update: already in the database, but the submission and/or your web research add information the existing row lacks (a real description where it had none, a confirmed start/end time, the official URL, the correct venue). Set matched_event_id and state exactly what is new in new_info.
 - reject: outside the corridor, cannot be verified as a real event, looks like spam or a test, or is otherwise not a fit.
 
-Fill "suggested" with values to complete the listing, drawn from the submission and your research: venue_name, start_time and end_time as HH:MM 24-hour, category (one of: live_music, festival, civic, hike_walk, kids, wine, games, other), a clean description, event_url, price as a short string, and cost_tier (one of: free, paid, donation, varies, unknown). Include only fields you are confident about. Omit the rest.
+Fill "suggested" with values to complete the listing, drawn from the submission and your research: venue_name, start_time and end_time as HH:MM 24-hour, category (one of: live_music, festival, civic, hike_walk, kids, wine, games, fine_arts, other), a clean description, event_url, price as a short string, and cost_tier (one of: free, paid, donation, varies, unknown). Include only fields you are confident about. Omit the rest.
 
 Rules:
 - matched_event_id MUST be one of the provided candidate ids, or null. Never invent an id.
