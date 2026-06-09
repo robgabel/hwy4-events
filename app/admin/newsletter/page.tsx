@@ -95,10 +95,16 @@ export default async function NewsletterDraftAdminPage({
   const flash = typeof params.flash === "string" ? params.flash : null;
 
   const [drafts, notes] = await Promise.all([loadDrafts(), loadNotes()]);
-  // The current draft is the most recent one that hasn't shipped yet; otherwise
-  // just the most recent row.
-  const current = drafts.find((d) => d.status !== "sent") ?? drafts[0] ?? null;
+  // The current draft is the most recent one that's still actionable (not yet
+  // shipped). Once the week's draft sends, there's a gap until Wednesday's
+  // prepare cron creates the next one — during that gap we must NOT fall back to
+  // the sent draft, or the page would render it in the editable card with live
+  // Save/Veto/Regenerate buttons that all error ("already been sent") and a
+  // preview that shows last week's email. Drop into the empty state instead; the
+  // sent draft still appears under Recent.
+  const current = drafts.find((d) => d.status !== "sent") ?? null;
   const history = drafts.filter((d) => d.id !== current?.id);
+  const lastSent = drafts.find((d) => d.status === "sent") ?? null;
 
   const today = todayISO();
   const activeNote = notes.find((n) => classifyWindow(today, n) === "active") ?? null;
@@ -125,9 +131,20 @@ export default async function NewsletterDraftAdminPage({
 
       {!current ? (
         <section style={cardStyle}>
+          <p style={{ color: "#666", fontSize: 16, margin: "0 0 8px" }}>
+            {lastSent ? (
+              <>
+                Last week&rsquo;s newsletter already shipped (
+                {fmtDate(lastSent.target_send_date)}, see Recent below). No draft is
+                queued for the coming Thursday yet.
+              </>
+            ) : (
+              <>No draft yet.</>
+            )}
+          </p>
           <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
-            No draft yet. Wednesday&rsquo;s <code>/api/newsletter/prepare</code> cron
-            will create one, or trigger it manually:
+            Wednesday&rsquo;s <code>/api/newsletter/prepare</code> cron will create
+            one, or trigger it now:
             <br />
             <code style={{ fontSize: 14 }}>
               curl -H &quot;Authorization: Bearer $CRON_SECRET&quot;
