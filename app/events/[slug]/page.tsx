@@ -22,9 +22,10 @@ import OutboundTracker from "@/components/OutboundTracker";
 import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import PatrioticBanner from "@/components/PatrioticBanner";
+import TwoFiftyBanner from "@/components/TwoFiftyBanner";
 import AdoptAPetBanner from "@/components/AdoptAPetBanner";
 import ClassicRockBanner from "@/components/ClassicRockBanner";
-import { isParadeEvent, isFourthFeatureEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
+import { isParadeEvent, isFourthFeatureEvent, isTwoFiftyEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
 import { resolveEventLinkFromOrgs, promotableVenueUrl, type LinkOrg } from "@/lib/event-link";
 
 export const revalidate = 3600;
@@ -269,6 +270,7 @@ export default async function EventPage({ params }: PageProps) {
       </nav>
 
       {isFourthFeatureEvent(event) && <PatrioticBanner town={event.town} />}
+      {isTwoFiftyEvent(event) && <TwoFiftyBanner town={event.town} />}
       {isAdoptAPetEvent(event) && <AdoptAPetBanner town={event.town} />}
       {isClassicRockEvent(event) && <ClassicRockBanner town={event.town} />}
 

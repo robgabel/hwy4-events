@@ -68,6 +68,35 @@ test("Calaveras Big Trees programs are treated as manually managed (all variants
   );
 });
 
+test("Hot Copper Car Show is manually managed (both the source's doubled title and the hand-cleaned name)", () => {
+  // GoCalaveras's actual (doubled) title — the row we want frozen so a re-scrape
+  // can't restore "Show Show" or the 23:50 placeholder end time.
+  assert.equal(
+    isManuallyManagedEvent({
+      name: "Hot Copper Car Show Show",
+      venue_name: "Copperopolis Town Square",
+    }),
+    true
+  );
+  // The corrected name still matches.
+  assert.equal(
+    isManuallyManagedEvent({
+      name: "Hot Copper Car Show",
+      venue_name: "Copperopolis Town Square",
+    }),
+    true
+  );
+  // The OTHER event at the same square (July 4 Stars & Stripes) must still scrape
+  // normally — the pattern is scoped to the car show's name, not the venue.
+  assert.equal(
+    isManuallyManagedEvent({
+      name: "Stars & Stripes Copper Valley Town Square",
+      venue_name: "Copperopolis Town Square",
+    }),
+    false
+  );
+});
+
 test("unrelated corridor events are not blocklisted", () => {
   assert.equal(
     isManuallyManagedEvent({
