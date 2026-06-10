@@ -15,6 +15,8 @@ import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import VenueInfo from "@/components/VenueInfo";
+import ConfidenceNote from "@/components/ConfidenceNote";
+import { eventConfidence } from "@/lib/confidence";
 import LinkifiedText from "@/components/LinkifiedText";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
@@ -200,6 +202,16 @@ export default async function EventPage({ params }: PageProps) {
   // as the visible CTA but never enters structured data — point schema at our own
   // stable page instead, so a churnable permalink can't leak into JSON-LD.
   const offerUrl = link.durable && link.href ? link.href : `${SITE_URL}/events/${slug}`;
+
+  // WS-8: honest-uncertainty disclosure, derived from structured fields.
+  const confidence = eventConfidence(event);
+  const addedOn = event.created_at
+    ? format(parseISO(event.created_at), "MMMM d, yyyy")
+    : null;
+  const venuePhone = venue?.phone ?? null;
+  const venuePhoneHref = venuePhone
+    ? `tel:${venuePhone.replace(/[^\d+]/g, "")}`
+    : null;
 
   const dateObj = parseISO(event.date);
   const dateStr = format(dateObj, "EEEE, MMMM d, yyyy");
@@ -451,6 +463,14 @@ export default async function EventPage({ params }: PageProps) {
             </p>
           </div>
         </div>
+
+        {confidence.showDisclosure && (
+          <ConfidenceNote
+            addedOn={addedOn}
+            phone={venuePhone}
+            phoneHref={venuePhoneHref}
+          />
+        )}
 
         {/* About */}
         {event.description && (

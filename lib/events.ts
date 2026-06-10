@@ -7,7 +7,7 @@ import type { Hwy4Event } from "./types";
 // event resolution can't drift. `image_url` is included because the poster
 // branching (supplied vs generated) keys off it.
 export const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, community_sourced, venue_key, image_url";
+  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, community_sourced, venue_key, image_url, created_at, verification_status";
 
 const PAGE_SIZE = 60;
 
