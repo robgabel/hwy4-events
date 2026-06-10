@@ -27,6 +27,11 @@ const ADDRESS = "1065 Blagen Rd, Arnold, CA 95223";
 const DATE = "2026-06-18"; // Thursday
 const START_TIME = "13:30:00";
 const END_TIME = "14:30:00";
+// Organizer flyer (HHSA/Senior Planet), committed to public/event-posters/ and
+// shown untouched as the poster (PRD-event-poster-loop.md §9 — we don't brand
+// organizer-supplied art). poster_locked so nothing overwrites it.
+const IMAGE_URL =
+  "https://hwy4events.com/event-posters/arnold-tech-class-2026-06-18.jpg";
 const DESCRIPTION =
   "A free one-hour workshop on useful, everyday technology, part of Calaveras " +
   "HHSA's Senior Planet series. This month's topic: Smartphone Photography and " +
@@ -59,6 +64,8 @@ async function main(): Promise<void> {
     venue_key: VENUE_KEY,
     town: TOWN,
     address: ADDRESS,
+    image_url: IMAGE_URL,
+    poster_locked: true,
     category: "civic", // "Community" bucket
     status: "confirmed",
     is_past: false,
