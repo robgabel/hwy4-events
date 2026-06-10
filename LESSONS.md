@@ -5,6 +5,24 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-06-10 — Hand-adding an event + its poster from a flyer (Arnold Library tech class)
+
+### Data
+
+- **`hwy4_events.category` stores DB slugs, not the display names — and a CHECK constraint rejects the wrong token.** The "Community" bucket is `civic`; also `live_music`, `hike_walk`, `fine_arts`. Inserting `'community'` fails `hwy4_events_category_check`. Pull the exact allowed set before inserting: `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='hwy4_events_category_check'` → `live_music | festival | civic | hike_walk | kids | wine | games | fine_arts | other`.
+- **Even a one-off hand-curated event gets a seed script, not just a raw insert.** The Arnold Library is scraper-blocklisted (`manual-sources.ts`), so a script owns the row like the weekly Storytime — but a single dated workshop needs no recurrence expansion (one row, no `expandWeekly`). Reuse the shared `generateDedupKey(name, date, town)` so a future scrape/community-submit of the same event collides instead of duplicating.
+- **Compute the dedup_key locally with `tsx -e` — it's a pure function, no DB/env needed.** `npx tsx -e "import {generateDedupKey} from './lib/event-identity.ts'; console.log(generateDedupKey(name,date,town))"` gives the exact key to hand to a raw `INSERT … RETURNING`.
+
+### Posters
+
+- **`public/event-posters/` is an established repo-hosting pattern for posters — not only the Supabase `event-posters` Storage bucket.** Five posters already live there; `image_url` is `https://hwy4events.com/event-posters/<file>.jpg`. This is the path that works from the web environment, where there's **no `SUPABASE_SERVICE_ROLE_KEY`** to upload to Storage (the MCP does SQL only, not binary objects). Commit the file, set `image_url` + `poster_locked=true`.
+- **A DB-only poster change is live instantly; a repo-hosted image is NOT live until `main` deploys.** Setting `image_url` via `execute_sql` updates prod immediately, but the JPG it points at 404s until the `public/` commit reaches `main` (Vercel build). So "the row is updated" ≠ "the poster shows" — the image needs the push to prod too.
+- **Organizer-supplied art is shown untouched (no Hwy4 lockup/QR).** Per `PRD-event-poster-loop.md` §9, we only brand posters *we* generate; a real flyer (here HHSA/Senior Planet) goes in as-is.
+
+### Process
+
+- **Splitting "push to prod" into two senses bit me.** The user's first "push to prod" I read as push-the-branch; they meant *deploy to prod* (fast-forward `main`). The branch DB writes were already live, but the committed poster wasn't. When someone says "push to prod," default to fast-forwarding `main` unless the branch isn't ready.
+
 ## 2026-06-09 — Featuring a curated event (Hot Copper Car Show, America's 250th)
 
 ### Data / scrapers
