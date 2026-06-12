@@ -11,7 +11,8 @@ import {
   draftQuestionReply,
   draftReplyForReviewed,
 } from "./actions";
-import { gmailComposeUrl, type SubmissionReply } from "@/lib/agent/submission-reply";
+import type { SubmissionReply } from "@/lib/agent/submission-reply";
+import EditableReplyPanel from "@/components/admin/EditableReplyPanel";
 import { readFlash } from "@/lib/admin/flash";
 
 export const dynamic = "force-dynamic";
@@ -180,7 +181,7 @@ export default async function SubmissionsAdminPage({
 
       {repliedSub?.ai_reply && (
         <div style={{ marginBottom: 20, border: "2px solid #1B3A2D", borderRadius: 12, padding: 4 }}>
-          <ReplyPanel
+          <EditableReplyPanel
             reply={repliedSub.ai_reply}
             heading={`✉ Email the submitter${repliedSub.submitter_name ? ` (${repliedSub.submitter_name})` : ""}`}
           />
@@ -264,7 +265,7 @@ function ReviewedRow({ sub }: { sub: ReviewedSubmission }) {
 
       {sub.ai_reply ? (
         <div style={{ marginTop: 12 }}>
-          <ReplyPanel reply={sub.ai_reply} heading="✉ Drafted reply" />
+          <EditableReplyPanel reply={sub.ai_reply} heading="✉ Drafted reply" />
         </div>
       ) : sub.submitter_email ? (
         <form action={draftReplyForReviewed} style={{ marginTop: 12 }}>
@@ -603,7 +604,7 @@ function SubmissionCard({
           </form>
           {sub.ai_reply?.outcome === "questions" && (
             <div style={{ marginTop: 12 }}>
-              <ReplyPanel
+              <EditableReplyPanel
                 reply={sub.ai_reply}
                 heading={`Drafted question to ${sub.submitter_name ?? sub.submitter_email}`}
               />
@@ -784,40 +785,6 @@ function Banner({ tone, children }: { tone: "ok" | "error"; children: React.Reac
   );
 }
 
-// Drafted reply to the submitter + a one-click Gmail compose deep-link. The app
-// never sends; the human reviews, edits, and sends from their own Gmail.
-function ReplyPanel({ reply, heading }: { reply: SubmissionReply; heading: string }) {
-  if (!reply.to) return null;
-  const href = gmailComposeUrl(reply.to, reply.subject, reply.body);
-  return (
-    <div style={replyPanelStyle}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          flexWrap: "wrap",
-          marginBottom: 10,
-        }}
-      >
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#1B3A2D" }}>{heading}</p>
-        <a href={href} target="_blank" rel="noreferrer" style={gmailBtn}>
-          Open in Gmail ↗
-        </a>
-      </div>
-      <label style={{ ...miniLabel, color: "#888", display: "block", margin: "0 0 3px" }}>Subject</label>
-      <input readOnly value={reply.subject} style={{ ...inputStyle, marginBottom: 10 }} />
-      <label style={{ ...miniLabel, color: "#888", display: "block", margin: "0 0 3px" }}>Body</label>
-      <textarea readOnly value={reply.body} rows={9} style={{ ...textareaStyle, fontSize: 15 }} />
-      <p style={{ fontSize: 12, color: "#999", margin: "6px 0 0", lineHeight: 1.5 }}>
-        Opens a pre-filled Gmail compose. Edit and send from your account; your signature is added by
-        Gmail.
-      </p>
-    </div>
-  );
-}
-
 function EmptyState() {
   return (
     <section
@@ -908,20 +875,4 @@ const questionBtn: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 600,
   cursor: "pointer",
-};
-const replyPanelStyle: React.CSSProperties = {
-  background: "#f6faf4",
-  border: "1px solid #cfe3c4",
-  borderRadius: 10,
-  padding: "14px 16px",
-};
-const gmailBtn: React.CSSProperties = {
-  display: "inline-block",
-  padding: "8px 14px",
-  background: "#1B3A2D",
-  color: "#fff",
-  borderRadius: 8,
-  fontSize: 14,
-  fontWeight: 600,
-  textDecoration: "none",
 };
