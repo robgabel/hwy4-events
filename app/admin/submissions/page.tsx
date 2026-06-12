@@ -53,6 +53,7 @@ type Submission = {
   description: string | null;
   category: string | null;
   event_url: string | null;
+  poster_url: string | null;
   submitter_name: string | null;
   submitter_email: string | null;
   created_at: string;
@@ -96,7 +97,7 @@ async function loadData(): Promise<{ submissions: Submission[]; matched: Map<str
   const { data } = await supabase
     .from("event_submissions")
     .select(
-      "id, event_name, event_date, start_time, venue_name, town, description, category, event_url, submitter_name, submitter_email, created_at, ai_verdict, ai_confidence, ai_headline, ai_matched_event_id, ai_analysis, ai_analyzed_at, ai_error, ai_reply"
+      "id, event_name, event_date, start_time, venue_name, town, description, category, event_url, poster_url, submitter_name, submitter_email, created_at, ai_verdict, ai_confidence, ai_headline, ai_matched_event_id, ai_analysis, ai_analyzed_at, ai_error, ai_reply"
     )
     .eq("status", "pending")
     .order("event_date", { ascending: true });
@@ -563,6 +564,33 @@ function SubmissionCard({
 
       <AIVerdictBanner sub={sub} matched={matched} />
 
+      {sub.poster_url && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ ...miniLabel, color: "#888", margin: "0 0 6px" }}>
+            Flyer the submitter attached
+          </p>
+          <a href={sub.poster_url} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={sub.poster_url}
+              alt={`Flyer for ${sub.event_name}`}
+              style={{
+                maxWidth: 280,
+                maxHeight: 360,
+                width: "auto",
+                height: "auto",
+                borderRadius: 10,
+                border: "1px solid #E7E0D5",
+                display: "block",
+              }}
+            />
+          </a>
+          <p style={{ fontSize: 13, color: "#777", margin: "6px 0 0" }}>
+            Publishing below will use this as the event&rsquo;s poster (pinned).
+          </p>
+        </div>
+      )}
+
       {sub.submitter_email && (
         <div style={{ marginBottom: 14 }}>
           <form action={draftQuestionReply} style={{ margin: 0 }}>
@@ -603,6 +631,9 @@ function SubmissionCard({
         </summary>
         <form action={publishSubmission}>
           <input type="hidden" name="id" value={sub.id} />
+          {sub.poster_url && (
+            <input type="hidden" name="image_url" value={sub.poster_url} />
+          )}
           <div
             style={{
               display: "grid",
