@@ -5,7 +5,27 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
-## 2026-06-10 — Hand-adding an event + its poster from a flyer (Arnold Library tech class)
+## 2026-06-12 — "Submit form keeps asking for a URL" (broken-URL-field fix + flyer attach)
+
+### The bug
+
+- **A form that "keeps rejecting" an input is usually the browser's native HTML constraint, not your server.** Feedback said the submit form "kept asking for URL even though I entered our website." The field was *optional* and the server never validated it — the culprit was `<input type="url">`, whose native validation **requires a scheme**, so a bare domain (`mywinery.com`) blocked submit. Check the HTML constraint (`type="url"`/`type="email"`/`pattern`) before hunting server code. Fix: accept what people actually type — `type="text"` + `inputMode="url"`, then normalize (prepend `https://` when no scheme) on both the client (`onBlur`) and server.
+- **Put the normalize rule in one shared pure fn (`lib/url.ts` `normalizeUrl`)** so the field and the route can't disagree about what a bare domain means — same discipline as `isSameEvent`/`generateDedupKey`.
+
+### Adding a file upload to an existing JSON form
+
+- **To attach a file, switch the form from JSON to multipart and the route from `request.json()` to `request.formData()`.** On the client, build a `FormData` and **don't set `Content-Type`** — the browser sets the multipart boundary itself. The text fields come back as strings via `formData.get(k)`.
+- **Reused existing infra instead of adding any.** `event_submissions.poster_url` (column) and the public `event-posters` Storage bucket already existed, plus the validated upload pattern (JPG/PNG/WebP, 4MB to stay under Vercel's 4.5MB body cap, orphan-cleanup on insert failure) from `/api/submit-poster`. No migration, no new bucket.
+- **Two poster-hosting paths, two contexts — don't conflate them.** The 2026-06-10 lesson said "no `SUPABASE_SERVICE_ROLE_KEY` in the web env → host posters in `public/event-posters/`." That's about *me* uploading during a session. This flyer flow uploads from the **deployed serverless function**, which *does* have the service-role key — so it writes to the Storage bucket at runtime. Session-time curation → repo `public/`; runtime user upload → Storage bucket.
+- **Pin a human-supplied flyer on publish: `image_url` + `poster_locked=true`.** Same semantics as the organizer poster-swap (PRD §9) — re-scrapes won't overwrite it, and it's shown untouched (no Hwy4 lockup, since it's the organizer's own art).
+
+### Ops / comms
+
+- **Feedback replies must not go *from* the forwarder address.** The "New Hwy4Events feedback" email arrives from `newsletter@hwy4events.com`, an **inbound-only ImprovMX forwarder** — replying to it bounces `550 5.1.3 Relay not permitted`. Rob's reply to the submitter never delivered. Reply to the submitter's real address (it's in the feedback body) from a real sending account, not by hitting "reply."
+
+---
+
+
 
 ### Data
 
