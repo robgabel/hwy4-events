@@ -55,6 +55,15 @@ const MANUAL_VENUE_PATTERNS: readonly string[] = [
   // so a re-scrape can't revert them. Matches the event name ("Hot Copper Car
   // Show") regardless of the source's doubling.
   "hot copper car show",
+  // Make and parTake (a maker/craft studio in Arnold's Meadowmont plaza) runs a
+  // weekly "Summer Maker Sessions" schedule published only as a printed flyer.
+  // The rows are hand-seeded as recurring programs
+  // (scripts/seed-make-partake-summer-2026.ts); the studio has no calendar the
+  // scrapers can read, so this keeps an aggregator from later re-listing the
+  // sessions with wrong/flattened dates over the curated rows. Matches the
+  // venue_name ("Make and parTake") on every variant.
+  "make and partake",
+  "make & partake",
 ];
 
 export interface MatchableEvent {

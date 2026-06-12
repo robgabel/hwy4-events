@@ -469,6 +469,21 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Arnold",
     address: "2182 California Highway 4, Arnold, CA 95223",
   },
+  "make-and-partake": {
+    canonical: "Make and parTake",
+    aliases: [
+      "make and partake",
+      "make & partake",
+      "make and partake llc",
+      "make + partake",
+      "makepartake",
+      "make and partake arnold",
+    ],
+    town: "Arnold",
+    // Suite 600 in the Meadowmont Shopping Center plaza (same 2182 Hwy 4 block
+    // as SmallTown Collectables, between Fawn and Fern).
+    address: "2182 Highway 4, Suite 600, Arnold, CA 95223",
+  },
   "arnold-shotokan": {
     canonical: "Arnold Shotokan",
     aliases: [
