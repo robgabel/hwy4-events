@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { TOWNS, CATEGORY_LABELS, type EventCategory } from "@/lib/types";
+import { normalizeUrl } from "@/lib/url";
 import Link from "next/link";
+
+const MAX_FLYER_BYTES = 4 * 1024 * 1024;
 
 interface FormData {
   event_name: string;
@@ -32,6 +35,7 @@ const INITIAL_FORM: FormData = {
 
 export default function SubmitEventForm() {
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
+  const [flyer, setFlyer] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,16 +45,33 @@ export default function SubmitEventForm() {
     setError(null);
   }
 
+  function onFlyerChange(file: File | null) {
+    setError(null);
+    if (file && file.size > MAX_FLYER_BYTES) {
+      setError("That flyer is over 4MB. Please pick a smaller image.");
+      setFlyer(null);
+      return;
+    }
+    setFlyer(file);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
 
     try {
+      // Multipart (not JSON) so an optional flyer image can ride along. The
+      // browser sets the multipart Content-Type/boundary itself, so we don't.
+      const body = new FormData();
+      for (const [key, value] of Object.entries(form)) {
+        body.append(key, value);
+      }
+      if (flyer) body.append("flyer", flyer);
+
       const res = await fetch("/api/submit-event", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body,
       });
 
       if (!res.ok) {
@@ -208,14 +229,19 @@ export default function SubmitEventForm() {
         </div>
 
         <div>
-          <label className={labelClass}>Event URL</label>
+          <label className={labelClass}>Event URL or Website</label>
           <input
-            type="url"
+            type="text"
+            inputMode="url"
             value={form.event_url}
             onChange={(e) => update("event_url", e.target.value)}
-            placeholder="https://..."
+            onBlur={() => update("event_url", normalizeUrl(form.event_url))}
+            placeholder="mywinery.com"
             className={inputClass}
           />
+          <p className="mt-1 text-xs text-stone-light">
+            Optional. Your website is fine, no need to type &ldquo;https://&rdquo;.
+          </p>
         </div>
 
         <div>
@@ -244,6 +270,20 @@ export default function SubmitEventForm() {
           <p className="mt-1 text-xs text-stone-light">
             Required so we can reach you if we have a question about your event
             before it goes up. We won&apos;t share it or add you to any list.
+          </p>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className={labelClass}>Flyer or Poster</label>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => onFlyerChange(e.target.files?.[0] ?? null)}
+            className="w-full cursor-pointer rounded-lg border border-stone-light/40 bg-white px-3 py-2 text-sm text-forest file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-sage/20 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-pine hover:file:bg-sage/30"
+          />
+          <p className="mt-1 text-xs text-stone-light">
+            Optional. Have a flyer? Attach a JPG, PNG, or WebP (max 4MB) and we may
+            use it as the event&apos;s poster.
           </p>
         </div>
       </div>

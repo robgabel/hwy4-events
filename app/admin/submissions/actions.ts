@@ -151,6 +151,12 @@ export async function publishSubmission(formData: FormData) {
 
   const supabase = getAdminClient();
 
+  // A flyer the submitter attached (uploaded to event-posters at submit time).
+  // When present, pin it as the event's poster so the poster system shows their
+  // art untouched and a re-scrape can't overwrite it (mirrors the organizer
+  // poster-swap: image_url + poster_locked).
+  const imageUrl = field(formData, "image_url");
+
   const row = {
     name,
     date,
@@ -161,6 +167,7 @@ export async function publishSubmission(formData: FormData) {
     description: field(formData, "description") || null,
     category,
     event_url: field(formData, "event_url") || null,
+    ...(imageUrl ? { image_url: imageUrl, poster_locked: true } : {}),
     status: "confirmed",
     visibility: "public",
     community_sourced: true,

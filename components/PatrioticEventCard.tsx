@@ -1,5 +1,5 @@
 import { CollapsedEvent } from "@/lib/types";
-import { isParadeEvent } from "@/lib/featured-events";
+import { isParadeEvent, patrioticCardTag } from "@/lib/featured-events";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
 import { getTownContent } from "@/app/towns/town-content";
 import {
@@ -112,7 +112,7 @@ export default function PatrioticEventCard({
             style={{ backgroundColor: RED }}
           >
             <Star className="h-3 w-3" />
-            July 4th
+            {patrioticCardTag(event)}
           </span>
           {isUpNext && (
             <span className="font-display inline-flex items-center rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">

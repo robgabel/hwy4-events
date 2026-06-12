@@ -51,7 +51,7 @@ export async function GrowthBriefing() {
 
   return (
     <>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Growth memo</h1>
+      <h1 style={{ color: "#1B3A2D", fontSize: 26, margin: "0 0 4px" }}>Growth memo</h1>
       <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
         Your weekly head-of-growth read. It tracks the North Star (returning locals + the
         newsletter), names the one move worth making this week, and drafts it. It proposes and
@@ -107,14 +107,14 @@ export async function GrowthBriefing() {
                 <article
                   style={{
                     background: "#fff",
-                    border: "1px solid #e8e4de",
-                    borderLeft: "4px solid #2d5016",
+                    border: "1px solid #E7E0D5",
+                    borderLeft: "4px solid #1B3A2D",
                     borderRadius: 12,
                     padding: 20,
                     marginBottom: 22,
                   }}
                 >
-                  <h3 style={{ color: "#2d5016", fontSize: 20, margin: "0 0 8px", fontWeight: 700 }}>
+                  <h3 style={{ color: "#1B3A2D", fontSize: 20, margin: "0 0 8px", fontWeight: 700 }}>
                     {digest.move_of_the_week.title}
                   </h3>
                   <p style={{ color: "#3a3a3a", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
@@ -130,7 +130,7 @@ export async function GrowthBriefing() {
                         marginTop: 12,
                       }}
                     >
-                      <p style={{ ...labelStyle, color: "#2d5016", margin: "0 0 2px" }}>Why this, why now</p>
+                      <p style={{ ...labelStyle, color: "#1B3A2D", margin: "0 0 2px" }}>Why this, why now</p>
                       <p style={{ color: "#3a3a3a", fontSize: 15, lineHeight: 1.5, margin: 0 }}>
                         {digest.move_of_the_week.why}
                       </p>
@@ -173,7 +173,7 @@ export async function GrowthBriefing() {
                   <SectionHeader>Ops footer</SectionHeader>
                   <CardList>
                     {digest.ops.map((item, i) => (
-                      <ItemCard key={i} item={item} accent="#e8e4de" />
+                      <ItemCard key={i} item={item} accent="#E7E0D5" />
                     ))}
                   </CardList>
                 </>
@@ -219,9 +219,9 @@ function VitalsStrip({ vitals }: { vitals: GrowthVitals }) {
       }}
     >
       {stats.map((s) => (
-        <div key={s.label} style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 10, padding: "12px 14px" }}>
+        <div key={s.label} style={{ background: "#fff", border: "1px solid #E7E0D5", borderRadius: 10, padding: "12px 14px" }}>
           <p style={{ ...labelStyle, margin: "0 0 4px" }}>{s.label}</p>
-          <p style={{ color: "#2d5016", fontSize: 24, fontWeight: 700, margin: 0 }}>{s.value}</p>
+          <p style={{ color: "#1B3A2D", fontSize: 24, fontWeight: 700, margin: 0 }}>{s.value}</p>
           {s.sub && <p style={{ color: "#8a7b66", fontSize: 12, margin: "2px 0 0" }}>{s.sub}</p>}
         </div>
       ))}
@@ -234,13 +234,13 @@ function ItemCard({ item, accent }: { item: DigestItem; accent: string }) {
     <article
       style={{
         background: "#fff",
-        border: "1px solid #e8e4de",
+        border: "1px solid #E7E0D5",
         borderLeft: `4px solid ${accent}`,
         borderRadius: 12,
         padding: 18,
       }}
     >
-      <h3 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 6px", fontWeight: 600 }}>{item.title}</h3>
+      <h3 style={{ color: "#1B3A2D", fontSize: 18, margin: "0 0 6px", fontWeight: 600 }}>{item.title}</h3>
       <p style={{ color: "#3a3a3a", fontSize: 16, lineHeight: 1.55, margin: 0 }}>{item.detail}</p>
     </article>
   );
@@ -248,7 +248,7 @@ function ItemCard({ item, accent }: { item: DigestItem; accent: string }) {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h2 style={{ color: "#2d5016", fontSize: 15, textTransform: "uppercase", letterSpacing: "0.06em", margin: "24px 0 12px" }}>
+    <h2 style={{ color: "#1B3A2D", fontSize: 15, textTransform: "uppercase", letterSpacing: "0.06em", margin: "24px 0 12px" }}>
       {children}
     </h2>
   );
@@ -261,7 +261,7 @@ function CardList({ children }: { children: React.ReactNode }) {
 function Banner({ tone, title, children }: { tone: "ok" | "error"; title: string; children: React.ReactNode }) {
   const bg = tone === "error" ? "#fef2f2" : "#f0f6ec";
   const border = tone === "error" ? "#fecaca" : "#d8e4d0";
-  const color = tone === "error" ? "#991b1b" : "#2d5016";
+  const color = tone === "error" ? "#991b1b" : "#1B3A2D";
   return (
     <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: 18, marginBottom: 12 }}>
       <p style={{ color, fontSize: 17, fontWeight: 600, margin: "0 0 4px" }}>{title}</p>
@@ -272,11 +272,11 @@ function Banner({ tone, title, children }: { tone: "ok" | "error"; title: string
 
 function EmptyState() {
   return (
-    <section style={{ background: "#fff", border: "1px solid #e8e4de", borderRadius: 12, padding: 32, textAlign: "center" }}>
-      <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>No memo yet.</p>
+    <section style={{ background: "#fff", border: "1px solid #E7E0D5", borderRadius: 12, padding: 32, textAlign: "center" }}>
+      <p style={{ color: "#1B3A2D", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>No memo yet.</p>
       <p style={{ color: "#666", fontSize: 16, margin: 0, lineHeight: 1.5 }}>
-        The growth memo runs weekly on Friday morning. Check back then, or trigger a run by hand to
-        see one now.
+        The growth memo runs weekly on Friday morning. Check back then, or use Run now (top right)
+        to generate one.
       </p>
     </section>
   );
@@ -285,7 +285,7 @@ function EmptyState() {
 const pillStyle = {
   display: "inline-block",
   background: "#eef4e9",
-  color: "#2d5016",
+  color: "#1B3A2D",
   fontSize: 12,
   fontWeight: 600,
   padding: "2px 8px",
@@ -294,7 +294,7 @@ const pillStyle = {
 
 const summaryCardStyle = {
   background: "#fff",
-  border: "1px solid #e8e4de",
+  border: "1px solid #E7E0D5",
   borderRadius: 12,
   padding: 20,
   marginBottom: 22,

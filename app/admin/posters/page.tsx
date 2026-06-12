@@ -145,7 +145,7 @@ function SubmissionCard({ sub, event }: { sub: Submission; event: EventRow | nul
             fontSize: 15,
             margin: "-4px 0 14px",
             padding: "8px 12px",
-            background: "#faf9f6",
+            background: "#FDF8F3",
             borderRadius: 8,
             borderLeft: "3px solid #d9d4cc",
           }}
@@ -221,8 +221,8 @@ function Poster({ label, src, highlight }: { label: string; src: string | null; 
         style={{
           borderRadius: 10,
           overflow: "hidden",
-          background: "#faf9f6",
-          border: highlight ? `2px solid ${INK}` : "1px solid #e8e4de",
+          background: "#FDF8F3",
+          border: highlight ? `2px solid ${INK}` : "1px solid #E7E0D5",
           aspectRatio: "4 / 5",
           display: "flex",
           alignItems: "center",

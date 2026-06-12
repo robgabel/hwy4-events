@@ -22,6 +22,17 @@ const FOURTH_FEATURE_EVENT_IDS = new Set<string>([
   "dddfef2b-df2d-43a8-89a6-2006bfcf20da", // Sierra Nevada Arts & Crafts Festival — Sat Jul 4 2026
 ]);
 
+// 2.5. AMERICA'S 250TH FEATURE — a patriotic feature that is NOT on the Fourth of
+//    July. The Hot Copper Car Show (Sat Jun 20 2026, Copperopolis Town Square)
+//    kicks off the summer of America's 250th, so it wears the Old Glory skin but
+//    with a "America's 250th" tag (not "July 4th") and its own "Red, White &
+//    Chrome" banner on its detail page. Same shape as a Fourth Feature: patriotic
+//    list card + a banner atop its OWN detail page (keeps the real poster/desc/
+//    map). Keyed by event id.
+const TWO_FIFTY_EVENT_IDS = new Set<string>([
+  "a658adc7-9311-4d25-99da-a59800e437a7", // Hot Copper Car Show — Sat Jun 20 2026
+]);
+
 // 3. ADOPT-A-PET DAY — a warm, dogs-and-cats skin: a pet-celebrating list card
 //    plus a banner atop its OWN detail page (it keeps its real shelter poster,
 //    description, and map). Keyed by event id so only this specific Saturday
@@ -44,13 +55,34 @@ export function isFourthFeatureEvent(event: Pick<Hwy4Event, "id">): boolean {
 }
 
 /**
- * Events that render the red/white/blue list card with the "July 4th" tag: the
- * parade plus any Fourth-of-July feature event.
+ * An America's-250th feature that is NOT on the Fourth of July (the Hot Copper
+ * Car Show, Jun 20). Gets the Old Glory banner on its OWN detail page with the
+ * bespoke "Red, White & Chrome" treatment, keeping its real poster/desc/map.
+ */
+export function isTwoFiftyEvent(event: Pick<Hwy4Event, "id">): boolean {
+  return TWO_FIFTY_EVENT_IDS.has(event.id);
+}
+
+/**
+ * Events that render the red/white/blue list card: the parade, any Fourth-of-July
+ * feature, and the America's-250th feature (which tags as "America's 250th"
+ * rather than "July 4th" — see patrioticCardTag).
  */
 export function isPatrioticCard(
   event: Pick<Hwy4Event, "org_slug" | "id">
 ): boolean {
-  return isParadeEvent(event) || isFourthFeatureEvent(event);
+  return (
+    isParadeEvent(event) || isFourthFeatureEvent(event) || isTwoFiftyEvent(event)
+  );
+}
+
+/**
+ * The pill label on a patriotic list card. Fourth-of-July events read "July 4th";
+ * the America's-250th feature (June, not the 4th) reads "America's 250th" so the
+ * card doesn't claim a date it isn't on.
+ */
+export function patrioticCardTag(event: Pick<Hwy4Event, "id">): string {
+  return isTwoFiftyEvent(event) ? "America's 250th" : "July 4th";
 }
 
 /**

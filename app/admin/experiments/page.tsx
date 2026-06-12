@@ -64,7 +64,7 @@ export default async function ExperimentsPage() {
     >
       {/* Log a new experiment */}
       <section style={cardStyle}>
-        <h2 style={{ color: "#2d5016", fontSize: 17, margin: "0 0 12px" }}>Log a new experiment</h2>
+        <h2 style={{ color: "#1B3A2D", fontSize: 17, margin: "0 0 12px" }}>Log a new experiment</h2>
         <form action={addExperiment} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Field label="Name (what changed)" name="name" placeholder="e.g. Newsletter signup on event detail pages" required />
           <Field label="Hypothesis (what you expect to move and why)" name="hypothesis" textarea placeholder="Adding the signup box to high-intent event pages lifts net adds because readers there already care." />
@@ -95,7 +95,7 @@ function ExperimentCard({ e }: { e: Experiment }) {
   return (
     <article style={{ ...cardStyle, borderLeft: `4px solid ${color}`, marginBottom: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <h3 style={{ color: "#2d5016", fontSize: 18, margin: 0, fontWeight: 600 }}>{e.name}</h3>
+        <h3 style={{ color: "#1B3A2D", fontSize: 18, margin: 0, fontWeight: 600 }}>{e.name}</h3>
         <span
           style={{
             flexShrink: 0,
@@ -208,7 +208,7 @@ function Empty() {
 
 const cardStyle = {
   background: "#fff",
-  border: "1px solid #e8e4de",
+  border: "1px solid #E7E0D5",
   borderRadius: 12,
   padding: 20,
   marginBottom: 12,
@@ -233,7 +233,7 @@ const textareaStyle = { ...inputStyle, resize: "vertical" as const, width: "100%
 const selectStyle = { ...inputStyle, cursor: "pointer" };
 const primaryBtn = {
   cursor: "pointer",
-  background: "#2d5016",
+  background: "#1B3A2D",
   color: "#fff",
   border: "none",
   borderRadius: 8,
@@ -244,8 +244,8 @@ const primaryBtn = {
 const secondaryBtn = {
   cursor: "pointer",
   background: "#fff",
-  color: "#2d5016",
-  border: "1px solid #2d5016",
+  color: "#1B3A2D",
+  border: "1px solid #1B3A2D",
   borderRadius: 8,
   padding: "7px 14px",
   fontSize: 14,

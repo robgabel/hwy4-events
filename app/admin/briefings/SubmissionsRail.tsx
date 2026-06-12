@@ -24,7 +24,7 @@ type PendingSub = {
 };
 
 const VERDICT: Record<string, { label: string; fg: string; bg: string; border: string }> = {
-  publish_new: { label: "Publish as new", fg: "#2d5016", bg: "#eaf7ea", border: "#b7e0b7" },
+  publish_new: { label: "Publish as new", fg: "#1B3A2D", bg: "#eaf7ea", border: "#b7e0b7" },
   duplicate: { label: "Already on the site", fg: "#4b5563", bg: "#f3f4f6", border: "#d8dce2" },
   duplicate_needs_update: { label: "Duplicate, adds info", fg: "#92400e", bg: "#fff7ed", border: "#fde4c8" },
   reject: { label: "Recommend passing", fg: "#922b21", bg: "#fdecea", border: "#f5b7b1" },
@@ -104,7 +104,7 @@ function SubRow({ sub }: { sub: PendingSub }) {
     <article
       style={{
         background: "#fff",
-        border: "1px solid #e8e4de",
+        border: "1px solid #E7E0D5",
         borderLeft: `4px solid ${v ? v.border : "#d8dce2"}`,
         borderRadius: 12,
         padding: "14px 16px",

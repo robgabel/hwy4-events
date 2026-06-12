@@ -124,7 +124,43 @@ export const CATEGORY_ICONS: Record<EventCategory, string> = {
   other: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
 };
 
-export interface CollapsedEvent extends Hwy4Event {
+/**
+ * The subset of event fields the homepage/list render path actually reads
+ * (EventList filtering + collapse, EventCard, and the bespoke card variants).
+ * The full `Hwy4Event` also carries scrape-provenance and audit columns
+ * (address, event_url, source_event_id, last_scraped_at, updated_at, …) that no
+ * card renders. The homepage ships the entire upcoming set (~1,000 rows) into
+ * the document for client-side filtering, so projecting to this shape (see
+ * `toListEvents` in lib/events-data.ts) keeps the per-row payload to only what's
+ * displayed. `CollapsedEvent` extends this, so the type checker proves no card
+ * consumer reaches for a dropped field. Full rows still feed JSON-LD and the
+ * detail page.
+ */
+export type EventListItem = Pick<
+  Hwy4Event,
+  | "id"
+  | "name"
+  | "description"
+  | "date"
+  | "start_time"
+  | "end_time"
+  | "venue_name"
+  | "town"
+  | "category"
+  | "artists"
+  | "status"
+  | "price"
+  | "cost_tier"
+  | "image_url"
+  | "visibility"
+  | "org_slug"
+  | "robs_pick"
+  | "is_weekly"
+  | "verification_status"
+  | "community_sourced"
+>;
+
+export interface CollapsedEvent extends EventListItem {
   endDate?: string;
   dayCount?: number;
   isCollapsed?: boolean;

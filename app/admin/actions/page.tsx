@@ -68,7 +68,7 @@ function policyStats(actions: AgentActionRow[], type: string) {
 const STATUS: Record<string, { label: string; bg: string; fg: string }> = {
   proposed: { label: "proposed", bg: "#fff7ed", fg: "#92400e" },
   approved: { label: "approved", bg: "#eef2ff", fg: "#3730a3" },
-  executed: { label: "executed", bg: "#eaf7ea", fg: "#2d5016" },
+  executed: { label: "executed", bg: "#eaf7ea", fg: "#1B3A2D" },
   rejected: { label: "rejected", bg: "#f3f4f6", fg: "#4b5563" },
   reverted: { label: "reverted", bg: "#f3f4f6", fg: "#4b5563" },
   failed: { label: "failed", bg: "#fdecea", fg: "#922b21" },
@@ -179,8 +179,8 @@ function PolicyPanel({
             <article
               style={{
                 background: "#fff",
-                border: "1px solid #e8e4de",
-                borderLeft: `4px solid ${pol.auto_execute ? "#2d5016" : "#d9d4cc"}`,
+                border: "1px solid #E7E0D5",
+                borderLeft: `4px solid ${pol.auto_execute ? "#1B3A2D" : "#d9d4cc"}`,
                 borderRadius: 12,
                 padding: "14px 16px",
                 display: "flex",
@@ -199,7 +199,7 @@ function PolicyPanel({
                       fontWeight: 700,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
-                      color: pol.auto_execute ? "#2d5016" : "#4b5563",
+                      color: pol.auto_execute ? "#1B3A2D" : "#4b5563",
                       background: pol.auto_execute ? "#eaf7ea" : "#f3f4f6",
                       border: `1px solid ${pol.auto_execute ? "#b7e0b7" : "#d8dce2"}`,
                       padding: "2px 8px",
@@ -251,7 +251,7 @@ function Badges({ action }: { action: AgentActionRow }) {
   );
   return (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-      {pill(action.type, "#eef2e9", "#2d5016")}
+      {pill(action.type, "#eef2e9", "#1B3A2D")}
       {pill(`blast: ${action.blast_radius}`, "#f3f4f6", "#4b5563")}
       {pill(action.reversible ? "reversible" : "irreversible", "#f3f4f6", "#4b5563")}
       {pill(action.outward_facing ? "outward" : "internal", "#f3f4f6", "#4b5563")}
@@ -278,7 +278,7 @@ function ProposedCard({ action }: { action: AgentActionRow }) {
   };
   const research = p.research;
   const confColor =
-    research?.confidence === "high" ? "#2d5016" : research?.confidence === "medium" ? "#92400e" : "#922b21";
+    research?.confidence === "high" ? "#1B3A2D" : research?.confidence === "medium" ? "#92400e" : "#922b21";
 
   return (
     <QueueCard>
@@ -381,7 +381,7 @@ function ProposedCard({ action }: { action: AgentActionRow }) {
         // Generic fallback for other action types (none staged by the proposer yet).
         <form action={approveAction} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input type="hidden" name="id" value={action.id} />
-          <pre style={{ flex: 1, minWidth: 240, fontSize: 12, color: "#555", background: "#faf9f6", padding: 10, borderRadius: 8, overflow: "auto", margin: 0 }}>
+          <pre style={{ flex: 1, minWidth: 240, fontSize: 12, color: "#555", background: "#FDF8F3", padding: 10, borderRadius: 8, overflow: "auto", margin: 0 }}>
             {JSON.stringify(action.payload, null, 2)}
           </pre>
           <button type="submit" style={adminBtn.primary}>
@@ -403,7 +403,7 @@ function DecidedRow({ action }: { action: AgentActionRow }) {
     <article
       style={{
         background: "#fff",
-        border: "1px solid #e8e4de",
+        border: "1px solid #E7E0D5",
         borderRadius: 12,
         padding: "12px 16px",
         display: "flex",

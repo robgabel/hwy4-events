@@ -47,6 +47,14 @@ const MANUAL_VENUE_PATTERNS: readonly string[] = [
   // re-listing them with wrong/flattened dates over the curated rows. Matches the
   // venue_name ("Murphys Senior Center") on every variant.
   "murphys senior center",
+  // The Lake Tulloch Lions Club's annual Hot Copper Car Show (Copperopolis Town
+  // Square) is a hand-curated marquee pick: a Rob's Pick + America's-250th feature.
+  // GoCalaveras lists it with a doubled title ("Hot Copper Car Show Show", slug
+  // hot-copper-car-show-show) and a 23:50 placeholder end time, both of which we
+  // correct by hand (the poster says 8 AM–3 PM). Blocklisting freezes those fixes
+  // so a re-scrape can't revert them. Matches the event name ("Hot Copper Car
+  // Show") regardless of the source's doubling.
+  "hot copper car show",
 ];
 
 export interface MatchableEvent {

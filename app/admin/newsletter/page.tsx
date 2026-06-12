@@ -1,4 +1,5 @@
 import { getAdminClientOrNull } from "@/lib/admin/db";
+import { readFlash } from "@/lib/admin/flash";
 import { saveDraft, vetoDraft, unvetoDraft, regenerateDraft } from "./actions";
 import { addNote, updateNote, deleteNote } from "./note-actions";
 
@@ -91,8 +92,7 @@ export default async function NewsletterDraftAdminPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const errorMsg = typeof params.error === "string" ? params.error : null;
-  const flash = typeof params.flash === "string" ? params.flash : null;
+  const { error: errorMsg, flash } = readFlash(params);
 
   const [drafts, notes] = await Promise.all([loadDrafts(), loadNotes()]);
   // The current draft is the most recent one that's still actionable (not yet
@@ -116,7 +116,7 @@ export default async function NewsletterDraftAdminPage({
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>
+      <h1 style={{ color: "#1B3A2D", fontSize: 26, margin: "0 0 4px" }}>
         Weekly Newsletter — Draft &amp; Approve
       </h1>
       <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px" }}>
@@ -230,14 +230,14 @@ export default async function NewsletterDraftAdminPage({
 
       {history.length > 0 && (
         <section style={{ marginTop: 8, marginBottom: 32 }}>
-          <h2 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 12px" }}>Recent</h2>
+          <h2 style={{ color: "#1B3A2D", fontSize: 18, margin: "0 0 12px" }}>Recent</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {history.map((d) => (
               <div
                 key={d.id}
                 style={{
                   background: "white",
-                  border: "1px solid #e8e4de",
+                  border: "1px solid #E7E0D5",
                   borderRadius: 10,
                   padding: "12px 16px",
                   display: "flex",
@@ -259,8 +259,8 @@ export default async function NewsletterDraftAdminPage({
       )}
 
       {/* "From Rob" note scheduling (folded in from the old /admin/newsletter-note). */}
-      <hr style={{ border: "none", borderTop: "1px solid #e8e4de", margin: "8px 0 28px" }} />
-      <h2 style={{ color: "#2d5016", fontSize: 22, margin: "0 0 4px" }}>&ldquo;From Rob&rdquo; note</h2>
+      <hr style={{ border: "none", borderTop: "1px solid #E7E0D5", margin: "8px 0 28px" }} />
+      <h2 style={{ color: "#1B3A2D", fontSize: 22, margin: "0 0 4px" }}>&ldquo;From Rob&rdquo; note</h2>
       <p style={{ color: "#666", fontSize: 16, margin: "0 0 20px" }}>
         Schedule personal notes for the block at the top of the weekly email. Each note has a date
         window; windows cannot overlap. If no note is active on send day, the email ships the default.
@@ -270,7 +270,7 @@ export default async function NewsletterDraftAdminPage({
       <section
         style={{
           background: activeNote ? "#f4efe6" : "#fff",
-          border: `1px solid ${activeNote ? "#e0d9cb" : "#e8e4de"}`,
+          border: `1px solid ${activeNote ? "#e0d9cb" : "#E7E0D5"}`,
           borderRadius: 12,
           padding: 20,
           marginBottom: 24,
@@ -278,7 +278,7 @@ export default async function NewsletterDraftAdminPage({
       >
         <p
           style={{
-            color: "#2d5016",
+            color: "#1B3A2D",
             fontSize: 13,
             fontWeight: 600,
             letterSpacing: "0.08em",
@@ -310,7 +310,7 @@ export default async function NewsletterDraftAdminPage({
 
       {/* Add new note */}
       <section style={cardStyle}>
-        <h3 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 12px" }}>Schedule a new note</h3>
+        <h3 style={{ color: "#1B3A2D", fontSize: 18, margin: "0 0 12px" }}>Schedule a new note</h3>
         <form action={addNote}>
           <NoteFields defaultStart={defaultStart} defaultEnd={defaultEnd} />
           <div style={{ marginTop: 12 }}>
@@ -323,7 +323,7 @@ export default async function NewsletterDraftAdminPage({
 
       {/* Existing notes list */}
       <section>
-        <h3 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 12px" }}>
+        <h3 style={{ color: "#1B3A2D", fontSize: 18, margin: "0 0 12px" }}>
           All scheduled notes <span style={{ color: "#999", fontWeight: 400 }}>({notes.length})</span>
         </h3>
         {notes.length === 0 ? (
@@ -342,9 +342,9 @@ export default async function NewsletterDraftAdminPage({
 
 function StatusTag({ status }: { status: Draft["status"] }) {
   const palette: Record<Draft["status"], { bg: string; fg: string }> = {
-    pending: { bg: "#2d5016", fg: "#fff" },
+    pending: { bg: "#1B3A2D", fg: "#fff" },
     vetoed: { bg: "#fdecea", fg: "#922b21" },
-    sent: { bg: "#e8e4de", fg: "#666" },
+    sent: { bg: "#E7E0D5", fg: "#666" },
     canceled: { bg: "#f0ebe2", fg: "#999" },
   };
   const label: Record<Draft["status"], string> = {
@@ -383,12 +383,12 @@ function NoteRow({ note, today }: { note: Note; today: string }) {
     borderRadius: 4,
     display: "inline-block",
     marginRight: 8,
-    background: cls === "active" ? "#2d5016" : cls === "upcoming" ? "#e8e4de" : "#f0ebe2",
+    background: cls === "active" ? "#1B3A2D" : cls === "upcoming" ? "#E7E0D5" : "#f0ebe2",
     color: cls === "active" ? "#fff" : "#666",
   };
 
   return (
-    <div style={{ background: "white", border: "1px solid #e8e4de", borderRadius: 10, padding: 16 }}>
+    <div style={{ background: "white", border: "1px solid #E7E0D5", borderRadius: 10, padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
         <span style={tagStyle}>{cls}</span>
         <span style={{ color: "#666", fontSize: 15 }}>
@@ -454,7 +454,7 @@ function Banner({ kind, children }: { kind: "ok" | "error"; children: React.Reac
       style={{
         background: ok ? "#eaf7ea" : "#fdecea",
         border: `1px solid ${ok ? "#b7e0b7" : "#f5b7b1"}`,
-        color: ok ? "#2d5016" : "#922b21",
+        color: ok ? "#1B3A2D" : "#922b21",
         padding: "12px 16px",
         borderRadius: 8,
         fontSize: 16,
@@ -468,7 +468,7 @@ function Banner({ kind, children }: { kind: "ok" | "error"; children: React.Reac
 
 const cardStyle: React.CSSProperties = {
   background: "white",
-  border: "1px solid #e8e4de",
+  border: "1px solid #E7E0D5",
   borderRadius: 12,
   padding: 20,
   marginBottom: 24,
@@ -503,7 +503,7 @@ const textareaStyle: React.CSSProperties = {
 
 const primaryBtnStyle: React.CSSProperties = {
   padding: "10px 18px",
-  background: "#2d5016",
+  background: "#1B3A2D",
   color: "#fff",
   border: "none",
   borderRadius: 8,
@@ -514,9 +514,9 @@ const primaryBtnStyle: React.CSSProperties = {
 
 const secondaryBtnStyle: React.CSSProperties = {
   padding: "10px 18px",
-  background: "#faf9f6",
-  color: "#2d5016",
-  border: "1px solid #2d5016",
+  background: "#FDF8F3",
+  color: "#1B3A2D",
+  border: "1px solid #1B3A2D",
   borderRadius: 8,
   fontSize: 16,
   fontWeight: 500,

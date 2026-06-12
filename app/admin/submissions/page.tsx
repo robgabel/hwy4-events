@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClientOrNull } from "@/lib/admin/db";
 import { TOWNS, CATEGORY_LABELS, type EventCategory } from "@/lib/types";
 import { classifyEventCategory } from "@/lib/categorize";
 import { generateEventSlug } from "@/lib/slugs";
@@ -12,6 +12,7 @@ import {
   draftReplyForReviewed,
 } from "./actions";
 import { gmailComposeUrl, type SubmissionReply } from "@/lib/agent/submission-reply";
+import { readFlash } from "@/lib/admin/flash";
 
 export const dynamic = "force-dynamic";
 // The "Re-analyze" server action runs web search + the model inline; give its
@@ -52,6 +53,7 @@ type Submission = {
   description: string | null;
   category: string | null;
   event_url: string | null;
+  poster_url: string | null;
   submitter_name: string | null;
   submitter_email: string | null;
   created_at: string;
@@ -90,14 +92,12 @@ type ReviewedSubmission = {
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EventCategory[];
 
 async function loadData(): Promise<{ submissions: Submission[]; matched: Map<string, MatchedEvent> }> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return { submissions: [], matched: new Map() };
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return { submissions: [], matched: new Map() };
   const { data } = await supabase
     .from("event_submissions")
     .select(
-      "id, event_name, event_date, start_time, venue_name, town, description, category, event_url, submitter_name, submitter_email, created_at, ai_verdict, ai_confidence, ai_headline, ai_matched_event_id, ai_analysis, ai_analyzed_at, ai_error, ai_reply"
+      "id, event_name, event_date, start_time, venue_name, town, description, category, event_url, poster_url, submitter_name, submitter_email, created_at, ai_verdict, ai_confidence, ai_headline, ai_matched_event_id, ai_analysis, ai_analyzed_at, ai_error, ai_reply"
     )
     .eq("status", "pending")
     .order("event_date", { ascending: true });
@@ -116,10 +116,8 @@ async function loadData(): Promise<{ submissions: Submission[]; matched: Map<str
 }
 
 async function loadReplied(id: string): Promise<RepliedSubmission | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return null;
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return null;
   const { data } = await supabase
     .from("event_submissions")
     .select("event_name, submitter_name, ai_reply")
@@ -129,10 +127,8 @@ async function loadReplied(id: string): Promise<RepliedSubmission | null> {
 }
 
 async function loadRecentlyReviewed(): Promise<ReviewedSubmission[]> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return [];
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
   const { data } = await supabase
     .from("event_submissions")
     .select("id, event_name, status, submitter_name, submitter_email, ai_reply")
@@ -161,8 +157,7 @@ export default async function SubmissionsAdminPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const errorMsg = typeof params.error === "string" ? params.error : null;
-  const flash = typeof params.flash === "string" ? params.flash : null;
+  const { error: errorMsg, flash } = readFlash(params);
   const repliedId = typeof params.replied === "string" ? params.replied : null;
   const { submissions, matched } = await loadData();
   const [repliedSub, reviewed] = await Promise.all([
@@ -173,7 +168,7 @@ export default async function SubmissionsAdminPage({
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto" }}>
-      <h1 style={{ color: "#2d5016", fontSize: 26, margin: "0 0 4px" }}>Community submissions</h1>
+      <h1 style={{ color: "#1B3A2D", fontSize: 26, margin: "0 0 4px" }}>Community submissions</h1>
       <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
         Events neighbors sent in through the submit form. The agent researches each one (checks the
         database for a match, searches the web for the organizer), then gives you a recommendation.
@@ -184,7 +179,7 @@ export default async function SubmissionsAdminPage({
       {flash && <Banner tone="ok">{flash}</Banner>}
 
       {repliedSub?.ai_reply && (
-        <div style={{ marginBottom: 20, border: "2px solid #2d5016", borderRadius: 12, padding: 4 }}>
+        <div style={{ marginBottom: 20, border: "2px solid #1B3A2D", borderRadius: 12, padding: 4 }}>
           <ReplyPanel
             reply={repliedSub.ai_reply}
             heading={`✉ Email the submitter${repliedSub.submitter_name ? ` (${repliedSub.submitter_name})` : ""}`}
@@ -209,7 +204,7 @@ export default async function SubmissionsAdminPage({
 
       {reviewed.length > 0 && (
         <section style={{ marginTop: 36 }}>
-          <h2 style={{ color: "#2d5016", fontSize: 18, margin: "0 0 4px" }}>Recently reviewed</h2>
+          <h2 style={{ color: "#1B3A2D", fontSize: 18, margin: "0 0 4px" }}>Recently reviewed</h2>
           <p style={{ color: "#777", fontSize: 14, margin: "0 0 14px", lineHeight: 1.5 }}>
             Published or dismissed submissions. Draft or re-open the reply to the submitter here, any
             time.
@@ -232,7 +227,7 @@ function ReviewedRow({ sub }: { sub: ReviewedSubmission }) {
     <article
       style={{
         background: "#fff",
-        border: "1px solid #e8e4de",
+        border: "1px solid #E7E0D5",
         borderRadius: 12,
         padding: 16,
       }}
@@ -247,11 +242,11 @@ function ReviewedRow({ sub }: { sub: ReviewedSubmission }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <strong style={{ color: "#2d5016", fontSize: 16 }}>{sub.event_name}</strong>
+          <strong style={{ color: "#1B3A2D", fontSize: 16 }}>{sub.event_name}</strong>
           <span
             style={{
               background: isApproved ? "#eaf7ea" : "#f3f4f6",
-              color: isApproved ? "#2d5016" : "#6b7280",
+              color: isApproved ? "#1B3A2D" : "#6b7280",
               fontSize: 12,
               fontWeight: 700,
               padding: "2px 8px",
@@ -293,10 +288,10 @@ const VERDICT_STYLES: Record<
 > = {
   publish_new: {
     label: "Publish as new",
-    fg: "#2d5016",
+    fg: "#1B3A2D",
     bg: "#eaf7ea",
     border: "#b7e0b7",
-    accent: "#2d5016",
+    accent: "#1B3A2D",
   },
   duplicate: {
     label: "Already on the site",
@@ -310,7 +305,7 @@ const VERDICT_STYLES: Record<
     fg: "#92400e",
     bg: "#fff7ed",
     border: "#fde4c8",
-    accent: "#d97706",
+    accent: "#C4922A",
   },
   reject: {
     label: "Recommend passing",
@@ -534,14 +529,14 @@ function SubmissionCard({
     <article
       style={{
         background: "#fff",
-        border: "1px solid #e8e4de",
-        borderLeft: `4px solid ${isPast ? "#922b21" : "#d97706"}`,
+        border: "1px solid #E7E0D5",
+        borderLeft: `4px solid ${isPast ? "#922b21" : "#C4922A"}`,
         borderRadius: 12,
         padding: 20,
       }}
     >
       <header style={{ marginBottom: 14 }}>
-        <h2 style={{ color: "#2d5016", fontSize: 19, margin: "0 0 4px", fontWeight: 600 }}>
+        <h2 style={{ color: "#1B3A2D", fontSize: 19, margin: "0 0 4px", fontWeight: 600 }}>
           {sub.event_name}
         </h2>
         <p style={{ color: "#666", fontSize: 15, margin: 0 }}>
@@ -568,6 +563,33 @@ function SubmissionCard({
       </header>
 
       <AIVerdictBanner sub={sub} matched={matched} />
+
+      {sub.poster_url && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ ...miniLabel, color: "#888", margin: "0 0 6px" }}>
+            Flyer the submitter attached
+          </p>
+          <a href={sub.poster_url} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={sub.poster_url}
+              alt={`Flyer for ${sub.event_name}`}
+              style={{
+                maxWidth: 280,
+                maxHeight: 360,
+                width: "auto",
+                height: "auto",
+                borderRadius: 10,
+                border: "1px solid #E7E0D5",
+                display: "block",
+              }}
+            />
+          </a>
+          <p style={{ fontSize: 13, color: "#777", margin: "6px 0 0" }}>
+            Publishing below will use this as the event&rsquo;s poster (pinned).
+          </p>
+        </div>
+      )}
 
       {sub.submitter_email && (
         <div style={{ marginBottom: 14 }}>
@@ -604,11 +626,14 @@ function SubmissionCard({
       )}
 
       <details style={{ marginBottom: 4 }} open={!showMerge}>
-        <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#2d5016", marginBottom: 10 }}>
+        <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#1B3A2D", marginBottom: 10 }}>
           {showMerge ? "Or publish as a separate new event" : "Review & publish"}
         </summary>
         <form action={publishSubmission}>
           <input type="hidden" name="id" value={sub.id} />
+          {sub.poster_url && (
+            <input type="hidden" name="image_url" value={sub.poster_url} />
+          )}
           <div
             style={{
               display: "grid",
@@ -750,7 +775,7 @@ function SelectField({
 function Banner({ tone, children }: { tone: "ok" | "error"; children: React.ReactNode }) {
   const s =
     tone === "ok"
-      ? { background: "#eaf7ea", border: "1px solid #b7e0b7", color: "#2d5016" }
+      ? { background: "#eaf7ea", border: "1px solid #b7e0b7", color: "#1B3A2D" }
       : { background: "#fdecea", border: "1px solid #f5b7b1", color: "#922b21" };
   return (
     <div style={{ ...s, padding: "12px 16px", borderRadius: 8, fontSize: 16, marginBottom: 16 }}>
@@ -776,7 +801,7 @@ function ReplyPanel({ reply, heading }: { reply: SubmissionReply; heading: strin
           marginBottom: 10,
         }}
       >
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#2d5016" }}>{heading}</p>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#1B3A2D" }}>{heading}</p>
         <a href={href} target="_blank" rel="noreferrer" style={gmailBtn}>
           Open in Gmail ↗
         </a>
@@ -798,13 +823,13 @@ function EmptyState() {
     <section
       style={{
         background: "#fff",
-        border: "1px solid #e8e4de",
+        border: "1px solid #E7E0D5",
         borderRadius: 12,
         padding: 32,
         textAlign: "center",
       }}
     >
-      <p style={{ color: "#2d5016", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
+      <p style={{ color: "#1B3A2D", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
         No pending submissions.
       </p>
       <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
@@ -846,7 +871,7 @@ const textareaStyle: React.CSSProperties = {
 };
 const primaryBtn: React.CSSProperties = {
   padding: "10px 18px",
-  background: "#2d5016",
+  background: "#1B3A2D",
   color: "#fff",
   border: "none",
   borderRadius: 8,
@@ -856,7 +881,7 @@ const primaryBtn: React.CSSProperties = {
 };
 const mergeBtn: React.CSSProperties = {
   padding: "10px 18px",
-  background: "#d97706",
+  background: "#C4922A",
   color: "#fff",
   border: "none",
   borderRadius: 8,
@@ -893,7 +918,7 @@ const replyPanelStyle: React.CSSProperties = {
 const gmailBtn: React.CSSProperties = {
   display: "inline-block",
   padding: "8px 14px",
-  background: "#2d5016",
+  background: "#1B3A2D",
   color: "#fff",
   borderRadius: 8,
   fontSize: 14,

@@ -83,6 +83,55 @@ function findRegisteredAddress(venueName: string | null | undefined): string | n
  * Also: if venue_name *itself* is a street address and event.address is null,
  * swap them (recover from scrapers that crossed wires).
  */
+// Placeholder end times that aggregators emit when an organizer leaves the end
+// blank, but which look like a real value on the card. GoCalaveras runs EventON,
+// which stamps 23:50 (11:50 PM); a genuine event ending at exactly 11:50 PM is
+// essentially nonexistent, so we treat it as "no end time" at the write boundary
+// (covering EVERY source/write path, not just GoCalaveras).
+const PLACEHOLDER_END_TIMES = new Set(["23:50", "23:50:00"]);
+
+// "HH:MM" / "HH:MM:SS" -> minutes since midnight, or null if unparseable.
+function timeToMinutes(t: string | null): number | null {
+  if (!t) return null;
+  const m = /^(\d{1,2}):(\d{2})/.exec(t);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+function minutesToTime(mins: number): string {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+export function normalizeEventTimes(event: ExtractedEvent): void {
+  if (event.end_time && PLACEHOLDER_END_TIMES.has(event.end_time)) {
+    event.end_time = null;
+  }
+
+  // Dropped-PM recovery. Aggregators (e.g. GoCalaveras/EventON) sometimes store
+  // a "5:00 PM" end as 05:00 because the organizer omitted the meridiem, which
+  // renders as an impossible "11 AM – 5 AM" window. Correct ONLY the unambiguous
+  // signature: a daytime start (08:00–16:00) paired with a small-hours end
+  // (00:01–07:00) — i.e. an event that appears to end before it starts. Add 12h.
+  // Genuine evening/overnight events start after ~6 PM, so they never match.
+  const startMin = timeToMinutes(event.start_time);
+  const endMin = timeToMinutes(event.end_time);
+  if (
+    startMin !== null &&
+    endMin !== null &&
+    startMin >= 8 * 60 &&
+    startMin <= 16 * 60 &&
+    endMin >= 1 &&
+    endMin <= 7 * 60
+  ) {
+    event.end_time = minutesToTime(endMin + 12 * 60);
+  }
+}
+
 export function normalizeEventLocation(event: ExtractedEvent): void {
   // Address-in-venue-name recovery
   if (!event.address && looksLikeStreetAddress(event.venue_name)) {
@@ -308,6 +357,7 @@ async function upsertEventsBatched(
 
   // Pre-pass: normalize + emit quality signals + compute dedup keys
   const prepared = events.map((event) => {
+    normalizeEventTimes(event);
     normalizeEventLocation(event);
     emitDataQualitySignal(event, sourceName, orgSlug);
     return {
@@ -560,6 +610,7 @@ export async function upsertEvents(
     // Normalize location fields before keying / writing — recovers from
     // scrapers that crossed venue_name with address, and back-fills address
     // from the venue registry where possible.
+    normalizeEventTimes(event);
     normalizeEventLocation(event);
 
     // Last-chance data-quality signal: anything still generic / address-less
