@@ -82,6 +82,19 @@ function findRegisteredAddress(venueName: string | null | undefined): string | n
  * Also: if venue_name *itself* is a street address and event.address is null,
  * swap them (recover from scrapers that crossed wires).
  */
+// Placeholder end times that aggregators emit when an organizer leaves the end
+// blank, but which look like a real value on the card. GoCalaveras runs EventON,
+// which stamps 23:50 (11:50 PM); a genuine event ending at exactly 11:50 PM is
+// essentially nonexistent, so we treat it as "no end time" at the write boundary
+// (covering EVERY source/write path, not just GoCalaveras).
+const PLACEHOLDER_END_TIMES = new Set(["23:50", "23:50:00"]);
+
+export function normalizeEventTimes(event: ExtractedEvent): void {
+  if (event.end_time && PLACEHOLDER_END_TIMES.has(event.end_time)) {
+    event.end_time = null;
+  }
+}
+
 export function normalizeEventLocation(event: ExtractedEvent): void {
   // Address-in-venue-name recovery
   if (!event.address && looksLikeStreetAddress(event.venue_name)) {
@@ -300,6 +313,7 @@ async function upsertEventsBatched(
 
   // Pre-pass: normalize + emit quality signals + compute dedup keys
   const prepared = events.map((event) => {
+    normalizeEventTimes(event);
     normalizeEventLocation(event);
     emitDataQualitySignal(event, sourceName, orgSlug);
     return {
@@ -552,6 +566,7 @@ export async function upsertEvents(
     // Normalize location fields before keying / writing — recovers from
     // scrapers that crossed venue_name with address, and back-fills address
     // from the venue registry where possible.
+    normalizeEventTimes(event);
     normalizeEventLocation(event);
 
     // Last-chance data-quality signal: anything still generic / address-less
