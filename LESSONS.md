@@ -5,6 +5,28 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-06-12 — Hand-adding a multi-session weekly venue from a flyer (Make and parTake, Arnold)
+
+### Modeling a flyer that lists several weekly series
+
+- **Several weekday programs → one seed script, one `expandWeekly` *per* series.** The flyer lists distinct programs per day (Wed "All Day with JJ" $25, Fri FunDay $30, Sat 2:30, Sun 2:00), each with its own name/time/price/description. Model as an array of `Series` and `flatMap(s => expandWeekly([s.day], START, END))`, not one shared multi-day list — a multi-day `expandWeekly` is only correct when the occurrences are the *same* event on different days (e.g. Big Trees "daily except Tuesday").
+- **Two sessions on the same day → one row spanning both, the breakdown in the prose.** Wednesday runs a morning (9–11:30) and a separate advanced afternoon (1–2:30). Two rows = two cards, same venue same day; collapsed to one 9:00–14:30 "All Day" row and spelled the two blocks out in the description. (Split only if they're genuinely separate ticketed events.)
+- **`fine_arts` is the slug for craft/maker classes** (pottery/painting/drawing per CLAUDE.md's category rule) — stored as the DB slug, not the "Fine Arts" display name.
+
+### Honesty about what the flyer doesn't say
+
+- **The flyer gave no summer start/end — that's an assumption, so surface it, don't bury it.** Picked 2026-06-12 … 2026-08-31, but every description ends with "call (209) 916-5675 to register or confirm dates," the rows are `description_locked` + `price_locked` so nothing auto-rewrites the hedge, and the caveat sits in the script header. Same discipline as the Arnold Library Storytime "call ahead" note. Re-seed (bump `END`) to extend.
+- **Don't invent a fee the flyer omits.** Wed/Fri carry printed prices ($25/$30); Sat/Sun don't, so `price` stays null (cost_tier `paid` — plainly a paid studio, but no amount shown). Mirrors extract-prices' "never guess an amount" rule.
+
+### Reuse / drift
+
+- **`upsert(rows, { onConflict: 'dedup_key' })` is the clean idempotent path** — updates in place on re-run, no pre-select needed (the older Storytime seeder's select-then-insert-only-new shape is clunkier). Relies on the unique constraint on `dedup_key` (present).
+- **Minor smell to fix later: this script re-hashes the dedup_key inline** (`createHash` over `normalizeName|date|normalizeTown`) instead of importing the shared `generateDedupKey`. It matches today but is a second copy that can silently drift from `lib/event-identity.ts`. Prefer the import (the Storytime seeder does).
+
+### Process
+
+- **Verify the work landed before claiming done — and before writing the lesson.** This session got confused across a context-summary boundary: I saw an MCP approval prompt and wrongly declared "task already complete," then over-corrected the next turn and wrongly declared it *not* done. Ground truth was two cheap checks I should have led with: `git log`/`git status` (commit `302abd1`, pushed) and a one-line `count(*) … GROUP BY name` on the DB (47 rows, Jun 12–Aug 30). Read state; don't narrate from memory of what you think you did.
+
 ## 2026-06-10 — Hand-adding an event + its poster from a flyer (Arnold Library tech class)
 
 ### Data
