@@ -240,6 +240,13 @@ function fmtDay(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Compact "6/11" for per-bar x-axis labels (stays legible where the full month
+// name wouldn't fit under 14 columns).
+function shortDay(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 async function loadNewsletterStats(): Promise<NewsletterStats | null> {
   const supabase = getAdminClientOrNull();
   if (!supabase) return null;
@@ -284,7 +291,6 @@ export default async function GrowthPage() {
   const lastSynced = rows.map((r) => r.synced_at).filter(Boolean).sort().at(-1);
 
   const trend = rows.slice(0, TREND_DAYS).reverse(); // chronological
-  const trendMax = Math.max(1, ...trend.map((r) => r.pageviews));
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto" }}>
@@ -317,32 +323,8 @@ export default async function GrowthPage() {
             ]}
           />
 
-          <SectionHeader>Daily pageviews · last {TREND_DAYS} days</SectionHeader>
-          <section style={cardStyle}>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 120 }}>
-              {trend.map((r) => (
-                <div
-                  key={r.date}
-                  title={`${fmtDay(r.date)}: ${nf(r.pageviews)} pageviews, ${nf(r.visits)} visits`}
-                  style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}
-                >
-                  <div
-                    style={{
-                      height: `${Math.round((r.pageviews / trendMax) * 100)}%`,
-                      minHeight: r.pageviews > 0 ? 3 : 0,
-                      background: "#1B3A2D",
-                      borderRadius: "3px 3px 0 0",
-                      opacity: r.pageviews > 0 ? 1 : 0.15,
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-              <span style={axisStyle}>{trend.length ? fmtDay(trend[0].date) : ""}</span>
-              <span style={axisStyle}>{trend.length ? fmtDay(trend[trend.length - 1].date) : ""}</span>
-            </div>
-          </section>
+          <SectionHeader>Visitors per day · last {TREND_DAYS} days</SectionHeader>
+          <DailyTrafficChart rows={trend} />
 
           <SectionHeader>Answer-engine referrals · 30d</SectionHeader>
           <section style={cardStyle}>
@@ -447,6 +429,91 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
+// Daily visitors (Cloudflare "visits" ≈ unique sessions) as the hero bars, with
+// the count printed above each so the numbers are readable without a tooltip
+// (the old chart was bars-only with a flaky native title). Pageviews ride along
+// as a pale ghost bar behind. Both series scale to a shared max so the ghost
+// always caps the visits bar. HTML (not SVG) so the value labels stay a fixed
+// pixel size and don't shrink to nothing on a phone-width viewport.
+function DailyTrafficChart({ rows }: { rows: DailyRow[] }) {
+  if (rows.length === 0) return null;
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.pageviews, r.visits)));
+  const peak = Math.max(0, ...rows.map((r) => r.visits));
+  return (
+    <section style={cardStyle}>
+      <div style={{ display: "flex", gap: 18, marginBottom: 14, fontSize: 13, color: "#666", flexWrap: "wrap" }}>
+        <span>
+          <span style={{ display: "inline-block", width: 11, height: 11, background: "#1B3A2D", borderRadius: 2, marginRight: 6, verticalAlign: "middle" }} />
+          Visitors (visits)
+        </span>
+        <span>
+          <span style={{ display: "inline-block", width: 11, height: 11, background: "#e7dcc2", borderRadius: 2, marginRight: 6, verticalAlign: "middle" }} />
+          Pageviews
+        </span>
+      </div>
+      <div style={{ display: "flex", alignItems: "stretch", gap: "1.6%", height: 156 }}>
+        {rows.map((r) => {
+          const vh = Math.round((r.visits / max) * 100);
+          const ph = Math.round((r.pageviews / max) * 100);
+          return (
+            <div
+              key={r.date}
+              title={`${fmtDay(r.date)}: ${nf(r.visits)} visitors · ${nf(r.pageviews)} pageviews`}
+              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%" }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#1B3A2D", lineHeight: 1, marginBottom: 4 }}>{nf(r.visits)}</span>
+              <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 0 }}>
+                <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${ph}%`, background: "#e7dcc2", borderRadius: "3px 3px 0 0" }} />
+                <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${vh}%`, minHeight: r.visits > 0 ? 3 : 0, background: "#1B3A2D", borderRadius: "3px 3px 0 0" }} />
+              </div>
+              <span style={{ fontSize: 10, color: "#aaa", lineHeight: 1, marginTop: 5 }}>{shortDay(r.date)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "14px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
+        Numbers above each bar are <strong>visitors</strong> that day (Cloudflare visits, roughly unique
+        sessions). The pale bar behind is <strong>pageviews</strong>. Peak: {nf(peak)} visitors. Hover a
+        bar for both counts.
+      </p>
+    </section>
+  );
+}
+
+// Local / Visitor / Unknown breakout: a stacked share bar plus labeled, counted
+// rows. One component so the site-visitor split (Gate 0) and the newsletter-list
+// split read identically. "Visitor" means remote (out-of-corridor) traffic.
+function VisitorBreakdown({ local, visitor, unknown }: { local: number; visitor: number; unknown: number }) {
+  const total = Math.max(1, local + visitor + unknown);
+  const segs = [
+    { key: "local", label: "Local", value: local, color: "#1B3A2D" },
+    { key: "visitor", label: "Visitor (remote)", value: visitor, color: "#5a8fa8" },
+    { key: "unknown", label: "Unknown", value: unknown, color: "#c9c2b6" },
+  ];
+  return (
+    <div>
+      <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", marginBottom: 12, background: "#f0ede8" }}>
+        {segs.map((s) =>
+          s.value > 0 ? (
+            <div key={s.key} title={`${s.label}: ${nf(s.value)}`} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} />
+          ) : null
+        )}
+      </div>
+      {segs.map((s) => (
+        <div key={s.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 14, color: "#2d3a22", marginBottom: 6 }}>
+          <span>
+            <span style={{ display: "inline-block", width: 10, height: 10, background: s.color, borderRadius: 2, marginRight: 8 }} />
+            {s.label}
+          </span>
+          <span style={{ fontWeight: 600 }}>
+            {nf(s.value)} · {Math.round((s.value / total) * 100)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Gate0Section({ data }: { data: Gate0 }) {
   if (!data.hasData) {
     return (
@@ -470,11 +537,11 @@ function Gate0Section({ data }: { data: Gate0 }) {
     <>
       <SectionHeader>Visitor vs local · 30d</SectionHeader>
       <section style={cardStyle}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-          <Stat label="Visitor share · 30d" value={`${pct(v.visitor, known30)}%`} sub={`${nf(v.visitor)} of ${nf(known30)} located`} />
+        <VisitorBreakdown local={v.local} visitor={v.visitor} unknown={v.unknown} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 16 }}>
+          <Stat label="Located views · 30d" value={nf(known30)} sub={`${nf(v.local)} local · ${nf(v.visitor)} remote`} />
           <Stat label="Visitor share · 7d" value={`${pct(v7.visitor, known7)}%`} sub={`${nf(v7.visitor)} of ${nf(known7)} located`} />
-          <Stat label="Local views · 30d" value={nf(v.local)} />
-          <Stat label="Unknown geo · 30d" value={nf(v.unknown)} />
+          <Stat label="Total views · 30d" value={nf(v.total)} sub={`incl. ${nf(v.unknown)} unknown geo`} />
         </div>
         <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
           Directional. Location is coarse IP geolocation (Vercel edge), which often places corridor
@@ -669,7 +736,6 @@ function NewsletterSignupsPanel({ stats }: { stats: NewsletterStats }) {
   const trend = stats.days.slice(-45); // chronological (oldest -> newest)
   const trendMax = Math.max(1, ...trend.map((d) => d.signups));
   const comp = stats.by_class;
-  const compTotal = Math.max(1, comp.local + comp.visitor + comp.unknown);
   const sources = Object.entries(stats.by_source)
     .map(([key, count]) => ({ key, count }))
     .sort((a, b) => b.count - a.count)
@@ -718,24 +784,8 @@ function NewsletterSignupsPanel({ stats }: { stats: NewsletterStats }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
         <section style={cardStyle}>
           <p style={{ ...labelStyle, margin: "0 0 10px" }}>Who the list is</p>
-          {([["local", "Local", "#1B3A2D"], ["visitor", "Visitor", "#5a8fa8"], ["unknown", "Unknown", "#c9c2b6"]] as const).map(
-            ([k, label, color]) => {
-              const v = comp[k];
-              const pctv = Math.round((v / compTotal) * 100);
-              return (
-                <div key={k} style={{ marginBottom: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#2d3a22" }}>
-                    <span>{label}</span>
-                    <span style={{ fontWeight: 600 }}>{nf(v)} · {pctv}%</span>
-                  </div>
-                  <div style={{ height: 5, background: "#f0ede8", borderRadius: 3, marginTop: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pctv}%`, background: color }} />
-                  </div>
-                </div>
-              );
-            }
-          )}
-          <p style={{ color: "#999", fontSize: 12, lineHeight: 1.5, margin: "8px 0 0" }}>
+          <VisitorBreakdown local={comp.local} visitor={comp.visitor} unknown={comp.unknown} />
+          <p style={{ color: "#999", fontSize: 12, lineHeight: 1.5, margin: "10px 0 0" }}>
             Classified at signup from coarse IP geo. Directional: a visitor signing up from inside a
             rental reads as local.
           </p>
