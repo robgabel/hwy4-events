@@ -31,11 +31,12 @@ const TOWN = "Arnold";
 const VENUE_NAME = "Arnold Library";
 const VENUE_KEY = "arnold-library";
 const ADDRESS = "1065 Blagen Rd, Arnold, CA 95223";
+// Just the organizer's blurb. The "community-submitted, unconfirmed, call ahead"
+// disclosure is NOT inline here anymore — it renders from structured confidence
+// fields (community_sourced + verification_status) via components/ConfidenceNote
+// on the event page. See lib/confidence.ts (WS-8).
 const DESCRIPTION =
-  "Come sing songs, dance and listen to stories every week with Miss Debbie! " +
-  "This was a community sourced weekly event added June 3, 2026. I couldn't find " +
-  "a website to confirm it is still happening. Please call ahead to confirm it's " +
-  "on (209) 795-1009 before you head down there.";
+  "Come sing songs, dance and listen to stories every week with Miss Debbie!";
 
 const START = "2026-06-03"; // first Wednesday (the submitted date)
 const END = "2026-12-30"; // bump + re-run to extend

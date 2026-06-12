@@ -214,8 +214,7 @@ export default async function AboutPage() {
             This Week on the 4
           </h3>
           <p className="text-sm leading-relaxed text-stone">
-            Every day, a fresh briefing of what&apos;s coming up. Written to
-            sound like a neighbor, not a robot.
+            A short read on what&apos;s worth your evening, every morning.
           </p>
         </div>
         <div className="rounded-xl border border-stone-light/20 bg-white px-5 py-4 text-center">

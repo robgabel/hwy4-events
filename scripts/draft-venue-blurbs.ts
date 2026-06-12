@@ -21,6 +21,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { supabaseAdmin } from "./lib/supabase-admin.js";
+import { withVoice } from "../lib/voice.js";
 
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
@@ -216,7 +217,7 @@ Lean on the Places signals for practical persona facts (dogs, kids, groups, outd
       const res = await client.messages.create({
         model: "claude-opus-4-7",
         max_tokens: 600,
-        system: SYSTEM_PROMPT,
+        system: withVoice(SYSTEM_PROMPT),
         messages: [{ role: "user", content: userPrompt }],
       });
       const text = res.content

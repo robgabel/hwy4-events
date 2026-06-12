@@ -1,12 +1,13 @@
 import { cache } from "react";
 import { generateEventSlug } from "./slugs";
+import { gateEventDescription } from "./description-quality";
 import type { Hwy4Event } from "./types";
 
 // Shared by the event detail page and the generated-poster route so the slug →
 // event resolution can't drift. `image_url` is included because the poster
 // branching (supplied vs generated) keys off it.
 export const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, community_sourced, venue_key, image_url";
+  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, visibility, org_slug, importance, robs_pick, community_sourced, venue_key, image_url, created_at, verification_status";
 
 const PAGE_SIZE = 60;
 
@@ -32,7 +33,7 @@ export const findEventBySlug = cache(
         .eq("date", dateMatch[0])
         .neq("status", "cancelled");
       const hit = matchSlug(data as unknown as Hwy4Event[] | null, slug);
-      if (hit) return hit;
+      if (hit) return gateEventDescription(hit);
     }
 
     // Pacific civil date, not UTC — otherwise this fallback scan would skip an
@@ -49,7 +50,7 @@ export const findEventBySlug = cache(
         .range(from, from + PAGE_SIZE - 1);
       if (error || !data) break;
       const hit = matchSlug(data as unknown as Hwy4Event[], slug);
-      if (hit) return hit;
+      if (hit) return gateEventDescription(hit);
       if (data.length < PAGE_SIZE) break;
     }
     return null;

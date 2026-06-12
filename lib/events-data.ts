@@ -18,6 +18,7 @@ import { unstable_cache } from "next/cache";
 import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event, EventListItem } from "@/lib/types";
 import { dedupeEvents } from "@/lib/dedupe-events";
+import { gateEventDescription } from "@/lib/description-quality";
 import { pacificToday, addDays } from "@/lib/date-windows";
 import type { SitemapEventRow } from "@/lib/sitemap";
 
@@ -67,7 +68,10 @@ async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
   console.log(
     `[events-data] fetched ${all.length} upcoming rows, ${deduped.length} after dedupe`
   );
-  return deduped;
+  // Gate descriptions ONCE here, after dedupe: strip calendar-widget junk and
+  // suppress meaningless stubs so no list card renders them. Done post-dedupe so
+  // read-time clustering still sees raw text. See lib/description-quality.ts.
+  return deduped.map(gateEventDescription);
 }
 
 /**

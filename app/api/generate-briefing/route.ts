@@ -5,6 +5,14 @@ import { NextResponse } from "next/server";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL } from "@/lib/constants";
 import { dedupeEvents } from "@/lib/dedupe-events";
+import { withVoice } from "@/lib/voice";
+import {
+  dayOfYear,
+  selectBriefingShape,
+  recentOpeners,
+  buildBriefingShapeGuidance,
+  openerKey,
+} from "@/lib/briefing-shapes";
 
 export const maxDuration = 60;
 
@@ -24,7 +32,8 @@ Rules:
 - End with: — Millie 🐾
 - LINKS: Link event mentions as [event text](url). Keep natural — don't link every event or venue names.
 - Events marked [MEMBERS ONLY] are for private clubs (like Blue Lake Springs). Mention them naturally but note they're for members/guests. Example: "Over at Blue Lake Springs, members can catch..."
-- Do NOT link members-only events — they don't have public event pages.`;
+- Do NOT link members-only events — they don't have public event pages.
+- ROB'S PICKS: an event tagged [ROB'S PICK: reason] should lead with that reason, in your own words. A plain [ROB'S PICK] with no reason gets a plain mention, no invented enthusiasm.`;
 
 async function getEventsForBriefing() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -43,7 +52,7 @@ async function getEventsForBriefing() {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url, visibility"
+      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, pick_reason, status, description, event_url, visibility"
     )
     .gte("date", today)
     .lte("date", nextWeek)
@@ -100,7 +109,11 @@ async function generateBriefing(
       e.start_time ? `at ${e.start_time}` : "",
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
-      e.robs_pick ? "[ROB'S PICK]" : "",
+      e.robs_pick
+        ? e.pick_reason
+          ? `[ROB'S PICK: ${e.pick_reason}]`
+          : "[ROB'S PICK]"
+        : "",
       e.visibility === "private" ? "[MEMBERS ONLY]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
       e.visibility !== "private" ? `URL: ${internalUrl}` : "",
@@ -148,14 +161,20 @@ async function generateBriefing(
     historySection = `\n\nRECENT BRIEFINGS (for freshness — do NOT repeat jokes, phrases, structural patterns, or comedic bits from these. Events may repeat since they span multiple days, but your creative angle must be different each day):\n\n${entries}`;
   }
 
+  // WS-6: rotate the briefing's structural shape by day-of-year and tell the
+  // model which recent openers to avoid, so a daily reader can't pattern-match it.
+  const shape = selectBriefingShape(dayOfYear(today));
+  const openers = recentOpeners(recentBriefings.map((b) => b.text));
+  const shapeGuidance = buildBriefingShapeGuidance(shape, openers);
+
   const message = await anthropic.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+    system: withVoice(SYSTEM_PROMPT),
     messages: [
       {
         role: "user",
-        content: `Today is ${dayOfWeek}, ${dateStr}. Write the daily briefing for Hwy4Events.com.\n\nTODAY'S EVENTS:\n${todaySummary}\n\nTOMORROW'S EVENTS:\n${tomorrowSummary}\n\nREST OF THE WEEK:\n${restOfWeekSummary}${historySection}`,
+        content: `Today is ${dayOfWeek}, ${dateStr}. Write the daily briefing for Hwy4Events.com.\n\nTODAY'S EVENTS:\n${todaySummary}\n\nTOMORROW'S EVENTS:\n${tomorrowSummary}\n\nREST OF THE WEEK:\n${restOfWeekSummary}${historySection}${shapeGuidance}`,
       },
     ],
   });
@@ -168,6 +187,14 @@ async function generateBriefing(
 
   const block = message.content[0];
   if (block.type !== "text") throw new Error("Unexpected response type");
+
+  // WS-6 opener guard: flag (don't block) a first-3-words repeat vs recent days.
+  const newOpener = openerKey(block.text);
+  if (newOpener && openers.some((o) => openerKey(o) === newOpener)) {
+    console.warn(
+      `[briefing] opener "${newOpener}" repeats a recent briefing (shape=${shape.id})`,
+    );
+  }
   return block.text;
 }
 

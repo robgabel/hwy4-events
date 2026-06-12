@@ -61,6 +61,9 @@ export interface Hwy4Event {
   last_scraped_at: string | null;
   /** DB-maintained row last-modified. Drives honest sitemap <lastmod>. */
   updated_at?: string | null;
+  /** Row creation timestamp. The "added on" date in the community-submitted
+   *  confidence note (lib/confidence.ts, WS-8). */
+  created_at?: string | null;
   image_url: string | null;
   robs_pick: boolean;
   is_weekly: boolean;

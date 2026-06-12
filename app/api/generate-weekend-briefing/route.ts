@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL } from "@/lib/constants";
 import { dedupeEvents } from "@/lib/dedupe-events";
+import { withVoice } from "@/lib/voice";
 
 export const maxDuration = 60;
 
@@ -197,7 +198,7 @@ async function generateWeekendBriefing(
   const message = await anthropic.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 1024,
-    system: WEEKEND_SYSTEM_PROMPT,
+    system: withVoice(WEEKEND_SYSTEM_PROMPT),
     messages: [
       {
         role: "user",

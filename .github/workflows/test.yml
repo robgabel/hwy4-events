@@ -8,6 +8,8 @@ name: Tests
 on:
   pull_request:
     paths:
+      - 'app/**'
+      - 'content/**'
       - 'lib/**'
       - 'scripts/**'
       - '.github/workflows/test.yml'
@@ -31,4 +33,11 @@ jobs:
 
       - name: Run tests
         run: npm test
+        working-directory: scripts
+
+      # Voice lint: hard-fails on BANNED_PHRASE / HUMANITY_CLAIM / LEAK in the
+      # shipped town pages, FAQ, and About; prints warnings for the rest. The
+      # same hard-fail gate also runs inside `npm test` (voice-lint.test.ts).
+      - name: Voice lint (content/VOICE.md)
+        run: npx tsx voice-lint.ts --warn
         working-directory: scripts

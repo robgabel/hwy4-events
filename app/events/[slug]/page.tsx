@@ -8,12 +8,15 @@ import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
 import { buildEventOffer } from "@/lib/schema";
 import { findEventBySlug } from "@/lib/events";
+import { truncateMeta } from "@/lib/description-quality";
 import { posterKind, posterImageUrl, generatedPosterPath, withSrc, humanizeHost } from "@/lib/poster";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import VenueInfo from "@/components/VenueInfo";
+import ConfidenceNote from "@/components/ConfidenceNote";
+import { eventConfidence } from "@/lib/confidence";
 import LinkifiedText from "@/components/LinkifiedText";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
@@ -92,8 +95,10 @@ export async function generateMetadata({
 
   const dateStr = format(parseISO(event.date), "MMMM d, yyyy");
   const title = `${event.name} — ${dateStr} in ${event.town}`;
+  // event.description is already gated (sanitized clean text or null) by
+  // findEventBySlug. truncateMeta guarantees we never cut mid-word in the SERP.
   const description = event.description
-    ? event.description.slice(0, 155)
+    ? truncateMeta(event.description)
     : `${event.name} at ${event.venue_name} in ${event.town}, CA on ${dateStr}.`;
 
   // The poster is the share image: organizer's own art if supplied, else the
@@ -198,6 +203,16 @@ export default async function EventPage({ params }: PageProps) {
   // as the visible CTA but never enters structured data — point schema at our own
   // stable page instead, so a churnable permalink can't leak into JSON-LD.
   const offerUrl = link.durable && link.href ? link.href : `${SITE_URL}/events/${slug}`;
+
+  // WS-8: honest-uncertainty disclosure, derived from structured fields.
+  const confidence = eventConfidence(event);
+  const addedOn = event.created_at
+    ? format(parseISO(event.created_at), "MMMM d, yyyy")
+    : null;
+  const venuePhone = venue?.phone ?? null;
+  const venuePhoneHref = venuePhone
+    ? `tel:${venuePhone.replace(/[^\d+]/g, "")}`
+    : null;
 
   const dateObj = parseISO(event.date);
   const dateStr = format(dateObj, "EEEE, MMMM d, yyyy");
@@ -450,6 +465,14 @@ export default async function EventPage({ params }: PageProps) {
             </p>
           </div>
         </div>
+
+        {confidence.showDisclosure && (
+          <ConfidenceNote
+            addedOn={addedOn}
+            phone={venuePhone}
+            phoneHref={venuePhoneHref}
+          />
+        )}
 
         {/* About */}
         {event.description && (

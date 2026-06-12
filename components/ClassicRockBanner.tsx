@@ -54,9 +54,9 @@ export default function ClassicRockBanner({ town }: { town: string }) {
           Turn it up in {town}
         </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-white/90">
-          Flashback brings the hits you grew up on to the Moose Lodge. Grab dinner
-          and a drink, find a spot near the speakers, and dance like the parking
-          lot is full of muscle cars. Open to the public, all are welcome.
+          Flashback plays classic rock covers up at the Moose Lodge. Dinner and a
+          full bar, the dance floor opens up after the first set, and you don&apos;t
+          need to be a member to come in.
         </p>
       </div>
     </div>

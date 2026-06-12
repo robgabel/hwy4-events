@@ -2,6 +2,7 @@ import React from "react";
 import Image from "next/image";
 import { SITE_URL } from "@/lib/constants";
 import { JsonLd, buildArticle } from "@/lib/schema";
+import { truncateMeta } from "@/lib/description-quality";
 import WeeklyBriefingTabs from "./WeeklyBriefingTabs";
 
 interface WeeklyBriefingProps {
@@ -104,7 +105,7 @@ export default function WeeklyBriefing({
         headline: hasWeekend
           ? `${title} + ${weekendTabLabel} briefing`
           : title,
-        description: briefing.slice(0, 280),
+        description: truncateMeta(briefing, 280),
         url: `${SITE_URL}/#briefing`,
         datePublished: generatedAt,
         dateModified: generatedAt,

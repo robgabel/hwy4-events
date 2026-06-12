@@ -10,6 +10,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL } from "@/lib/constants";
+import { withVoice } from "./voice";
 
 export const NEWSLETTER_MODEL = "claude-opus-4-7";
 
@@ -203,7 +204,7 @@ export async function generateNewsletter(
   const message = await anthropic.messages.create({
     model: NEWSLETTER_MODEL,
     max_tokens: 1500,
-    system: NEWSLETTER_SYSTEM_PROMPT,
+    system: withVoice(NEWSLETTER_SYSTEM_PROMPT),
     messages: [
       {
         role: "user",
