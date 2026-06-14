@@ -101,6 +101,20 @@ export async function getHomepageEvents(): Promise<Hwy4Event[]> {
   return all.filter((e) => e.date <= cutoff || e.robs_pick);
 }
 
+// The exact complement of getHomepageEvents: upcoming events that fall BEYOND
+// the homepage horizon and aren't already shipped as curated robs_pick rows
+// (those ride along in the initial payload regardless of date). Together the two
+// partition the full upcoming set with no overlap and no gap. The homepage pulls
+// these in on demand — when a visitor pages past the near-term feed or filters
+// into a window the 60 days don't cover — so the deep catalog stays reachable
+// from the homepage without bloating the initial document. Served from the same
+// cached superset as getHomepageEvents, so it costs no extra database scan.
+export async function getEventsBeyondHorizon(): Promise<Hwy4Event[]> {
+  const all = await getUpcomingEvents();
+  const cutoff = addDays(pacificToday().iso, HOMEPAGE_HORIZON_DAYS);
+  return all.filter((e) => e.date > cutoff && !e.robs_pick);
+}
+
 // The homepage (and other list views) renders ~25 cards at a time but holds the
 // whole upcoming set in the client for instant filtering. Shipping every row's
 // full `description` (the card clamps it to 2-3 lines) plus scrape-only columns

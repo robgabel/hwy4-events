@@ -26,6 +26,7 @@ import {
   formatISODate,
 } from "@/lib/date-utils";
 import { nowPacificMinutes, hasEventEnded, hasEventStarted } from "@/lib/event-time";
+import { fetchEventsBeyondHorizon } from "@/app/actions";
 
 // Lazy-load non-critical components so they don't block hydration
 const FilterBar = dynamic(() => import("./FilterBar"), { ssr: true });
@@ -240,6 +241,17 @@ export default function EventList({
   const filterRef = useRef<HTMLDivElement>(null);
   const [filterHeight, setFilterHeight] = useState(0);
 
+  // Events beyond the 60-day homepage horizon, pulled on demand (see the
+  // fetchEventsBeyondHorizon server action). The homepage ships only the
+  // near-term window to keep the initial payload small; we fetch the deep
+  // catalog into the client the moment a visitor needs it — paging past the
+  // near-term feed, or filtering into a window the 60 days don't cover — then it
+  // flows through the same in-memory filter/pagination path as everything else.
+  const [furtherEvents, setFurtherEvents] = useState<EventListItem[]>([]);
+  const [furtherStatus, setFurtherStatus] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
+
   // URL-based town filtering: ?town=Avery or ?town=Avery&town=Arnold
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -293,8 +305,24 @@ export default function EventList({
     return () => clearInterval(id);
   }, []);
 
+  // The near-term set (initialEvents) plus any on-demand further-out events,
+  // deduped by id and re-sorted into date/start-time order so the date-grouping
+  // below — which assumes same-day events are contiguous — stays correct. The
+  // common case (nothing fetched yet) returns the already-sorted prop untouched.
+  const allEvents = useMemo(() => {
+    if (furtherEvents.length === 0) return initialEvents;
+    const seen = new Set(initialEvents.map((e) => e.id));
+    return initialEvents
+      .concat(furtherEvents.filter((e) => !seen.has(e.id)))
+      .sort(
+        (a, b) =>
+          a.date.localeCompare(b.date) ||
+          (a.start_time ?? "").localeCompare(b.start_time ?? "")
+      );
+  }, [initialEvents, furtherEvents]);
+
   const filtered = useMemo(() => {
-    const visible = initialEvents.filter((e) => {
+    const visible = allEvents.filter((e) => {
       if (e.visibility === "private") {
         // Members-only (e.g. Blue Lake Springs): shown only when the org is
         // explicitly enabled in the Clubs filter. The Event Type filter does
@@ -313,7 +341,7 @@ export default function EventList({
       return true;
     });
     return collapseMultiDayEvents(visible);
-  }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange, freeOnly, categoryQuick]);
+  }, [allEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange, freeOnly, categoryQuick]);
 
   // Drop events that have already ended (today's morning slots, mostly). Until
   // the clock is known (`now === null`, i.e. server + first paint) show the full
@@ -352,6 +380,48 @@ export default function EventList({
   const totalEvents = visible.length;
   const [visibleCount, setVisibleCount] = useState(INITIAL_EVENTS);
 
+  // Pull the further-out catalog once per session. `idle` is the only state that
+  // kicks a fetch, so concurrent triggers (a click racing the empty-filter
+  // effect) collapse to a single request; the result is served from the shared
+  // server cache, so it's cheap. `reveal` bumps the visible count after load so
+  // a "Show more" click that crossed the horizon doesn't need a second tap.
+  const loadFurther = useCallback(
+    async (reveal: boolean) => {
+      if (furtherStatus !== "idle") return;
+      setFurtherStatus("loading");
+      try {
+        const extra = await fetchEventsBeyondHorizon();
+        setFurtherEvents(extra);
+        setFurtherStatus("loaded");
+        if (reveal) setVisibleCount((prev) => prev + BATCH_SIZE);
+      } catch {
+        setFurtherStatus("error");
+      }
+    },
+    [furtherStatus]
+  );
+
+  // The "Show more events" button: reveal the next batch of already-loaded
+  // events; once the loaded set is exhausted, the same click pulls the
+  // further-out catalog (and reveals its first batch).
+  const handleShowMore = useCallback(() => {
+    if (visibleCount < totalEvents) {
+      setVisibleCount((prev) => Math.min(prev + BATCH_SIZE, totalEvents));
+    } else {
+      void loadFurther(true);
+    }
+  }, [visibleCount, totalEvents, loadFurther]);
+
+  // If the active filters match nothing in the near-term window, the matches may
+  // simply live further out (e.g. a September festival the 60-day feed can't
+  // reach). Pull the deep catalog once so the filter can find them instead of
+  // falsely reading "nothing on". Guarded by `idle`, so it fires at most once.
+  useEffect(() => {
+    if (visible.length === 0 && furtherStatus === "idle") {
+      void loadFurther(false);
+    }
+  }, [visible.length, furtherStatus, loadFurther]);
+
   // Captured once on mount (a lazy initializer runs before any effect, so the
   // persistence effect below can't clobber it). null on the server and on a
   // first-ever visit.
@@ -371,7 +441,15 @@ export default function EventList({
   useEffect(() => {
     if (!savedListState) return;
     if (savedListState.count > INITIAL_EVENTS) {
-      setVisibleCount(Math.min(savedListState.count, totalEvents));
+      // Unclamped: the visibleGroups slice below caps gracefully at whatever is
+      // loaded, so an overshoot is harmless and self-corrects as more arrives.
+      setVisibleCount(savedListState.count);
+      // A saved length past the near-term set means the user had loaded the
+      // further-out catalog before they left; pull it back so the list can grow
+      // to where it was.
+      if (savedListState.count > initialEvents.length) {
+        void loadFurther(false);
+      }
     }
     if (savedListState.scrollY > 0) {
       pendingScrollRef.current = savedListState.scrollY;
@@ -545,6 +623,11 @@ export default function EventList({
       {/* Event list */}
       <div className="mt-2 space-y-6">
         {groups.length === 0 ? (
+          furtherStatus === "loading" ? (
+            <div className="animate-fadeIn rounded-xl border border-stone-light/30 bg-white px-6 py-12 text-center">
+              <p className="text-stone">Looking further out…</p>
+            </div>
+          ) : (
           <div className="animate-fadeIn rounded-xl border border-stone-light/30 bg-white px-6 py-12 text-center">
             <Image
               src="/millie-happy.svg"
@@ -571,6 +654,7 @@ export default function EventList({
               Clear filters
             </button>
           </div>
+          )
         ) : (
           <>
             {visibleGroups.map((group, groupIndex) => (
@@ -617,35 +701,56 @@ export default function EventList({
             {/* List terminus: load each next page on an explicit click so the
              * page ends and the footer (towns, what's-on, submit) is always
              * reachable. */}
-            {visibleCount < totalEvents ? (
+            {visibleCount < totalEvents ||
+            furtherStatus === "idle" ||
+            furtherStatus === "loading" ? (
               <div className="flex flex-col items-center gap-3 py-8">
                 <button
-                  onClick={() =>
-                    setVisibleCount((prev) =>
-                      Math.min(prev + BATCH_SIZE, totalEvents)
-                    )
-                  }
-                  className="cursor-pointer rounded-lg bg-pine px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-forest"
+                  onClick={handleShowMore}
+                  disabled={furtherStatus === "loading"}
+                  className="cursor-pointer rounded-lg bg-pine px-6 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-forest disabled:cursor-wait disabled:opacity-70"
                 >
-                  Show {Math.min(BATCH_SIZE, totalEvents - visibleCount)} more
-                  events
+                  {furtherStatus === "loading"
+                    ? "Loading events further out…"
+                    : visibleCount < totalEvents
+                      ? `Show ${Math.min(BATCH_SIZE, totalEvents - visibleCount)} more events`
+                      : "Show events further out"}
                 </button>
                 <span className="text-xs text-stone">
-                  Showing {visibleCount} of {totalEvents}
+                  Showing {Math.min(visibleCount, totalEvents)} of {totalEvents}
+                  {/* The near-term feed is capped at 60 days; the "+" signals a
+                      deeper catalog that loads on demand. */}
+                  {furtherStatus !== "loaded" ? "+" : ""}
                 </span>
               </div>
             ) : (
               totalEvents > INITIAL_EVENTS && (
                 <p className="py-8 text-center text-sm text-stone">
-                  That&apos;s what&apos;s coming up on the 4. Looking further
-                  out?{" "}
-                  <Link
-                    href="/this-month"
-                    className="font-medium text-pine hover:underline"
-                  >
-                    Browse this month
-                  </Link>{" "}
-                  or pick a town from the footer.
+                  {furtherStatus === "error" ? (
+                    <>
+                      That&apos;s everything we could load. Having trouble
+                      reaching the rest?{" "}
+                      <Link
+                        href="/this-month"
+                        className="font-medium text-pine hover:underline"
+                      >
+                        Browse this month
+                      </Link>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      That&apos;s everything coming up on the 4. Looking for
+                      something specific?{" "}
+                      <Link
+                        href="/this-month"
+                        className="font-medium text-pine hover:underline"
+                      >
+                        Browse this month
+                      </Link>{" "}
+                      or pick a town from the footer.
+                    </>
+                  )}
                 </p>
               )
             )}
