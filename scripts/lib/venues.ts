@@ -290,6 +290,16 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Angels Camp",
     address: "753 S Main St, Angels Camp, CA 95222",
   },
+  "new-melones-lake-marina": {
+    canonical: "New Melones Lake Marina",
+    aliases: [
+      "new melones lake marina",
+      "new melones marina",
+      "new melones lake",
+    ],
+    town: "Angels Camp",
+    address: "6503 Glory Hole Rd, Angels Camp, CA 95222",
+  },
   "greenhorn-creek": {
     canonical: "Greenhorn Creek Resort",
     aliases: [
