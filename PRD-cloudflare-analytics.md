@@ -79,7 +79,7 @@ Conventions mirrored from the existing codebase: pure `lib/*` helpers like [`lib
 
 - **Migration** `supabase/migrations/2026XXXX_add_analytics_daily.sql` creating `analytics_daily` (schema below). RLS enabled, **no public-read policy** (internal data, service-role only). This is a deliberate departure from the public-read site tables; analytics is not public.
 - **`app/api/snapshot-analytics/route.ts`** — daily Vercel cron (add to [`vercel.json`](vercel.json)) that writes yesterday's row. Idempotent on `date` (upsert). Authed by `CRON_SECRET`.
-- **Why persist:** Cloudflare's free Web Analytics retention is limited (~6 months) and is not our system of record. A nightly snapshot gives unbounded trend history, the same pattern the project already uses for fingerprints and briefings.
+- **Why persist:** Cloudflare keeps **unsampled** RUM for only ~7 days (older data is aggregated to ~10%), and the GraphQL adaptive API we read serves only **~3 weeks** of history for this site (verified 2026-06-19: data present at 21 days back, gone by 25; the dashboard's "6 months" is heavily-sampled aggregate, *not* what the API returns). The daily snapshot is the system of record. A nightly capture of *yesterday* always lands inside the 7-day unsampled window, so the stored history is full-fidelity; a broken cron, though, loses fidelity within a week and data within ~3 weeks — hence the freshness alarm (below).
 
 ### Phase 3 — Surface it
 
@@ -163,6 +163,12 @@ Phase 1 + 2 built and smoke-tested against live data:
 - Env: `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_WEB_ANALYTICS_SITE_TAG` set in Vercel **Production** and appended to the main checkout `.env.local`. Site tag: `c2807310a1f9469c8955db02d84f7fce`.
 
 **Token lesson:** the working token is an *account-owned* token (minted from the account-scoped `/{account_id}/api-tokens` page). Account-owned tokens return code 1000 "Invalid API Token" against `/user/tokens/verify` — a false negative, because that endpoint only knows *user* tokens. Validate against the GraphQL endpoint instead. (Now documented in CLAUDE.md's env section.)
+
+### Update (2026-06-19) — retention verified + freshness alarm
+
+- **Retention corrected.** Live probe + CF docs: unsampled RUM is kept only **7 days** (then aggregated to ~10%), and the GraphQL adaptive API we read serves only **~3 weeks** of history for this site (data present at 21 days back, gone by 25). The earlier "~6 months" was the *dashboard's* sampled-aggregate view, not the API. Operationally: the snapshot is the system of record, and a broken cron loses fidelity within a week / data within ~3 weeks.
+- **Freshness alarm shipped** in [`/api/check-events`](app/api/check-events/route.ts): it now reads the latest `analytics_daily` row and Slack-alerts if the snapshot is ≥2 days behind (a missed run) or the latest captured day has 0 pageviews (the CF read silently failed). No new cron — folded into the existing daily audit (surfaced in its `summary.analytics`). Closes the one gap that made the durable-history design a silent single point of failure.
+- **Pending:** the 24 backfilled all-zero rows (2026-05-04…05-27, from before the beacon had data) are cosmetic noise in trend averages; a one-line `DELETE FROM analytics_daily WHERE pageviews = 0 AND visits = 0` cleans them up. The automated delete was blocked by the prod-write safety guard, so it awaits a manual run.
 
 ### Remaining steps
 - [x] **Migration applied (2026-06-02) via MCP.** Correction to an earlier wrong assumption: hwy4events is **not** a separate Supabase project. Its `NEXT_PUBLIC_SUPABASE_URL` points to `uzediwokyshjbsymevtp` — the shared rob-ai / PAOS project (org "Gabel.Global", labeled "Claude Code" in Supabase), which the MCP reaches. Applied with `apply_migration`; verified 10 columns + RLS + deny-all policy; the security advisor surfaced no new findings for `analytics_daily` (the other lints are pre-existing).
