@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { track } from "@/lib/track";
+import { track, firstTouchSrc } from "@/lib/track";
 
 /**
  * Gate 0: fires one geo-classifiable view beacon per session+path. The server
@@ -52,7 +52,7 @@ export default function PageViewTracker() {
       // ignore
     }
 
-    track({ kind: "view", path: pathname, sessionId: getSessionId() });
+    track({ kind: "view", path: pathname, sessionId: getSessionId(), src: firstTouchSrc() });
   }, [pathname]);
 
   return null;

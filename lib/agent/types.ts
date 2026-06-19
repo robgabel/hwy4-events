@@ -152,6 +152,13 @@ export type GrowthContext = {
     visitor_share_30d: number | null; // fraction of referral clicks from visitors (the secondary North Star)
     top_events: { event_id: string; clicks: number }[];
   };
+  channels: {
+    // First-touch arrival channel (site_events.src): qr / share / host /
+    // newsletter / ref:<host>, with "direct" for untagged. The acquisition view
+    // the experiments need (e.g. host-kit = scans tagged src=host -> referrals).
+    sessions_by_src_7d: Record<string, number>; // distinct view sessions by channel, last 7d
+    referrals_by_src_30d: Record<string, number>; // business-referral clicks by channel, last 30d
+  };
   traffic: {
     pageviews_7d: number;
     pageviews_prev_7d: number;

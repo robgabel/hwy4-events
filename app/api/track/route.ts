@@ -68,6 +68,10 @@ export async function POST(request: Request) {
     country: geo.country,
     path,
     session_id: clamp(body.sessionId, 64),
+    // First-touch arrival channel (qr / share / host / newsletter / ref:host),
+    // null for direct/untagged. Set on both views and outbound clicks so a row
+    // is self-describing without joining back to the session's first view.
+    src: clamp(body.src, 60),
     is_bot: isBot,
   };
 

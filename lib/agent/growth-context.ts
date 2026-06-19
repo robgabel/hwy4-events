@@ -54,9 +54,9 @@ export async function gatherGrowthContext(
     getNewsletterStats(supabase, 60),
     supabase.from("newsletter_drafts").select("id, target_send_date, sent_at, sent_count").eq("status", "sent").order("sent_at", { ascending: false }).limit(1),
     // Pull 14d of local + visitor views to derive weekly session proxies.
-    supabase.from("site_events").select("session_id, visitor_class, created_at").eq("kind", "view").eq("is_bot", false).gte("created_at", d14).limit(20000),
+    supabase.from("site_events").select("session_id, visitor_class, created_at, src").eq("kind", "view").eq("is_bot", false).gte("created_at", d14).limit(20000),
     // 30d of outbound business clicks (the referral signal).
-    supabase.from("site_events").select("click_type, visitor_class, event_id, created_at").eq("kind", "outbound").eq("is_bot", false).gte("created_at", d30).limit(20000),
+    supabase.from("site_events").select("click_type, visitor_class, event_id, created_at, src").eq("kind", "outbound").eq("is_bot", false).gte("created_at", d30).limit(20000),
     supabase.from("analytics_daily").select("date, pageviews, top_pages, ai_referrals").order("date", { ascending: false }).limit(14),
     supabase.from("seo_snapshots").select("captured_at").order("captured_at", { ascending: false }).limit(1),
     supabase.from("hwy4_orgs").select("id", { count: "exact", head: true }).not("canonical_url", "is", null),
@@ -125,6 +125,28 @@ export async function gatherGrowthContext(
     .map(([event_id, clicks]) => ({ event_id, clicks }))
     .sort((a, b) => b.clicks - a.clicks)
     .slice(0, 5);
+
+  // ── arrival channels (site_events.src, first-touch) ─────────────────────────
+  // Distinct view sessions per channel (last 7d) and referral clicks per channel
+  // (last 30d). "direct" = untagged/null src. This is the acquisition view the
+  // experiments need; before src existed every channel was invisible.
+  const sessionsBySrc7d: Record<string, number> = {};
+  const seenPerSrc = new Map<string, Set<string>>();
+  for (const v of viewRows) {
+    if (String(v.created_at) < d7) continue;
+    const k = v.src ? String(v.src) : "direct";
+    const sid = String(v.session_id ?? "");
+    if (!sid) continue;
+    if (!seenPerSrc.has(k)) seenPerSrc.set(k, new Set());
+    seenPerSrc.get(k)!.add(sid);
+  }
+  for (const [k, set] of seenPerSrc) sessionsBySrc7d[k] = set.size;
+
+  const referralsBySrc30d: Record<string, number> = {};
+  for (const o of outRows) {
+    const k = o.src ? String(o.src) : "direct";
+    referralsBySrc30d[k] = (referralsBySrc30d[k] ?? 0) + 1;
+  }
 
   // ── traffic (analytics_daily, newest first) ─────────────────────────────
   const aRows = rows(analytics);
@@ -224,6 +246,10 @@ export async function gatherGrowthContext(
       by_type: byType,
       visitor_share_30d: outRows.length > 0 ? visitorClicks / outRows.length : null,
       top_events: topReferralEvents,
+    },
+    channels: {
+      sessions_by_src_7d: sessionsBySrc7d,
+      referrals_by_src_30d: referralsBySrc30d,
     },
     traffic: {
       pageviews_7d: pv7,

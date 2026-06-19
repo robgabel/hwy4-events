@@ -98,6 +98,7 @@ type Gate0 = {
   outboundTotal: number;
   outboundByType: { type: string; count: number }[];
   topEvents: { name: string; clicks: number }[];
+  bySrc: { src: string; count: number }[];
   hasData: boolean;
 };
 
@@ -111,6 +112,7 @@ async function loadGate0(): Promise<Gate0> {
     outboundTotal: 0,
     outboundByType: [],
     topEvents: [],
+    bySrc: [],
     hasData: false,
   };
   const supabase = getAdminClientOrNull();
@@ -121,7 +123,7 @@ async function loadGate0(): Promise<Gate0> {
 
   const { data: viewsData } = await supabase
     .from("site_events")
-    .select("visitor_class, created_at")
+    .select("visitor_class, created_at, src")
     .eq("kind", "view")
     .eq("is_bot", false)
     .gte("created_at", since30);
@@ -133,7 +135,7 @@ async function loadGate0(): Promise<Gate0> {
     .gte("created_at", since30);
 
   const vrows =
-    (viewsData as { visitor_class: string; created_at: string }[] | null) ?? [];
+    (viewsData as { visitor_class: string; created_at: string; src: string | null }[] | null) ?? [];
   const crows =
     (clicksData as
       | { click_type: string | null; event_id: string | null; created_at: string }[]
@@ -180,12 +182,24 @@ async function loadGate0(): Promise<Gate0> {
     clicks: eventCounts.get(id) ?? 0,
   }));
 
+  // First-touch arrival-channel mix (site_events.src); null -> "direct".
+  const srcCounts = new Map<string, number>();
+  for (const r of vrows) {
+    const k = r.src || "direct";
+    srcCounts.set(k, (srcCounts.get(k) ?? 0) + 1);
+  }
+  const bySrc = [...srcCounts.entries()]
+    .map(([src, count]) => ({ src, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
   return {
     views: tally(vrows),
     views7: tally(vrows.filter((r) => r.created_at >= since7)),
     outboundTotal: crows.length,
     outboundByType,
     topEvents,
+    bySrc,
     hasData: vrows.length > 0 || crows.length > 0,
   };
 }
@@ -533,6 +547,7 @@ function Gate0Section({ data }: { data: Gate0 }) {
   const known30 = v.local + v.visitor;
   const known7 = v7.local + v7.visitor;
   const clickMax = Math.max(1, ...data.topEvents.map((e) => e.clicks));
+  const srcMax = Math.max(1, ...data.bySrc.map((s) => s.count));
   return (
     <>
       <SectionHeader>Visitor vs local · 30d</SectionHeader>
@@ -582,6 +597,31 @@ function Gate0Section({ data }: { data: Gate0 }) {
           spend&rdquo; (the economic flywheel). Directional, not exact attribution.
         </p>
       </section>
+
+      {data.bySrc.length > 0 && (
+        <>
+          <SectionHeader>Arrival channels · 30d</SectionHeader>
+          <section style={cardStyle}>
+            <p style={{ ...labelStyle, margin: "0 0 10px" }}>Page views by first-touch channel</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+              {data.bySrc.map((s) => (
+                <div key={s.src}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                    <span style={{ color: "#2d3a22", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.src}</span>
+                    <span style={{ color: "#1B3A2D", fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{nf(s.count)}</span>
+                  </div>
+                  <div style={{ height: 4, background: "#f0ede8", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.round((s.count / srcMax) * 100)}%`, background: "#9bb87a", borderRadius: 2 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
+              How sessions first arrived: <code>qr</code> / <code>share</code> / <code>host</code> / <code>newsletter</code> come from the <code>?src</code> tag, <code>ref:*</code> is an external referrer, <code>direct</code> is untagged. First-touch per session.
+            </p>
+          </section>
+        </>
+      )}
     </>
   );
 }

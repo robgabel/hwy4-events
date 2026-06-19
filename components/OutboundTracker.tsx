@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { track } from "@/lib/track";
+import { track, firstTouchSrc } from "@/lib/track";
 
 /**
  * Gate 0: delegated outbound-click tracker for the event detail page. Listens
@@ -31,6 +31,7 @@ export default function OutboundTracker({ eventId }: { eventId: string }) {
         eventId,
         clickType,
         targetUrl: el.getAttribute("href"),
+        src: firstTouchSrc(),
       });
     }
 

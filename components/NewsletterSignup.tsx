@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { firstTouchSrc } from "@/lib/track";
 
 export default function NewsletterSignup({
   variant = "default",
@@ -28,10 +29,14 @@ export default function NewsletterSignup({
 
     setStatus("loading");
     try {
+      // Prefer the explicit placement code (e.g. "homepage_event5"); when a
+      // caller didn't set one, fall back to the arrival channel so no signup is
+      // unattributed (was the source of all the NULL signup_source rows).
+      const attribution = source ?? firstTouchSrc() ?? undefined;
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), source }),
+        body: JSON.stringify({ email: email.trim(), source: attribution }),
       });
       const data = await res.json();
       if (!res.ok) {
