@@ -296,6 +296,140 @@ export async function GET(request: Request) {
   }
 }
 
+// Targeted re-send of the most recent SENT issue to an explicit address list, for
+// recovering recipients a prior send dropped. Mirrors the GET send loop's
+// robustness (inspect { error }, throttle, retry) on purpose — it is a manual
+// remediation tool, deliberately separate from the unattended weekly cron send so
+// it can never blast the whole list. CRON_SECRET-gated.
+//
+//   POST /api/newsletter/send  { "targets": ["a@b.com", ...] }
+export async function POST(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization");
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    return NextResponse.json({ error: "Missing RESEND_API_KEY" }, { status: 500 });
+  }
+
+  let targets: string[] = [];
+  try {
+    const body = await request.json();
+    targets = Array.isArray(body?.targets) ? body.targets : [];
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body; expected { targets: string[] }" },
+      { status: 400 }
+    );
+  }
+  targets = targets.filter((t): t is string => typeof t === "string" && t.includes("@"));
+  if (targets.length === 0) {
+    return NextResponse.json({ error: "No valid target addresses" }, { status: 400 });
+  }
+
+  try {
+    const supabase = getServiceClient();
+
+    // The issue to re-send = the most recent already-sent draft.
+    const { data: draft } = await supabase
+      .from("newsletter_drafts")
+      .select("id, subject, content")
+      .eq("status", "sent")
+      .order("target_send_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!draft) {
+      return NextResponse.json({ error: "No sent draft to re-send" }, { status: 400 });
+    }
+
+    // Only re-send to addresses that are still active subscribers.
+    const { data: subs } = await supabase
+      .from("newsletter_subscribers")
+      .select("email, unsubscribe_token")
+      .in("email", targets)
+      .eq("confirmed", true)
+      .is("unsubscribed_at", null);
+    const recipients = subs || [];
+
+    const [events, robNoteResult] = await Promise.all([getUpcomingEvents(), getRobNote()]);
+    const tracking = {
+      campaignId: draft.id as string,
+      slugToEventId: buildSlugToEventId(events),
+    };
+    const resend = new Resend(resendApiKey);
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const sendOne = async (sub: {
+      email: string;
+      unsubscribe_token: string;
+    }): Promise<{ ok: boolean; error?: string }> => {
+      const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
+      try {
+        const { data, error } = await resend.emails.send({
+          from: `${SITE_NAME} <newsletter@hwy4events.com>`,
+          replyTo: "robgabel@gmail.com",
+          to: sub.email,
+          subject: draft.subject as string,
+          html: buildEmailHtml(
+            robNoteResult.body,
+            draft.content as string,
+            unsubscribeUrl,
+            tracking
+          ),
+          headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+        });
+        if (error) return { ok: false, error: error.message || "resend error" };
+        if (!data?.id) return { ok: false, error: "resend returned no id" };
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : "unknown error" };
+      }
+    };
+
+    let resent = 0;
+    const failures: { email: string; error: string }[] = [];
+    for (const sub of recipients) {
+      const res = await sendOne(sub);
+      if (res.ok) resent++;
+      else failures.push({ email: sub.email, error: res.error || "unknown" });
+      await sleep(SEND_THROTTLE_MS);
+    }
+    if (failures.length > 0) {
+      const toRetry = failures.splice(0, failures.length);
+      for (const f of toRetry) {
+        const sub = recipients.find((s) => s.email === f.email);
+        if (!sub) continue;
+        await sleep(1200);
+        const res = await sendOne(sub);
+        if (res.ok) resent++;
+        else failures.push({ email: sub.email, error: res.error || "unknown" });
+      }
+    }
+
+    // Surface any requested addresses that were not active subscribers (skipped).
+    const skipped = targets.filter(
+      (t) => !recipients.some((r) => r.email.toLowerCase() === t.toLowerCase())
+    );
+
+    return NextResponse.json({
+      ok: true,
+      mode: "resend",
+      subject: draft.subject,
+      requested: targets.length,
+      eligible: recipients.length,
+      resent,
+      skipped_not_active: skipped.length > 0 ? skipped : undefined,
+      failures: failures.length > 0 ? failures : undefined,
+    });
+  } catch (err) {
+    console.error("Newsletter re-send failed:", err);
+    return NextResponse.json({ error: "Failed to re-send newsletter" }, { status: 500 });
+  }
+}
+
 // Read-only preview: prefers the most recent draft (so you see exactly what's
 // queued/approved), then the last archived newsletter, then a placeholder.
 async function renderPreview() {
