@@ -173,17 +173,6 @@ export type GrowthContext = {
   };
 };
 
-export function emptyGrowthDigest(summary: string): GrowthDigest {
-  return {
-    summary,
-    north_star: { headline: "", detail: "" },
-    move_of_the_week: null,
-    experiments: [],
-    watching: [],
-    ops: [],
-  };
-}
-
 // Defensive coercion of model JSON into a GrowthDigest. Never throws; returns
 // null if unusable so the caller can fall back to a degraded run.
 export function coerceGrowthDigest(raw: unknown): GrowthDigest | null {
@@ -236,7 +225,10 @@ export function coerceGrowthDigest(raw: unknown): GrowthDigest | null {
   }
 
   return {
-    summary: o.summary,
+    // Capped like every other text field. summary is the field the degraded
+    // raw-JSON dump used to land in, and the only one that was unbounded; a
+    // backstop here keeps a runaway run from blowing out the layout.
+    summary: o.summary.slice(0, 600),
     north_star: {
       headline: String(ns.headline ?? "").slice(0, 200),
       detail: String(ns.detail ?? "").slice(0, 600),
