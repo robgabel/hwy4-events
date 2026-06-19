@@ -76,33 +76,21 @@ export async function GrowthBriefing() {
 
           {vitals && <VitalsStrip vitals={vitals} />}
 
+          {run.status === "degraded" && (
+            <>
+              <Banner tone="error" title="This run could not be parsed.">
+                The agent ran but returned output we could not turn into a memo (usually the
+                JSON ran past the token limit before it closed). Nothing was sent. Use Run now
+                to retry. The raw output is below.
+              </Banner>
+              {run.error && <pre style={preStyle}>{run.error}</pre>}
+            </>
+          )}
+
           {digest && (
             <>
-              {digest.summary && (
-                <section style={summaryCardStyle}>
-                  <p style={{ margin: 0, color: "#2d3a22", fontSize: 18, lineHeight: 1.6 }}>
-                    {digest.summary}
-                  </p>
-                </section>
-              )}
-
-              {/* North Star */}
-              {(digest.north_star.headline || digest.north_star.detail) && (
-                <section style={{ background: "#1b3a2d", borderRadius: 14, padding: 22, marginBottom: 22 }}>
-                  <p style={{ ...labelStyle, color: "#9db89a", margin: "0 0 8px" }}>North Star</p>
-                  <p style={{ margin: "0 0 6px", color: "#fff", fontSize: 21, fontWeight: 700, lineHeight: 1.35 }}>
-                    {digest.north_star.headline}
-                  </p>
-                  {digest.north_star.detail && (
-                    <p style={{ margin: 0, color: "#cfe0c8", fontSize: 16, lineHeight: 1.55 }}>
-                      {digest.north_star.detail}
-                    </p>
-                  )}
-                </section>
-              )}
-
-              {/* Move of the week */}
-              <SectionHeader>Move of the week</SectionHeader>
+              {/* Move of the week — the hero. Lead with the action, not the prose. */}
+              <SectionHeader>This week&apos;s move</SectionHeader>
               {digest.move_of_the_week ? (
                 <article
                   style={{
@@ -110,40 +98,58 @@ export async function GrowthBriefing() {
                     border: "1px solid #E7E0D5",
                     borderLeft: "4px solid #1B3A2D",
                     borderRadius: 12,
-                    padding: 20,
+                    padding: 22,
                     marginBottom: 22,
                   }}
                 >
-                  <h3 style={{ color: "#1B3A2D", fontSize: 20, margin: "0 0 8px", fontWeight: 700 }}>
+                  <h3 style={{ color: "#1B3A2D", fontSize: 22, margin: "0 0 8px", fontWeight: 700, lineHeight: 1.3 }}>
                     {digest.move_of_the_week.title}
                   </h3>
                   <p style={{ color: "#3a3a3a", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
                     {digest.move_of_the_week.detail}
                   </p>
-                  {digest.move_of_the_week.why && (
-                    <div
-                      style={{
-                        background: "#f0f6ec",
-                        border: "1px solid #d8e4d0",
-                        borderRadius: 8,
-                        padding: "8px 12px",
-                        marginTop: 12,
-                      }}
-                    >
-                      <p style={{ ...labelStyle, color: "#1B3A2D", margin: "0 0 2px" }}>Why this, why now</p>
-                      <p style={{ color: "#3a3a3a", fontSize: 15, lineHeight: 1.5, margin: 0 }}>
-                        {digest.move_of_the_week.why}
-                      </p>
-                    </div>
-                  )}
+                  {/* The draft is the Do; it sits directly under the move, above the rationale. */}
                   {digest.move_of_the_week.draft && (
                     <GrowthDraftBlock draft={digest.move_of_the_week.draft} />
+                  )}
+                  {digest.move_of_the_week.why && (
+                    <p
+                      style={{
+                        color: "#6b7d70",
+                        fontSize: 14,
+                        lineHeight: 1.5,
+                        margin: "12px 0 0",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Why now: {digest.move_of_the_week.why}
+                    </p>
                   )}
                 </article>
               ) : (
                 <Banner tone="ok" title="No clear move this week.">
                   A quiet week. Nothing with enough leverage to chase. Hold the line.
                 </Banner>
+              )}
+
+              {/* North Star — the one-line read, detail inlined */}
+              {(digest.north_star.headline || digest.north_star.detail) && (
+                <section style={{ background: "#1b3a2d", borderRadius: 14, padding: "16px 20px", marginBottom: 22 }}>
+                  <p style={{ ...labelStyle, color: "#9db89a", margin: "0 0 6px" }}>North Star</p>
+                  <p style={{ margin: 0, color: "#fff", fontSize: 18, fontWeight: 600, lineHeight: 1.45 }}>
+                    {digest.north_star.headline}
+                    {digest.north_star.detail && (
+                      <span style={{ color: "#cfe0c8", fontWeight: 400 }}> {digest.north_star.detail}</span>
+                    )}
+                  </p>
+                </section>
+              )}
+
+              {/* Summary — demoted to a short note, only when it adds something */}
+              {digest.summary && (
+                <p style={{ color: "#6b7d70", fontSize: 15, lineHeight: 1.6, margin: "0 0 22px" }}>
+                  {digest.summary}
+                </p>
               )}
 
               {digest.experiments.length > 0 && (
@@ -292,10 +298,18 @@ const pillStyle = {
   borderRadius: 6,
 };
 
-const summaryCardStyle = {
-  background: "#fff",
-  border: "1px solid #E7E0D5",
-  borderRadius: 12,
-  padding: 20,
-  marginBottom: 22,
+// Raw model output for a degraded run. Dark + monospace so it reads as an
+// unmistakable debug dump, never mistaken for the memo's own prose.
+const preStyle = {
+  background: "#1e1e1e",
+  color: "#d4d4d4",
+  fontSize: 12.5,
+  lineHeight: 1.5,
+  padding: 16,
+  borderRadius: 10,
+  margin: "0 0 22px",
+  maxHeight: 420,
+  overflow: "auto" as const,
+  whiteSpace: "pre-wrap" as const,
+  wordBreak: "break-word" as const,
 };

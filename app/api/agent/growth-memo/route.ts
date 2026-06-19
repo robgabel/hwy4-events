@@ -5,7 +5,6 @@ import { SITE_URL } from "@/lib/constants";
 import { gatherGrowthContext } from "@/lib/agent/growth-context";
 import {
   coerceGrowthDigest,
-  emptyGrowthDigest,
   type GrowthContext,
   type GrowthDigest,
 } from "@/lib/agent/types";
@@ -45,6 +44,8 @@ Output STRICT JSON only. No markdown fences, no preamble. Match this shape exact
 
 north_star.headline is the one-line read on the North Star this week (e.g. local-session trend + newsletter net). move_of_the_week is the single move (null only on a genuinely quiet week with no clear lever). watching is leading signals not yet worth acting on. ops is a short footer of queue items that still need a human (pending submissions, verification), kept brief — growth is the point, ops is the footnote.
 
+Brevity is the product: lead Rob to one action, do not bury it in prose. summary is AT MOST 2 sentences and must NOT restate the move or the north star (the page renders those as their own cards); if there is nothing to add beyond them, return an empty string for summary. north_star.detail is at most one sentence. move_of_the_week.why is at most one sentence. If a line does not help Rob decide or act, cut it.
+
 experiments: you are given the team's LOGGED experiments in the "experiments" field of the signal pack, each with a name, hypothesis, metric, baseline, and status. Report ONE experiments item per logged experiment that is still running (or concluded very recently). For each, give an honest early read from this week's numbers against its stated metric and baseline: is it moving, flat, or too early to tell. Do NOT invent experiments that are not in the list, and do not omit a running one. If there are no logged experiments, return an empty experiments array. You are reading results, not designing tests.`;
 
 function safeJson(text: string): unknown {
@@ -65,13 +66,19 @@ function safeJson(text: string): unknown {
   }
 }
 
-async function generateMemo(
-  context: GrowthContext
-): Promise<{ digest: GrowthDigest; status: string; usage: { input: number; output: number } }> {
+async function generateMemo(context: GrowthContext): Promise<{
+  digest: GrowthDigest | null;
+  status: "ok" | "degraded";
+  failure: string | null;
+  usage: { input: number; output: number };
+}> {
   const anthropic = new Anthropic();
   const message = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 2000,
+    // A summary + north_star + a fully-drafted email easily exceeds 2000 output
+    // tokens; truncation there leaves unterminated JSON that fails to parse and
+    // used to dump the raw blob into the summary card. 4000 holds the whole memo.
+    max_tokens: 4000,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -86,16 +93,21 @@ async function generateMemo(
   });
 
   const usage = { input: message.usage.input_tokens, output: message.usage.output_tokens };
+  const truncated = message.stop_reason === "max_tokens";
   const block = message.content[0];
   const text = block && block.type === "text" ? block.text : "";
   const parsed = coerceGrowthDigest(safeJson(text));
-  if (parsed) return { digest: parsed, status: "ok", usage };
+  if (parsed) return { digest: parsed, status: "ok", failure: null, usage };
 
-  return {
-    digest: emptyGrowthDigest(text || "The growth memo could not be produced this run."),
-    status: "degraded",
-    usage,
-  };
+  // Parsing failed. Do NOT pour the raw model output into the summary card — it
+  // renders as an unreadable wall of JSON. Surface it as an explicit degraded
+  // run instead: digest stays null so the UI shows no cards, and the reason plus
+  // raw text go to agent_runs.error for a clearly-marked debug view.
+  const reason = truncated
+    ? "The model hit the 4000-token limit before it finished the JSON, so the memo could not be parsed."
+    : "The model returned output that could not be parsed as the expected JSON.";
+  const failure = `${reason}\n\n--- raw model output ---\n${text || "(empty response)"}`;
+  return { digest: null, status: "degraded", failure, usage };
 }
 
 async function postSlack(digest: GrowthDigest): Promise<void> {
@@ -135,7 +147,7 @@ export async function GET(request: Request) {
 
   try {
     const context = await gatherGrowthContext(supabase);
-    const { digest, status, usage } = await generateMemo(context);
+    const { digest, status, failure, usage } = await generateMemo(context);
 
     const { error } = await supabase.from("agent_runs").insert({
       run_type: "growth_memo",
@@ -145,16 +157,17 @@ export async function GET(request: Request) {
       output_tokens: usage.output,
       context_in: context,
       digest,
+      error: failure,
     });
     if (error) throw error;
 
-    await postSlack(digest);
+    if (digest) await postSlack(digest);
 
     return NextResponse.json({
       ok: true,
       status,
-      move: digest.move_of_the_week?.title ?? null,
-      summary: digest.summary,
+      move: digest?.move_of_the_week?.title ?? null,
+      summary: digest?.summary ?? null,
     });
   } catch (err) {
     console.error("[growth-memo] failed:", err);
