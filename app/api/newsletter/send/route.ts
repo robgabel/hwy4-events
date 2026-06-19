@@ -15,7 +15,13 @@ import {
   todayISO,
 } from "@/lib/newsletter";
 
-export const maxDuration = 120;
+// Bumped from 120s: the send loop below paces each send to respect Resend's
+// rate limit, so a larger subscriber list needs more wall-clock headroom.
+export const maxDuration = 300;
+
+// Delay between individual Resend sends (~2/sec). A no-delay burst is what
+// tripped Resend's rate limit on 2026-06-18 and got 25 sends silently rejected.
+const SEND_THROTTLE_MS = 500;
 
 // Thursday cron. The weekly newsletter now ships on a 24h veto window: the day
 // before, /api/newsletter/prepare stored a draft; a human had ~24h to edit or
@@ -164,47 +170,116 @@ export async function GET(request: Request) {
     const resend = new Resend(resendApiKey);
 
     let sent = 0;
-    const errors: string[] = [];
+    const failures: { email: string; error: string }[] = [];
 
-    // Send individually so each email has a personalized unsubscribe link
-    for (const sub of subscribers) {
+    // One Resend call per subscriber so each gets a personalized unsubscribe link.
+    // CRITICAL: resend.emails.send() returns { data, error } and does NOT throw on
+    // API errors (rate-limit, validation, suppression). The old code did
+    // `await send(); sent++` without inspecting the result, so a rejected send was
+    // silently counted as delivered — on 2026-06-18 that reported 81 sent when only
+    // 56 actually went out (25 rate-limited away, incl. the owner's own address).
+    // We now check the result, throttle to stay under the rate limit, and retry.
+    const sendOne = async (sub: {
+      email: string;
+      unsubscribe_token: string;
+    }): Promise<{ ok: boolean; error?: string }> => {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
       try {
-        await resend.emails.send({
+        const { data, error } = await resend.emails.send({
           from: `${SITE_NAME} <newsletter@hwy4events.com>`,
           // Replies go to Gmail until ImprovMX forwarding for the domain is live.
           replyTo: "robgabel@gmail.com",
           to: sub.email,
           subject,
           html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
-          headers: {
-            "List-Unsubscribe": `<${unsubscribeUrl}>`,
-          },
+          headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
         });
-        sent++;
+        if (error) return { ok: false, error: error.message || "resend error" };
+        if (!data?.id) return { ok: false, error: "resend returned no id" };
+        return { ok: true };
       } catch (err) {
-        errors.push(`${sub.email}: ${err instanceof Error ? err.message : "unknown error"}`);
+        return { ok: false, error: err instanceof Error ? err.message : "unknown error" };
+      }
+    };
+
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    // First pass — throttled so a burst doesn't trip Resend's rate limit.
+    for (const sub of subscribers) {
+      const res = await sendOne(sub);
+      if (res.ok) sent++;
+      else failures.push({ email: sub.email, error: res.error || "unknown" });
+      await sleep(SEND_THROTTLE_MS);
+    }
+
+    // Retry pass — most first-pass failures are transient 429s. Back off, try once
+    // more, and only then give up on a recipient.
+    if (failures.length > 0) {
+      const toRetry = failures.splice(0, failures.length);
+      for (const f of toRetry) {
+        const sub = subscribers.find((s) => s.email === f.email);
+        if (!sub) continue;
+        await sleep(1200);
+        const res = await sendOne(sub);
+        if (res.ok) sent++;
+        else failures.push({ email: sub.email, error: res.error || "unknown" });
+      }
+    }
+
+    // Never fail silently again: if anyone was dropped (or the delivered count came
+    // up short of the active list), log it and shout in Slack with the addresses.
+    if (failures.length > 0 || sent < subscribers.length) {
+      console.error(
+        `[newsletter/send] delivered ${sent}/${subscribers.length}; ${failures.length} failed:`,
+        failures
+      );
+      const webhook = process.env.SLACK_WEBHOOK_URL;
+      if (webhook) {
+        const sample = failures.slice(0, 25).map((f) => f.email).join(", ");
+        try {
+          await fetch(webhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text:
+                `*⚠️ Newsletter ${today}: delivered ${sent}/${subscribers.length}*` +
+                (failures.length > 0
+                  ? `\n${failures.length} not sent: ${sample}${failures.length > 25 ? " …" : ""}`
+                  : "") +
+                `\nSee ${SITE_URL}/admin/newsletter.`,
+            }),
+          });
+        } catch (err) {
+          console.error("[newsletter/send] Slack alert failed:", err);
+        }
       }
     }
 
     // Mark the draft sent and archive the body for the public "latest newsletter".
+    const now = new Date().toISOString();
     await supabase
       .from("newsletter_drafts")
       .update({
         status: "sent",
-        sent_at: new Date().toISOString(),
+        sent_at: now,
         sent_count: sent,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
       .eq("id", draft.id);
 
-    await supabase
-      .from("site_config")
-      .upsert({ key: "latest_newsletter", value: content }, { onConflict: "key" });
+    // site_config.updated_at defaults to now() only on INSERT; on the upsert's
+    // UPDATE branch it would stay frozen at the row's first-insert time, so set
+    // it explicitly here to keep the archive timestamp honest on every send.
     await supabase
       .from("site_config")
       .upsert(
-        { key: "latest_newsletter_date", value: new Date().toISOString() },
+        { key: "latest_newsletter", value: content, updated_at: now },
+        { onConflict: "key" }
+      );
+    await supabase
+      .from("site_config")
+      .upsert(
+        { key: "latest_newsletter_date", value: now, updated_at: now },
         { onConflict: "key" }
       );
 
@@ -213,7 +288,7 @@ export async function GET(request: Request) {
       sent,
       total: subscribers.length,
       subject,
-      errors: errors.length > 0 ? errors : undefined,
+      failures: failures.length > 0 ? failures : undefined,
     });
   } catch (err) {
     console.error("Newsletter send failed:", err);
