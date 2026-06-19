@@ -1,8 +1,9 @@
 -- Daily snapshot of Cloudflare Web Analytics (RUM) for hwy4events.com.
 -- Written by /api/snapshot-analytics (daily Vercel cron) via lib/cloudflare-analytics.ts.
--- Cloudflare's free Web Analytics retention is limited (~6 months); this table is
--- the unbounded local history that powers the admin Growth view + AEO referral
--- tracking. Internal/ops data: NOT public. See PRD-cloudflare-analytics.md.
+-- Cloudflare keeps unsampled RUM only ~7 days and its GraphQL adaptive API serves
+-- only ~3 weeks back (the dashboard's 6-month view is sampled aggregate); this table
+-- is the unbounded, full-fidelity local history that powers the admin Growth view +
+-- AEO referral tracking. Internal/ops data: NOT public. See PRD-cloudflare-analytics.md.
 
 create table if not exists analytics_daily (
   date          date primary key,

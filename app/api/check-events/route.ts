@@ -287,6 +287,46 @@ export async function GET(request: Request) {
     console.error("[check-events] link-gap computation failed:", err);
   }
 
+  // Analytics-snapshot freshness — the freshness alarm for analytics_daily. That
+  // table is the durable local history that outlives Cloudflare's SHORT free-RUM
+  // retention, so if the daily /api/snapshot-analytics cron silently stops (token
+  // expiry, CF schema change, Supabase blip), the un-snapshotted days are lost for
+  // good within that window. The snapshot writes the *previous* UTC day at 09:00
+  // UTC and this audit runs at 18:00 UTC, so the latest row should be yesterday:
+  // >=2 days behind means a run was missed, and a fresh-but-zero latest row means
+  // the cron ran but the CF read returned nothing. Guarded so it never breaks the
+  // audit. See PRD-cloudflare-analytics.md.
+  let analyticsStaleReason: string | null = null;
+  let analyticsLatest: { date: string; pageviews: number } | null = null;
+  try {
+    const { data: latestRows, error: aErr } = await supabase
+      .from("analytics_daily")
+      .select("date, pageviews")
+      .order("date", { ascending: false })
+      .limit(1);
+    if (aErr) {
+      console.error("[check-events] analytics_daily freshness query failed:", aErr.message);
+    } else {
+      const latest = latestRows?.[0] as { date: string; pageviews: number } | undefined;
+      if (!latest) {
+        analyticsStaleReason = "no rows in analytics_daily — the snapshot cron has never written";
+      } else {
+        analyticsLatest = { date: latest.date, pageviews: latest.pageviews };
+        const daysBehind = Math.floor(
+          (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${latest.date}T00:00:00Z`)) / 86400000
+        );
+        if (daysBehind >= 2) {
+          analyticsStaleReason = `latest snapshot is ${latest.date} (${daysBehind} days behind) — the daily snapshot-analytics cron may be failing`;
+        } else if ((latest.pageviews ?? 0) === 0) {
+          analyticsStaleReason = `latest snapshot (${latest.date}) captured 0 pageviews — the CF read may be silently failing`;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[check-events] analytics freshness check failed:", err);
+  }
+  const analyticsStale = analyticsStaleReason !== null;
+
   const summary = {
     audited_at: new Date().toISOString(),
     total_future_events: rows.length,
@@ -294,6 +334,12 @@ export async function GET(request: Request) {
     aggregator_fallback_links: aggregatorFallbackLinks,
     actionable_link_gaps: actionableLinkGaps.length,
     actionable_link_gap_venues: actionableLinkGaps,
+    analytics: {
+      latest_date: analyticsLatest?.date ?? null,
+      latest_pageviews: analyticsLatest?.pageviews ?? null,
+      stale: analyticsStale,
+      stale_reason: analyticsStaleReason,
+    },
     issues: {
       duplicates: duplicates.length,
       same_event_duplicates: sameEventDupes.length,
@@ -310,11 +356,23 @@ export async function GET(request: Request) {
   const totalIssues = Object.values(summary.issues).reduce((a, b) => a + b, 0);
   console.log("[check-events] Audit complete:", summary);
 
-  // Post to Slack if there are issues OR a high-frequency link gap to nudge.
+  // Post to Slack if there are issues, a high-frequency link gap to nudge, or the
+  // analytics snapshot has gone stale (a data-loss risk — see the freshness check).
   const webhook = process.env.SLACK_WEBHOOK_URL;
-  if (webhook && (totalIssues > 0 || actionableLinkGaps.length > 0)) {
-    const header = totalIssues > 0 ? `${totalIssues} issue(s)` : "no issues — link-gap nudge";
+  if (webhook && (totalIssues > 0 || actionableLinkGaps.length > 0 || analyticsStale)) {
+    const header =
+      totalIssues > 0
+        ? `${totalIssues} issue(s)`
+        : analyticsStale
+          ? "analytics snapshot stale"
+          : "no issues — link-gap nudge";
     const lines: string[] = [`*Hwy4 events audit — ${header}*`];
+    if (analyticsStale) {
+      lines.push(`\n:rotating_light: *Analytics snapshot stale:* ${analyticsStaleReason}.`);
+      lines.push(
+        `_Durable history can't be backfilled past Cloudflare's short RUM retention — check the /api/snapshot-analytics cron + CLOUDFLARE_* env._`
+      );
+    }
     if (duplicates.length > 0) {
       lines.push(`\n*${duplicates.length} duplicate group(s):*`);
       for (const d of duplicates.slice(0, 10)) {

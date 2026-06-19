@@ -7,8 +7,10 @@ export const maxDuration = 30;
 /**
  * Daily snapshot of Cloudflare Web Analytics (RUM) into Supabase `analytics_daily`.
  *
- * Cloudflare's free Web Analytics retention is limited (~6 months); this builds an
- * unbounded local history and powers the admin Growth view + AEO referral tracking.
+ * Cloudflare keeps unsampled RUM only ~7 days and its GraphQL adaptive API serves
+ * only ~3 weeks of history (the dashboard's 6-month view is sampled aggregate, not
+ * what the API returns); this builds an unbounded, full-fidelity local history and
+ * powers the admin Growth view + AEO referral tracking.
  * Runs once daily via vercel.json cron, capturing the previous full UTC day.
  * Idempotent: upserts on `date`. Gated by CRON_SECRET. See PRD-cloudflare-analytics.md.
  */
