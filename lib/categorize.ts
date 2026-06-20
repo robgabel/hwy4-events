@@ -32,7 +32,7 @@ export function classifyEventCategory(text: string): EventCategory {
   if (/\b(theater|theatre|playhouse|shakespeare|broadway|matinee|one-act|opera|ballet)\b/.test(haystack)) {
     return "fine_arts";
   }
-  if (/\b(kids|kid|children|family|youth|day camp|summer camp|adventure camp|forest school|creek critters|easter egg|story time)\b/.test(haystack)) {
+  if (/\b(kids|kid|children|family|youth|teens?|tweens?|day camp|summer camp|adventure camp|forest school|creek critters|easter egg|story ?time)\b/.test(haystack)) {
     return "kids";
   }
   if (/\b(bingo|trivia|bocce|pool tournament|cribbage|card tournament|game night|poker)\b/.test(haystack)) {
@@ -40,7 +40,7 @@ export function classifyEventCategory(text: string): EventCategory {
   }
   // Remaining Fine Arts: comedy/improv and visual/craft arts (pottery, painting,
   // drawing). After "kids" so a kids art/pottery camp still lands in "kids".
-  if (/\b(improv|drama|comedy|stand-?up|art gallery|art exhibit|art show|painting|drawing|sketching|pottery|ceramic|ceramics|wheel throwing|sculpt|paint (?:and|&) sip|sip (?:and|&) paint|open studio)\b/.test(haystack)) {
+  if (/\b(improv|drama|comedy|stand-?up|art gallery|art exhibit|art show|paint|painting|drawing|sketching|pottery|ceramic|ceramics|wheel throwing|sculpt|paint (?:and|&) sip|sip (?:and|&) paint|open studio)\b/.test(haystack)) {
     return "fine_arts";
   }
   if (/\b(festival|fair|celebration|fest)\b/.test(haystack)) return "festival";
