@@ -12,6 +12,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import EventCard from "./EventCard";
+import type { Forecast } from "@/lib/weather";
 import {
   parseDate,
   isToday,
@@ -220,9 +221,11 @@ function writeSavedListState(state: SavedListState): void {
 export default function EventList({
   initialEvents,
   orgs,
+  forecast = null,
 }: {
   initialEvents: EventListItem[];
   orgs: Hwy4Org[];
+  forecast?: Forecast | null;
 }) {
   const [selectedCategories, setSelectedCategories] = useState<
     Set<EventCategory>
@@ -602,6 +605,7 @@ export default function EventList({
                           <EventCard
                             event={event}
                             isUpNext={event.id === upNextId}
+                            forecast={forecast}
                           />
                           {/* Inline newsletter signup after the 5th event */}
                           {globalIndex === NEWSLETTER_AFTER_EVENT_INDEX && (

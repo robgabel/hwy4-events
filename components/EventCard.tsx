@@ -6,6 +6,10 @@ import AdoptAPetEventCard from "@/components/AdoptAPetEventCard";
 import ClassicRockEventCard from "@/components/ClassicRockEventCard";
 import { getTownContent } from "@/app/towns/town-content";
 import { humanizeHost } from "@/lib/poster";
+import { isOutdoorEvent } from "@/lib/is-outdoor-event";
+import { weatherQualifier } from "@/lib/weather-conditions";
+import type { Forecast } from "@/lib/weather";
+import WeatherChip from "@/components/WeatherChip";
 import {
   parseDate,
   formatShortWeekday,
@@ -121,9 +125,11 @@ function getEventImage(event: CollapsedEvent): string {
 export default function EventCard({
   event,
   isUpNext = false,
+  forecast = null,
 }: {
   event: CollapsedEvent;
   isUpNext?: boolean;
+  forecast?: Forecast | null;
 }) {
   // Marquee patriotic events get a fully bespoke card.
   if (isPatrioticCard(event)) {
@@ -169,6 +175,15 @@ export default function EventCard({
     humanizeHost(event.source_name, event.name) ??
     (event.org_slug ? ORG_LABELS[event.org_slug] || event.org_slug : null);
   const sourceHref = event.source_url || event.event_url;
+
+  // Weather chip: only for outdoor events, and only when the forecast covers
+  // the event's date (NWS gives ~7 days). isOutdoorEvent gates on category +
+  // venue/name so an indoor "festival" doesn't get a sun icon.
+  const weather =
+    forecast && isOutdoorEvent(event)
+      ? forecast.byDate[event.date] ?? null
+      : null;
+  const weatherCopy = weather ? weatherQualifier(weather, event) : null;
 
   return (
     <article
@@ -431,6 +446,10 @@ export default function EventCard({
               </svg>
               {timeRange}
             </span>
+          )}
+
+          {weather && (
+            <WeatherChip day={weather} qualifier={weatherCopy} event={event} />
           )}
 
           {/* Place: town leads (the geographic decision unit), venue second. */}
