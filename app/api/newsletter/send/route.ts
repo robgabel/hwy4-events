@@ -15,12 +15,14 @@ import {
   todayISO,
 } from "@/lib/newsletter";
 
-// Bumped from 120s: the send loop below paces each send to respect Resend's
-// rate limit, so a larger subscriber list needs more wall-clock headroom.
+// Bumped from 120s: the per-message retry pass and the POST recovery loop pace
+// their sends, so a larger subscriber list needs more wall-clock headroom.
 export const maxDuration = 300;
 
-// Delay between individual Resend sends (~2/sec). A no-delay burst is what
-// tripped Resend's rate limit on 2026-06-18 and got 25 sends silently rejected.
+// Delay between individual (per-message) Resend sends — used by the retry pass and
+// the POST recovery loop, and as a small gap between batch requests. ~2/sec keeps
+// us clear of Resend's 5 req/sec limit. (A no-delay per-message burst is what
+// tripped the rate limit on 2026-06-18; the weekly GET send now uses the Batch API.)
 const SEND_THROTTLE_MS = 500;
 
 // Thursday cron. The weekly newsletter now ships on a 24h veto window: the day
@@ -172,28 +174,34 @@ export async function GET(request: Request) {
     let sent = 0;
     const failures: { email: string; error: string }[] = [];
 
-    // One Resend call per subscriber so each gets a personalized unsubscribe link.
-    // CRITICAL: resend.emails.send() returns { data, error } and does NOT throw on
-    // API errors (rate-limit, validation, suppression). The old code did
-    // `await send(); sent++` without inspecting the result, so a rejected send was
-    // silently counted as delivered — on 2026-06-18 that reported 81 sent when only
-    // 56 actually went out (25 rate-limited away, incl. the owner's own address).
-    // We now check the result, throttle to stay under the rate limit, and retry.
+    // CRITICAL: resend.batch.send() / resend.emails.send() return { data, error }
+    // and do NOT throw on API errors (rate-limit, validation, suppression). The
+    // original code did `await send(); sent++` without inspecting the result, so a
+    // rejected send was silently counted as delivered — on 2026-06-04 that delivered
+    // 30/72, and on 2026-06-18 reported 81 sent when only 56 went out (rate-limited
+    // away, incl. the owner's own address). Every result is now inspected.
+
+    // Build one message per subscriber, each with its own personalized unsubscribe
+    // link. Shared by the batch primary pass and the per-message retry below.
+    const buildMessage = (sub: { email: string; unsubscribe_token: string }) => {
+      const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
+      return {
+        from: `${SITE_NAME} <newsletter@hwy4events.com>`,
+        // Replies go to Gmail until ImprovMX forwarding for the domain is live.
+        replyTo: "robgabel@gmail.com",
+        to: sub.email,
+        subject,
+        html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
+        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+      };
+    };
+
     const sendOne = async (sub: {
       email: string;
       unsubscribe_token: string;
     }): Promise<{ ok: boolean; error?: string }> => {
-      const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
       try {
-        const { data, error } = await resend.emails.send({
-          from: `${SITE_NAME} <newsletter@hwy4events.com>`,
-          // Replies go to Gmail until ImprovMX forwarding for the domain is live.
-          replyTo: "robgabel@gmail.com",
-          to: sub.email,
-          subject,
-          html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
-          headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
-        });
+        const { data, error } = await resend.emails.send(buildMessage(sub));
         if (error) return { ok: false, error: error.message || "resend error" };
         if (!data?.id) return { ok: false, error: "resend returned no id" };
         return { ok: true };
@@ -204,16 +212,41 @@ export async function GET(request: Request) {
 
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-    // First pass — throttled so a burst doesn't trip Resend's rate limit.
-    for (const sub of subscribers) {
-      const res = await sendOne(sub);
-      if (res.ok) sent++;
-      else failures.push({ email: sub.email, error: res.error || "unknown" });
-      await sleep(SEND_THROTTLE_MS);
+    // Primary pass — Resend's Batch API sends up to 100 messages per request, so the
+    // whole list ships in a handful of HTTP calls instead of one-per-recipient. That
+    // is structurally immune to the 5 req/sec rate limit (what dropped recipients on
+    // 2026-06-04 and 2026-06-18) and far faster than pacing each send. batch.send
+    // still returns { data, error } and does NOT throw, so we inspect it; a whole-
+    // batch rejection drops every recipient in that chunk to the retry pass below.
+    const BATCH_SIZE = 100;
+    const outbound = subscribers.map((sub) => ({ sub, msg: buildMessage(sub) }));
+    for (let i = 0; i < outbound.length; i += BATCH_SIZE) {
+      const chunk = outbound.slice(i, i + BATCH_SIZE);
+      try {
+        const { data, error } = await resend.batch.send(chunk.map((m) => m.msg));
+        if (error) {
+          for (const m of chunk) {
+            failures.push({ email: m.sub.email, error: error.message || "batch rejected" });
+          }
+        } else {
+          // Batch is all-or-nothing per request; on success Resend returns one id
+          // per message.
+          const ids = (data as { data?: unknown[] } | null)?.data;
+          sent += Array.isArray(ids) ? ids.length : chunk.length;
+        }
+      } catch (err) {
+        for (const m of chunk) {
+          failures.push({
+            email: m.sub.email,
+            error: err instanceof Error ? err.message : "unknown error",
+          });
+        }
+      }
+      if (i + BATCH_SIZE < outbound.length) await sleep(SEND_THROTTLE_MS);
     }
 
-    // Retry pass — most first-pass failures are transient 429s. Back off, try once
-    // more, and only then give up on a recipient.
+    // Retry pass — per-message and throttled, for anyone a batch rejection dropped.
+    // Most such failures are transient 429s; back off, try once more, then give up.
     if (failures.length > 0) {
       const toRetry = failures.splice(0, failures.length);
       for (const f of toRetry) {
