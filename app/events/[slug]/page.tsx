@@ -4,7 +4,6 @@ import type { Metadata } from "next";
 import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
-import { isOutdoorEvent } from "@/lib/is-outdoor-event";
 import { getForecast, getWeatherForDate } from "@/lib/weather";
 import { weatherQualifier } from "@/lib/weather-conditions";
 import WeatherChip from "@/components/WeatherChip";
@@ -239,11 +238,9 @@ export default async function EventPage({ params }: PageProps) {
   const mapLng = geocoded?.lng ?? townData?.lng ?? null;
   const mapZoom = geocoded ? 15 : townData?.mapZoom ?? 13;
 
-  // Weather for THIS event's town (detail size), outdoor events within the
-  // 7-day NWS window only.
-  const weather = isOutdoorEvent(event)
-    ? getWeatherForDate(forecast, event.date)
-    : null;
+  // Weather for THIS event's town (detail size), any event within the 7-day
+  // NWS window.
+  const weather = getWeatherForDate(forecast, event.date);
   const weatherCopy = weather ? weatherQualifier(weather, event) : null;
 
   // The Arnold parade gets a fully bespoke, parade-specific detail microsite.
