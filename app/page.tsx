@@ -4,7 +4,7 @@ import { getHomepageEvents, toListEvents } from "@/lib/events-data";
 import { JsonLd, buildItemList } from "@/lib/schema";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
-import { getForecast } from "@/lib/weather";
+import { getForecastsByTown } from "@/lib/weather";
 import WeeklyBriefing from "@/components/WeeklyBriefing";
 import ShareSiteLink from "@/components/ShareSiteLink";
 import Link from "next/link";
@@ -93,14 +93,14 @@ async function getOrgs(): Promise<Hwy4Org[]> {
 }
 
 export default async function Home() {
-  const [events, orgs, greeting, briefing, weekendBriefing, forecast] =
+  const [events, orgs, greeting, briefing, weekendBriefing, forecastsByTown] =
     await Promise.all([
       getHomepageEvents(),
       getOrgs(),
       getGreeting(),
       getBriefing(),
       getWeekendBriefing(),
-      getForecast(),
+      getForecastsByTown(),
     ]);
 
   return (
@@ -137,7 +137,7 @@ export default async function Home() {
           <EventList
             initialEvents={toListEvents(events)}
             orgs={orgs}
-            forecast={forecast}
+            forecastsByTown={forecastsByTown}
           />
         </section>
       </div>

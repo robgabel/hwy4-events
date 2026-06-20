@@ -1,4 +1,5 @@
-import { SITE_LATLNG, WEATHER_USER_AGENT } from "./constants";
+import { WEATHER_USER_AGENT } from "./constants";
+import { CORRIDOR_TOWNS } from "./towns";
 import { addDays, pacificToday } from "./date-windows";
 import { mapShortForecast, type ConditionKey } from "./weather-conditions";
 
@@ -208,7 +209,11 @@ function localIsoAtMinutes(date: string, minutesFromMidnight: number): string {
   )}:00${offsetSuffix(offset)}`;
 }
 
-function solarTimes(date: string): { sunrise: string; sunset: string } {
+function solarTimes(
+  date: string,
+  lat: number,
+  lng: number
+): { sunrise: string; sunset: string } {
   const noon = new Date(`${date}T12:00:00Z`);
   const n = dayOfYear(noon);
   const gamma = (2 * Math.PI * (n - 1)) / 365;
@@ -227,7 +232,7 @@ function solarTimes(date: string): { sunrise: string; sunset: string } {
     0.000907 * Math.sin(2 * gamma) -
     0.002697 * Math.cos(3 * gamma) +
     0.00148 * Math.sin(3 * gamma);
-  const latRad = (SITE_LATLNG.lat * Math.PI) / 180;
+  const latRad = (lat * Math.PI) / 180;
   const zenith = (90.833 * Math.PI) / 180;
   const hourAngle =
     (Math.acos(
@@ -236,7 +241,7 @@ function solarTimes(date: string): { sunrise: string; sunset: string } {
     ) *
       180) /
     Math.PI;
-  const solarNoonUtc = 720 - 4 * SITE_LATLNG.lng - eqTime;
+  const solarNoonUtc = 720 - 4 * lng - eqTime;
   const offset = timezoneOffsetMinutes(PACIFIC_TZ, noon);
   const sunriseLocal = solarNoonUtc - 4 * hourAngle + offset;
   const sunsetLocal = solarNoonUtc + 4 * hourAngle + offset;
@@ -246,8 +251,11 @@ function solarTimes(date: string): { sunrise: string; sunset: string } {
   };
 }
 
-export async function getForecast(): Promise<Forecast | null> {
-  const pointsUrl = `https://api.weather.gov/points/${SITE_LATLNG.lat},${SITE_LATLNG.lng}`;
+export async function getForecast(
+  lat: number,
+  lng: number
+): Promise<Forecast | null> {
+  const pointsUrl = `https://api.weather.gov/points/${lat},${lng}`;
   const points = await fetchJson<NwsPointsResponse>(
     pointsUrl,
     POINTS_REVALIDATE_SECONDS
@@ -265,7 +273,7 @@ export async function getForecast(): Promise<Forecast | null> {
   const today = pacificToday().iso;
   return {
     byDate: foldPeriods(periods),
-    ...solarTimes(today),
+    ...solarTimes(today, lat, lng),
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -278,4 +286,25 @@ export function getWeatherForDate(
   const today = pacificToday().iso;
   if (date < today || date > addDays(today, 7)) return null;
   return forecast.byDate[date] ?? null;
+}
+
+/** Forecasts keyed by corridor town name (lib/towns.ts). */
+export type TownForecasts = Record<string, Forecast | null>;
+
+/**
+ * Per-town forecast for the whole corridor. Weather here varies enormously by
+ * elevation: Copperopolis (~850 ft) to Bear Valley (~7,000 ft) are ~60 miles
+ * and 6,000 vertical feet apart, so a single corridor-centroid forecast is
+ * wrong at both ends. Each town gets its own NWS lookup from its lib/towns.ts
+ * lat/lng. Fetches run in parallel and are individually cached (see
+ * getForecast); one town failing yields null for that town only, not the map.
+ */
+export async function getForecastsByTown(): Promise<TownForecasts> {
+  const entries = await Promise.all(
+    CORRIDOR_TOWNS.map(
+      async (town) =>
+        [town.name, await getForecast(town.lat, town.lng)] as const
+    )
+  );
+  return Object.fromEntries(entries);
 }

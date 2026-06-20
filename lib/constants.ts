@@ -1,15 +1,11 @@
 export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://hwy4events.com";
 
-// Corridor centroid (≈ between Murphys and Arnold) for region-level weather.
-// NOTE: forecasts are currently corridor-level, not per-event. Elevation along
-// the 4 varies a lot (Angels Camp ~1,400ft → Bear Valley ~7,000ft); to make
-// them event-accurate, wire getForecast() to per-venue coords via lib/geocode.ts.
-// Porting to a new region? This one constant is the only geo change weather needs.
-export const SITE_LATLNG = { lat: 38.18, lng: -120.42 };
-
 // NWS (api.weather.gov) requires a descriptive User-Agent that names the app
-// and a contact (a URL suffices). Bump the name when porting to a new region.
+// and a contact (a URL suffices). Weather is fetched PER TOWN (lib/weather.ts
+// getForecastsByTown) from each town's lat/lng in lib/towns.ts, because
+// elevation along the 4 swings ~6,000 ft and a single point is wrong at both
+// ends. Bump the name when porting to a new region.
 export const WEATHER_USER_AGENT = `Hwy4EventsBot/1.0 (${SITE_URL})`;
 
 export const SITE_NAME = "Hwy 4 Events";

@@ -8,7 +8,7 @@ import { getTownContent } from "@/app/towns/town-content";
 import { humanizeHost } from "@/lib/poster";
 import { isOutdoorEvent } from "@/lib/is-outdoor-event";
 import { weatherQualifier } from "@/lib/weather-conditions";
-import type { Forecast } from "@/lib/weather";
+import type { TownForecasts } from "@/lib/weather";
 import WeatherChip from "@/components/WeatherChip";
 import {
   parseDate,
@@ -125,11 +125,11 @@ function getEventImage(event: CollapsedEvent): string {
 export default function EventCard({
   event,
   isUpNext = false,
-  forecast = null,
+  forecastsByTown = null,
 }: {
   event: CollapsedEvent;
   isUpNext?: boolean;
-  forecast?: Forecast | null;
+  forecastsByTown?: TownForecasts | null;
 }) {
   // Marquee patriotic events get a fully bespoke card.
   if (isPatrioticCard(event)) {
@@ -176,12 +176,15 @@ export default function EventCard({
     (event.org_slug ? ORG_LABELS[event.org_slug] || event.org_slug : null);
   const sourceHref = event.source_url || event.event_url;
 
-  // Weather chip: only for outdoor events, and only when the forecast covers
-  // the event's date (NWS gives ~7 days). isOutdoorEvent gates on category +
-  // venue/name so an indoor "festival" doesn't get a sun icon.
+  // Weather chip: look up THIS event's town (Copperopolis at ~850 ft and Bear
+  // Valley at ~7,000 ft have wildly different weather), only for outdoor events,
+  // and only when the forecast covers the event's date (NWS gives ~7 days).
+  // isOutdoorEvent gates on category + venue/name so an indoor "festival"
+  // doesn't get a sun icon.
+  const townForecast = forecastsByTown?.[event.town] ?? null;
   const weather =
-    forecast && isOutdoorEvent(event)
-      ? forecast.byDate[event.date] ?? null
+    townForecast && isOutdoorEvent(event)
+      ? townForecast.byDate[event.date] ?? null
       : null;
   const weatherCopy = weather ? weatherQualifier(weather, event) : null;
 
