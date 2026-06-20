@@ -28,13 +28,14 @@ const PAGE_SIZE = 1000;
 
 // Columns needed by the card renderer (EventCard), the read-time deduper
 // (dedupe-events.ts), and the JSON-LD builders (schema.tsx). Trimmed vs. the
-// old per-page selects: dropped `source_url`, `source_name`, and `importance`,
-// which no list view or schema reads — smaller rows, less egress per scan.
+// old per-page selects: still drops `importance` (unread by any list or schema).
+// `source_name` + `source_url` are kept now for the event-card "Source:" line.
 const EVENT_COLUMNS =
   "id, name, description, date, start_time, end_time, venue_name, town, " +
   "address, category, artists, status, price, cost_tier, event_url, " +
-  "source_event_id, image_url, visibility, org_slug, robs_pick, is_weekly, " +
-  "verification_status, community_sourced, last_scraped_at, updated_at";
+  "source_event_id, source_name, source_url, image_url, visibility, org_slug, " +
+  "robs_pick, is_weekly, verification_status, community_sourced, " +
+  "last_scraped_at, updated_at";
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
   // "Today" in the corridor's Pacific civil date, NOT UTC. Computing it in UTC
@@ -145,6 +146,9 @@ export function toListEvents(events: Hwy4Event[]): EventListItem[] {
     is_weekly: e.is_weekly,
     verification_status: e.verification_status,
     community_sourced: e.community_sourced,
+    source_name: e.source_name,
+    source_url: e.source_url,
+    event_url: e.event_url,
   }));
 }
 

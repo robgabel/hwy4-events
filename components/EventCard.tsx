@@ -5,6 +5,7 @@ import PatrioticEventCard from "@/components/PatrioticEventCard";
 import AdoptAPetEventCard from "@/components/AdoptAPetEventCard";
 import ClassicRockEventCard from "@/components/ClassicRockEventCard";
 import { getTownContent } from "@/app/towns/town-content";
+import { humanizeHost } from "@/lib/poster";
 import {
   parseDate,
   formatShortWeekday,
@@ -160,6 +161,14 @@ export default function EventCard({
   const accentColor = CATEGORY_ACCENT_COLORS[event.category];
 
   const townHasPage = getTownContent(townSlug(event.town)) !== null;
+
+  // "Source: <organizer>" provenance line. humanizeHost hides aggregator /
+  // community sources (GoCalaveras, Community Submission) and title-repeats,
+  // so this shows selectively — a small trust signal for real organizers.
+  const sourceLabel =
+    humanizeHost(event.source_name, event.name) ??
+    (event.org_slug ? ORG_LABELS[event.org_slug] || event.org_slug : null);
+  const sourceHref = event.source_url || event.event_url;
 
   return (
     <article
@@ -460,6 +469,20 @@ export default function EventCard({
             </span>
           </span>
         </div>
+
+        {sourceHref && sourceLabel && (
+          <p className="mt-2 text-xs text-stone">
+            Source:{" "}
+            <a
+              href={sourceHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative z-20 font-medium text-pine underline decoration-pine/30 underline-offset-2 hover:decoration-pine"
+            >
+              {sourceLabel}
+            </a>
+          </p>
+        )}
       </div>
 
       {/* Thumbnail */}

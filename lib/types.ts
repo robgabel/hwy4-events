@@ -158,6 +158,9 @@ export type EventListItem = Pick<
   | "is_weekly"
   | "verification_status"
   | "community_sourced"
+  | "source_name"
+  | "source_url"
+  | "event_url"
 >;
 
 export interface CollapsedEvent extends EventListItem {
