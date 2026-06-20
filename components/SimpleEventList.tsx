@@ -4,6 +4,7 @@ import { Fragment } from "react";
 import type { Hwy4Event, CollapsedEvent } from "@/lib/types";
 import EventCard from "./EventCard";
 import NewsletterSignup from "./NewsletterSignup";
+import type { TownForecasts } from "@/lib/weather";
 
 /**
  * Minimal client-rendered list of EventCards, used by server pages (town,
@@ -21,18 +22,20 @@ export default function SimpleEventList({
   events,
   newsletterAfterIndex,
   newsletterSource,
+  forecastsByTown = null,
 }: {
   events: Hwy4Event[];
   newsletterAfterIndex?: number;
   /** Attribution code for the inline signup (R1b), e.g. "town_murphys". */
   newsletterSource?: string;
+  forecastsByTown?: TownForecasts | null;
 }) {
   if (events.length === 0) return null;
   return (
     <div className="space-y-3">
       {events.map((e, i) => (
         <Fragment key={e.id}>
-          <EventCard event={e as CollapsedEvent} />
+          <EventCard event={e as CollapsedEvent} forecastsByTown={forecastsByTown} />
           {i === newsletterAfterIndex && (
             <NewsletterSignup variant="inline" source={newsletterSource} />
           )}

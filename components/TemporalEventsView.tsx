@@ -15,6 +15,7 @@ import {
 } from "@/lib/schema";
 import SimpleEventList from "@/components/SimpleEventList";
 import NewsletterSignup from "@/components/NewsletterSignup";
+import { getForecastsByTown } from "@/lib/weather";
 import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content";
 import { TEMPORAL_CONFIG, type WindowKey } from "@/lib/date-windows";
 
@@ -47,7 +48,10 @@ export default async function TemporalEventsView({
 }) {
   const cfg = TEMPORAL_CONFIG[windowKey];
   const range = cfg.getRange();
-  const events = await getEventsInRange(range.start, range.end);
+  const [events, forecastsByTown] = await Promise.all([
+    getEventsInRange(range.start, range.end),
+    getForecastsByTown(),
+  ]);
   const grouped = groupByDate(events);
   const townLinks = publishedTownLinks();
 
@@ -146,6 +150,7 @@ export default async function TemporalEventsView({
                     events={dayEvents}
                     newsletterAfterIndex={newsletterAfterIndex}
                     newsletterSource={`temporal_${windowKey}`}
+                    forecastsByTown={forecastsByTown}
                   />
                 </section>
               );

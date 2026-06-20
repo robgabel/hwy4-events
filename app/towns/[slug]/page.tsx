@@ -23,6 +23,7 @@ import {
 } from "@/app/towns/town-content";
 import SimpleEventList from "@/components/SimpleEventList";
 import NewsletterSignup from "@/components/NewsletterSignup";
+import { getForecast, type TownForecasts } from "@/lib/weather";
 import { linkifyPhones } from "@/lib/linkify";
 
 export const revalidate = 3600;
@@ -94,10 +95,14 @@ export default async function TownPage({ params }: PageProps) {
   const town: TownInfo | undefined = TOWN_INFO[content.townName];
   if (!town) notFound();
 
-  const [events, venues] = await Promise.all([
+  const [events, venues, townForecast] = await Promise.all([
     getEventsInTown(content.townName),
     getVenuesInTown(content.townName),
+    getForecast(town.lat, town.lng),
   ]);
+  // Every event on this page is in one town, so a one-entry map is all the
+  // cards need (and keeps the client payload to a single town's forecast).
+  const forecastsByTown: TownForecasts = { [town.name]: townForecast };
 
   const nearby = pickNearbyTowns(town, 3);
 
@@ -215,7 +220,7 @@ export default async function TownPage({ params }: PageProps) {
         </h2>
         {events.length > 0 ? (
           <>
-            <SimpleEventList events={events.slice(0, 10)} newsletterAfterIndex={4} newsletterSource={`town_${slug}`} />
+            <SimpleEventList events={events.slice(0, 10)} newsletterAfterIndex={4} newsletterSource={`town_${slug}`} forecastsByTown={forecastsByTown} />
             {events.length > 10 && (
               <p className="mt-4 text-sm text-stone">
                 <Link
