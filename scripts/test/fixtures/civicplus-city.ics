@@ -1,0 +1,13 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+DESCRIPTION:Member agencies host networking and community building events. https://www.eugene-or.gov/calendar.aspx?EID=33710
+DTEND;TZID=America/Los_Angeles:20270415T190000
+DTSTART;TZID=America/Los_Angeles:20270415T170000
+LOCATION:Farmers Market Pavilion - 85 E 8th Ave Eugene OR 97401
+SUMMARY:Communities of Color & Allies Network Third Thursday Event
+UID:33710
+URL:/common/modules/iCalendar/iCalendar.aspx?feed=calendar&catID=14
+END:VEVENT
+END:VCALENDAR

@@ -1,0 +1,23 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Springshare//LibCal//EN
+X-WR-TIMEZONE:America/Los_Angeles
+BEGIN:VEVENT
+DTSTART:20260707T233000Z
+DTEND:20260708T003000Z
+SUMMARY:Teen Team
+DESCRIPTION:For ages 13 - 19. Sign up to join Teen Team at the Downtown Library.
+LOCATION:Downtown Library
+UID:LibCal-15065-16862425
+URL:https://eugene.libcal.com/event/16862425
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260708T000000Z
+DTEND:20260708T013000Z
+SUMMARY:Adults: Paint Citrus Fruits with Watercolors
+DESCRIPTION:Adults: learn to paint vibrant citrus fruits with watercolors.
+LOCATION:Sheldon Branch
+UID:LibCal-15065-17017027
+URL:https://eugene.libcal.com/event/17017027
+END:VEVENT
+END:VCALENDAR

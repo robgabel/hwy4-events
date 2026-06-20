@@ -1,0 +1,26 @@
+{
+  "events": [
+    {
+      "id": 10000455,
+      "status": "publish",
+      "title": "Skate &#038; Shop at the Tuesday Farmers Market",
+      "description": "<p>Shop fresh local food and skate downtown.</p>",
+      "url": "https://www.lanecountyfarmersmarket.org/event/skate-shop-at-the-tuesday-market/2026-06-23/",
+      "start_date": "2026-06-23 09:00:00",
+      "end_date": "2026-06-23 14:00:00",
+      "all_day": false,
+      "cost": "Free",
+      "venue": {
+        "venue": "Farmers Market Pavilion and Plaza",
+        "address": "85 E 8th Ave",
+        "city": "Eugene",
+        "state": "OR",
+        "zip": "97401"
+      },
+      "categories": [{ "name": "Farmers Markets", "slug": "farmers-markets" }],
+      "image": {
+        "url": "https://www.lanecountyfarmersmarket.org/wp-content/uploads/2026/03/LCFM-Logo-Color-Block-scaled.png"
+      }
+    }
+  ]
+}

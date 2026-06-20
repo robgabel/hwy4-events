@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Events Calendar</title>
+    <item>
+      <title>Amazon Farmers Market</title>
+      <link>https://www.eugenecascadescoast.org/event/amazon-farmers-market/54640/</link>
+      <category><![CDATA[ Farmers Markets &amp; Farm Stands ]]></category>
+      <category><![CDATA[ Culinary ]]></category>
+      <guid ispermalink="false">https://www.eugenecascadescoast.org/event/amazon-farmers-market/54640/</guid>
+      <pubDate>Thu, 18 Jun 2026 23:59:59 -0700</pubDate>
+      <description><![CDATA[
+        <img src='https://assets.simpleviewinc.com/simpleview/image/upload/c_fill,h_100,q_75,w_150/v1/crm/lanecounty/amazon-farmers-market.jpg'/>
+        06/11/2026 to 10/29/2026 - <p>Come enjoy another summer of the Amazon Farmers Market in South Eugene.</p>
+      ]]></description>
+    </item>
+  </channel>
+</rss>

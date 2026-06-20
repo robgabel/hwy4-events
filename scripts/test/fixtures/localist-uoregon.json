@@ -1,0 +1,48 @@
+{
+  "events": [
+    {
+      "event": {
+        "id": 52649726732869,
+        "title": " Gateway to Himalayan Art",
+        "url": "https://jsma.uoregon.edu/gateway-himalayan-art",
+        "localist_url": "https://calendar.uoregon.edu/event/gateway-to-himalayan-art",
+        "status": "live",
+        "private": false,
+        "rejected": false,
+        "first_date": "2026-02-21",
+        "last_date": "2026-07-05",
+        "free": true,
+        "ticket_cost": "$5 for adults, $3 for seniors, free for youth",
+        "description_text": "Gateway to Himalayan Art is a special exhibition that introduces the main forms, concepts, meanings, and living traditions of Himalayan art.",
+        "location_name": "Jordan Schnitzer Museum of Art (JSMA)",
+        "room_number": "Barker Gallery",
+        "address": "1430 Johnson Lane, Eugene, OR 97403",
+        "geo": {
+          "street": "1430 Johnson Lane",
+          "city": "Eugene",
+          "state": "OR",
+          "zip": "97403"
+        },
+        "filters": {
+          "event_types": [
+            { "name": "Arts & Culture" },
+            { "name": "Exhibit" },
+            { "name": "Art" }
+          ]
+        },
+        "event_instances": [
+          {
+            "event_instance": {
+              "id": 52649726812859,
+              "event_id": 52649726732869,
+              "start": "2026-06-18T00:00:00-07:00",
+              "end": null,
+              "all_day": true
+            }
+          }
+        ],
+        "photo_url": "https://localist-images.azureedge.net/photos/example.jpg"
+      }
+    }
+  ]
+}

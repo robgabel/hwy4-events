@@ -1,0 +1,31 @@
+{
+  "events": [
+    {
+      "id": 10007214,
+      "status": "publish",
+      "url": "https://wowhall.org/event/dance-empowered-with-cynthia-valentine-3/2026-06-17/",
+      "title": "Dance Empowered with Cynthia Valentine",
+      "description": "<h3>MOVEMENT AS MEDICINE</h3><p>The mission of Dance Empowered is to create an inclusive, community-oriented dance experience.</p>",
+      "start_date": "2026-06-17 17:30:00",
+      "end_date": "2026-06-17 18:30:00",
+      "all_day": false,
+      "cost": "$10 - $100",
+      "venue": {
+        "venue": "WOW Hall",
+        "address": "291 West 8th Avenue",
+        "city": "Eugene",
+        "state": "OR",
+        "zip": "97401"
+      },
+      "categories": [
+        { "name": "Classes", "slug": "classes" },
+        { "name": "Events", "slug": "event" }
+      ],
+      "image": {
+        "url": "https://wowhall.org/wp-content/uploads/example.png"
+      }
+    }
+  ],
+  "total": 1,
+  "total_pages": 1
+}

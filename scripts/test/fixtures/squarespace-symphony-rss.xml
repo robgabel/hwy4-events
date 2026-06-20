@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0">
+  <channel>
+    <title>Events - Eugene Symphony</title>
+    <item>
+      <title>Willamalane Children's Celebration</title>
+      <category>Community Events</category>
+      <pubDate>Wed, 03 Jun 2026 23:17:18 +0000</pubDate>
+      <link>https://www.eugenesymphony.org/events/instrument-petting-zoo-childrens-celebration-6-27-2026</link>
+      <guid isPermaLink="false">symphony-children-2026</guid>
+      <description><![CDATA[Join us at the Willamalane Children's Celebration for our family-friendly Instrument Petting Zoo. Admission is free.]]></description>
+      <content:encoded><![CDATA[
+        <p>Join us for a family-friendly Instrument Petting Zoo at the Willamalane Children's Celebration in Springfield.</p>
+        <img data-image="https://images.squarespace-cdn.com/content/example/IPZ_1080x1080_6-27.png" src="https://images.squarespace-cdn.com/content/example/IPZ_1080x1080_6-27.png?format=1000w" />
+      ]]></content:encoded>
+    </item>
+  </channel>
+</rss>
