@@ -1,15 +1,7 @@
-import type { ComponentType } from "react";
-import {
-  Cloud,
-  CloudFog,
-  CloudLightning,
-  CloudRain,
-  CloudSnow,
-  CloudSun,
-  Sun,
-  Wind,
-  type LucideProps,
-} from "lucide-react";
+// Pure forecast logic only — no React / lucide-react imports. The condition →
+// icon map lives in lib/weather-icons.ts so scripts/test/weather.test.ts can
+// import these functions without pulling a root-only UI dep into the script
+// test runner (which resolves against scripts/node_modules). See weather-icons.ts.
 
 export type ConditionKey =
   | "clear"
@@ -34,29 +26,6 @@ export function mapShortForecast(
   if (/\b(partly|mostly sunny|few clouds)\b/.test(text)) return "partly_cloudy";
   if (/\b(overcast|cloudy)\b/.test(text)) return "cloudy";
   return "clear";
-}
-
-export function conditionIcon(
-  key: ConditionKey
-): ComponentType<LucideProps> {
-  switch (key) {
-    case "clear":
-      return Sun;
-    case "partly_cloudy":
-      return CloudSun;
-    case "cloudy":
-      return Cloud;
-    case "rain":
-      return CloudRain;
-    case "snow":
-      return CloudSnow;
-    case "fog":
-      return CloudFog;
-    case "storm":
-      return CloudLightning;
-    case "windy":
-      return Wind;
-  }
 }
 
 export function conditionColorClass(

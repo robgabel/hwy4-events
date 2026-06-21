@@ -1,5 +1,6 @@
 import type { ResolvedWeather } from "@/lib/weather";
-import { conditionColorClass, conditionIcon } from "@/lib/weather-conditions";
+import { conditionColorClass } from "@/lib/weather-conditions";
+import { conditionIcon } from "@/lib/weather-icons";
 
 export default function WeatherChip({
   weather,
