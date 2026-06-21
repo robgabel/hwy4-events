@@ -39,3 +39,22 @@ export async function countPending(
     .eq(column, value);
   return count ?? 0;
 }
+
+// Nav-badge count for rows where a column IS NULL (e.g. venues missing a blurb).
+// Same never-throw contract as countPending. `idColumn` is the table's key, since
+// some tables (hwy4_venues) have no `id`.
+export async function countMissing(
+  table: string,
+  column: string,
+  idColumn = "id"
+): Promise<number> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return 0;
+  const supabase = createClient(url, key);
+  const { count } = await supabase
+    .from(table)
+    .select(idColumn, { count: "exact", head: true })
+    .is(column, null);
+  return count ?? 0;
+}
