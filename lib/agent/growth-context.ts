@@ -7,6 +7,14 @@ import { getNewsletterStats } from "@/lib/newsletter-stats";
 // ONLY summarize what's in here. Grounded in the live schemas: site_events
 // (Gate 0), newsletter_subscribers / _drafts / _clicks, analytics_daily,
 // seo_snapshots, hwy4_orgs, share_hits, poster_submissions, event_submissions.
+//
+// Aggregation rule: every site_events / share_hits / newsletter_clicks signal
+// is aggregated by a SQL RPC (growth_*_stats), NOT by tallying a raw rowset in
+// JS. A PostgREST rowset is capped at ~1,000, so the old "select rows then
+// count" path silently undercounted every session/referral/share/click metric
+// once a window held >1,000 rows (the North Star proxy froze first). The RPCs
+// aggregate server-side and return a single jsonb each, immune to the cap and
+// exact at any volume. See migration 20260621b_growth_signal_rpcs.sql.
 
 const DAY = 86_400_000;
 const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
@@ -14,19 +22,20 @@ const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 type Row = Record<string, unknown>;
 const rows = (r: { data: unknown }) => (r.data ?? []) as Row[];
 const num = (v: unknown) => (typeof v === "number" ? v : Number(v ?? 0)) || 0;
+const asObj = (v: unknown) => (v ?? {}) as Record<string, unknown>;
 
-/** Distinct session_ids in a row set, plus how many had 2+ views (engaged). */
-function sessionStats(views: Row[]): { distinct: number; engaged: number } {
-  const counts = new Map<string, number>();
-  for (const v of views) {
-    const s = String(v.session_id ?? "");
-    if (!s) continue;
-    counts.set(s, (counts.get(s) ?? 0) + 1);
-  }
-  let engaged = 0;
-  for (const c of counts.values()) if (c >= 2) engaged++;
-  return { distinct: counts.size, engaged };
-}
+/** A {distinct, engaged} session block as returned by growth_session_stats. */
+type SessionStat = { distinct: number; engaged: number };
+const sessionStat = (v: unknown): SessionStat => {
+  const o = asObj(v);
+  return { distinct: num(o.distinct), engaged: num(o.engaged) };
+};
+/** Coerce a jsonb src->count object into a plain Record<string, number>. */
+const numMap = (v: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [k, val] of Object.entries(asObj(v))) out[k] = num(val);
+  return out;
+};
 
 export async function gatherGrowthContext(
   supabase: SupabaseClient
@@ -39,12 +48,12 @@ export async function gatherGrowthContext(
   const [
     nlStats,
     lastSend,
-    views14,
-    outbound30,
+    sessionAgg,
+    outboundAgg,
     analytics,
     seoLatest,
     durableOrgs,
-    shareHits7,
+    shareAgg,
     posterPending,
     pendingSubs,
     needsVerif,
@@ -53,14 +62,15 @@ export async function gatherGrowthContext(
     // Newsletter trend + composition, single source of truth (lib/newsletter-stats).
     getNewsletterStats(supabase, 60),
     supabase.from("newsletter_drafts").select("id, target_send_date, sent_at, sent_count").eq("status", "sent").order("sent_at", { ascending: false }).limit(1),
-    // Pull 14d of local + visitor views to derive weekly session proxies.
-    supabase.from("site_events").select("session_id, visitor_class, created_at, src").eq("kind", "view").eq("is_bot", false).gte("created_at", d14).limit(20000),
-    // 30d of outbound business clicks (the referral signal).
-    supabase.from("site_events").select("click_type, visitor_class, event_id, created_at, src").eq("kind", "outbound").eq("is_bot", false).gte("created_at", d30).limit(20000),
+    // 14d of view sessions -> weekly local/visitor session proxies (DB-aggregated).
+    supabase.rpc("growth_session_stats", { p_d7: d7, p_d14: d14 }),
+    // 30d of outbound business clicks, the referral signal (DB-aggregated).
+    supabase.rpc("growth_outbound_stats", { p_d7: d7, p_d30: d30 }),
     supabase.from("analytics_daily").select("date, pageviews, top_pages, ai_referrals").order("date", { ascending: false }).limit(14),
     supabase.from("seo_snapshots").select("captured_at").order("captured_at", { ascending: false }).limit(1),
     supabase.from("hwy4_orgs").select("id", { count: "exact", head: true }).not("canonical_url", "is", null),
-    supabase.from("share_hits").select("src").gte("created_at", d7).limit(20000),
+    // 7d of share hits by src (DB-aggregated).
+    supabase.rpc("growth_share_stats", { p_d7: d7 }),
     supabase.from("poster_submissions").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("event_submissions").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("hwy4_events").select("id", { count: "exact", head: true }).eq("verification_status", "needs_verification"),
@@ -75,78 +85,40 @@ export async function gatherGrowthContext(
       .limit(20),
   ]);
 
-  // ── newsletter last-send clicks ─────────────────────────────────────────
+  // ── newsletter last-send clicks (DB-aggregated; see growth_newsletter_click_stats) ─
   const sendRow = rows(lastSend)[0];
   let sendClicks = 0;
   let topEvents: { slug: string; clicks: number }[] = [];
   if (sendRow?.id) {
-    const { data: clickRows } = await supabase
-      .from("newsletter_clicks")
-      .select("slug")
-      .eq("campaign_id", String(sendRow.id))
-      .eq("is_bot", false)
-      .limit(20000);
-    const cr = (clickRows ?? []) as Row[];
-    sendClicks = cr.length;
-    const bySlug = new Map<string, number>();
-    for (const c of cr) {
-      const s = String(c.slug ?? "");
-      if (s) bySlug.set(s, (bySlug.get(s) ?? 0) + 1);
-    }
-    topEvents = [...bySlug.entries()]
-      .map(([slug, clicks]) => ({ slug, clicks }))
-      .sort((a, b) => b.clicks - a.clicks)
-      .slice(0, 5);
+    const { data: ncRaw } = await supabase.rpc("growth_newsletter_click_stats", {
+      p_campaign_id: String(sendRow.id),
+    });
+    const nc = asObj(ncRaw);
+    sendClicks = num(nc.total);
+    topEvents = (Array.isArray(nc.topSlugs) ? nc.topSlugs : []).map((s) => {
+      const o = asObj(s);
+      return { slug: String(o.slug ?? ""), clicks: num(o.clicks) };
+    });
   }
 
-  // ── audience proxies from views ─────────────────────────────────────────
-  const viewRows = rows(views14);
-  const local7 = viewRows.filter((v) => v.visitor_class === "local" && String(v.created_at) >= d7);
-  const localPrev7 = viewRows.filter((v) => v.visitor_class === "local" && String(v.created_at) < d7);
-  const visitor7 = viewRows.filter((v) => v.visitor_class === "visitor" && String(v.created_at) >= d7);
-  const localStats7 = sessionStats(local7);
-  const localStatsPrev7 = sessionStats(localPrev7);
-  const visitorStats7 = sessionStats(visitor7);
+  // ── audience proxies from view sessions (see growth_session_stats) ────────
+  const sess = asObj(sessionAgg.data);
+  const localStats7 = sessionStat(sess.local7);
+  const localStatsPrev7 = sessionStat(sess.localPrev7);
+  const visitorStats7 = sessionStat(sess.visitor7);
+  const sessionsBySrc7d = numMap(sess.sessionsBySrc7d);
 
-  // ── referrals ───────────────────────────────────────────────────────────
-  const outRows = rows(outbound30);
-  const out7 = outRows.filter((o) => String(o.created_at) >= d7);
-  const byType: Record<string, number> = {};
-  let visitorClicks = 0;
-  const byEvent = new Map<string, number>();
-  for (const o of outRows) {
-    const t = String(o.click_type ?? "other");
-    byType[t] = (byType[t] ?? 0) + 1;
-    if (o.visitor_class === "visitor") visitorClicks++;
-    const e = o.event_id ? String(o.event_id) : "";
-    if (e) byEvent.set(e, (byEvent.get(e) ?? 0) + 1);
-  }
-  const topReferralEvents = [...byEvent.entries()]
-    .map(([event_id, clicks]) => ({ event_id, clicks }))
-    .sort((a, b) => b.clicks - a.clicks)
-    .slice(0, 5);
-
-  // ── arrival channels (site_events.src, first-touch) ─────────────────────────
-  // Distinct view sessions per channel (last 7d) and referral clicks per channel
-  // (last 30d). "direct" = untagged/null src. This is the acquisition view the
-  // experiments need; before src existed every channel was invisible.
-  const sessionsBySrc7d: Record<string, number> = {};
-  const seenPerSrc = new Map<string, Set<string>>();
-  for (const v of viewRows) {
-    if (String(v.created_at) < d7) continue;
-    const k = v.src ? String(v.src) : "direct";
-    const sid = String(v.session_id ?? "");
-    if (!sid) continue;
-    if (!seenPerSrc.has(k)) seenPerSrc.set(k, new Set());
-    seenPerSrc.get(k)!.add(sid);
-  }
-  for (const [k, set] of seenPerSrc) sessionsBySrc7d[k] = set.size;
-
-  const referralsBySrc30d: Record<string, number> = {};
-  for (const o of outRows) {
-    const k = o.src ? String(o.src) : "direct";
-    referralsBySrc30d[k] = (referralsBySrc30d[k] ?? 0) + 1;
-  }
+  // ── referrals (see growth_outbound_stats) ─────────────────────────────────
+  const out = asObj(outboundAgg.data);
+  const out7Count = num(out.total7);
+  const out30Count = num(out.total30);
+  const visitorClicks = num(out.visitorClicks30);
+  const byType = numMap(out.byType);
+  const referralsBySrc30d = numMap(out.bySrc);
+  const topReferralEvents = (Array.isArray(out.topEvents) ? out.topEvents : []).map((e) => {
+    const o = asObj(e);
+    return { event_id: String(o.event_id ?? ""), clicks: num(o.count) };
+  });
 
   // ── traffic (analytics_daily, newest first) ─────────────────────────────
   const aRows = rows(analytics);
@@ -180,12 +152,8 @@ export async function gatherGrowthContext(
     }));
   }
 
-  // ── network virality ────────────────────────────────────────────────────
-  const shareBySrc: Record<string, number> = {};
-  for (const s of rows(shareHits7)) {
-    const k = String(s.src ?? "other");
-    shareBySrc[k] = (shareBySrc[k] ?? 0) + 1;
-  }
+  // ── network virality (see growth_share_stats) ─────────────────────────────
+  const shareBySrc = numMap(shareAgg.data);
 
   const vitals: GrowthVitals = {
     newsletter_active: nlStats.total_active,
@@ -193,7 +161,7 @@ export async function gatherGrowthContext(
     newsletter_confirm_rate_30d: nlStats.confirm_rate_30d,
     local_sessions_7d: localStats7.distinct,
     local_sessions_prev_7d: localStatsPrev7.distinct,
-    business_referrals_7d: out7.length,
+    business_referrals_7d: out7Count,
     pageviews_7d: pv7,
   };
 
@@ -241,10 +209,10 @@ export async function gatherGrowthContext(
       engaged_local_sessions_7d: localStats7.engaged,
     },
     referrals: {
-      total_7d: out7.length,
-      total_30d: outRows.length,
+      total_7d: out7Count,
+      total_30d: out30Count,
       by_type: byType,
-      visitor_share_30d: outRows.length > 0 ? visitorClicks / outRows.length : null,
+      visitor_share_30d: out30Count > 0 ? visitorClicks / out30Count : null,
       top_events: topReferralEvents,
     },
     channels: {
