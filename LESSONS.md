@@ -5,6 +5,32 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-06-21 — Per-town hourly weather, event-card affordance, deploy + zsh gotchas
+
+Built the weather chips end-to-end (started from Peter Hollens's dormant Eugene-fork
+module) and fixed the event-card click affordance. Lessons:
+
+### Product / design (weather in an elevation corridor)
+
+- **One forecast point is wrong for a corridor that climbs 6,000 ft.** Copperopolis (850 ft) reads 83° while Bear Valley (7,000 ft, 60 mi away) reads 69° on the same afternoon. Per-town — one NWS fetch per town from its `lib/towns.ts` lat/lng — is the only honest model; a single `SITE_LATLNG` centroid lies at both ends.
+- **Daily high/low misleads any time-specific event.** A 6pm concert showed 55° because the code returned the *overnight low* for "evening" events. NWS's **hourly** endpoint + resolving to the event's start hour is the fix (6pm reads ~74°, a 7:30am breakfast reads 60°). When you have a timestamp, use the hour, not the day.
+- **A label that's always on is off.** After shipping the "patio weather" qualifier, every sunny card chanted it and the eye learned to skip it. A tag has to *differentiate* (rain, a real swing, an unusual temp) or it's noise. (Steve Jobs brain framing — also: kill your own darling the day it stops earning its place.)
+- **For a long event the spread beats a point, but only when it's real.** A 9am–3pm camp runs 65→78; show `low→high · bring layers`, gated on span ≥4h AND swing ≥12° so short/flat events stay a clean single number. The verb ("bring layers") is the product; never an hour-by-hour strip.
+- **Card clickability needs an explicit cue once a competing off-site link sits on the card.** A prominent "Source:" link made the (invisible) whole-card→detail-page affordance ambiguous and risked leaking clicks off-site. Fix: a right-edge disclosure chevron (mobile-critical, where the thumbnail is hidden) + demote the source to a quiet "via X". The richest internal destination should win the click, not the off-site link.
+
+### Process / environment (gotchas that cost real time)
+
+- **zsh eats `$VAR:path` — the `:` starts a parameter/history modifier.** `git show "$REF:lib/foo.ts"` mangled to `…bootstrapomponents/...` (the `:c` of `:components` got consumed) and threw `bad substitution`, **even inside double quotes**. Fix: single-quote the whole literal with the ref hardcoded — `git show 'branch-name:path/to/file.ts'` — or don't put `$VAR:` adjacent. It bit me 3× before I stopped using the variable there.
+- **Vercel ISR + CDN serve a stale copy for ~1–2 min after a deploy; incognito does NOT bypass it.** A `revalidate=3600` page returns `x-vercel-cache: HIT` with a small `age` right after promotion, so "I still don't see it" was propagation lag, not a bug. Verify a deploy by polling the *served* HTML for a unique marker (a class string, a literal) and check the cache headers — don't trust a single fresh-looking load.
+- **Verify base before every prod push — collaborators land commits mid-session.** Rob merged #146 and #148 to `main` while this session ran; the base-check (`merge-base origin/main HEAD == origin/main`) caught both, and a plain `git rebase origin/main` replayed the local commit cleanly (different files, no conflict) before pushing. Never force; rebase and re-check.
+
+### Technical
+
+- **One hourly fetch can feed two shapes.** `foldHourly` builds `byHour` (event-time lookups) AND a `byDate` summary (the no-start-time fallback + `WeatherStrip`) from the same periods — no second NWS request, no separate daily call.
+- **NWS needs a descriptive `User-Agent` with contact; per-town volume is fine because Next caches by URL.** 9 towns × (points + hourly) collapses to ~9 cached fetches per revalidation window shared across every page, not per request.
+
+---
+
 ## 2026-06-19 — Cloudflare analytics retention + snapshot freshness alarm
 
 ### Cloudflare Web Analytics retention (the headline gotcha)
