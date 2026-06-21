@@ -7,7 +7,7 @@ import ClassicRockEventCard from "@/components/ClassicRockEventCard";
 import { getTownContent } from "@/app/towns/town-content";
 import { humanizeHost } from "@/lib/poster";
 import { weatherQualifier } from "@/lib/weather-conditions";
-import type { TownForecasts } from "@/lib/weather";
+import { resolveEventWeather, type TownForecasts } from "@/lib/weather";
 import WeatherChip from "@/components/WeatherChip";
 import {
   parseDate,
@@ -177,11 +177,11 @@ export default function EventCard({
 
   // Weather chip on every event that has a forecast for its town + date. We look
   // up THIS event's town (Copperopolis at ~850 ft and Bear Valley at ~7,000 ft
-  // have wildly different weather); NWS covers ~7 days, so events further out
-  // just have no chip.
+  // have wildly different weather) and resolve to the temp at the event's start
+  // hour. NWS covers ~7 days, so events further out just have no chip.
   const townForecast = forecastsByTown?.[event.town] ?? null;
-  const weather = townForecast?.byDate[event.date] ?? null;
-  const weatherCopy = weather ? weatherQualifier(weather, event) : null;
+  const weather = resolveEventWeather(townForecast, event);
+  const weatherCopy = weather ? weatherQualifier(weather) : null;
 
   return (
     <article
@@ -447,7 +447,7 @@ export default function EventCard({
           )}
 
           {weather && (
-            <WeatherChip day={weather} qualifier={weatherCopy} event={event} />
+            <WeatherChip weather={weather} qualifier={weatherCopy} />
           )}
 
           {/* Place: town leads (the geographic decision unit), venue second. */}

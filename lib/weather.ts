@@ -20,7 +20,17 @@ export interface DayWeather {
   isWithinHorizon: true;
 }
 
+/** A single hour's conditions, from the NWS hourly forecast. */
+export interface HourWeather {
+  temp: number | null;
+  condition: ConditionKey;
+  precipPct: number;
+  shortText: string;
+}
+
 export interface Forecast {
+  /** Keyed by "YYYY-MM-DDTHH" in Pacific local time — the event-hour lookup. */
+  byHour: Record<string, HourWeather>;
   byDate: Record<string, DayWeather>;
   sunrise: string;
   sunset: string;
@@ -30,6 +40,7 @@ export interface Forecast {
 interface NwsPointsResponse {
   properties?: {
     forecast?: string;
+    forecastHourly?: string;
   };
 }
 
@@ -49,15 +60,6 @@ interface NwsForecastResponse {
     periods?: NwsPeriod[];
   };
 }
-
-type DraftDay = {
-  date: string;
-  highF: number | null;
-  lowF: number | null;
-  dayText: string | null;
-  nightText: string | null;
-  precipPct: number;
-};
 
 async function fetchJson<T>(
   url: string,
@@ -105,57 +107,84 @@ function clampPrecip(value: number | null | undefined): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function foldPeriods(periods: NwsPeriod[]): Record<string, DayWeather> {
-  const drafts = new Map<string, DraftDay>();
+function pacificHour(dateTime: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: PACIFIC_TZ,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(dateTime));
+  return parts.find((p) => p.type === "hour")?.value ?? "00";
+}
+
+type DayAgg = {
+  highF: number | null;
+  lowF: number | null;
+  precipPct: number;
+  middayText: string | null;
+};
+
+// Fold the NWS hourly periods into both an hour-keyed map (event-time lookups)
+// and a day-keyed summary (the no-start-time fallback + WeatherStrip). One
+// fetch feeds both.
+function foldHourly(periods: NwsPeriod[]): {
+  byHour: Record<string, HourWeather>;
+  byDate: Record<string, DayWeather>;
+} {
+  const today = pacificToday().iso;
+  const horizonEnd = addDays(today, 7);
+  const byHour: Record<string, HourWeather> = {};
+  const days = new Map<string, DayAgg>();
 
   for (const period of periods) {
     if (!period.startTime) continue;
     const date = pacificDateKey(period.startTime);
-    const draft =
-      drafts.get(date) ??
-      ({
-        date,
-        highF: null,
-        lowF: null,
-        dayText: null,
-        nightText: null,
-        precipPct: 0,
-      } satisfies DraftDay);
-
+    if (date < today || date > horizonEnd) continue;
+    const hour = pacificHour(period.startTime);
     const temp =
       typeof period.temperature === "number" ? period.temperature : null;
-    if (period.isDaytime) {
-      if (temp !== null) draft.highF = Math.max(draft.highF ?? temp, temp);
-      draft.dayText ||= period.shortForecast || null;
-    } else {
-      if (temp !== null) draft.lowF = Math.min(draft.lowF ?? temp, temp);
-      draft.nightText ||= period.shortForecast || null;
-    }
+    const precipPct = clampPrecip(period.probabilityOfPrecipitation?.value);
+    const shortText = period.shortForecast || "Forecast unavailable";
 
-    draft.precipPct = Math.max(
-      draft.precipPct,
-      clampPrecip(period.probabilityOfPrecipitation?.value)
-    );
-    drafts.set(date, draft);
+    byHour[`${date}T${hour}`] = {
+      temp,
+      condition: mapShortForecast(shortText, precipPct),
+      precipPct,
+      shortText,
+    };
+
+    const agg =
+      days.get(date) ??
+      ({
+        highF: null,
+        lowF: null,
+        precipPct: 0,
+        middayText: null,
+      } satisfies DayAgg);
+    if (temp !== null) {
+      agg.highF = agg.highF === null ? temp : Math.max(agg.highF, temp);
+      agg.lowF = agg.lowF === null ? temp : Math.min(agg.lowF, temp);
+    }
+    agg.precipPct = Math.max(agg.precipPct, precipPct);
+    // A midday hour stands in for the day's headline condition/text.
+    const h = Number(hour);
+    if (h >= 12 && h <= 15 && !agg.middayText) agg.middayText = shortText;
+    days.set(date, agg);
   }
 
-  const today = pacificToday().iso;
-  const horizonEnd = addDays(today, 7);
   const byDate: Record<string, DayWeather> = {};
-  for (const draft of drafts.values()) {
-    if (draft.date < today || draft.date > horizonEnd) continue;
-    const shortText = draft.dayText ?? draft.nightText ?? "Forecast unavailable";
-    byDate[draft.date] = {
-      date: draft.date,
-      highF: draft.highF,
-      lowF: draft.lowF,
-      condition: mapShortForecast(shortText, draft.precipPct),
-      precipPct: draft.precipPct,
+  for (const [date, agg] of days) {
+    const shortText = agg.middayText ?? "Forecast unavailable";
+    byDate[date] = {
+      date,
+      highF: agg.highF,
+      lowF: agg.lowF,
+      condition: mapShortForecast(shortText, agg.precipPct),
+      precipPct: agg.precipPct,
       shortText,
       isWithinHorizon: true,
     };
   }
-  return byDate;
+  return { byHour, byDate };
 }
 
 function dayOfYear(date: Date): number {
@@ -260,7 +289,7 @@ export async function getForecast(
     pointsUrl,
     POINTS_REVALIDATE_SECONDS
   );
-  const forecastUrl = points?.properties?.forecast;
+  const forecastUrl = points?.properties?.forecastHourly;
   if (!forecastUrl) return null;
 
   const forecast = await fetchJson<NwsForecastResponse>(
@@ -271,8 +300,10 @@ export async function getForecast(
   if (!Array.isArray(periods) || periods.length === 0) return null;
 
   const today = pacificToday().iso;
+  const { byHour, byDate } = foldHourly(periods);
   return {
-    byDate: foldPeriods(periods),
+    byHour,
+    byDate,
     ...solarTimes(today, lat, lng),
     fetchedAt: new Date().toISOString(),
   };
@@ -286,6 +317,44 @@ export function getWeatherForDate(
   const today = pacificToday().iso;
   if (date < today || date > addDays(today, 7)) return null;
   return forecast.byDate[date] ?? null;
+}
+
+/** The single reading a chip shows for an event: the temp at the event's start
+ *  hour when we have it, otherwise the day's high. */
+export interface ResolvedWeather {
+  temp: number | null;
+  condition: ConditionKey;
+  precipPct: number;
+  shortText: string;
+  /** true = matched the event's actual hour; false = daily-high fallback. */
+  hourly: boolean;
+}
+
+export function resolveEventWeather(
+  forecast: Forecast | null,
+  event: { date: string; start_time?: string | null }
+): ResolvedWeather | null {
+  if (!forecast) return null;
+  const today = pacificToday().iso;
+  if (event.date < today || event.date > addDays(today, 7)) return null;
+
+  // Event-hour reading when the event has a start time and that hour is in range.
+  if (event.start_time) {
+    const key = `${event.date}T${event.start_time.slice(0, 2)}`;
+    const hour = forecast.byHour[key];
+    if (hour) return { ...hour, hourly: true };
+  }
+
+  // No start time (or the hour fell outside the forecast): use the day's high.
+  const day = forecast.byDate[event.date];
+  if (!day) return null;
+  return {
+    temp: day.highF ?? day.lowF,
+    condition: day.condition,
+    precipPct: day.precipPct,
+    shortText: day.shortText,
+    hourly: false,
+  };
 }
 
 /** Forecasts keyed by corridor town name (lib/towns.ts). */

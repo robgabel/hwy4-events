@@ -1,32 +1,24 @@
-import type { DayWeather } from "@/lib/weather";
-import {
-  conditionColorClass,
-  conditionIcon,
-  displayWeatherTemp,
-} from "@/lib/weather-conditions";
-
-type WeatherChipEvent = {
-  start_time?: string | null;
-};
+import type { ResolvedWeather } from "@/lib/weather";
+import { conditionColorClass, conditionIcon } from "@/lib/weather-conditions";
 
 export default function WeatherChip({
-  day,
+  weather,
   qualifier,
-  event,
   size = "card",
 }: {
-  day: DayWeather;
+  weather: ResolvedWeather;
   qualifier: string | null;
-  event: WeatherChipEvent;
   size?: "card" | "detail";
 }) {
-  const Icon = conditionIcon(day.condition);
-  const temp = displayWeatherTemp(day, event);
+  const temp = weather.temp;
   if (temp === null) return null;
 
+  const Icon = conditionIcon(weather.condition);
   const rainLabel =
-    day.precipPct > 0 ? `, ${day.precipPct}% chance of precipitation` : "";
-  const label = `Weather: ${temp} degrees, ${day.shortText}${rainLabel}`;
+    weather.precipPct > 0
+      ? `, ${weather.precipPct}% chance of precipitation`
+      : "";
+  const label = `Weather: ${temp} degrees, ${weather.shortText}${rainLabel}`;
 
   return (
     <span
@@ -39,7 +31,7 @@ export default function WeatherChip({
     >
       <Icon
         aria-hidden="true"
-        className={`h-3.5 w-3.5 ${conditionColorClass(day.condition, day.highF)}`}
+        className={`h-3.5 w-3.5 ${conditionColorClass(weather.condition, temp)}`}
         strokeWidth={2}
       />
       <span className="tabular-nums">{temp}&deg;</span>

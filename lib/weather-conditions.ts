@@ -21,17 +21,6 @@ export type ConditionKey =
   | "storm"
   | "windy";
 
-type WeatherEvent = {
-  start_time?: string | null;
-};
-
-type DayLike = {
-  highF: number | null;
-  lowF: number | null;
-  condition: ConditionKey;
-  precipPct: number;
-};
-
 export function mapShortForecast(
   shortText: string,
   precipPct = 0
@@ -91,33 +80,25 @@ export function conditionColorClass(
   }
 }
 
-function startsInEvening(event: WeatherEvent): boolean {
-  if (!event.start_time) return false;
-  const hour = Number(event.start_time.slice(0, 2));
-  return Number.isFinite(hour) && hour >= 17;
-}
-
-export function weatherQualifier(
-  day: DayLike,
-  event: WeatherEvent
-): string | null {
-  if (day.precipPct >= 50) return "rain likely";
-  if (day.precipPct >= 30) return "showers possible";
+/**
+ * A short scene-setting tag from the event-HOUR reading. Temp is the forecast
+ * temperature at the event's start hour, so "patio weather" / "bring a layer"
+ * reflect how it'll actually feel when you're there, not the day's high or low.
+ */
+export function weatherQualifier(w: {
+  temp: number | null;
+  condition: ConditionKey;
+  precipPct: number;
+}): string | null {
+  if (w.precipPct >= 50) return "rain likely";
+  if (w.precipPct >= 30) return "showers possible";
   if (
-    startsInEvening(event) &&
-    day.highF !== null &&
-    day.highF >= 78 &&
-    (day.condition === "clear" || day.condition === "partly_cloudy")
+    w.temp !== null &&
+    w.temp >= 80 &&
+    (w.condition === "clear" || w.condition === "partly_cloudy")
   ) {
     return "patio weather";
   }
-  if (startsInEvening(event) && day.lowF !== null && day.lowF <= 48) {
-    return "chilly evening";
-  }
+  if (w.temp !== null && w.temp <= 50) return "bring a layer";
   return null;
-}
-
-export function displayWeatherTemp(day: DayLike, event: WeatherEvent): number | null {
-  if (startsInEvening(event) && day.lowF !== null) return day.lowF;
-  return day.highF ?? day.lowF;
 }

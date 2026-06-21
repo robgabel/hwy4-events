@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
-import { getForecast, getWeatherForDate } from "@/lib/weather";
+import { getForecast, resolveEventWeather } from "@/lib/weather";
 import { weatherQualifier } from "@/lib/weather-conditions";
 import WeatherChip from "@/components/WeatherChip";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
@@ -238,10 +238,10 @@ export default async function EventPage({ params }: PageProps) {
   const mapLng = geocoded?.lng ?? townData?.lng ?? null;
   const mapZoom = geocoded ? 15 : townData?.mapZoom ?? 13;
 
-  // Weather for THIS event's town (detail size), any event within the 7-day
-  // NWS window.
-  const weather = getWeatherForDate(forecast, event.date);
-  const weatherCopy = weather ? weatherQualifier(weather, event) : null;
+  // Weather for THIS event's town (detail size), resolved to the event's start
+  // hour, any event within the 7-day NWS window.
+  const weather = resolveEventWeather(forecast, event);
+  const weatherCopy = weather ? weatherQualifier(weather) : null;
 
   // The Arnold parade gets a fully bespoke, parade-specific detail microsite.
   if (isParadeEvent(event)) {
@@ -383,9 +383,8 @@ export default async function EventPage({ params }: PageProps) {
                   </dt>
                   <dd>
                     <WeatherChip
-                      day={weather}
+                      weather={weather}
                       qualifier={weatherCopy}
-                      event={event}
                       size="detail"
                     />
                   </dd>
