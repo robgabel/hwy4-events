@@ -502,8 +502,8 @@ export default function EventCard({
         )}
       </div>
 
-      {/* Thumbnail */}
-      <div className="hidden shrink-0 sm:block">
+      {/* Thumbnail — vertically centered so it lines up with the chevron. */}
+      <div className="hidden shrink-0 self-center sm:block">
         <div className="relative h-20 w-20 overflow-hidden rounded-lg">
           <Image
             src={getEventImage(event)}
