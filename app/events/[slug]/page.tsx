@@ -67,6 +67,19 @@ function formatTime(time: string | null): string | null {
   return `${display}:${m} ${ampm}`;
 }
 
+/** Friendly provenance label for the non-durable source line ("Listed on
+ *  GoCalaveras"). Only aggregator hosts reach this path today; fall back to the
+ *  bare host so a future aggregator still reads sensibly. */
+function sourceHostLabel(href: string): string {
+  try {
+    const h = new URL(href).hostname.toLowerCase().replace(/^www\./, "");
+    if (h === "gocalaveras.com") return "GoCalaveras";
+    return h;
+  } catch {
+    return "the source";
+  }
+}
+
 /** Google Calendar "add event" template link. */
 function calendarUrl(event: Hwy4Event): string {
   const d = event.date.replace(/-/g, "");
@@ -419,36 +432,32 @@ export default async function EventPage({ params }: PageProps) {
               )}
             </dl>
 
-            {/* Actions. Share is the primary door (the shared link is the growth loop);
-                download, calendar, and directions are secondary. */}
-            <div className="mt-6 flex flex-wrap gap-2.5">
+            {/* Actions. Share stays the SOLE filled primary — it's the only
+                growth loop (a shared link brings the next visitor), so nothing
+                competes with it for fill. The durable "Visit event page" link is
+                promoted to a clearly-secondary outline button (organizer / venue /
+                stable source only); a non-durable aggregator source renders as an
+                attributed line below, never a button. Directions + calendar are
+                secondary; the rarely-used poster download is demoted to an icon. */}
+            <div className="mt-6 flex flex-wrap items-center gap-2.5">
               <ShareButton
                 url={`${SITE_URL}/events/${slug}`}
                 title={event.name}
                 text={`${event.name} at ${event.venue_name} in ${event.town}`}
                 variant="primary"
               />
-              <a
-                href={downloadHref}
-                download
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest transition-colors hover:border-pine/30 hover:text-pine"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-                </svg>
-                Download poster
-              </a>
-              <a
-                href={calendarUrl(event)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest transition-colors hover:border-pine/30 hover:text-pine"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Add to calendar
-              </a>
+              {link.durable && link.href && (
+                <a
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-otrack="more_info"
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-pine bg-white px-4 py-2 text-sm font-semibold text-pine transition-colors hover:bg-pine hover:text-white"
+                >
+                  {link.label}
+                  <span aria-hidden="true" className="text-base leading-none">↗</span>
+                </a>
+              )}
               <a
                 href={directionsHref}
                 target="_blank"
@@ -462,11 +471,40 @@ export default async function EventPage({ params }: PageProps) {
                 </svg>
                 Directions
               </a>
+              <a
+                href={calendarUrl(event)}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-otrack="add_to_calendar"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-stone-light/40 bg-white px-4 py-2 text-sm font-medium text-forest transition-colors hover:border-pine/30 hover:text-pine"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Add to calendar
+              </a>
+              <a
+                href={downloadHref}
+                download
+                data-otrack="download_poster"
+                aria-label="Download poster"
+                title="Download poster"
+                className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-stone-light/40 bg-white p-2 text-stone transition-colors hover:border-pine/30 hover:text-pine"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                </svg>
+              </a>
             </div>
 
-            {link.kind !== "none" && link.href && (
+            {/* Non-durable aggregator source (e.g. GoCalaveras): shown on every
+                such event for credibility + an accuracy safety valve (if our data
+                is wrong, the reader can verify at the source), but as an attributed
+                line, not a button — and it stays out of JSON-LD (offerUrl) too.
+                Durable sources render as the outline button above instead. */}
+            {!link.durable && link.href && (
               <p className="mt-4 text-sm text-stone">
-                More info:{" "}
+                Listed on{" "}
                 <a
                   href={link.href}
                   target="_blank"
@@ -474,8 +512,9 @@ export default async function EventPage({ params }: PageProps) {
                   data-otrack="more_info"
                   className="font-medium text-pine underline underline-offset-2 hover:text-forest"
                 >
-                  {link.label}
+                  {sourceHostLabel(link.href)}
                 </a>
+                <span aria-hidden="true"> ↗</span>
               </p>
             )}
 
@@ -483,6 +522,7 @@ export default async function EventPage({ params }: PageProps) {
               See something off?{" "}
               <Link
                 href={`/events/${slug}/report`}
+                data-otrack="suggest_fix"
                 className="font-medium text-pine underline underline-offset-2 hover:text-forest"
               >
                 Suggest a fix
