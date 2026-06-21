@@ -60,38 +60,41 @@ test("outdoor detector is conservative", () => {
 });
 
 test("weather qualifier stays plain and conservative", () => {
-  // Hot + clear at the event hour -> the one upbeat tag.
+  // Reads the event-HOUR temperature (not the day's high/low), so the tags
+  // reflect how it'll feel when you're there. Logic lives in weatherQualifier.
+  // Hot + clear → patio weather.
   assert.equal(
     weatherQualifier({ temp: 82, condition: "clear", precipPct: 0 }),
     "patio weather"
   );
-  // Cool at the event hour -> a gentle nudge, nothing alarmist.
+  // Cool at the event hour → bring a layer.
   assert.equal(
-    weatherQualifier({ temp: 46, condition: "cloudy", precipPct: 0 }),
+    weatherQualifier({ temp: 48, condition: "cloudy", precipPct: 0 }),
     "bring a layer"
   );
-  // Rain probability dominates everything else.
+  // Likely rain wins over temperature.
   assert.equal(
-    weatherQualifier({ temp: 52, condition: "rain", precipPct: 55 }),
+    weatherQualifier({ temp: 62, condition: "rain", precipPct: 55 }),
     "rain likely"
   );
+  // A real chance of showers (>= 30%, < 50%).
   assert.equal(
-    weatherQualifier({ temp: 60, condition: "cloudy", precipPct: 35 }),
+    weatherQualifier({ temp: 66, condition: "clear", precipPct: 35 }),
     "showers possible"
   );
-  // A long event with a real temperature swing leads with the spread.
+  // A long event with a big temperature swing → bring layers (range wins).
   assert.equal(
     weatherQualifier({
-      temp: 78,
+      temp: 60,
       condition: "clear",
       precipPct: 0,
       range: { low: 60, high: 85 },
     }),
     "bring layers"
   );
-  // Mild and dry -> no tag at all (the chip stays quiet).
+  // Mild and unremarkable → no tag at all.
   assert.equal(
-    weatherQualifier({ temp: 68, condition: "partly_cloudy", precipPct: 10 }),
+    weatherQualifier({ temp: 68, condition: "cloudy", precipPct: 0 }),
     null
   );
 });

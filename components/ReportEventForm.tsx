@@ -10,9 +10,15 @@ const labelClass = "block text-sm font-medium uppercase tracking-wide text-stone
 export default function ReportEventForm({
   slug,
   eventName,
+  variant = "page",
 }: {
   slug: string;
   eventName: string;
+  /** "page" = standalone /report page (its own card + a back-to-event link).
+   *  "inline" = embedded in the event detail page via SuggestFixInline: no card
+   *  chrome (the wrapper supplies it) and no back-link, since the reader is
+   *  already on the event they're correcting. */
+  variant?: "page" | "inline";
 }) {
   const [note, setNote] = useState("");
   const [role, setRole] = useState<"" | "organizer" | "visitor">("");
@@ -22,6 +28,8 @@ export default function ReportEventForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const inline = variant === "inline";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,6 +62,29 @@ export default function ReportEventForm({
   }
 
   if (submitted) {
+    // Inline: a compact confirmation that keeps the reader on the event page.
+    if (inline) {
+      return (
+        <div className="flex items-start gap-2.5 rounded-lg bg-sage/10 px-3 py-3">
+          <svg
+            className="mt-0.5 h-5 w-5 shrink-0 text-pine"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <div>
+            <p className="font-medium text-forest">Thanks for the note!</p>
+            <p className="mt-0.5 text-sm text-stone">
+              We&apos;ll take a look and update the event if it checks out. Nothing changes until we
+              review it.
+            </p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="rounded-xl border border-sage/30 bg-white px-6 py-10 text-center shadow-sm">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-sage/20">
@@ -85,7 +116,9 @@ export default function ReportEventForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-xl border border-stone-light/30 bg-white px-6 py-6 shadow-sm"
+      className={
+        inline ? "" : "rounded-xl border border-stone-light/30 bg-white px-6 py-6 shadow-sm"
+      }
     >
       {/* Honeypot: hidden from people, catnip for bots. Off-screen + unfocusable. */}
       <input

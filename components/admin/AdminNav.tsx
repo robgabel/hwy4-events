@@ -10,6 +10,7 @@ export type NavBadges = {
   posters: number;
   verification: number;
   feedback: number;
+  venues: number;
 };
 
 // Client nav for the admin cockpit. Server layout computes the pending-count
@@ -90,6 +91,9 @@ export default function AdminNav({ badges }: { badges: NavBadges }) {
       </NavLink>
       <NavLink href="/admin/feedback" active={isActive("/admin/feedback")} badge={badges.feedback}>
         Feedback
+      </NavLink>
+      <NavLink href="/admin/venues" active={isActive("/admin/venues")} badge={badges.venues}>
+        Venues
       </NavLink>
     </nav>
   );

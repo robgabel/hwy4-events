@@ -1,3 +1,8 @@
+// Pure forecast logic only — no React / lucide-react imports. The condition →
+// icon map lives in lib/weather-icons.ts so scripts/test/weather.test.ts can
+// import these functions without pulling a root-only UI dep into the script
+// test runner (which resolves against scripts/node_modules). See weather-icons.ts.
+
 export type ConditionKey =
   | "clear"
   | "partly_cloudy"

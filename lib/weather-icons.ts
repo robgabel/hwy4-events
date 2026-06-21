@@ -13,10 +13,13 @@ import {
 import type { ConditionKey } from "./weather-conditions";
 
 /**
- * Maps a stable ConditionKey to its Lucide icon component. Split out from
- * weather-conditions.ts so the pure forecast logic there (mapShortForecast,
- * weatherQualifier, conditionColorClass) stays dependency-free and unit-testable
- * from the scraper package, which does not install React / lucide-react.
+ * Condition key → lucide-react icon. Kept OUT of lib/weather-conditions.ts on
+ * purpose: that module holds the pure forecast logic (mapShortForecast,
+ * weatherQualifier, conditionColorClass) that scripts/test/weather.test.ts
+ * imports, and the scripts/ test runner resolves modules against
+ * scripts/node_modules — which has no lucide-react (a root-only dep). Importing
+ * the icons here, only from the UI (WeatherChip/WeatherStrip), keeps the tested
+ * logic dependency-free so CI doesn't fail on a missing lucide-react.
  */
 export function conditionIcon(key: ConditionKey): ComponentType<LucideProps> {
   switch (key) {

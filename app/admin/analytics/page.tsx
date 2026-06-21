@@ -146,53 +146,35 @@ async function loadGate0(): Promise<Gate0> {
   const since = new Date(sinceMs).toISOString();
   const since7 = new Date(now - windowDays7 * 86400000).toISOString();
 
-  const { data: viewsData } = await supabase
-    .from("site_events")
-    .select("visitor_class, created_at, src")
-    .eq("kind", "view")
-    .eq("is_bot", false)
-    .gte("created_at", since);
-  const { data: clicksData } = await supabase
-    .from("site_events")
-    .select("click_type, event_id, created_at")
-    .eq("kind", "outbound")
-    .eq("is_bot", false)
-    .gte("created_at", since);
-
-  const vrows =
-    (viewsData as { visitor_class: string; created_at: string; src: string | null }[] | null) ?? [];
-  const crows =
-    (clicksData as
-      | { click_type: string | null; event_id: string | null; created_at: string }[]
-      | null) ?? [];
-
-  const tally = (rows: { visitor_class: string }[]) => {
-    const t = { local: 0, visitor: 0, unknown: 0, total: 0 };
-    for (const r of rows) {
-      if (r.visitor_class === "local") t.local++;
-      else if (r.visitor_class === "visitor") t.visitor++;
-      else t.unknown++;
-      t.total++;
-    }
-    return t;
+  // Aggregate in the DB, not in JS. A PostgREST rowset is capped at ~1,000, so the
+  // old "SELECT rows then tally" path silently froze every total at 1,000 once a
+  // window held >1,000 views (and the 7d slice, filtered from the truncated set,
+  // was undercounted worse). gate0_stats returns a single jsonb value — immune to
+  // the row cap and exact at any volume. See migration 20260621_gate0_stats_rpc.sql.
+  type Tally = { local: number; visitor: number; unknown: number; total: number };
+  const zero: Tally = { local: 0, visitor: 0, unknown: 0, total: 0 };
+  const { data: statsRaw } = await supabase.rpc("gate0_stats", {
+    p_since: since,
+    p_since7: since7,
+  });
+  const stats = (statsRaw ?? {}) as {
+    views?: Tally;
+    views7?: Tally;
+    bySrc?: { src: string; count: number }[];
+    outboundTotal?: number;
+    outboundByType?: { type: string; count: number }[];
+    topEvents?: { event_id: string; count: number }[];
   };
 
-  const typeCounts = new Map<string, number>();
-  const eventCounts = new Map<string, number>();
-  for (const r of crows) {
-    if (r.click_type)
-      typeCounts.set(r.click_type, (typeCounts.get(r.click_type) ?? 0) + 1);
-    if (r.event_id)
-      eventCounts.set(r.event_id, (eventCounts.get(r.event_id) ?? 0) + 1);
-  }
-  const outboundByType = [...typeCounts.entries()]
-    .map(([type, count]) => ({ type, count }))
-    .sort((a, b) => b.count - a.count);
+  const views = stats.views ?? zero;
+  const views7 = stats.views7 ?? zero;
+  const outboundTotal = stats.outboundTotal ?? 0;
+  const outboundByType = (stats.outboundByType ?? []).filter((t) => t.type);
+  const bySrc = stats.bySrc ?? [];
 
-  const topIds = [...eventCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([id]) => id);
+  // Resolve names for the (≤8) top events the RPC ranked.
+  const topRaw = stats.topEvents ?? [];
+  const topIds = topRaw.map((e) => e.event_id);
   const nameById = new Map<string, string>();
   if (topIds.length) {
     const { data: evs } = await supabase
@@ -202,33 +184,22 @@ async function loadGate0(): Promise<Gate0> {
     for (const e of (evs as { id: string; name: string }[] | null) ?? [])
       nameById.set(e.id, e.name);
   }
-  const topEvents = topIds.map((id) => ({
-    name: nameById.get(id) ?? "(event)",
-    clicks: eventCounts.get(id) ?? 0,
+  const topEvents = topRaw.map((e) => ({
+    name: nameById.get(e.event_id) ?? "(event)",
+    clicks: e.count,
   }));
 
-  // First-touch arrival-channel mix (site_events.src); null -> "direct".
-  const srcCounts = new Map<string, number>();
-  for (const r of vrows) {
-    const k = r.src || "direct";
-    srcCounts.set(k, (srcCounts.get(k) ?? 0) + 1);
-  }
-  const bySrc = [...srcCounts.entries()]
-    .map(([src, count]) => ({ src, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
-
   return {
-    views: tally(vrows),
-    views7: tally(vrows.filter((r) => r.created_at >= since7)),
-    outboundTotal: crows.length,
+    views,
+    views7,
+    outboundTotal,
     outboundByType,
     topEvents,
     bySrc,
     windowDays,
     windowDays7,
     windowStart: windowDays < WINDOW_DAYS ? new Date(firstSeen).toISOString() : null,
-    hasData: vrows.length > 0 || crows.length > 0,
+    hasData: views.total > 0 || outboundTotal > 0,
   };
 }
 
