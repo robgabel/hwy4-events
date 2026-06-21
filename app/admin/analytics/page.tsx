@@ -99,6 +99,9 @@ type Gate0 = {
   outboundByType: { type: string; count: number }[];
   topEvents: { name: string; clicks: number }[];
   bySrc: { src: string; count: number }[];
+  windowDays: number; // lesser of 30 or days since tracking began
+  windowDays7: number; // lesser of 7 or days since tracking began
+  windowStart: string | null; // ISO of the first event, only when the window is capped (< 30d)
   hasData: boolean;
 };
 
@@ -113,26 +116,48 @@ async function loadGate0(): Promise<Gate0> {
     outboundByType: [],
     topEvents: [],
     bySrc: [],
+    windowDays: WINDOW_DAYS,
+    windowDays7: 7,
+    windowStart: null,
     hasData: false,
   };
   const supabase = getAdminClientOrNull();
   if (!supabase) return empty;
 
-  const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
-  const since7 = new Date(Date.now() - 7 * 86400000).toISOString();
+  // Window = the LESSER OF 30 days or the time since first-party visitor tracking
+  // began (site_events started 2026-06-08). Anchoring the floor to the earliest
+  // row keeps the label honest (e.g. "13d" today) and self-corrects to a true
+  // "30d" once a full month of history exists — no hard-coded launch date to rot.
+  const { data: firstRow } = await supabase
+    .from("site_events")
+    .select("created_at")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const now = Date.now();
+  const fullWindowMs = WINDOW_DAYS * 86400000;
+  const firstSeen = firstRow?.created_at
+    ? new Date(firstRow.created_at as string).getTime()
+    : now - fullWindowMs;
+  const sinceMs = Math.max(now - fullWindowMs, firstSeen);
+  const windowDays = Math.max(1, Math.ceil((now - sinceMs) / 86400000));
+  const windowDays7 = Math.min(7, windowDays);
+  const since = new Date(sinceMs).toISOString();
+  const since7 = new Date(now - windowDays7 * 86400000).toISOString();
 
   const { data: viewsData } = await supabase
     .from("site_events")
     .select("visitor_class, created_at, src")
     .eq("kind", "view")
     .eq("is_bot", false)
-    .gte("created_at", since30);
+    .gte("created_at", since);
   const { data: clicksData } = await supabase
     .from("site_events")
     .select("click_type, event_id, created_at")
     .eq("kind", "outbound")
     .eq("is_bot", false)
-    .gte("created_at", since30);
+    .gte("created_at", since);
 
   const vrows =
     (viewsData as { visitor_class: string; created_at: string; src: string | null }[] | null) ?? [];
@@ -200,6 +225,9 @@ async function loadGate0(): Promise<Gate0> {
     outboundByType,
     topEvents,
     bySrc,
+    windowDays,
+    windowDays7,
+    windowStart: windowDays < WINDOW_DAYS ? new Date(firstSeen).toISOString() : null,
     hasData: vrows.length > 0 || crows.length > 0,
   };
 }
@@ -548,27 +576,38 @@ function Gate0Section({ data }: { data: Gate0 }) {
   const known7 = v7.local + v7.visitor;
   const clickMax = Math.max(1, ...data.topEvents.map((e) => e.clicks));
   const srcMax = Math.max(1, ...data.bySrc.map((s) => s.count));
+  const { windowDays, windowDays7 } = data;
+  const startStr = data.windowStart
+    ? new Date(data.windowStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   return (
     <>
-      <SectionHeader>Visitor vs local · 30d</SectionHeader>
+      <SectionHeader>Visitor vs local · {windowDays}d</SectionHeader>
       <section style={cardStyle}>
         <VisitorBreakdown local={v.local} visitor={v.visitor} unknown={v.unknown} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 16 }}>
-          <Stat label="Located views · 30d" value={nf(known30)} sub={`${nf(v.local)} local · ${nf(v.visitor)} remote`} />
-          <Stat label="Visitor share · 7d" value={`${pct(v7.visitor, known7)}%`} sub={`${nf(v7.visitor)} of ${nf(known7)} located`} />
-          <Stat label="Total views · 30d" value={nf(v.total)} sub={`incl. ${nf(v.unknown)} unknown geo`} />
+          <Stat label={`Located views · ${windowDays}d`} value={nf(known30)} sub={`${nf(v.local)} local · ${nf(v.visitor)} remote`} />
+          <Stat label={`Visitor share · ${windowDays7}d`} value={`${pct(v7.visitor, known7)}%`} sub={`${nf(v7.visitor)} of ${nf(known7)} located`} />
+          <Stat label={`Total views · ${windowDays}d`} value={nf(v.total)} sub={`incl. ${nf(v.unknown)} unknown geo`} />
         </div>
         <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
+          {startStr ? (
+            <>
+              <strong>Full history so far:</strong> first-party visitor tracking began {startStr} (
+              {windowDays} {windowDays === 1 ? "day" : "days"} ago), so this is the whole window, not a
+              full 30 days yet.{" "}
+            </>
+          ) : null}
           Directional. Location is coarse IP geolocation (Vercel edge), which often places corridor
           residents in a regional hub, so locals are undercounted. Read the trend, not the absolute.
           Bots that don&rsquo;t run JS never appear here.
         </p>
       </section>
 
-      <SectionHeader>Business referrals · 30d</SectionHeader>
+      <SectionHeader>Business referrals · {windowDays}d</SectionHeader>
       <section style={cardStyle}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: data.topEvents.length ? 16 : 0 }}>
-          <Stat label="Outbound clicks · 30d" value={nf(data.outboundTotal)} />
+          <Stat label={`Outbound clicks · ${windowDays}d`} value={nf(data.outboundTotal)} />
           {data.outboundByType.map((t) => (
             <Stat key={t.type} label={CLICK_LABELS[t.type] ?? t.type} value={nf(t.count)} />
           ))}
@@ -600,7 +639,7 @@ function Gate0Section({ data }: { data: Gate0 }) {
 
       {data.bySrc.length > 0 && (
         <>
-          <SectionHeader>Arrival channels · 30d</SectionHeader>
+          <SectionHeader>Arrival channels · {windowDays}d</SectionHeader>
           <section style={cardStyle}>
             <p style={{ ...labelStyle, margin: "0 0 10px" }}>Page views by first-touch channel</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
@@ -725,7 +764,7 @@ function SignupsVsVisitorsPanel({ days, gate0 }: { days: SvvDay[]; gate0: Gate0 
         <Stat label="Visits · 30d (UTC)" value={nf(totalVisits)} />
         <Stat label="Signups · 30d (UTC)" value={nf(totalSignups)} />
         <Stat label="Visit→signup · 30d" value={convStr(conv)} sub={`${nf(totalSignups)} ÷ ${nf(totalVisits)}`} />
-        <Stat label="Local share of visits" value={located ? `${pct(vw.local, located)}%` : "—"} sub="directional" />
+        <Stat label="Local share of visits" value={located ? `${pct(vw.local, located)}%` : "—"} sub={`${gate0.windowDays}d · directional`} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
@@ -739,7 +778,7 @@ function SignupsVsVisitorsPanel({ days, gate0 }: { days: SvvDay[]; gate0: Gate0 
         </section>
 
         <section style={cardStyle}>
-          <p style={{ ...labelStyle, margin: "0 0 10px" }}>Of those visits · who (directional)</p>
+          <p style={{ ...labelStyle, margin: "0 0 10px" }}>Of those visits · who · {gate0.windowDays}d (directional)</p>
           <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
             {split.map((s) => (
               <div key={s.key} title={`${s.label}: ${nf(s.value)}`} style={{ width: `${(s.value / splitTotal) * 100}%`, background: s.color }} />
