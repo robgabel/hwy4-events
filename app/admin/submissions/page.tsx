@@ -44,6 +44,14 @@ type Analysis = {
   flags: string[];
 };
 
+type RawEmail = {
+  from?: string;
+  subject?: string;
+  text?: string;
+  message_id?: string;
+  received_at?: string;
+};
+
 type Submission = {
   id: string;
   event_name: string;
@@ -55,6 +63,8 @@ type Submission = {
   category: string | null;
   event_url: string | null;
   poster_url: string | null;
+  source: string | null;
+  raw_email: RawEmail | null;
   submitter_name: string | null;
   submitter_email: string | null;
   created_at: string;
@@ -98,7 +108,7 @@ async function loadData(): Promise<{ submissions: Submission[]; matched: Map<str
   const { data } = await supabase
     .from("event_submissions")
     .select(
-      "id, event_name, event_date, start_time, venue_name, town, description, category, event_url, poster_url, submitter_name, submitter_email, created_at, ai_verdict, ai_confidence, ai_headline, ai_matched_event_id, ai_analysis, ai_analyzed_at, ai_error, ai_reply"
+      "id, event_name, event_date, start_time, venue_name, town, description, category, event_url, poster_url, source, raw_email, submitter_name, submitter_email, created_at, ai_verdict, ai_confidence, ai_headline, ai_matched_event_id, ai_analysis, ai_analyzed_at, ai_error, ai_reply"
     )
     .eq("status", "pending")
     .order("event_date", { ascending: true });
@@ -537,6 +547,24 @@ function SubmissionCard({
       }}
     >
       <header style={{ marginBottom: 14 }}>
+        {sub.source === "email" && (
+          <span
+            style={{
+              display: "inline-block",
+              background: "#e7efe9",
+              color: "#1B3A2D",
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+              padding: "2px 8px",
+              borderRadius: 999,
+              marginBottom: 6,
+            }}
+          >
+            Came in by email
+          </span>
+        )}
         <h2 style={{ color: "#1B3A2D", fontSize: 19, margin: "0 0 4px", fontWeight: 600 }}>
           {sub.event_name}
         </h2>
@@ -590,6 +618,43 @@ function SubmissionCard({
             Publishing below will use this as the event&rsquo;s poster (pinned).
           </p>
         </div>
+      )}
+
+      {sub.raw_email && (
+        <details style={{ marginBottom: 14 }}>
+          <summary style={{ cursor: "pointer", fontSize: 13, color: "#888", fontWeight: 600 }}>
+            Original email
+          </summary>
+          <div style={{ marginTop: 8, fontSize: 14, color: "#555", lineHeight: 1.5 }}>
+            {sub.raw_email.from && (
+              <p style={{ margin: "0 0 4px" }}>
+                <strong>From:</strong> {sub.raw_email.from}
+              </p>
+            )}
+            {sub.raw_email.subject && (
+              <p style={{ margin: "0 0 8px" }}>
+                <strong>Subject:</strong> {sub.raw_email.subject}
+              </p>
+            )}
+            {sub.raw_email.text && (
+              <pre
+                style={{
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "inherit",
+                  background: "#faf9f7",
+                  border: "1px solid #eee",
+                  borderRadius: 6,
+                  padding: 10,
+                  margin: 0,
+                  maxHeight: 220,
+                  overflow: "auto",
+                }}
+              >
+                {sub.raw_email.text}
+              </pre>
+            )}
+          </div>
+        </details>
       )}
 
       {sub.submitter_email && (
