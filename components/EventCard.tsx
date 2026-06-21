@@ -488,13 +488,13 @@ export default function EventCard({
         </div>
 
         {sourceHref && sourceLabel && (
-          <p className="mt-2 text-xs text-stone">
-            Source:{" "}
+          <p className="mt-2 text-[11px] text-stone-light">
+            via{" "}
             <a
               href={sourceHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="relative z-20 font-medium text-pine underline decoration-pine/30 underline-offset-2 hover:decoration-pine"
+              className="relative z-20 hover:text-stone hover:underline"
             >
               {sourceLabel}
             </a>
@@ -514,6 +514,28 @@ export default function EventCard({
             loading="lazy"
           />
         </div>
+      </div>
+
+      {/* Disclosure chevron: signals the whole card opens the event's detail
+          page. On mobile the thumbnail is hidden, so this becomes the rightmost
+          element — the iOS "this row opens" cue, exactly where the thumb looks. */}
+      <div
+        aria-hidden="true"
+        className="flex shrink-0 items-center self-center text-stone-light transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-stone"
+      >
+        <svg
+          className="h-5 w-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9 5l7 7-7 7"
+          />
+        </svg>
       </div>
     </article>
   );
