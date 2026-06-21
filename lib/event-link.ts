@@ -136,15 +136,20 @@ const SOCIAL_HOSTS: ReadonlySet<string> = new Set([
 
 /** A venue website we're willing to promote to a durable CTA (resolver
  *  priority #2 — "venue canonical"). Null for multi-tenant venues, social pages
- *  (not event-specific), and missing/unparseable URLs. Callers pass the result
- *  straight into resolveEventLink's `venueUrl`, so the resolver stays pure and
- *  this trust gate lives in exactly one place. */
+ *  (not event-specific), aggregator/unstable hosts, and missing/unparseable
+ *  URLs. The aggregator guard matters because `hwy4_venues.website` is
+ *  auto-synced from Google Places, which sometimes returns a GoCalaveras listing
+ *  as a venue's "website" — that is NON-durable (the whole reason GoCalaveras is
+ *  the fallback, not a destination), so it must not be promoted to priority #2.
+ *  Callers pass the result straight into resolveEventLink's `venueUrl`, so the
+ *  resolver stays pure and this trust gate lives in exactly one place. */
 export function promotableVenueUrl(
   venueName: string | null | undefined,
   website: string | null | undefined
 ): string | null {
   if (!website) return null;
   if (isMultiTenantVenue(venueName)) return null;
+  if (isUnstableHost(website)) return null; // GoCalaveras et al. (also catches unparseable)
   const h = hostOf(website);
   if (!h || SOCIAL_HOSTS.has(h)) return null;
   return website;
@@ -190,9 +195,13 @@ export function resolveEventLink(
 ): ResolvedLink {
   // 1. Organizer canonical — the most authoritative, durable destination. A
   //    GoCalaveras event that matches an organizer keeps linking here, not to
-  //    GoCalaveras (primary source wins).
+  //    GoCalaveras (primary source wins). Guard: a canonical_url that is ITSELF
+  //    an unstable aggregator host (a misconfigured hwy4_orgs row whose
+  //    "canonical" is a GoCalaveras permalink) is NOT durable — skip it and let
+  //    the event fall through to the non-durable aggregator fallback below, so a
+  //    churnable permalink can never be laundered into JSON-LD via an org row.
   const org = opts?.org;
-  if (org?.canonical_url) {
+  if (org?.canonical_url && !isUnstableHost(org.canonical_url)) {
     return {
       href: org.canonical_url,
       label: `Visit ${org.display_name?.trim() || "event organizer"}`,

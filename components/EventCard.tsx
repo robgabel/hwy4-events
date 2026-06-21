@@ -5,7 +5,6 @@ import PatrioticEventCard from "@/components/PatrioticEventCard";
 import AdoptAPetEventCard from "@/components/AdoptAPetEventCard";
 import ClassicRockEventCard from "@/components/ClassicRockEventCard";
 import { getTownContent } from "@/app/towns/town-content";
-import { humanizeHost } from "@/lib/poster";
 import { weatherQualifier } from "@/lib/weather-conditions";
 import { resolveEventWeather, type TownForecasts } from "@/lib/weather";
 import WeatherChip from "@/components/WeatherChip";
@@ -167,13 +166,12 @@ export default function EventCard({
 
   const townHasPage = getTownContent(townSlug(event.town)) !== null;
 
-  // "Source: <organizer>" provenance line. humanizeHost hides aggregator /
-  // community sources (GoCalaveras, Community Submission) and title-repeats,
-  // so this shows selectively — a small trust signal for real organizers.
-  const sourceLabel =
-    humanizeHost(event.source_name, event.name) ??
-    (event.org_slug ? ORG_LABELS[event.org_slug] || event.org_slug : null);
-  const sourceHref = event.source_url || event.event_url;
+  // Quieted "via <name>" provenance line. The destination is resolved
+  // server-side (lib/events-data.ts → lib/event-link.ts) and is present ONLY
+  // when it's a durable organizer/venue/stable-source link. A thin aggregator
+  // listing (GoCalaveras) resolves to null, so the card links only to our own
+  // detail page rather than sending the reader somewhere with fewer details.
+  const outbound = event.outboundLink ?? null;
 
   // Weather chip on every event that has a forecast for its town + date. We look
   // up THIS event's town (Copperopolis at ~850 ft and Bear Valley at ~7,000 ft
@@ -487,16 +485,16 @@ export default function EventCard({
           </span>
         </div>
 
-        {sourceHref && sourceLabel && (
+        {outbound && (
           <p className="mt-2 text-[11px] text-stone-light">
             via{" "}
             <a
-              href={sourceHref}
+              href={outbound.href}
               target="_blank"
               rel="noopener noreferrer"
               className="relative z-20 hover:text-stone hover:underline"
             >
-              {sourceLabel}
+              {outbound.label}
             </a>
           </p>
         )}

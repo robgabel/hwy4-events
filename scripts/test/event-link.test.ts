@@ -64,6 +64,30 @@ test("organizer canonical wins over a GoCalaveras event_url (primary source wins
   assert.equal(r.durable, true);
 });
 
+test("a misconfigured org canonical that is itself a GoCalaveras permalink is NOT durable", () => {
+  // Real case: the hwy4_orgs row "the-stitch-lounge" had its canonical_url set
+  // to a gocalaveras.com event permalink. That must not launder a churnable
+  // aggregator link into a durable organizer link (and thus into JSON-LD). It
+  // falls through to the non-durable aggregator fallback instead.
+  const STITCH: LinkOrg = {
+    slug: "the-stitch-lounge",
+    display_name: "The Stitch Lounge",
+    canonical_url: "https://www.gocalaveras.com/events/the-stitch-lounge-summer-camp/",
+    match_patterns: ["The Stitch Lounge"],
+  };
+  const r = resolveEventLinkFromOrgs(
+    ev({
+      name: "The Stitch Lounge Summer Camp",
+      venue_name: "The Stitch Lounge",
+      org_slug: "gocalaveras",
+      event_url: "https://www.gocalaveras.com/events/the-stitch-lounge-summer-camp/",
+    }),
+    [...ORGS, STITCH]
+  );
+  assert.equal(r.kind, "source");
+  assert.equal(r.durable, false); // non-durable → card shows nothing, kept out of JSON-LD
+});
+
 test("Arnold Rim Trail resolves via pattern even when misspelled 'Aronld'", () => {
   const r = resolveEventLinkFromOrgs(
     ev({
@@ -202,6 +226,19 @@ test("promotableVenueUrl rejects social pages and missing/junk urls", () => {
   );
   assert.equal(promotableVenueUrl("My Bar", null), null);
   assert.equal(promotableVenueUrl("My Bar", "not a url"), null);
+});
+
+test("promotableVenueUrl rejects an aggregator (GoCalaveras) venue website — Places sometimes syncs one in", () => {
+  // hwy4_venues.website is auto-synced from Google Places, which occasionally
+  // returns a GoCalaveras listing as a venue's "website". That host is the
+  // non-durable fallback, never a durable priority-#2 destination, so the event
+  // must fall through (here: to its own internal page) rather than render a
+  // "durable" card/detail link to gocalaveras.com. Real case: The Stitch Lounge.
+  assert.equal(
+    promotableVenueUrl("The Stitch Lounge", "https://www.gocalaveras.com/events/the-stitch-lounge-summer-camp/"),
+    null
+  );
+  assert.equal(promotableVenueUrl("Some Venue", "https://gocalaveras.com/events/x/"), null);
 });
 
 test("isMultiTenantVenue: parks/centers yes, single operators no, no false positives", () => {

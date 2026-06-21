@@ -29,6 +29,21 @@ export type EventCostTier =
   | "varies"
   | "unknown";
 
+/**
+ * The resolved outbound "more info" destination shown on a card, computed
+ * server-side in lib/events-data.ts via the shared resolver (lib/event-link.ts).
+ * Only ever a DURABLE destination (organizer canonical, venue canonical, or a
+ * stable-source link). When the best available link is a non-durable aggregator
+ * (GoCalaveras) or there is none, this is null and the card links solely to our
+ * own detail page — which is richer than the aggregator listing anyway.
+ */
+export interface ListOutboundLink {
+  href: string;
+  /** Bare destination name for the card's "Source:" line (e.g. "Arnold Rim
+   *  Trail"), distinct from the resolver's "Visit X" CTA label on the detail page. */
+  label: string;
+}
+
 export interface Hwy4Event {
   id: string;
   name: string;
@@ -70,6 +85,10 @@ export interface Hwy4Event {
   verification_status?: EventVerificationStatus;
   community_sourced?: boolean;
   venue_key?: string | null;
+  /** Resolved outbound link for cards, attached by getUpcomingEvents (see
+   *  lib/events-data.ts). Present only on rows read through that cached set;
+   *  null when the only link would be a non-durable aggregator (GoCalaveras). */
+  outboundLink?: ListOutboundLink | null;
 }
 
 /**
@@ -158,9 +177,7 @@ export type EventListItem = Pick<
   | "is_weekly"
   | "verification_status"
   | "community_sourced"
-  | "source_name"
-  | "source_url"
-  | "event_url"
+  | "outboundLink"
 >;
 
 export interface CollapsedEvent extends EventListItem {

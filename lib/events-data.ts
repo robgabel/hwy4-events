@@ -16,26 +16,90 @@
 
 import { unstable_cache } from "next/cache";
 import { getSupabase } from "@/lib/supabase";
-import { Hwy4Event, EventListItem } from "@/lib/types";
+import { Hwy4Event, EventListItem, ListOutboundLink } from "@/lib/types";
 import { dedupeEvents } from "@/lib/dedupe-events";
 import { gateEventDescription } from "@/lib/description-quality";
 import { pacificToday, addDays } from "@/lib/date-windows";
 import type { SitemapEventRow } from "@/lib/sitemap";
+import {
+  resolveEventLink,
+  matchOrgForEvent,
+  promotableVenueUrl,
+  type LinkOrg,
+} from "@/lib/event-link";
+import { humanizeHost } from "@/lib/poster";
 
 export const EVENTS_CACHE_TAG = "events";
 const REVALIDATE_SECONDS = 1800; // 30 min upper bound on staleness
 const PAGE_SIZE = 1000;
 
 // Columns needed by the card renderer (EventCard), the read-time deduper
-// (dedupe-events.ts), and the JSON-LD builders (schema.tsx). Trimmed vs. the
-// old per-page selects: still drops `importance` (unread by any list or schema).
-// `source_name` + `source_url` are kept now for the event-card "Source:" line.
+// (dedupe-events.ts), the JSON-LD builders (schema.tsx), and the server-side
+// outbound-link resolver below. Trimmed vs. the old per-page selects: still
+// drops `importance` (unread by any list or schema). The resolver reads
+// name/description/venue_name/org_slug (organizer match), `venue_key` (venue
+// canonical), `event_url` (stable source), and `source_name` (the card's link
+// label) — so the card and the detail page share one definition of "where does
+// this link go" (lib/event-link.ts).
 const EVENT_COLUMNS =
   "id, name, description, date, start_time, end_time, venue_name, town, " +
   "address, category, artists, status, price, cost_tier, event_url, " +
   "source_event_id, source_name, source_url, image_url, visibility, org_slug, " +
-  "robs_pick, is_weekly, verification_status, community_sourced, " +
+  "robs_pick, is_weekly, verification_status, community_sourced, venue_key, " +
   "last_scraped_at, updated_at";
+
+// Orgs (that have a canonical link) + venue websites, loaded once per cache
+// window alongside the events fetch so outbound-link resolution uses the exact
+// org/venue data the detail page uses. Only orgs WITH a canonical_url can
+// produce an organizer link, so we filter to those (a smaller match set).
+async function loadLinkContext(): Promise<{
+  orgs: LinkOrg[];
+  venueWebsites: Map<string, string>;
+}> {
+  const sb = getSupabase();
+  const [orgsRes, venuesRes] = await Promise.all([
+    sb
+      .from("hwy4_orgs")
+      .select("slug, display_name, canonical_url, match_patterns")
+      .not("canonical_url", "is", null),
+    sb.from("hwy4_venues").select("venue_key, website"),
+  ]);
+  const orgs = (orgsRes.data as LinkOrg[] | null) ?? [];
+  const venueWebsites = new Map<string, string>();
+  for (const v of (venuesRes.data as
+    | { venue_key: string; website: string | null }[]
+    | null) ?? []) {
+    if (v.website) venueWebsites.set(v.venue_key, v.website);
+  }
+  return { orgs, venueWebsites };
+}
+
+// Resolve a card's outbound "more info" link via the SAME resolver the detail
+// page uses (lib/event-link.ts), then keep it ONLY if durable. A non-durable
+// aggregator fallback (GoCalaveras) or "none" returns null, so the card links
+// solely to our own richer detail page instead of a thin aggregator listing.
+// This is what stops the bulk of cards from pointing at GoCalaveras.
+function buildOutboundLink(
+  ev: Hwy4Event,
+  orgs: LinkOrg[],
+  venueWebsites: Map<string, string>
+): ListOutboundLink | null {
+  const venueUrl = ev.venue_key
+    ? promotableVenueUrl(ev.venue_name, venueWebsites.get(ev.venue_key) ?? null)
+    : null;
+  const org = matchOrgForEvent(ev, orgs);
+  const resolved = resolveEventLink(ev, { org, venueUrl, venueName: ev.venue_name });
+  if (!resolved.durable || !resolved.href) return null;
+  // Bare destination name for the card's "Source:" line (the resolver's own
+  // label is the "Visit X" CTA form the detail page uses).
+  const label =
+    resolved.kind === "organizer"
+      ? org?.display_name?.trim() || ev.venue_name
+      : resolved.kind === "venue"
+        ? ev.venue_name
+        : humanizeHost(ev.source_name, ev.name) ?? "Event Page";
+  return { href: resolved.href, label };
+}
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
   // "Today" in the corridor's Pacific civil date, NOT UTC. Computing it in UTC
@@ -72,7 +136,17 @@ async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
   // Gate descriptions ONCE here, after dedupe: strip calendar-widget junk and
   // suppress meaningless stubs so no list card renders them. Done post-dedupe so
   // read-time clustering still sees raw text. See lib/description-quality.ts.
-  return deduped.map(gateEventDescription);
+  const gated = deduped.map(gateEventDescription);
+
+  // Resolve each card's outbound link HERE (once per cache window) so every
+  // render path carries it: the homepage (projected via toListEvents), and the
+  // town + temporal pages (which pass raw rows straight to the card). No page
+  // re-fetches orgs/venues, and the card can never drift from the detail page.
+  const { orgs, venueWebsites } = await loadLinkContext();
+  return gated.map((e) => ({
+    ...e,
+    outboundLink: buildOutboundLink(e, orgs, venueWebsites),
+  }));
 }
 
 /**
@@ -146,9 +220,7 @@ export function toListEvents(events: Hwy4Event[]): EventListItem[] {
     is_weekly: e.is_weekly,
     verification_status: e.verification_status,
     community_sourced: e.community_sourced,
-    source_name: e.source_name,
-    source_url: e.source_url,
-    event_url: e.event_url,
+    outboundLink: e.outboundLink ?? null,
   }));
 }
 
