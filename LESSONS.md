@@ -5,6 +5,26 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-06-19 — Cloudflare analytics retention + snapshot freshness alarm
+
+### Cloudflare Web Analytics retention (the headline gotcha)
+
+- **The dashboard's "6 months" is *sampled aggregate*; the GraphQL adaptive API we actually read (`rumPageloadEventsAdaptiveGroups`) serves only ~3 weeks — and unsampled data just 7 days.** Don't take a dashboard's history depth as its API's retention; they're different products. The `analytics_daily` PRD had assumed "~6 months" and was wrong everywhere. Verify empirically: probe single-day totals at increasing offsets (3/7/14/21/25/30/45/90d) and watch where it flips to "no data" (here: present at 21d, gone by 25d).
+- **A backfill recovers only what's still inside the window; older days come back as silent zero rows, not errors.** The 2026-06-03 30-day backfill wrote 24 all-zero rows for dates CF had already aged out — those then masquerade as real "0 pageviews" days and drag trend averages. A 0 from a snapshot backfill means "no data available," not "no traffic."
+- **Retention is unmeasurable while the source is younger than its window.** When the beacon only started ~3 weeks ago, "where data stops" can't separate the retention edge from the data-start edge. Flag the confound; don't assert a number you can't isolate.
+
+### Architecture
+
+- **A durable snapshot of a short-retention upstream is a silent single point of *permanent* data loss without a freshness alarm.** "It's built and the cron's been firing" is necessary, not sufficient: if the snapshotter breaks quietly you lose days you can never backfill (the upstream already forgot them). Beating short retention is the entire point of the snapshot — which is exactly what makes monitoring non-optional. Fix here: a freshness check (latest row ≥2 days behind **or** latest day = 0 pageviews) folded into the **existing** daily audit (`/api/check-events` → Slack), not a new cron. The "latest day = 0" arm catches the nastiest case — the cron "succeeds" but the upstream read silently returned nothing.
+- **Before planning a build, check whether it already exists and *works*.** The ask was "store CF analytics daily — we might already"; the storage was fully built, deployed, and running with zero gaps. The real gap was the missing alarm, not the storage. Investigate live state (DB rows, cron `synced_at`, gap query) before writing a plan — the plan shrank from "build it" to "monitor it."
+
+### Process
+
+- **The prod-write safety classifier blocks DELETEs on shared prod tables even when the user approved them in-chat.** A `DELETE FROM analytics_daily …` via the Supabase MCP was denied (the classifier can't see conversational authorization). Don't retry the same path — hand the user the one-line SQL to run themselves. Default to treating destructive prod writes as human-run; reserve MCP writes for additive/idempotent ops.
+- **For a one-off API probe, load only the keys you need from the *primary* checkout's `.env.local` (worktrees don't inherit it) and run a throwaway `tsx` script from `/tmp`** (keep it out of the repo): `set -a; eval "$(grep -E '^CLOUDFLARE_…=' …/hwy4-events/.env.local)"; set +a; scripts/node_modules/.bin/tsx /tmp/probe.ts`.
+
+---
+
 ## 2026-06-12 — "Submit form keeps asking for a URL" (broken-URL-field fix + flyer attach)
 
 ### The bug
