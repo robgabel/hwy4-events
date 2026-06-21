@@ -25,6 +25,7 @@ import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
 import ShareTracker from "@/components/ShareTracker";
 import OutboundTracker from "@/components/OutboundTracker";
+import SuggestFixInline from "@/components/SuggestFixInline";
 import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import PatrioticBanner from "@/components/PatrioticBanner";
@@ -518,16 +519,10 @@ export default async function EventPage({ params }: PageProps) {
               </p>
             )}
 
-            <p className="mt-4 text-sm text-stone">
-              See something off?{" "}
-              <Link
-                href={`/events/${slug}/report`}
-                data-otrack="suggest_fix"
-                className="font-medium text-pine underline underline-offset-2 hover:text-forest"
-              >
-                Suggest a fix
-              </Link>
-            </p>
+            {/* Inline correction form — expands in place so the reader keeps the
+                event they're correcting on screen (no navigating away and back).
+                Falls back to the standalone /report page with JS off. */}
+            <SuggestFixInline slug={slug} eventName={event.name} />
           </div>
         </div>
 
