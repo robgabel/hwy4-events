@@ -5,6 +5,7 @@ import PatrioticEventCard from "@/components/PatrioticEventCard";
 import AdoptAPetEventCard from "@/components/AdoptAPetEventCard";
 import ClassicRockEventCard from "@/components/ClassicRockEventCard";
 import { getTownContent } from "@/app/towns/town-content";
+import { canOptimizeImage } from "@/lib/image-hosts";
 import { weatherQualifier } from "@/lib/weather-conditions";
 import { resolveEventWeather, type TownForecasts } from "@/lib/weather";
 import WeatherChip from "@/components/WeatherChip";
@@ -165,6 +166,8 @@ export default function EventCard({
   const accentColor = CATEGORY_ACCENT_COLORS[event.category];
 
   const townHasPage = getTownContent(townSlug(event.town)) !== null;
+
+  const thumbnailSrc = getEventImage(event);
 
   // Quieted "via <name>" provenance line. The destination is resolved
   // server-side (lib/events-data.ts → lib/event-link.ts) and is present ONLY
@@ -503,14 +506,26 @@ export default function EventCard({
       {/* Thumbnail — vertically centered so it lines up with the chevron. */}
       <div className="hidden shrink-0 self-center sm:block">
         <div className="relative h-20 w-20 overflow-hidden rounded-lg">
-          <Image
-            src={getEventImage(event)}
-            alt=""
-            fill
-            className="object-cover"
-            sizes="80px"
-            loading="lazy"
-          />
+          {canOptimizeImage(thumbnailSrc) ? (
+            <Image
+              src={thumbnailSrc}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="80px"
+              loading="lazy"
+            />
+          ) : (
+            // External / non-allowlisted host: a plain <img> sidesteps
+            // next/image's host allowlist so a bad image can't 500 the page.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumbnailSrc}
+              alt=""
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
         </div>
       </div>
 
