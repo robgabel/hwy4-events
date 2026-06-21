@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { isUnstableHost } from "@/lib/event-link";
 
 export const maxDuration = 120;
 
@@ -216,7 +217,14 @@ export async function GET(request: Request) {
           rating: details.rating ?? null,
           user_ratings_total: details.userRatingCount ?? null,
           phone: details.nationalPhoneNumber ?? null,
-          website: details.websiteUri ?? null,
+          // Drop an aggregator/unstable-host website (Google sometimes returns a
+          // GoCalaveras listing as a venue's "website" — e.g. Angels Camp Museum).
+          // A churning aggregator is never a durable destination; mirrors
+          // promotableVenueUrl's read-time guard so the STORED data stays clean too.
+          website:
+            details.websiteUri && !isUnstableHost(details.websiteUri)
+              ? details.websiteUri
+              : null,
           maps_url: details.googleMapsUri ?? null,
           hours: details.regularOpeningHours?.weekdayDescriptions ?? null,
           places_attributes: buildAttributes(details),
