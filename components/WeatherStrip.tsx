@@ -1,10 +1,8 @@
 import { addDays, pacificToday } from "@/lib/date-windows";
 import type { Forecast } from "@/lib/weather";
 import { getWeatherForDate } from "@/lib/weather";
-import {
-  conditionColorClass,
-  conditionIcon,
-} from "@/lib/weather-conditions";
+import { conditionColorClass } from "@/lib/weather-conditions";
+import { conditionIcon } from "@/lib/weather-icons";
 
 function formatWeekday(date: string): string {
   return new Intl.DateTimeFormat("en-US", {

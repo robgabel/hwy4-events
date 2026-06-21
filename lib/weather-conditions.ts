@@ -1,16 +1,3 @@
-import type { ComponentType } from "react";
-import {
-  Cloud,
-  CloudFog,
-  CloudLightning,
-  CloudRain,
-  CloudSnow,
-  CloudSun,
-  Sun,
-  Wind,
-  type LucideProps,
-} from "lucide-react";
-
 export type ConditionKey =
   | "clear"
   | "partly_cloudy"
@@ -34,29 +21,6 @@ export function mapShortForecast(
   if (/\b(partly|mostly sunny|few clouds)\b/.test(text)) return "partly_cloudy";
   if (/\b(overcast|cloudy)\b/.test(text)) return "cloudy";
   return "clear";
-}
-
-export function conditionIcon(
-  key: ConditionKey
-): ComponentType<LucideProps> {
-  switch (key) {
-    case "clear":
-      return Sun;
-    case "partly_cloudy":
-      return CloudSun;
-    case "cloudy":
-      return Cloud;
-    case "rain":
-      return CloudRain;
-    case "snow":
-      return CloudSnow;
-    case "fog":
-      return CloudFog;
-    case "storm":
-      return CloudLightning;
-    case "windy":
-      return Wind;
-  }
 }
 
 export function conditionColorClass(
