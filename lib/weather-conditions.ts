@@ -89,9 +89,13 @@ export function weatherQualifier(w: {
   temp: number | null;
   condition: ConditionKey;
   precipPct: number;
+  range?: { low: number; high: number } | null;
 }): string | null {
   if (w.precipPct >= 50) return "rain likely";
   if (w.precipPct >= 30) return "showers possible";
+  // Long event with a real temperature swing: the spread is the headline, and
+  // "bring layers" is the one thing the reader needs to do about it.
+  if (w.range) return "bring layers";
   if (
     w.temp !== null &&
     w.temp >= 80 &&

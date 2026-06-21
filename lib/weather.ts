@@ -319,33 +319,98 @@ export function getWeatherForDate(
   return forecast.byDate[date] ?? null;
 }
 
-/** The single reading a chip shows for an event: the temp at the event's start
- *  hour when we have it, otherwise the day's high. */
+// A long event whose temperature swings this much across its hours shows a
+// range (low->high) + a verdict instead of one number — in the mountains a
+// 10-5 fair really can run 60 to 85.
+const LONG_EVENT_HOURS = 4;
+const SWING_THRESHOLD_F = 12;
+
+// Most notable condition wins the icon across a multi-hour window: one rainy
+// stretch in an otherwise clear day should still warn.
+const CONDITION_PRIORITY: ConditionKey[] = [
+  "storm",
+  "snow",
+  "rain",
+  "fog",
+  "windy",
+  "cloudy",
+  "partly_cloudy",
+  "clear",
+];
+
+function eventHour(time: string): number | null {
+  const h = Number(time.slice(0, 2));
+  return Number.isFinite(h) ? h : null;
+}
+
+/** The reading a chip shows for an event. Usually the temp at the start hour;
+ *  for a long event with a big temperature swing, `range` is set and the chip
+ *  shows low->high instead of a single number. */
 export interface ResolvedWeather {
   temp: number | null;
   condition: ConditionKey;
   precipPct: number;
   shortText: string;
-  /** true = matched the event's actual hour; false = daily-high fallback. */
+  /** true = matched the event's actual hour(s); false = daily-high fallback. */
   hourly: boolean;
+  /** Set only for long, swingy events — the chip renders low->high + a verdict. */
+  range: { low: number; high: number } | null;
 }
 
 export function resolveEventWeather(
   forecast: Forecast | null,
-  event: { date: string; start_time?: string | null }
+  event: { date: string; start_time?: string | null; end_time?: string | null }
 ): ResolvedWeather | null {
   if (!forecast) return null;
   const today = pacificToday().iso;
   if (event.date < today || event.date > addDays(today, 7)) return null;
 
-  // Event-hour reading when the event has a start time and that hour is in range.
-  if (event.start_time) {
-    const key = `${event.date}T${event.start_time.slice(0, 2)}`;
-    const hour = forecast.byHour[key];
-    if (hour) return { ...hour, hourly: true };
+  const startHour = event.start_time ? eventHour(event.start_time) : null;
+  const endHour = event.end_time ? eventHour(event.end_time) : null;
+
+  // Long, swingy event -> range. Walk every hour from start to end; if it runs
+  // several hours AND the temp moves a lot, show the spread instead of a point.
+  if (
+    startHour !== null &&
+    endHour !== null &&
+    endHour - startHour >= LONG_EVENT_HOURS
+  ) {
+    const readings: HourWeather[] = [];
+    for (let h = startHour; h <= endHour; h++) {
+      const r = forecast.byHour[`${event.date}T${String(h).padStart(2, "0")}`];
+      if (r) readings.push(r);
+    }
+    const temps = readings
+      .map((r) => r.temp)
+      .filter((t): t is number => t !== null);
+    if (temps.length >= 2) {
+      const low = Math.min(...temps);
+      const high = Math.max(...temps);
+      if (high - low >= SWING_THRESHOLD_F) {
+        const condition =
+          CONDITION_PRIORITY.find((c) =>
+            readings.some((r) => r.condition === c)
+          ) ?? "clear";
+        return {
+          temp: high,
+          condition,
+          precipPct: Math.max(...readings.map((r) => r.precipPct)),
+          shortText: `${low} to ${high} degrees across the event`,
+          hourly: true,
+          range: { low, high },
+        };
+      }
+    }
   }
 
-  // No start time (or the hour fell outside the forecast): use the day's high.
+  // Single event-hour reading.
+  if (startHour !== null) {
+    const hour =
+      forecast.byHour[`${event.date}T${String(startHour).padStart(2, "0")}`];
+    if (hour) return { ...hour, hourly: true, range: null };
+  }
+
+  // No start time (or hour outside the forecast): the day's high.
   const day = forecast.byDate[event.date];
   if (!day) return null;
   return {
@@ -354,6 +419,7 @@ export function resolveEventWeather(
     precipPct: day.precipPct,
     shortText: day.shortText,
     hourly: false,
+    range: null,
   };
 }
 

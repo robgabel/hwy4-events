@@ -10,7 +10,9 @@ export default function WeatherChip({
   qualifier: string | null;
   size?: "card" | "detail";
 }) {
-  const temp = weather.temp;
+  const range = weather.range;
+  // For a range, the high drives the icon color (the "it gets hot" signal).
+  const temp = range ? range.high : weather.temp;
   if (temp === null) return null;
 
   const Icon = conditionIcon(weather.condition);
@@ -18,7 +20,10 @@ export default function WeatherChip({
     weather.precipPct > 0
       ? `, ${weather.precipPct}% chance of precipitation`
       : "";
-  const label = `Weather: ${temp} degrees, ${weather.shortText}${rainLabel}`;
+  const reading = range
+    ? `${range.low} to ${range.high} degrees across the event`
+    : `${temp} degrees, ${weather.shortText}`;
+  const label = `Weather: ${reading}${rainLabel}`;
 
   return (
     <span
@@ -34,7 +39,9 @@ export default function WeatherChip({
         className={`h-3.5 w-3.5 ${conditionColorClass(weather.condition, temp)}`}
         strokeWidth={2}
       />
-      <span className="tabular-nums">{temp}&deg;</span>
+      <span className="tabular-nums">
+        {range ? `${range.low}→${range.high}` : temp}&deg;
+      </span>
       {qualifier && <span className="text-stone">· {qualifier}</span>}
     </span>
   );
