@@ -572,6 +572,8 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     aliases: [
       "white pines lake park",
       "white pines lake",
+      // Common scraper typo seen on a GoCalaveras music listing.
+      "white pines lake part",
       "white pines park",
       // The Arnold Rim Trail's "Run the Rim" races start/finish here, and it
       // is the trail's main day-use trailhead hub, so a bare "Arnold Rim Trail"
@@ -598,6 +600,86 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Bear Valley",
     // Grizzly Ballfield / meadow at the village entrance.
     address: "1 Bear Valley Road, Bear Valley, CA 95223",
+  },
+  "val-du-vino": {
+    canonical: "Val Du Vino Winery",
+    aliases: [
+      "val du vino",
+      "val du vino winery",
+      "val du vino tasting room",
+      "valduvino",
+    ],
+    town: "Murphys",
+    address: "634 French Gulch Rd, Murphys, CA 95247",
+  },
+  "indian-rock": {
+    canonical: "Indian Rock Vineyards",
+    aliases: [
+      "indian rock vineyards",
+      "indian rock vineyard",
+      "indian rock",
+    ],
+    town: "Murphys",
+    address: "1154 Pennsylvania Gulch Rd, Murphys, CA 95247",
+  },
+  "prospect-772": {
+    canonical: "Prospect 772 Winery",
+    aliases: [
+      "prospect 772",
+      "prospect 772 winery",
+      "prospect 772 winery and tasting room",
+      "prospect 772 wine company",
+      "prospect 772 tasting room",
+    ],
+    town: "Angels Camp",
+    address: "772 Appaloosa Rd, Angels Camp, CA 95222",
+  },
+  "copper-valley-golf": {
+    canonical: "The Golf Club at Copper Valley",
+    aliases: [
+      "the golf club at copper valley",
+      "golf club at copper valley",
+      "copper valley golf club",
+      "copper valley golf",
+    ],
+    town: "Copperopolis",
+    address: "1001 Saddle Creek Dr, Copperopolis, CA 95228",
+  },
+  "stitch-lounge": {
+    canonical: "The Stitch Lounge",
+    aliases: [
+      "the stitch lounge",
+      "stitch lounge",
+    ],
+    town: "Arnold",
+    address: "2704 CA-4 #1C, Arnold, CA 95223",
+  },
+  "native-sons-hall": {
+    canonical: "Native Sons Hall",
+    aliases: [
+      "native sons hall",
+      "native sons hall murphys",
+      "native sons of the golden west",
+      "native sons parlor",
+      "native sons building",
+    ],
+    town: "Murphys",
+    address: "389 Main St, Murphys, CA 95247",
+  },
+  // Maker/pottery studio in Arnold (Cameo Plaza). It already has a live
+  // hwy4_venues row + 40+ keyed events but had fallen out of this registry, so
+  // a venue-key backfill would have stripped those links — re-registered here
+  // so seed + backfill keep it intact.
+  "make-and-partake": {
+    canonical: "Make and parTake",
+    aliases: [
+      "make and partake",
+      "make & partake",
+      "make and partake arnold",
+      "makeandpartake",
+    ],
+    town: "Arnold",
+    address: "2182 Highway 4, Suite 600, Arnold, CA 95223",
   },
 };
 
