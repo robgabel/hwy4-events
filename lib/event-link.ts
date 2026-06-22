@@ -108,6 +108,18 @@ export function isUnstableHost(url: string): boolean {
   return UNSTABLE_SOURCE_HOSTS.has(h) || UNSTABLE_SOURCE_HOSTS.has(`www.${h}`);
 }
 
+/** Friendly provenance label for a non-durable aggregator source link — the
+ *  "via GoCalaveras" on a card and "Listed on GoCalaveras" on the detail page.
+ *  Only aggregator hosts reach this path today; falls back to the bare host so a
+ *  future aggregator still reads sensibly. Shared so the card + detail page can't
+ *  drift. */
+export function aggregatorHostLabel(href: string): string {
+  const h = hostOf(href);
+  if (!h) return "the source";
+  if (h === "gocalaveras.com") return "GoCalaveras";
+  return h;
+}
+
 /** Venues that host events from many independent organizers (parks, community
  *  centers, town squares, fairgrounds, amphitheaters). Their own website is a
  *  generic homepage, not an event page — a worse "more info" destination than the

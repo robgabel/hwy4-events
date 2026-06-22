@@ -33,7 +33,7 @@ import TwoFiftyBanner from "@/components/TwoFiftyBanner";
 import AdoptAPetBanner from "@/components/AdoptAPetBanner";
 import ClassicRockBanner from "@/components/ClassicRockBanner";
 import { isParadeEvent, isFourthFeatureEvent, isTwoFiftyEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
-import { resolveEventLinkFromOrgs, promotableVenueUrl, type LinkOrg } from "@/lib/event-link";
+import { resolveEventLinkFromOrgs, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
 
 export const revalidate = 3600;
 
@@ -66,19 +66,6 @@ function formatTime(time: string | null): string | null {
   const ampm = hour >= 12 ? "PM" : "AM";
   const display = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
   return `${display}:${m} ${ampm}`;
-}
-
-/** Friendly provenance label for the non-durable source line ("Listed on
- *  GoCalaveras"). Only aggregator hosts reach this path today; fall back to the
- *  bare host so a future aggregator still reads sensibly. */
-function sourceHostLabel(href: string): string {
-  try {
-    const h = new URL(href).hostname.toLowerCase().replace(/^www\./, "");
-    if (h === "gocalaveras.com") return "GoCalaveras";
-    return h;
-  } catch {
-    return "the source";
-  }
 }
 
 /** Google Calendar "add event" template link. */
@@ -513,7 +500,7 @@ export default async function EventPage({ params }: PageProps) {
                   data-otrack="more_info"
                   className="font-medium text-pine underline underline-offset-2 hover:text-forest"
                 >
-                  {sourceHostLabel(link.href)}
+                  {aggregatorHostLabel(link.href)}
                 </a>
                 <span aria-hidden="true"> ↗</span>
               </p>

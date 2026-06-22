@@ -25,6 +25,7 @@ import {
   resolveEventLink,
   matchOrgForEvent,
   promotableVenueUrl,
+  aggregatorHostLabel,
   type LinkOrg,
 } from "@/lib/event-link";
 import { humanizeHost } from "@/lib/poster";
@@ -75,10 +76,13 @@ async function loadLinkContext(): Promise<{
 }
 
 // Resolve a card's outbound "more info" link via the SAME resolver the detail
-// page uses (lib/event-link.ts), then keep it ONLY if durable. A non-durable
-// aggregator fallback (GoCalaveras) or "none" returns null, so the card links
-// solely to our own richer detail page instead of a thin aggregator listing.
-// This is what stops the bulk of cards from pointing at GoCalaveras.
+// page uses (lib/event-link.ts). A durable destination (organizer/venue/stable
+// source) carries through as before; a non-durable aggregator source
+// (GoCalaveras) carries through too — flagged `durable: false` and labeled from
+// its host — so the card can still attribute it ("via GoCalaveras"), matching
+// the detail page's "Listed on GoCalaveras" line. Only "none" (community
+// submissions / no source) returns null, where the card links solely to our own
+// richer detail page.
 function buildOutboundLink(
   ev: Hwy4Event,
   orgs: LinkOrg[],
@@ -89,16 +93,19 @@ function buildOutboundLink(
     : null;
   const org = matchOrgForEvent(ev, orgs);
   const resolved = resolveEventLink(ev, { org, venueUrl, venueName: ev.venue_name });
-  if (!resolved.durable || !resolved.href) return null;
-  // Bare destination name for the card's "Source:" line (the resolver's own
-  // label is the "Visit X" CTA form the detail page uses).
-  const label =
-    resolved.kind === "organizer"
+  if (!resolved.href) return null;
+  // Bare destination name for the card's "via …" line (the resolver's own label
+  // is the "Visit X" CTA form the detail page uses). A non-durable aggregator
+  // source is labeled from its host ("GoCalaveras") since humanizeHost
+  // deliberately hides aggregator source_names.
+  const label = !resolved.durable
+    ? aggregatorHostLabel(resolved.href)
+    : resolved.kind === "organizer"
       ? org?.display_name?.trim() || ev.venue_name
       : resolved.kind === "venue"
         ? ev.venue_name
         : humanizeHost(ev.source_name, ev.name) ?? "Event Page";
-  return { href: resolved.href, label };
+  return { href: resolved.href, label, durable: resolved.durable };
 }
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
