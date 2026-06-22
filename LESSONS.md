@@ -5,6 +5,27 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-06-21 — Growth-memo row-cap fix (Supabase: aggregate in the DB, never count rows in JS)
+
+The weekly Head-of-Growth memo was silently under-reporting its North Star. `lib/agent/growth-context.ts` SELECTed raw `site_events` / `share_hits` / `newsletter_clicks` rows and tallied them in JS. Same class of bug as this morning's `/admin/analytics` fix (16b3a86) — the **second** surface hit by it. Fixed with four `SECURITY INVOKER` SQL RPCs (migration `20260621b_growth_signal_rpcs.sql`). Lessons:
+
+### Technical — Supabase / Postgres
+
+- **PostgREST silently caps a rowset at ~1,000, and `.limit(20000)` does NOT override it** (the server clamps to `min(requested, db-max-rows)`). Any "fetch rows, then count/group in JS" path freezes or undercounts once a window crosses ~1,000 (a round `1,000` total is the tell). The 14-day view window here was **1,440 rows**, so the week-over-week WRR proxy was computed from a truncated, non-random ~1,000-row slice (~31% dropped). Fix: aggregate in the DB — a `SECURITY INVOKER` SQL function returning one `jsonb`, called via `supabase.rpc(...)`. Exact at any volume, one round trip, RLS still gates the data (service-role only). Cross-checked correct: `distinct_sessions_7d` 561 == Σ `sessionsBySrc7d` 561.
+- **When you fix one row-cap bug, grep for its siblings — they travel in packs.** One `.select().limit(20000)` mistake had been copy-pasted across **four** reads in this one file (after the analytics page earlier the same day). A single `db-max-rows` misunderstanding tends to repeat on every read of the same high-volume table.
+- **A `uuid` column compared to `''` throws `22P02 invalid input syntax for type uuid`.** The JS truthy guard `event_id ? … : ""` translates to SQL as `event_id IS NOT NULL`, never `event_id <> ''` (a uuid has no empty-string value). Check the column type before porting a JS falsy-check: `session_id` was `text`, so `<> ''` was correct *there*. Same JS idiom, two different SQL translations.
+- **After `apply_migration` creates an RPC, run `notify pgrst, 'reload schema'`.** Direct SQL (`execute_sql`) sees the new function immediately, but the PostgREST `.rpc()` path the app actually uses needs the schema cache reloaded first, or it 404s the function in prod.
+- **Supabase MCP `execute_sql` returns only the LAST statement's result** when you send multiple `;`-separated statements in one call. A leading diagnostic SELECT was silently dropped; only the second came back. Run diagnostics one statement per call, or fold them into a single SELECT.
+- **`apply_migration` runs in a transaction** — the mid-migration `22P02` rolled the whole thing back, so nothing applied partially. `create or replace function` is idempotent, so the fix-and-re-apply was clean.
+
+### Process — verify the right way, authorize the risky step explicitly
+
+- **Match verification to the surface.** This is a cron/back-end read path (writes `agent_runs`, renders behind Basic Auth) — a browser preview proves nothing. The real proof chain: apply migration → call the RPCs against live data via MCP → cross-check a derived number two independent ways → show the bug was real (1,440 > the cap) → `tsc --noEmit` → run the exact `npm test` CI runs (140/140). Don't reflexively spin up the dev server when the change isn't browser-observable.
+- **A pronoun won't authorize a prod deploy.** "do both" was blocked by the permission classifier on `gh pr merge` (merging `main` auto-deploys via Vercel); an explicit "yes, merge & deploy now" cleared it. Name the irreversible/outward action specifically when asking — and don't try to route around the gate (a direct push to `main` would hit the same deploy and defeat its intent).
+- **A chip spawned in a prior session can't be dismissed from a new one.** The `task_id` isn't in the new context, and transcript-search is approval-gated (unavailable unsupervised), so there's no recovery path — it falls back to a manual click for the user. If a spawned-task id might be needed later, it has to be captured somewhere that survives the session boundary.
+
+---
+
 ## 2026-06-21 — Per-town hourly weather, event-card affordance, deploy + zsh gotchas
 
 Built the weather chips end-to-end (started from Peter Hollens's dormant Eugene-fork
