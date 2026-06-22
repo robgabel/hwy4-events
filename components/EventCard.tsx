@@ -170,10 +170,11 @@ export default function EventCard({
   const thumbnailSrc = getEventImage(event);
 
   // Quieted "via <name>" provenance line. The destination is resolved
-  // server-side (lib/events-data.ts → lib/event-link.ts) and is present ONLY
-  // when it's a durable organizer/venue/stable-source link. A thin aggregator
-  // listing (GoCalaveras) resolves to null, so the card links only to our own
-  // detail page rather than sending the reader somewhere with fewer details.
+  // server-side (lib/events-data.ts → lib/event-link.ts): a durable
+  // organizer/venue/stable-source link, OR a non-durable aggregator source
+  // (GoCalaveras), kept so the card still attributes it ("via GoCalaveras")
+  // like the detail page's "Listed on GoCalaveras". Null only for community
+  // submissions / no source, where the card links solely to our own detail page.
   const outbound = event.outboundLink ?? null;
 
   // Weather chip on every event that has a forecast for its town + date. We look

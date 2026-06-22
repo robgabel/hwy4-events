@@ -32,16 +32,22 @@ export type EventCostTier =
 /**
  * The resolved outbound "more info" destination shown on a card, computed
  * server-side in lib/events-data.ts via the shared resolver (lib/event-link.ts).
- * Only ever a DURABLE destination (organizer canonical, venue canonical, or a
- * stable-source link). When the best available link is a non-durable aggregator
- * (GoCalaveras) or there is none, this is null and the card links solely to our
- * own detail page — which is richer than the aggregator listing anyway.
+ * A DURABLE destination (organizer canonical, venue canonical, or a stable-source
+ * link) OR a non-durable aggregator source (GoCalaveras) carried so the card can
+ * still attribute it ("via GoCalaveras"), matching the detail page. Null only
+ * when there's no source at all (community submissions / no link), where the card
+ * links solely to our own detail page.
  */
 export interface ListOutboundLink {
   href: string;
-  /** Bare destination name for the card's "Source:" line (e.g. "Arnold Rim
-   *  Trail"), distinct from the resolver's "Visit X" CTA label on the detail page. */
+  /** Bare destination name for the card's "via …" line (e.g. "Arnold Rim Trail"
+   *  or "GoCalaveras"), distinct from the resolver's "Visit X" CTA label on the
+   *  detail page. */
   label: string;
+  /** False for a non-durable aggregator source (GoCalaveras), true otherwise.
+   *  Lets the card style attribution-only sources differently from a durable
+   *  organizer/venue link if desired. */
+  durable: boolean;
 }
 
 export interface Hwy4Event {
