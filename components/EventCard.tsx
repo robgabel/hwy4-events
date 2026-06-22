@@ -169,14 +169,6 @@ export default function EventCard({
 
   const thumbnailSrc = getEventImage(event);
 
-  // Quieted "via <name>" provenance line. The destination is resolved
-  // server-side (lib/events-data.ts → lib/event-link.ts): a durable
-  // organizer/venue/stable-source link, OR a non-durable aggregator source
-  // (GoCalaveras), kept so the card still attributes it ("via GoCalaveras")
-  // like the detail page's "Listed on GoCalaveras". Null only for community
-  // submissions / no source, where the card links solely to our own detail page.
-  const outbound = event.outboundLink ?? null;
-
   // Weather chip on every event that has a forecast for its town + date. We look
   // up THIS event's town (Copperopolis at ~850 ft and Bear Valley at ~7,000 ft
   // have wildly different weather) and resolve to the temp at the event's start
@@ -488,20 +480,6 @@ export default function EventCard({
             </span>
           </span>
         </div>
-
-        {outbound && (
-          <p className="mt-2 text-[11px] text-stone-light">
-            via{" "}
-            <a
-              href={outbound.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative z-20 hover:text-stone hover:underline"
-            >
-              {outbound.label}
-            </a>
-          </p>
-        )}
       </div>
 
       {/* Thumbnail — vertically centered so it lines up with the chevron. */}
