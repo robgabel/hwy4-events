@@ -21,6 +21,18 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 - `site_config` table is a key-value store (briefing text, timestamps, etc.)
 - `hwy4_orgs` maps venues/sources to display names and slugs for org pages
 
+## Admin cockpit (`/admin`)
+
+The operator surface, gated whole by Basic Auth ([middleware.ts](middleware.ts), user `rob` + `ADMIN_PASSWORD`). Cleaned up 2026-06-23 (designed via `/brain elon-musk` → `/debate`, a delete-first pass): collapsed a flat ~10-link nav — a separate top-level page per queue — into one **Inbox** front door + a five-group nav.
+
+- **`/admin` → `/admin/inbox`.** The **Inbox** ([app/admin/inbox/page.tsx](app/admin/inbox/page.tsx)) is the front door: one **read-only ranked list** unifying the five review queues — submissions, posters, verification, feedback, and agent proposals — each row a type chip + the agent's headline/verdict + age, drilling into that source's existing page to actually act. Its nav badge ([app/admin/layout.tsx](app/admin/layout.tsx)) is the single total across all five. Ranked by recency for now (stakes-weighting is a deliberate later increment). **It routes, it never writes** — a shared `dispose()` handler is a later step, built only if the per-source pages prove insufficient.
+- **Slimmed nav (5 items): Inbox · Pulse · Analytics · Newsletter · Venues** ([components/admin/AdminNav.tsx](components/admin/AdminNav.tsx)).
+  - **Pulse** — the read-only agent surfaces under one tab via [components/admin/PulseTabs.tsx](components/admin/PulseTabs.tsx): **Today** (chief-of-staff ops digest) + **Growth memo** (both tabs of `/admin/briefings`) + **Experiments** (`/admin/experiments`, the growth-agent memory).
+  - **Analytics** — the **Growth** tab (`/admin/analytics`), ordered North-Star-first: visitor-vs-local + business referrals + signups→visits (Gate 0), then Newsletter, then a demoted **Traffic detail** group (Cloudflare RUM; countries/devices sit in a low-signal "Audience" cut).
+  - **Newsletter** (`/admin/newsletter`) — the Wed-draft / Thu-send veto surface.
+  - **Venues** (`/admin/venues`) — review/edit venue blurbs. Kept as its own destination: a blurb **backlog**, not a triage queue, so it deliberately stays out of the Inbox.
+- **The five former queue routes still exist** — `/admin/submissions`, `/admin/posters`, `/admin/verification`, `/admin/feedback`, `/admin/actions` — and hold all the real disposition logic (publish / merge / dismiss / approve / revert, in each page's `actions.ts`). The Inbox links into them; they're just no longer top-level nav, so drilling into one keeps the **Inbox** tab lit.
+
 ## Deduplication (defense in depth)
 
 The same real-world event can appear twice: one source re-lists it under a changed title, or two sources describe it independently (e.g. the GoCalaveras aggregator lists "Live Music @ The Lube Room" while the venue feed lists "Live at The Lube: Poison Oakies" — same night). The title-based `dedup_key` only catches byte-identical re-scrapes of the *same* title, so it cannot see these. Four layers guard against dupes:
