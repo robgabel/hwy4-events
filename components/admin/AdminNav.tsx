@@ -1,34 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { INK, MUTED, ACCENT, BORDER, SUBTLE_BG } from "@/components/admin/ui";
+import { usePathname } from "next/navigation";
+import { INK, MUTED, ACCENT, BORDER } from "@/components/admin/ui";
 
 export type NavBadges = {
-  actions: number;
-  submissions: number;
-  posters: number;
-  verification: number;
-  feedback: number;
+  inbox: number;
   venues: number;
 };
 
-// Client nav for the admin cockpit. Server layout computes the pending-count
-// badges and passes them in; this component owns active-tab highlighting
-// (usePathname + the ?view param, so the two /briefings tabs read distinctly).
+// Slimmed admin nav. "Act" (the Inbox — the unified review queue) is separated
+// from "look / tend" (Pulse = read-only agent briefings + experiments; Analytics;
+// Newsletter; Venues). The five former queue routes (submissions / posters /
+// verification / feedback / actions) still exist as pages — the Inbox links into
+// them — but they're no longer top-level nav, so drilling into one keeps the
+// "Inbox" tab lit. Venues is a blurb backlog rather than a triage queue, so it
+// stays its own destination instead of folding into the Inbox.
+const INBOX_ROUTES = [
+  "/admin/inbox",
+  "/admin/submissions",
+  "/admin/posters",
+  "/admin/verification",
+  "/admin/feedback",
+  "/admin/actions",
+];
+
+// Pulse spans the briefings page (Today + Growth-memo tabs) and Experiments.
+const PULSE_ROUTES = ["/admin/briefings", "/admin/experiments"];
+
 export default function AdminNav({ badges }: { badges: NavBadges }) {
   const pathname = usePathname();
-  const view = useSearchParams().get("view");
 
-  function isActive(href: string): boolean {
-    const [path, query] = href.split("?");
-    if (path === "/admin/briefings") {
-      if (pathname !== "/admin/briefings") return false;
-      const hrefGrowth = query?.includes("view=growth");
-      return hrefGrowth ? view === "growth" : view !== "growth";
-    }
-    return pathname === path || pathname.startsWith(path + "/");
-  }
+  const inActive = (routes: string[]) =>
+    routes.some((r) => pathname === r || pathname.startsWith(r + "/"));
+  const startsWith = (path: string) => pathname === path || pathname.startsWith(path + "/");
 
   return (
     <nav
@@ -55,44 +60,23 @@ export default function AdminNav({ badges }: { badges: NavBadges }) {
       >
         Admin
       </span>
-      {/* Agent cockpit — briefings (read-only) + the action queue */}
-      <NavLink href="/admin/briefings" active={isActive("/admin/briefings")}>
-        Today
+
+      <NavLink href="/admin/inbox" active={inActive(INBOX_ROUTES)} badge={badges.inbox}>
+        Inbox
       </NavLink>
-      <NavLink href="/admin/briefings?view=growth" active={isActive("/admin/briefings?view=growth")}>
-        Growth memo
-      </NavLink>
-      <NavLink href="/admin/actions" active={isActive("/admin/actions")} badge={badges.actions}>
-        Actions
-      </NavLink>
+
       <NavDivider />
-      {/* Growth */}
-      <NavLink href="/admin/experiments" active={isActive("/admin/experiments")}>
-        Experiments
+
+      <NavLink href="/admin/briefings" active={inActive(PULSE_ROUTES)}>
+        Pulse
       </NavLink>
-      <NavLink href="/admin/analytics" active={isActive("/admin/analytics")}>
+      <NavLink href="/admin/analytics" active={startsWith("/admin/analytics")}>
         Analytics
       </NavLink>
-      <NavDivider />
-      {/* Content */}
-      <NavLink href="/admin/newsletter" active={isActive("/admin/newsletter")}>
+      <NavLink href="/admin/newsletter" active={startsWith("/admin/newsletter")}>
         Newsletter
       </NavLink>
-      <NavDivider />
-      {/* Human review queues (badged with pending counts) */}
-      <NavLink href="/admin/submissions" active={isActive("/admin/submissions")} badge={badges.submissions}>
-        Submissions
-      </NavLink>
-      <NavLink href="/admin/posters" active={isActive("/admin/posters")} badge={badges.posters}>
-        Posters
-      </NavLink>
-      <NavLink href="/admin/verification" active={isActive("/admin/verification")} badge={badges.verification}>
-        Verification
-      </NavLink>
-      <NavLink href="/admin/feedback" active={isActive("/admin/feedback")} badge={badges.feedback}>
-        Feedback
-      </NavLink>
-      <NavLink href="/admin/venues" active={isActive("/admin/venues")} badge={badges.venues}>
+      <NavLink href="/admin/venues" active={startsWith("/admin/venues")} badge={badges.venues}>
         Venues
       </NavLink>
     </nav>

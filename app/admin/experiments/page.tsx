@@ -1,5 +1,6 @@
 import { getAdminClientOrNull } from "@/lib/admin/db";
-import { QueueShell } from "@/components/admin/ui";
+import { QueueShell, ADMIN_MAX_WIDTH } from "@/components/admin/ui";
+import { PulseTabs } from "@/components/admin/PulseTabs";
 import { ConfirmSubmit } from "@/components/admin/ConfirmSubmit";
 import {
   addExperiment,
@@ -52,16 +53,20 @@ export default async function ExperimentsPage() {
   const running = experiments.filter((e) => e.status === "running");
 
   return (
-    <QueueShell
-      title="Experiments"
-      intro={
-        <>
-          The growth agent&rsquo;s memory. Log a deliberate growth change with a hypothesis and the
-          metric to watch; the weekly memo reads the running ones and reports an early read on each.
-          Conclude them when you have a verdict. {running.length} running.
-        </>
-      }
-    >
+    <>
+      <div style={{ maxWidth: ADMIN_MAX_WIDTH, margin: "0 auto" }}>
+        <PulseTabs active="experiments" />
+      </div>
+      <QueueShell
+        title="Experiments"
+        intro={
+          <>
+            The growth agent&rsquo;s memory. Log a deliberate growth change with a hypothesis and the
+            metric to watch; the weekly memo reads the running ones and reports an early read on each.
+            Conclude them when you have a verdict. {running.length} running.
+          </>
+        }
+      >
       {/* Log a new experiment */}
       <section style={cardStyle}>
         <h2 style={{ color: "#1B3A2D", fontSize: 17, margin: "0 0 12px" }}>Log a new experiment</h2>
@@ -85,7 +90,8 @@ export default async function ExperimentsPage() {
           ))}
         </div>
       )}
-    </QueueShell>
+      </QueueShell>
+    </>
   );
 }
 
