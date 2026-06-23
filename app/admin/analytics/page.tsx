@@ -17,7 +17,6 @@ type DailyRow = {
   referrers: CountRow[];
   countries: CountRow[];
   devices: CountRow[];
-  browsers: CountRow[];
   ai_referrals: Record<string, number>;
   synced_at: string;
 };
@@ -30,7 +29,7 @@ async function loadDaily(): Promise<DailyRow[]> {
   if (!supabase) return [];
   const { data } = await supabase
     .from("analytics_daily")
-    .select("date, pageviews, visits, top_pages, referrers, countries, devices, browsers, ai_referrals, synced_at")
+    .select("date, pageviews, visits, top_pages, referrers, countries, devices, ai_referrals, synced_at")
     .order("date", { ascending: false })
     .limit(WINDOW_DAYS);
   return (data as DailyRow[] | null) ?? [];
@@ -215,7 +214,7 @@ function sumLast(rows: DailyRow[], n: number) {
 
 function aggregate(
   rows: DailyRow[],
-  field: "top_pages" | "referrers" | "countries" | "devices" | "browsers",
+  field: "top_pages" | "referrers" | "countries" | "devices",
   topN: number
 ): CountRow[] {
   const map = new Map<string, { pageviews: number; visits: number }>();
@@ -308,14 +307,62 @@ export default async function GrowthPage() {
   return (
     <div style={{ maxWidth: 940, margin: "0 auto" }}>
       <h1 style={{ color: "#1B3A2D", fontSize: 26, margin: "0 0 4px" }}>Growth</h1>
-      <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px", lineHeight: 1.5 }}>
-        Traffic from Cloudflare Web Analytics, snapshotted nightly into the site&rsquo;s own
-        history. Privacy-first and cookieless, so the numbers run a touch lower than ad-tech
-        analytics, but they&rsquo;re honest.
+      <p style={{ color: "#666", fontSize: 16, margin: "0 0 8px", lineHeight: 1.5 }}>
+        North Star first: who&rsquo;s showing up (local vs visitor) and whether they act (business
+        referrals, signups). Newsletter and raw traffic follow.
       </p>
 
+      {/* North Star — the flywheel metrics (BUSINESS-PLAN): who shows up, whether they act. */}
+      <GroupHeader title="North Star" sub="Who shows up, and whether they act. The flywheel." />
       <Gate0Section data={gate0} />
+      <SignupsVsVisitorsPanel days={svv} gate0={gate0} />
 
+      {/* Newsletter — the owned retention channel. */}
+      {newsletter && newsletter.total_active > 0 && (
+        <>
+          <GroupHeader title="Newsletter" sub="The owned retention channel." />
+          <NewsletterSignupsPanel stats={newsletter} />
+        </>
+      )}
+
+      {newsletterClicks && newsletterClicks.perEvent.length > 0 && (
+        <>
+          <SectionHeader>Newsletter clicks · {fmtDay(newsletterClicks.campaignDate)} send</SectionHeader>
+          <section style={cardStyle}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+              {newsletterClicks.perEvent.map((e, i) => (
+                <div key={i}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                    <span style={{ color: "#2d3a22", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {e.name}
+                    </span>
+                    <span style={{ color: "#1B3A2D", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{nf(e.clicks)}</span>
+                  </div>
+                  <div style={{ height: 4, background: "#f0ede8", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.round((e.clicks / nlMax) * 100)}%`, background: "#9bb87a", borderRadius: 2 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p style={{ color: "#999", fontSize: 12, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
+              {nf(newsletterClicks.total)} event-link click{newsletterClicks.total === 1 ? "" : "s"}
+              {newsletterClicks.sentCount > 0
+                ? ` across ${nf(newsletterClicks.sentCount)} recipients (~${Math.round(
+                    (newsletterClicks.total / newsletterClicks.sentCount) * 100
+                  )}% clicked an event)`
+                : ""}
+              . Bot-filtered and directional — email scanners pre-click links, so read it as a relative
+              ranking, not a precise count.
+            </p>
+          </section>
+        </>
+      )}
+
+      {/* Traffic detail — demoted below the metrics that matter. */}
+      <GroupHeader
+        title="Traffic detail"
+        sub="Cloudflare Web Analytics, snapshotted nightly into the site's own history. Privacy-first and cookieless, so a touch lower than ad-tech analytics, but honest."
+      />
       {!hasData ? (
         <section style={emptyCardStyle}>
           <p style={{ color: "#1B3A2D", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
@@ -366,7 +413,11 @@ export default async function GrowthPage() {
             <RankedList title="Top referrers · 30d" rows={referrers} kind="referrer" />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 16, marginTop: 16 }}>
+          <SectionHeader>Audience · 30d</SectionHeader>
+          <p style={{ color: "#aaa", fontSize: 13, margin: "0 0 12px", lineHeight: 1.5 }}>
+            Low-signal for a single-corridor site — kept for completeness, not a metric to steer by.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 16 }}>
             <RankedList title="Countries · 30d" rows={countries} kind="plain" />
             <RankedList title="Devices · 30d" rows={devices} kind="plain" />
           </div>
@@ -379,42 +430,6 @@ export default async function GrowthPage() {
         </>
       )}
 
-      <SignupsVsVisitorsPanel days={svv} gate0={gate0} />
-
-      {newsletter && newsletter.total_active > 0 && <NewsletterSignupsPanel stats={newsletter} />}
-
-      {newsletterClicks && newsletterClicks.perEvent.length > 0 && (
-        <>
-          <SectionHeader>Newsletter clicks · {fmtDay(newsletterClicks.campaignDate)} send</SectionHeader>
-          <section style={cardStyle}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              {newsletterClicks.perEvent.map((e, i) => (
-                <div key={i}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-                    <span style={{ color: "#2d3a22", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {e.name}
-                    </span>
-                    <span style={{ color: "#1B3A2D", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{nf(e.clicks)}</span>
-                  </div>
-                  <div style={{ height: 4, background: "#f0ede8", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.round((e.clicks / nlMax) * 100)}%`, background: "#9bb87a", borderRadius: 2 }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p style={{ color: "#999", fontSize: 12, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
-              {nf(newsletterClicks.total)} event-link click{newsletterClicks.total === 1 ? "" : "s"}
-              {newsletterClicks.sentCount > 0
-                ? ` across ${nf(newsletterClicks.sentCount)} recipients (~${Math.round(
-                    (newsletterClicks.total / newsletterClicks.sentCount) * 100
-                  )}% clicked an event)`
-                : ""}
-              . Bot-filtered and directional — email scanners pre-click links, so read it as a relative
-              ranking, not a precise count.
-            </p>
-          </section>
-        </>
-      )}
     </div>
   );
 }
@@ -916,6 +931,17 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
     <h2 style={{ color: "#1B3A2D", fontSize: 15, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", margin: "28px 0 12px" }}>
       {children}
     </h2>
+  );
+}
+
+// Group divider — one level above SectionHeader. Establishes the page's priority
+// spine: North Star → Newsletter → Traffic detail.
+function GroupHeader({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div style={{ margin: "34px 0 16px", paddingBottom: 8, borderBottom: "2px solid #1B3A2D" }}>
+      <h2 style={{ color: "#1B3A2D", fontSize: 19, fontWeight: 700, margin: 0 }}>{title}</h2>
+      {sub && <p style={{ color: "#888", fontSize: 13, margin: "3px 0 0", lineHeight: 1.4 }}>{sub}</p>}
+    </div>
   );
 }
 

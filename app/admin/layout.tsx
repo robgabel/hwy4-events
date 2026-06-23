@@ -6,8 +6,10 @@ import AdminNav from "@/components/admin/AdminNav";
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  // Badge counts for the review queues. countPending returns 0 (never throws) on
-  // a misconfigured env so the whole admin tree can't 500 over a missing badge.
+  // The Inbox badge is the single total across the review queues it unifies.
+  // Venues (a blurb backlog, not a triage queue) is its own surface, badged
+  // separately. countPending / countMissing return 0 (never throw) on a
+  // misconfigured env so the whole admin tree can't 500 over a missing badge.
   const [verification, submissions, posters, feedback, proposedActions, venues] = await Promise.all([
     countPending("hwy4_events", "verification_status", "needs_verification"),
     countPending("event_submissions", "status", "pending"),
@@ -16,6 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     countPending("agent_actions", "status", "proposed"),
     countMissing("hwy4_venues", "blurb", "venue_key"),
   ]);
+  const inbox = verification + submissions + posters + feedback + proposedActions;
 
   return (
     <main
@@ -28,16 +31,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     >
       <div style={{ maxWidth: ADMIN_MAX_WIDTH, margin: "0 auto 20px" }}>
         <Suspense fallback={<div style={{ height: 36 }} />}>
-          <AdminNav
-            badges={{
-              actions: proposedActions,
-              submissions,
-              posters,
-              verification,
-              feedback,
-              venues,
-            }}
-          />
+          <AdminNav badges={{ inbox, venues }} />
         </Suspense>
       </div>
       {children}
