@@ -23,6 +23,14 @@ export type CreateOrgRowPayload = {
   town?: string;
 };
 
+export type CreateVenueRowPayload = {
+  venue_key?: string;
+  canonical?: string;
+  town?: string;
+  address?: string;
+  aliases?: string[];
+};
+
 export async function executeAction(
   supabase: SupabaseClient,
   action: AgentActionRow
@@ -30,6 +38,8 @@ export async function executeAction(
   switch (action.type) {
     case "create_org_row":
       return execCreateOrgRow(supabase, action.payload as CreateOrgRowPayload);
+    case "create_venue_row":
+      return execCreateVenueRow(supabase, action.payload as CreateVenueRowPayload);
     case "flag_spam_submission":
       return execFlagSpam(supabase, action.payload as { submission_id?: string });
     default:
@@ -49,6 +59,13 @@ export async function revertAction(
   switch (action.type) {
     case "create_org_row": {
       const { error } = await supabase.from("hwy4_orgs").delete().eq("id", action.target_id);
+      return error ? { ok: false, error: error.message } : { ok: true };
+    }
+    case "create_venue_row": {
+      // target_id is the venue_key (hwy4_venues has no surrogate id). Deleting the
+      // row can't orphan events: their venue_key links by registry resolution, not
+      // a FK, and with "row + snippet only" the executor never wrote event keys.
+      const { error } = await supabase.from("hwy4_venues").delete().eq("venue_key", action.target_id);
       return error ? { ok: false, error: error.message } : { ok: true };
     }
     case "flag_spam_submission": {
@@ -111,6 +128,48 @@ async function execCreateOrgRow(
 
   // Insert: nothing to restore on revert beyond deleting target_id.
   return { ok: true, targetTable: "hwy4_orgs", targetId: inserted.id as string, beforeSnapshot: null };
+}
+
+// Register a venue: insert the hwy4_venues row so the event detail page has a
+// venue section to render and /api/sync-venue-facts (weekly) auto-populates the
+// Google facts (places_synced_at starts NULL → it's picked up). This is the
+// "row + snippet only" half of Phase 1A: the row is the immediately-writable,
+// reversible part; the human commits the emitted scripts/lib/venues.ts snippet to
+// link the venue's events durably (the matcher is registry-driven; the scraper
+// re-nulls an unregistered venue's key on re-scrape, so the registry edit is what
+// makes the link permanent). address is Tier A but optional here — name + town
+// still resolve a Places listing and a town-centroid map degrades gracefully.
+async function execCreateVenueRow(
+  supabase: SupabaseClient,
+  p: CreateVenueRowPayload
+): Promise<ExecuteResult> {
+  const venue_key = (p.venue_key ?? "").trim();
+  const canonical = (p.canonical ?? "").trim();
+  const town = (p.town ?? "").trim();
+  const address = (p.address ?? "").trim();
+  if (!venue_key) return { ok: false, error: "Missing venue key." };
+  if (!canonical) return { ok: false, error: "Missing canonical (display) name." };
+  if (!town) return { ok: false, error: "Missing town." };
+
+  // Friendlier than a raw 23505 unique-violation.
+  const { data: existing } = await supabase
+    .from("hwy4_venues")
+    .select("venue_key")
+    .eq("venue_key", venue_key)
+    .maybeSingle();
+  if (existing) return { ok: false, error: `A venue with key "${venue_key}" already exists.` };
+
+  const { error } = await supabase.from("hwy4_venues").insert({
+    venue_key,
+    canonical,
+    town,
+    address: address || null,
+    // places_synced_at left NULL so the next sync-venue-facts run enriches it.
+  });
+  if (error) return { ok: false, error: error.message };
+
+  // hwy4_venues is keyed by venue_key (no surrogate id) — that's the revert handle.
+  return { ok: true, targetTable: "hwy4_venues", targetId: venue_key, beforeSnapshot: null };
 }
 
 async function execFlagSpam(

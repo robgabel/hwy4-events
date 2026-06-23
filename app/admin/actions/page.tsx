@@ -20,6 +20,7 @@ import {
   scanForActions,
   setPolicy,
   researchAction,
+  researchVenueAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -102,7 +103,8 @@ export default async function ActionsPage({
         <>
           What the agent proposes; what you dispose. Stage 1 of the cockpit: the agent stages
           low-stakes, reversible, internal actions and a human approves each one. Nothing here
-          auto-runs. Today: <strong>create_org_row</strong>, draining the link-gap worklist.
+          auto-runs. Today: <strong>create_org_row</strong> (link-gap worklist) and{" "}
+          <strong>create_venue_row</strong> (unregistered venues with upcoming events).
         </>
       }
       error={error}
@@ -268,131 +270,257 @@ function hostOf(url: string): string {
 }
 
 function ProposedCard({ action }: { action: AgentActionRow }) {
+  return (
+    <QueueCard>
+      <Badges action={action} />
+      <CardHeader title={action.title ?? action.type} meta={action.rationale ?? undefined} />
+      {action.type === "create_org_row" ? (
+        <OrgProposedBody action={action} />
+      ) : action.type === "create_venue_row" ? (
+        <VenueProposedBody action={action} />
+      ) : (
+        <GenericProposedBody action={action} />
+      )}
+    </QueueCard>
+  );
+}
+
+type Research = { confidence?: string; sources?: { title: string; url: string }[]; notes?: string };
+
+// Shared research affordance: a "Research X" button + the agent's confidence and
+// source links. Reused by the org (canonical URL) and venue (address) proposals.
+function ResearchRow({
+  id,
+  research,
+  researchFn,
+  label,
+  emptyHint,
+}: {
+  id: string;
+  research: Research | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  researchFn: (formData: FormData) => any;
+  label: string;
+  emptyHint: string;
+}) {
+  const confColor =
+    research?.confidence === "high" ? "#1B3A2D" : research?.confidence === "medium" ? "#92400e" : "#922b21";
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", margin: "-4px 0 12px" }}>
+      <form action={researchFn} style={{ margin: 0 }}>
+        <input type="hidden" name="id" value={id} />
+        <button type="submit" style={{ ...adminBtn.secondary, padding: "6px 12px", fontSize: 14 }}>
+          🔍 {research ? `Re-research ${label}` : `Research ${label}`}
+        </button>
+      </form>
+      {research ? (
+        <span style={{ fontSize: 13, color: MUTED }}>
+          Agent research: <strong style={{ color: confColor }}>{research.confidence ?? "low"}</strong> confidence
+          {research.sources && research.sources.length > 0 && (
+            <>
+              {" · "}
+              {research.sources.slice(0, 3).map((s, i) => (
+                <a
+                  key={i}
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#2d5a3d", marginRight: 8 }}
+                >
+                  {hostOf(s.url)} ↗
+                </a>
+              ))}
+            </>
+          )}
+        </span>
+      ) : (
+        <span style={{ fontSize: 13, color: MUTED }}>{emptyHint}</span>
+      )}
+    </div>
+  );
+}
+
+function OrgProposedBody({ action }: { action: AgentActionRow }) {
   const p = action.payload as {
     slug?: string;
     display_name?: string;
     canonical_url?: string;
     match_patterns?: string[];
     town?: string;
-    research?: { confidence?: string; sources?: { title: string; url: string }[]; notes?: string };
+    research?: Research;
   };
-  const research = p.research;
-  const confColor =
-    research?.confidence === "high" ? "#1B3A2D" : research?.confidence === "medium" ? "#92400e" : "#922b21";
-
   return (
-    <QueueCard>
-      <Badges action={action} />
-      <CardHeader title={action.title ?? action.type} meta={action.rationale ?? undefined} />
-
-      {action.type === "create_org_row" && (
+    <>
+      <ResearchRow
+        id={action.id}
+        research={p.research}
+        researchFn={researchAction}
+        label="URL"
+        emptyHint="No URL yet — click Research (~20s), or paste the organizer’s events page below."
+      />
+      <form action={approveAction}>
+        <input type="hidden" name="id" value={action.id} />
         <div
           style={{
-            display: "flex",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 10,
-            alignItems: "center",
-            flexWrap: "wrap",
-            margin: "-4px 0 12px",
+            marginBottom: 12,
           }}
         >
-          <form action={researchAction} style={{ margin: 0 }}>
-            <input type="hidden" name="id" value={action.id} />
-            <button type="submit" style={{ ...adminBtn.secondary, padding: "6px 12px", fontSize: 14 }}>
-              🔍 {research ? "Re-research URL" : "Research URL"}
-            </button>
-          </form>
-          {research ? (
-            <span style={{ fontSize: 13, color: MUTED }}>
-              Agent research:{" "}
-              <strong style={{ color: confColor }}>{research.confidence ?? "low"}</strong> confidence
-              {research.sources && research.sources.length > 0 && (
-                <>
-                  {" · "}
-                  {research.sources.slice(0, 3).map((s, i) => (
-                    <a
-                      key={i}
-                      href={s.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2d5a3d", marginRight: 8 }}
-                    >
-                      {hostOf(s.url)} ↗
-                    </a>
-                  ))}
-                </>
-              )}
-            </span>
-          ) : (
-            <span style={{ fontSize: 13, color: MUTED }}>
-              No URL yet — click Research (~20s), or paste the organizer&rsquo;s events page below.
-            </span>
-          )}
+          <Field label="Slug" name="slug" defaultValue={p.slug ?? ""} />
+          <Field label="Display name" name="display_name" defaultValue={p.display_name ?? ""} />
+          <Field
+            label="Canonical events URL (required)"
+            name="canonical_url"
+            defaultValue={p.canonical_url ?? ""}
+            placeholder="https://organizer.com/events"
+            required
+            highlight
+          />
+          <Field label="Town" name="town" defaultValue={p.town ?? ""} />
+          <Field
+            label="Match patterns (comma-separated)"
+            name="match_patterns"
+            defaultValue={(p.match_patterns ?? []).join(", ")}
+          />
         </div>
-      )}
-
-      {action.type === "create_org_row" ? (
-        <form action={approveAction}>
-          <input type="hidden" name="id" value={action.id} />
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 10,
-              marginBottom: 12,
-            }}
-          >
-            <Field label="Slug" name="slug" defaultValue={p.slug ?? ""} />
-            <Field label="Display name" name="display_name" defaultValue={p.display_name ?? ""} />
-            <Field
-              label="Canonical events URL (required)"
-              name="canonical_url"
-              defaultValue={p.canonical_url ?? ""}
-              placeholder="https://organizer.com/events"
-              required
-              highlight
-            />
-            <Field label="Town" name="town" defaultValue={p.town ?? ""} />
-            <Field
-              label="Match patterns (comma-separated)"
-              name="match_patterns"
-              defaultValue={(p.match_patterns ?? []).join(", ")}
-            />
-          </div>
-          <p style={{ color: MUTED, fontSize: 13, lineHeight: 1.5, margin: "0 0 12px" }}>
-            Find the organizer&rsquo;s own events page and paste it above; the rest is pre-filled. Approving
-            inserts the <code>hwy4_orgs</code> row, upgrading every matching event to a durable link.
-            Reversible (deletes the row).
-          </p>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <button type="submit" style={adminBtn.primary}>
-              Approve &amp; create
-            </button>
-            <input
-              name="decided_note"
-              placeholder="Note (optional)"
-              style={{ ...adminInput, flex: 1, minWidth: 160 }}
-            />
-            <button type="submit" formAction={rejectAction} formNoValidate style={adminBtn.danger}>
-              Reject
-            </button>
-          </div>
-        </form>
-      ) : (
-        // Generic fallback for other action types (none staged by the proposer yet).
-        <form action={approveAction} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <input type="hidden" name="id" value={action.id} />
-          <pre style={{ flex: 1, minWidth: 240, fontSize: 12, color: "#555", background: "#FDF8F3", padding: 10, borderRadius: 8, overflow: "auto", margin: 0 }}>
-            {JSON.stringify(action.payload, null, 2)}
-          </pre>
+        <p style={{ color: MUTED, fontSize: 13, lineHeight: 1.5, margin: "0 0 12px" }}>
+          Find the organizer’s own events page and paste it above; the rest is pre-filled. Approving
+          inserts the <code>hwy4_orgs</code> row, upgrading every matching event to a durable link.
+          Reversible (deletes the row).
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button type="submit" style={adminBtn.primary}>
-            Approve
+            Approve &amp; create
           </button>
+          <input name="decided_note" placeholder="Note (optional)" style={{ ...adminInput, flex: 1, minWidth: 160 }} />
           <button type="submit" formAction={rejectAction} formNoValidate style={adminBtn.danger}>
             Reject
           </button>
-        </form>
-      )}
-    </QueueCard>
+        </div>
+      </form>
+    </>
+  );
+}
+
+// Build the scripts/lib/venues.ts KNOWN_VENUES entry to paste + commit. Reflects
+// the saved proposal payload; if you edit slug/aliases in the form, mirror them here.
+function venuesTsSnippet(p: {
+  venue_key?: string;
+  canonical?: string;
+  town?: string;
+  address?: string;
+  aliases?: string[];
+}): string {
+  const aliasLines = (p.aliases ?? []).map((a) => `      ${JSON.stringify(a)},`).join("\n");
+  const addressLine = p.address ? `\n    address: ${JSON.stringify(p.address)},` : "";
+  return `  ${JSON.stringify(p.venue_key ?? "")}: {
+    canonical: ${JSON.stringify(p.canonical ?? "")},
+    aliases: [
+${aliasLines}
+    ],
+    town: ${JSON.stringify(p.town ?? "")},${addressLine}
+  },`;
+}
+
+function VenueProposedBody({ action }: { action: AgentActionRow }) {
+  const p = action.payload as {
+    venue_key?: string;
+    canonical?: string;
+    town?: string;
+    address?: string;
+    aliases?: string[];
+    event_count?: number;
+    research?: Research;
+  };
+  return (
+    <>
+      <ResearchRow
+        id={action.id}
+        research={p.research}
+        researchFn={researchVenueAction}
+        label="address"
+        emptyHint="No address yet — click Research (~20s), or paste the venue’s street address below."
+      />
+      <form action={approveAction}>
+        <input type="hidden" name="id" value={action.id} />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 10,
+            marginBottom: 12,
+          }}
+        >
+          <Field label="Venue key (slug)" name="venue_key" defaultValue={p.venue_key ?? ""} />
+          <Field label="Canonical (display) name" name="canonical" defaultValue={p.canonical ?? ""} />
+          <Field label="Town" name="town" defaultValue={p.town ?? ""} />
+          <Field
+            label="Street address (Tier A — verify)"
+            name="address"
+            defaultValue={p.address ?? ""}
+            placeholder="1154 Pennsylvania Gulch Rd, Murphys, CA 95247"
+            highlight
+          />
+          <Field label="Aliases (comma-separated)" name="aliases" defaultValue={(p.aliases ?? []).join(", ")} />
+        </div>
+        <p style={{ color: MUTED, fontSize: 13, lineHeight: 1.5, margin: "0 0 12px" }}>
+          Verify the address (a wrong one drops the map pin in the wrong place). Approving inserts the{" "}
+          <code>hwy4_venues</code> row, so its event pages gain a venue section and the weekly Places sync
+          fills the Google facts. Reversible (deletes the row). <strong>To link the venue’s events durably</strong>,
+          paste the snippet below into <code>scripts/lib/venues.ts</code> and commit — the matcher is
+          registry-driven, so until then the events stay unkeyed.
+        </p>
+        <details style={{ marginBottom: 12 }}>
+          <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: INK }}>
+            Registry snippet for scripts/lib/venues.ts
+          </summary>
+          <pre
+            style={{
+              fontSize: 12,
+              color: "#333",
+              background: "#FDF8F3",
+              border: "1px solid #E7E0D5",
+              padding: 12,
+              borderRadius: 8,
+              overflow: "auto",
+              margin: "8px 0 0",
+              lineHeight: 1.5,
+            }}
+          >
+            {venuesTsSnippet(p)}
+          </pre>
+        </details>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button type="submit" style={adminBtn.primary}>
+            Approve &amp; create
+          </button>
+          <input name="decided_note" placeholder="Note (optional)" style={{ ...adminInput, flex: 1, minWidth: 160 }} />
+          <button type="submit" formAction={rejectAction} formNoValidate style={adminBtn.danger}>
+            Reject
+          </button>
+        </div>
+      </form>
+    </>
+  );
+}
+
+// Generic fallback for other action types (e.g. flag_spam_submission).
+function GenericProposedBody({ action }: { action: AgentActionRow }) {
+  return (
+    <form action={approveAction} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <input type="hidden" name="id" value={action.id} />
+      <pre style={{ flex: 1, minWidth: 240, fontSize: 12, color: "#555", background: "#FDF8F3", padding: 10, borderRadius: 8, overflow: "auto", margin: 0 }}>
+        {JSON.stringify(action.payload, null, 2)}
+      </pre>
+      <button type="submit" style={adminBtn.primary}>
+        Approve
+      </button>
+      <button type="submit" formAction={rejectAction} formNoValidate style={adminBtn.danger}>
+        Reject
+      </button>
+    </form>
   );
 }
 

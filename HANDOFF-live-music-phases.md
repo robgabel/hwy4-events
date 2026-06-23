@@ -20,7 +20,9 @@
 
 ---
 
-## Phase 1A — Self-healing venue-gap proposer
+## Phase 1A — Self-healing venue-gap proposer ✅ SHIPPED 2026-06-22
+
+**Decisions made (the Open decisions below, resolved by Rob):** executor is **row + snippet only** (Open #1 → option B); threshold **N=3** (Open #2). Built: migration `20260622_create_venue_row_policy.sql` (policy row, human-gated); worklist `lib/venue-gaps.ts` (`venue_key IS NULL` + real non-generic name not already a registered canonical, ≥3 upcoming public events; pure core locked by `scripts/test/venue-gaps.test.ts`); Tier-A address research `lib/agent/research-venue.ts`; proposer `lib/agent/propose-venue-rows.ts` folded into `/api/agent/propose-actions` + the `/admin/actions` "Scan" button; `create_venue_row` executor + revert in `lib/agent/actions-executor.ts`; the `create_venue_row` card (research-prefilled fields + copyable `venues.ts` snippet) in `app/admin/actions/page.tsx`. On approve: insert the `hwy4_venues` row (venue section + weekly Places facts light up immediately; reversible = delete the row) **and** commit the emitted `scripts/lib/venues.ts` snippet to link events durably (the matcher re-nulls an unregistered venue's `venue_key` on re-scrape, so the registry commit is load-bearing). Verified: 145 scripts tests pass, `tsc` clean, full `next build` clean, executor insert validated against the live `hwy4_venues` schema. The live worklist surfaces real gaps today (Murphys Volunteer Library ×11, Gateway Hotel Pool ×4, …). The original plan follows for reference.
 
 **Goal:** a new venue that starts hosting events gets *proposed* into the registry within a week instead of rendering bare for months. Today the only signal is `/api/check-events` reporting unresolved venues to Slack; nobody actions it systematically.
 
@@ -92,8 +94,8 @@
 
 ## Open decisions for Rob
 
-1. **Phase 1A executor:** auto-write the `hwy4_venues` row on approve (revertible) and emit a `scripts/lib/venues.ts` diff for a human to commit? Or keep registry edits fully manual and have the proposer only research + draft the row? (Code can't self-commit the deployed registry; the row write is the autonomous-capable part.)
-2. **Phase 1A threshold `N`** for "enough events to be worth a row" (link-gap uses ≥5 single-operator). Same here?
+1. ~~**Phase 1A executor**~~ — **RESOLVED (2026-06-22): row + snippet only.** Approve writes the `hwy4_venues` row (revertible) and emits a `scripts/lib/venues.ts` snippet for a human to commit; the executor does NOT set `venue_key` on events (that would decay on the next re-scrape until the registry commit lands — and we chose no silent-decay state). Events link durably via the committed registry + the normal backfill/scrape.
+2. ~~**Phase 1A threshold `N`**~~ — **RESOLVED (2026-06-22): N=3** (`VENUE_GAP_THRESHOLD` in `lib/venue-gaps.ts`). Lower than link-gap's ≥5 to catch smaller real series (a bare venue page is a bigger hole than an aggregator link).
 3. **Phase 2 scope:** badges-only first (cheap, high value), or the full composed "night" block in one pass?
 4. **Phase 3A artist links:** curated table vs. web-research resolver vs. skip until an organizer asks.
 

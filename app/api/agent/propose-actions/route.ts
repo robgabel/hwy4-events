@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { proposeLinkGapActions, researchPendingProposals } from "@/lib/agent/propose-link-gaps";
+import { proposeVenueRowActions, researchPendingVenueProposals } from "@/lib/agent/propose-venue-rows";
 import { runAutoExecutor } from "@/lib/agent/auto-runner";
 import { SITE_URL } from "@/lib/constants";
 
@@ -28,17 +29,22 @@ export async function GET(request: Request) {
 
   try {
     const result = await proposeLinkGapActions(supabase);
-    // Research a bounded batch of blank-URL proposals (each ~15-25s; capped so the
+    // Same propose→research split for the venue-gap worklist (Phase 1A): stage
+    // unregistered venues, then research a small batch of their addresses.
+    const venues = await proposeVenueRowActions(supabase);
+    // Research bounded batches of blank proposals (each ~15-25s; capped so the
     // cron can't time out). The rest get researched next run or on-demand in the UI.
     const research = await researchPendingProposals(supabase, 3);
+    const venueResearch = await researchPendingVenueProposals(supabase, 2);
     // Stage 2: auto-execute any proposals whose type has graduated (no-op while
     // every agent_policy.auto_execute is false). Covers proposals from prior runs too.
     const auto = await runAutoExecutor(supabase);
 
     const webhook = process.env.SLACK_WEBHOOK_URL;
-    if (webhook && (result.proposed > 0 || auto.executed > 0)) {
+    if (webhook && (result.proposed > 0 || venues.proposed > 0 || auto.executed > 0)) {
       const bits: string[] = [];
       if (result.proposed > 0) bits.push(`${result.proposed} new link-gap action(s) proposed`);
+      if (venues.proposed > 0) bits.push(`${venues.proposed} new venue(s) to register proposed`);
       if (auto.executed > 0) bits.push(`${auto.executed} auto-executed`);
       try {
         await fetch(webhook, {
@@ -51,7 +57,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, ...result, research, auto });
+    return NextResponse.json({ ok: true, ...result, venues, research, venueResearch, auto });
   } catch (err) {
     console.error("[propose-actions] failed:", err);
     return NextResponse.json(
