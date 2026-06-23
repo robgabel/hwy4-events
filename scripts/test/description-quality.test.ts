@@ -85,6 +85,35 @@ test("sanitize: empty/undefined is safe", () => {
   assert.equal(sanitizeDescription("   \n  \n"), "");
 });
 
+// --- Raw HTML / entity bleed (page-builder markup, any source) -------------
+test("sanitize: strips raw HTML tags but keeps the text", () => {
+  const out = sanitizeDescription(
+    "<p>Live music on the <strong>patio</strong> tonight, <a href='https://x.com'>details here</a>.</p>",
+  );
+  assert.ok(!/[<>]/.test(out), "no angle brackets remain");
+  assert.match(out, /Live music on the patio tonight, details here\./);
+});
+
+test("sanitize: decodes common entities (named + numeric)", () => {
+  const out = sanitizeDescription("Coffee &amp; Cars &#8212; Saturday at 9&nbsp;AM");
+  assert.match(out, /Coffee & Cars/);
+  assert.ok(!out.includes("&amp;"));
+  assert.ok(!out.includes("&nbsp;"));
+});
+
+test("sanitize: drops <script>/<style> blocks wholesale", () => {
+  const out = sanitizeDescription(
+    "<style>.x{color:red}</style>Family fun day at the park.<script>alert(1)</script>",
+  );
+  assert.ok(!out.includes("alert"));
+  assert.ok(!out.includes("color:red"));
+  assert.match(out, /Family fun day at the park\./);
+});
+
+test("sanitize: conservative — math/emoticons survive (tag must open with a letter)", () => {
+  assert.equal(sanitizeDescription("groups < 10 welcome <3"), "groups < 10 welcome <3");
+});
+
 // --- Suppress cases ---------------------------------------------------------
 test("suppress: colon-terminated boilerplate (Bingo)", () => {
   const text =

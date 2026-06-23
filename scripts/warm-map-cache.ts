@@ -64,7 +64,9 @@ async function main() {
   // --- Bust: force pages to re-geocode with the latest addresses -------------
   if (SECRET) {
     try {
-      const r = await fetch(`${SITE_URL}/api/revalidate?secret=${encodeURIComponent(SECRET)}&tag=geocode`);
+      const r = await fetch(`${SITE_URL}/api/revalidate?tag=geocode`, {
+        headers: { authorization: `Bearer ${SECRET}` },
+      });
       console.log(`Bust geocode tag: HTTP ${r.status}`);
     } catch (e) {
       console.warn("Bust failed:", (e as Error).message);

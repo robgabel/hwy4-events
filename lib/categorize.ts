@@ -8,44 +8,150 @@ import type { EventCategory } from "./types";
  * Categories describe WHAT the event is, not WHERE. Order matters: most specific
  * patterns first. Returns "other" when nothing matches.
  *
+ * Two precedence tiers (see `classifyEventCategoryDetailed` + `reconcileCategory`):
+ *  - AUTHORITATIVE rules fire on high-precision tokens (bingo, opera, karaoke,
+ *    pottery, blood drive, …). When one matches, the category is near-certain, so
+ *    an LLM guess does NOT get to override it. This closes the old hole where a
+ *    confident-wrong LLM could flip a clearly-named event into the wrong bucket
+ *    (the Eugene fork hit this hard: venue boilerplate dumped its whole classical
+ *    season into Live Music).
+ *  - SOFT rules are weaker signals; an LLM MAY upgrade them to a more specific
+ *    category, but may never downgrade a specific keyword result to "other".
+ *
  * Used by:
- *  - the Visit Murphys scraper (`scripts/scrapers/visit-murphys.ts`), which feeds
- *    in the title + the source's own category names
- *  - the `/admin/submissions` publish form, which feeds in the submitted name +
- *    description so community submissions (the `/submit` form collects no
- *    category) default to the right type instead of always falling back to
- *    "other" (e.g. "Karaoke at Murphys Irish Pub" → live_music).
+ *  - the GoCalaveras + Facebook scrapers (deterministic floor, reconciled with an
+ *    LLM via `reconcileCategory`)
+ *  - the Visit Murphys scraper + feed-ingest (title + source category names; no LLM)
+ *  - the `/admin/submissions` publish form (submitted name + description)
  */
-export function classifyEventCategory(text: string): EventCategory {
-  const haystack = text.toLowerCase();
 
-  if (/\b(live music|concert|dj|open mic|trio|band|acoustic|jazz|blues|karaoke)\b/.test(haystack)) {
-    return "live_music";
-  }
-  if (/\b(wine|vineyard|winery|tasting|mimosa|sip & |sip and )\b/.test(haystack)) return "wine";
-  if (/\b(hike|guided walk|nature walk|bird walk|trail run|fun run|5k|trail stewardship)\b/.test(haystack)) {
-    return "hike_walk";
-  }
+export const VALID_CATEGORIES: readonly EventCategory[] = [
+  "live_music",
+  "festival",
+  "civic",
+  "hike_walk",
+  "kids",
+  "wine",
+  "games",
+  "fine_arts",
+  "other",
+];
+
+export interface DetailedCategory {
+  /** The resolved category ("other" if nothing matched). */
+  category: EventCategory;
+  /** Which rule fired (for debugging / bounded backfills); null on no match. */
+  rule: string | null;
+  /** True when a high-precision keyword fired → should win over an LLM guess. */
+  authoritative: boolean;
+}
+
+interface CategoryRule {
+  category: EventCategory;
+  rule: string;
+  pattern: RegExp;
+  authoritative: boolean;
+}
+
+// Ordered, most-specific first. Where a category has both unambiguous and weak
+// tokens it's split into an authoritative rule immediately followed by a soft
+// rule. This preserves the original single-regex behavior exactly — the UNION of
+// tokens per category and the cross-category order are unchanged — while letting
+// the unambiguous tokens carry override weight. Verified token-for-token against
+// the pre-2026-06-23 single-regex classifier; the only deliberate category-output
+// change is "blood drive" → civic (was "other"), matching the red-cross scraper.
+const RULES: CategoryRule[] = [
+  { category: "live_music", rule: "live_music_strong", authoritative: true,
+    pattern: /\b(live music|open mic|karaoke)\b/ },
+  { category: "live_music", rule: "live_music", authoritative: false,
+    pattern: /\b(concert|dj|trio|band|acoustic|jazz|blues)\b/ },
+
+  { category: "wine", rule: "wine_strong", authoritative: true,
+    pattern: /\b(wine|winery|vineyard|wine tasting|mimosa)\b/ },
+  { category: "wine", rule: "wine", authoritative: false,
+    pattern: /\b(tasting|sip & |sip and )\b/ },
+
+  { category: "hike_walk", rule: "hike_walk", authoritative: false,
+    pattern: /\b(hike|guided walk|nature walk|bird walk|trail run|fun run|5k|trail stewardship)\b/ },
+
   // Strong performing-arts signals run BEFORE "kids": a play's blurb often
-  // mentions "family"/"children" ("Henry V", "What the Constitution Means to
-  // Me"), which would otherwise misroute the production into "kids".
-  if (/\b(theater|theatre|playhouse|shakespeare|broadway|matinee|one-act|opera|ballet)\b/.test(haystack)) {
-    return "fine_arts";
+  // mentions "family"/"children", which would otherwise misroute it into "kids".
+  { category: "fine_arts", rule: "performing_arts_strong", authoritative: true,
+    pattern: /\b(opera|ballet|shakespeare|playhouse)\b/ },
+  { category: "fine_arts", rule: "performing_arts", authoritative: false,
+    pattern: /\b(theater|theatre|broadway|matinee|one-act)\b/ },
+
+  { category: "kids", rule: "kids", authoritative: false,
+    pattern: /\b(kids|kid|children|family|youth|teens?|tweens?|day camp|summer camp|adventure camp|forest school|creek critters|easter egg|story ?time)\b/ },
+
+  { category: "games", rule: "games_strong", authoritative: true,
+    pattern: /\b(bingo|trivia|bocce|cribbage|poker)\b/ },
+  { category: "games", rule: "games", authoritative: false,
+    pattern: /\b(pool tournament|card tournament|game night)\b/ },
+
+  // Remaining Fine Arts: comedy/improv + visual/craft arts. After "kids" so a
+  // kids' art/pottery camp still lands in "kids".
+  { category: "fine_arts", rule: "visual_arts_strong", authoritative: true,
+    pattern: /\b(pottery|ceramics?|wheel throwing|paint (?:and|&) sip|sip (?:and|&) paint|open studio)\b/ },
+  { category: "fine_arts", rule: "visual_arts", authoritative: false,
+    pattern: /\b(improv|drama|comedy|stand-?up|art gallery|art exhibit|art show|paint|painting|drawing|sketching|sculpt)\b/ },
+
+  { category: "festival", rule: "festival", authoritative: false,
+    pattern: /\b(festival|fair|celebration|fest)\b/ },
+
+  { category: "civic", rule: "civic_strong", authoritative: true,
+    pattern: /\b(farmers market|flea market|car show|car cruise|blood drive)\b/ },
+  { category: "civic", rule: "civic", authoritative: false,
+    pattern: /\b(meeting|fundraiser|breakfast|luncheon|town hall|public hearing|council|board)\b/ },
+];
+
+// Venue self-description that injects a false category signal when a scraper drags
+// the venue blurb into the event text — e.g. "the foothills' most beautiful concert
+// venue" pushing a comedy night into live_music. Stripped before matching. Tight on
+// purpose: only a (category-word + venue-noun) pair, so real event phrases like
+// "Concert in the Park" or "Summer Concert Series" are untouched.
+const VENUE_BOILERPLATE =
+  /\b(?:premier |beautiful |historic |intimate |stunning |iconic )?(?:live[- ]music|concert|event|performance|performing[- ]arts)[- ](?:venue|hall|center|centre|space)\b/gi;
+
+function stripVenueBoilerplate(text: string): string {
+  return text.replace(VENUE_BOILERPLATE, " ");
+}
+
+/**
+ * Full classification result: the category, which rule fired, and whether that
+ * rule is authoritative (high-precision → should beat an LLM). The scrapers use
+ * this; everyone else can use the `classifyEventCategory` convenience wrapper.
+ */
+export function classifyEventCategoryDetailed(text: string): DetailedCategory {
+  const haystack = stripVenueBoilerplate(text.toLowerCase());
+  for (const r of RULES) {
+    if (r.pattern.test(haystack)) {
+      return { category: r.category, rule: r.rule, authoritative: r.authoritative };
+    }
   }
-  if (/\b(kids|kid|children|family|youth|teens?|tweens?|day camp|summer camp|adventure camp|forest school|creek critters|easter egg|story ?time)\b/.test(haystack)) {
-    return "kids";
+  return { category: "other", rule: null, authoritative: false };
+}
+
+/** Convenience: just the category. Stable signature for the no-LLM callers. */
+export function classifyEventCategory(text: string): EventCategory {
+  return classifyEventCategoryDetailed(text).category;
+}
+
+/**
+ * Reconcile the keyword classification with an LLM's category guess. One place,
+ * shared by every scraper that runs an LLM classifier, so the precedence rule
+ * can't drift between them:
+ *  - An AUTHORITATIVE keyword match WINS over the LLM (the fix).
+ *  - Otherwise the LLM may UPGRADE a soft/"other" keyword result to a specific
+ *    category, but may never downgrade a specific keyword result to "other".
+ */
+export function reconcileCategory(
+  keyword: DetailedCategory,
+  llm: string | null | undefined,
+): EventCategory {
+  if (keyword.authoritative) return keyword.category;
+  if (llm && llm !== "other" && (VALID_CATEGORIES as readonly string[]).includes(llm)) {
+    return llm as EventCategory;
   }
-  if (/\b(bingo|trivia|bocce|pool tournament|cribbage|card tournament|game night|poker)\b/.test(haystack)) {
-    return "games";
-  }
-  // Remaining Fine Arts: comedy/improv and visual/craft arts (pottery, painting,
-  // drawing). After "kids" so a kids art/pottery camp still lands in "kids".
-  if (/\b(improv|drama|comedy|stand-?up|art gallery|art exhibit|art show|paint|painting|drawing|sketching|pottery|ceramic|ceramics|wheel throwing|sculpt|paint (?:and|&) sip|sip (?:and|&) paint|open studio)\b/.test(haystack)) {
-    return "fine_arts";
-  }
-  if (/\b(festival|fair|celebration|fest)\b/.test(haystack)) return "festival";
-  if (/\b(meeting|fundraiser|breakfast|luncheon|town hall|public hearing|council|board|farmers market|flea market|car show|car cruise)\b/.test(haystack)) {
-    return "civic";
-  }
-  return "other";
+  return keyword.category;
 }

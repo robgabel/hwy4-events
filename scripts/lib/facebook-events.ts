@@ -4,7 +4,11 @@ import { decodeEventFields } from "./extract.js";
 import { applyVenueDetection } from "./venue-matcher.js";
 import { TOWNS, TOWN_ADDRESS_ALIASES } from "../../lib/towns.js";
 import { runApifyActorSync } from "./apify-client.js";
-import { classifyEventCategory } from "../../lib/categorize.js";
+import {
+  classifyEventCategory,
+  classifyEventCategoryDetailed,
+  reconcileCategory,
+} from "../../lib/categorize.js";
 
 /**
  * Facebook Events Discover scraper.
@@ -370,19 +374,16 @@ ${JSON.stringify(items, null, 2)}`;
       }
     }
 
-    return events.map((e, i) => {
-      const cat = byIndex.get(i);
-      // Upgrade-only: take the LLM's specific category, but never let it
-      // overwrite a keyword-derived specific category back down to "other".
-      if (
-        cat &&
-        cat !== "other" &&
-        (VALID_CATEGORIES as readonly string[]).includes(cat)
-      ) {
-        return { ...e, category: cat as Category };
-      }
-      return e;
-    });
+    return events.map((e, i) => ({
+      ...e,
+      // Reconcile the LLM guess with the keyword floor (lib/categorize): an
+      // authoritative keyword wins; otherwise the LLM may upgrade a soft/"other"
+      // result, but never downgrade a specific keyword result to "other".
+      category: reconcileCategory(
+        classifyEventCategoryDetailed(`${e.name} ${e.description ?? ""}`),
+        byIndex.get(i),
+      ) as Category,
+    }));
   } catch (err: any) {
     console.warn(`  Category classification failed: ${err?.message || err}. Keeping "other".`);
     return events;

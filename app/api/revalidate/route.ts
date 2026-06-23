@@ -14,7 +14,14 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
-  if (sp.get("secret") !== process.env.REVALIDATION_SECRET) {
+  // Prefer the Authorization header so the secret stays out of URLs, access
+  // logs, proxy caches, and browser history. The ?secret= query param is still
+  // accepted as a fallback for one release so in-flight callers don't break
+  // mid-rotation — remove it (and rotate the secret) once warm-maps is verified.
+  const expected = process.env.REVALIDATION_SECRET;
+  const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const provided = bearer || sp.get("secret");
+  if (!expected || provided !== expected) {
     return NextResponse.json({ message: "Invalid secret" }, { status: 401 });
   }
 
