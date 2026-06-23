@@ -39,9 +39,13 @@
 
 ---
 
-## Phase 1B — Auto-queue blurb drafts into `/admin/venues`
+## Phase 1B — Auto-queue blurb drafts into `/admin/venues` ✅ SHIPPED 2026-06-21
 
 **Goal:** after the weekly Places sync, any venue missing a blurb gets a *drafted* Tier-B blurb waiting for one-click approval — hands-off to draft, never auto-published.
+
+**What shipped (decision: GitHub Action, not a serverless route).** The blurb engine reads the 83KB `docs/LOCAL-KNOWLEDGE-BASE.md` via `fs`, which a `standalone` serverless route can't do without file-tracing (the thing `lib/voice.ts` deliberately avoided). So drafting reuses the existing tsx engine verbatim — `draft-venue-blurbs.ts` gained a `--queue` mode that writes to the new pending `blurb_draft` column (migration `20260621c_add_venue_blurb_draft.sql`) instead of the live `blurb` — invoked weekly by `.github/workflows/draft-blurbs.yml` (Mondays 13:00 UTC, after the Places sync). `/admin/venues` (`page.tsx` + `actions.ts`) surfaces the draft pre-filled with an "AI draft, not yet published" banner; **Save** publishes + clears the draft, **Discard** clears the text but keeps `blurb_draft_at` as a "human declined" marker so the weekly drafter won't re-propose it. The `--queue` gate (`blurb IS NULL AND blurb_draft IS NULL AND blurb_draft_at IS NULL AND place_id IS NOT NULL`) makes it idempotent + self-limiting. Verified: gate selects the 3 current gaps; Discard suppression holds; public never renders a draft. **Note for the operator:** add `GOOGLE_PLACES_API_KEY` to the repo's GitHub Action secrets if you want the drafter's live review-snippet grounding (optional — it already grounds on `places_attributes` + the knowledge base without it).
+
+**Original plan (for reference):**
 
 **Steps:**
 1. After `/api/sync-venue-facts` runs (or a sibling weekly cron), for each venue with `blurb IS NULL` + a resolved `place_id`, generate a draft with the **same engine** `scripts/draft-venue-blurbs.ts` uses (extract its core into a `lib/` function callable from a route; it already grounds in `places_attributes` + live review snippets + `docs/LOCAL-KNOWLEDGE-BASE.md`, runs `withVoice()`, and refuses hard voice violations).
@@ -56,6 +60,8 @@
 ---
 
 ## Phase 2 — Compose the live-music *night* (the "awesome" leap)
+
+> **Step 1 (practical-signals badges) ✅ SHIPPED 2026-06-21.** `practicalBadges` in `components/VenueInfo.tsx` renders the decision-driving `places_attributes` (dog-friendly / kid-friendly / patio / good for groups / parking) as a quiet badge row under the venue facts strip on every event detail page (Tier A). `places_attributes` was added to the `Hwy4Venue` type + the detail page's `VENUE_COLUMNS` select. Verified live on mobile (the Lube Room show renders all five). **Still roadmap: steps 2–3** — the category-scoped *composed* "night" block.
 
 **Key insight:** the ingredients are already on the detail page (`app/events/[slug]/page.tsx` imports `getForecast`/`resolveEventWeather`/`WeatherChip`/`VenueInfo` and renders `artists`). Phase 2 is **arrangement + surfacing**, not new data.
 

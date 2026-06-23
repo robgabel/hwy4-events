@@ -1,0 +1,45 @@
+name: Weekly Venue Blurb Drafts
+
+# Self-healing Tier-B venue blurbs (PRD-live-music-experience.md Phase 1B).
+# Drafts a neighbor-voice blurb for every venue missing one and stages it in
+# hwy4_venues.blurb_draft for human review at /admin/venues. It NEVER publishes
+# to the live `blurb` column — a human Save does that (the accuracy contract:
+# a machine may draft but never publish voice copy).
+#
+# Idempotent + self-limiting: --queue only selects venues with no blurb AND no
+# pending draft AND a resolved Places listing, so steady state is a no-op and a
+# burst of new venues drains ~10/week.
+
+on:
+  schedule:
+    # Mondays 13:00 UTC, just after the weekly Places-facts sync (sync-venue-facts,
+    # Mondays 12:00 UTC) so drafts are grounded in freshly synced attributes.
+    - cron: '0 13 * * 1'
+  workflow_dispatch: # Manual trigger (also: `tsx draft-venue-blurbs.ts --queue --apply` locally)
+
+jobs:
+  draft-blurbs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: scripts
+
+      - name: Queue venue blurb drafts
+        run: npx tsx draft-venue-blurbs.ts --queue --apply --limit 10
+        working-directory: scripts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Optional: enables live review snippets for vibe/specifics. Absent =
+          # the drafter grounds on places_attributes + the knowledge base only.
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
