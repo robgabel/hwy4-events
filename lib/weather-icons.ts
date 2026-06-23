@@ -18,7 +18,7 @@ import type { ConditionKey } from "./weather-conditions";
  * weatherQualifier, conditionColorClass) that scripts/test/weather.test.ts
  * imports, and the scripts/ test runner resolves modules against
  * scripts/node_modules — which has no lucide-react (a root-only dep). Importing
- * the icons here, only from the UI (WeatherChip/WeatherStrip), keeps the tested
+ * the icons here, only from the UI (WeatherChip), keeps the tested
  * logic dependency-free so CI doesn't fail on a missing lucide-react.
  */
 export function conditionIcon(key: ConditionKey): ComponentType<LucideProps> {

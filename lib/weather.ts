@@ -124,8 +124,7 @@ type DayAgg = {
 };
 
 // Fold the NWS hourly periods into both an hour-keyed map (event-time lookups)
-// and a day-keyed summary (the no-start-time fallback + WeatherStrip). One
-// fetch feeds both.
+// and a day-keyed summary (the no-start-time fallback). One fetch feeds both.
 function foldHourly(periods: NwsPeriod[]): {
   byHour: Record<string, HourWeather>;
   byDate: Record<string, DayWeather>;

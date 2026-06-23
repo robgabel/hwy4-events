@@ -55,6 +55,39 @@ function isOrphanLine(line: string): boolean {
   return t.length === 1 && !/[a-z0-9]/i.test(t);
 }
 
+// Raw HTML / entities that page-builder + calendar sources drag into descriptions.
+// The scrapers already entity-decode at extract time, so this is idempotent on a
+// clean write; running it here in the SHARED layer also cleans legacy rows at
+// render and covers any future writer. Decode entities FIRST so encoded markup
+// ("&lt;p&gt;") becomes real tags and gets stripped too. Conservative: a tag must
+// open with a letter or "/", so "5 < 10" and "<3" survive untouched.
+const NAMED_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&apos;": "'",
+  "&nbsp;": " ",
+  "&rsquo;": "’",
+  "&lsquo;": "‘",
+  "&rdquo;": "”",
+  "&ldquo;": "“",
+};
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&[a-z]+;/gi, (e) => NAMED_ENTITIES[e.toLowerCase()] ?? e);
+}
+
+function stripHtml(input: string): string {
+  return decodeEntities(input)
+    .replace(/<\s*(?:br|\/p|\/div|\/li|\/h[1-6]|\/tr)\s*\/?>/gi, "\n") // structure → newlines
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ") // drop script/style wholesale
+    .replace(/<\/?[a-zA-Z][^>]*>/g, ""); // remaining tags
+}
+
 export interface SanitizeResult {
   /** Cleaned text (may be ""). */
   text: string;
@@ -65,20 +98,21 @@ export interface SanitizeResult {
 }
 
 /**
- * Strip calendar-widget junk and collapse noise, per PRD §4.1.2, in order:
+ * Strip raw HTML, calendar-widget junk, and collapse noise, in order:
+ *  0. strip HTML tags + decode common entities (stripHtml)
  *  1. drop whole-line widget tokens (Add to calendar, Google Calendar, …)
  *  2. drop orphan single-character lines (@, ·, -)
  *  3. collapse 3+ blank lines to 2
  *  4. trim
  * Keeps the real prose intact (the Native Sons pancake breakfast survives; only
- * the iCal/Outlook chrome is removed).
+ * the iCal/Outlook chrome + page-builder markup is removed).
  */
 export function sanitizeDescriptionDetailed(
   input: string | null | undefined,
 ): SanitizeResult {
   if (!input) return { text: "", strippedRatio: 0, removedWidget: false };
 
-  const lines = input.replace(/\r\n/g, "\n").split("\n");
+  const lines = stripHtml(input).replace(/\r\n/g, "\n").split("\n");
   let meaningfulOriginal = 0;
   let removed = 0;
   let removedWidget = false;

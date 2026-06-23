@@ -5,7 +5,11 @@ import { supabaseAdmin } from "../lib/supabase-admin.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
 import { isNonCorridorAddress } from "../lib/corridor.js";
-import { classifyEventCategory } from "../../lib/categorize.js";
+import {
+  classifyEventCategory,
+  classifyEventCategoryDetailed,
+  reconcileCategory,
+} from "../../lib/categorize.js";
 
 const EVENTS_URL = "https://www.gocalaveras.com/events/";
 const AJAX_URL = "https://www.gocalaveras.com/wp-admin/admin-ajax.php";
@@ -756,26 +760,18 @@ Return ONLY the JSON array, no other text.`;
       town?: string;
     }>;
 
-    const VALID_CATEGORIES = [
-      "live_music",
-      "festival",
-      "civic",
-      "hike_walk",
-      "kids",
-      "wine",
-      "games",
-      "fine_arts",
-      "other",
-    ];
     for (const c of classifications) {
       if (c.i >= 0 && c.i < events.length) {
-        // Only let the LLM *upgrade* to a specific category. If it returns a
-        // valid non-"other" type, take it; if it returns "other" (or junk),
-        // keep the deterministic-floor baseline set above — which may already
-        // be specific (e.g. "Live Music @ Stevenot" → live_music).
-        if (VALID_CATEGORIES.includes(c.category) && c.category !== "other") {
-          events[c.i].category = c.category;
-        }
+        // Reconcile the LLM guess with the keyword floor: an authoritative
+        // keyword (bingo, opera, karaoke, …) wins; otherwise the LLM may upgrade
+        // a soft/"other" result to a specific category, but never downgrade a
+        // specific keyword result to "other". (lib/categorize.reconcileCategory)
+        events[c.i].category = reconcileCategory(
+          classifyEventCategoryDetailed(
+            `${events[c.i].name} ${events[c.i].description ?? ""}`,
+          ),
+          c.category,
+        );
         events[c.i].artists = c.artists;
         if (c.town && c.town !== "Unknown" && events[c.i].town === "Unknown") {
           events[c.i].town = c.town;

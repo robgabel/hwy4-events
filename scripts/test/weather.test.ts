@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isOutdoorEvent } from "../../lib/is-outdoor-event.js";
 import {
   mapShortForecast,
   weatherQualifier,
@@ -14,49 +13,6 @@ test("maps NWS shortForecast strings into stable condition keys", () => {
   assert.equal(mapShortForecast("Rain Showers Likely", 60), "rain");
   assert.equal(mapShortForecast("Patchy Fog", 0), "fog");
   assert.equal(mapShortForecast("Thunderstorms", 20), "storm");
-});
-
-test("outdoor detector is conservative", () => {
-  assert.equal(
-    isOutdoorEvent({
-      name: "Saturday Farmers Market",
-      venue_name: "Farmers Market Pavilion and Plaza",
-      category: "civic",
-    }),
-    true
-  );
-  assert.equal(
-    isOutdoorEvent({
-      name: "Gallery Talk",
-      venue_name: "Jordan Schnitzer Museum of Art",
-      category: "fine_arts",
-    }),
-    false
-  );
-  assert.equal(
-    isOutdoorEvent({
-      name: "Summer concert",
-      venue_name: "Cuthbert Amphitheater",
-      category: "live_music",
-    }),
-    true
-  );
-  assert.equal(
-    isOutdoorEvent({
-      name: "Winter Film Festival",
-      venue_name: "Hult Center",
-      category: "festival",
-    }),
-    false
-  );
-  assert.equal(
-    isOutdoorEvent({
-      name: "RHYTHM AND RESILIENCE Juneteenth Celebration",
-      venue_name: "Downtown Riverfront Park",
-      category: "festival",
-    }),
-    true
-  );
 });
 
 test("weather qualifier stays plain and conservative", () => {
