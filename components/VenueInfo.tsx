@@ -34,15 +34,33 @@ function websiteLabel(url: string): string {
   }
 }
 
+// The handful of practical, decision-driving Google Places attributes worth a
+// public badge: the things that change a go/no-go for a parent or a group (Jen:
+// "can I bring the dog / the 4-year-old?"; Mia: "is there a patio?"). Curated on
+// purpose — we show the few that matter, not every attribute Google returns.
+// Tier A (verified, third-party); the rating in the facts strip carries the
+// "via Google" attribution for the whole block.
+function practicalBadges(attrs: Record<string, unknown> | null): string[] {
+  if (!attrs) return [];
+  const out: string[] = [];
+  if (attrs.allows_dogs === true) out.push("Dog-friendly");
+  if (attrs.good_for_children === true) out.push("Kid-friendly");
+  if (attrs.outdoor_seating === true) out.push("Patio seating");
+  if (attrs.good_for_groups === true) out.push("Good for groups");
+  if (Array.isArray(attrs.parking) && attrs.parking.length > 0) out.push("Parking");
+  return out;
+}
+
 export default function VenueInfo({ venue }: { venue: Hwy4Venue }) {
   const hours = todaysHours(venue.hours);
+  const badges = practicalBadges(venue.places_attributes);
   const hasFacts =
     venue.rating != null ||
     hours != null ||
     !!venue.phone ||
     !!venue.website;
 
-  if (!venue.blurb && !hasFacts) return null;
+  if (!venue.blurb && !hasFacts && badges.length === 0) return null;
 
   return (
     <section className="mb-6">
@@ -105,6 +123,19 @@ export default function VenueInfo({ venue }: { venue: Hwy4Venue }) {
               {websiteLabel(venue.website)}
             </a>
           )}
+        </div>
+      )}
+
+      {badges.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {badges.map((b) => (
+            <span
+              key={b}
+              className="inline-flex items-center rounded-full bg-forest/5 px-2.5 py-0.5 text-xs font-medium text-pine ring-1 ring-inset ring-forest/10"
+            >
+              {b}
+            </span>
+          ))}
         </div>
       )}
     </section>

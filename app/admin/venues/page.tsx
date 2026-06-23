@@ -15,7 +15,7 @@ import {
   SUBTLE_BG,
 } from "@/components/admin/ui";
 import { ConfirmSubmit } from "@/components/admin/ConfirmSubmit";
-import { saveBlurb, clearBlurb } from "./actions";
+import { saveBlurb, clearBlurb, discardDraft } from "./actions";
 import type { CSSProperties } from "react";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +27,8 @@ type VenueRow = {
   address: string | null;
   blurb: string | null;
   blurb_generated_at: string | null;
+  blurb_draft: string | null;
+  blurb_draft_at: string | null;
   rating: number | null;
   user_ratings_total: number | null;
   phone: string | null;
@@ -38,18 +40,23 @@ type VenueRow = {
 };
 
 const COLUMNS =
-  "venue_key, canonical, town, address, blurb, blurb_generated_at, rating, user_ratings_total, phone, website, maps_url, places_attributes, places_synced_at, places_locked";
+  "venue_key, canonical, town, address, blurb, blurb_generated_at, blurb_draft, blurb_draft_at, rating, user_ratings_total, phone, website, maps_url, places_attributes, places_synced_at, places_locked";
+
+// Order by where the work is: a pending AI draft (one click to approve) first,
+// then venues with no blurb and no draft (write from scratch), then published
+// blurbs. Alphabetical within each band.
+function workRank(v: VenueRow): number {
+  if (v.blurb) return 2;
+  return v.blurb_draft ? 0 : 1;
+}
 
 async function loadVenues(): Promise<VenueRow[]> {
   const supabase = getAdminClientOrNull();
   if (!supabase) return [];
   const { data } = await supabase.from("hwy4_venues").select(COLUMNS);
   const rows = (data ?? []) as VenueRow[];
-  // Missing-blurb first (the work), then alphabetical.
   return rows.sort(
-    (a, b) =>
-      Number(Boolean(a.blurb)) - Number(Boolean(b.blurb)) ||
-      a.canonical.localeCompare(b.canonical)
+    (a, b) => workRank(a) - workRank(b) || a.canonical.localeCompare(b.canonical)
   );
 }
 
@@ -104,6 +111,7 @@ export default async function VenuesAdminPage({
   const { error, flash } = readFlash(await searchParams);
   const venues = await loadVenues();
   const withBlurb = venues.filter((v) => v.blurb).length;
+  const withDraft = venues.filter((v) => !v.blurb && v.blurb_draft).length;
 
   return (
     <QueueShell
@@ -112,7 +120,17 @@ export default async function VenuesAdminPage({
         <>
           The local-voice blurb shown on every event&rsquo;s detail page for that venue. Google facts
           (rating, hours, attributes) sync automatically; the blurb is written in our voice and edited
-          here. {withBlurb} of {venues.length} venues have one. Empty the box and Save to clear.
+          here. {withBlurb} of {venues.length} venues have one.{" "}
+          {withDraft > 0 && (
+            <>
+              <strong>
+                {withDraft} AI draft{withDraft === 1 ? "" : "s"}
+              </strong>{" "}
+              waiting for review (edit if needed, then Save to publish). A draft is never shown
+              publicly until you save it.{" "}
+            </>
+          )}
+          Empty the box and Save to clear.
         </>
       }
       error={error}
@@ -148,6 +166,8 @@ const textareaStyle: CSSProperties = {
 
 function VenueBlurbCard({ venue }: { venue: VenueRow }) {
   const hasBlurb = Boolean(venue.blurb);
+  // A machine-queued draft awaiting review (only when there's no published blurb).
+  const hasDraft = !hasBlurb && Boolean(venue.blurb_draft);
   const chips = attrChips(venue.places_attributes);
 
   return (
@@ -219,11 +239,31 @@ function VenueBlurbCard({ venue }: { venue: VenueRow }) {
         </div>
       )}
 
+      {hasDraft && (
+        <div
+          style={{
+            background: "#fff7ed",
+            border: `1px solid ${ACCENT}`,
+            borderRadius: 8,
+            padding: "8px 12px",
+            marginBottom: 10,
+            fontSize: 13.5,
+            lineHeight: 1.5,
+            color: INK,
+          }}
+        >
+          <strong style={{ color: ACCENT }}>AI draft, not yet published.</strong> Grounded in the
+          Google attributes above plus the local knowledge base. Sanity-check any owner names or dish
+          specifics (those are review-sourced and lower-confidence). Edit as needed, then Save to
+          publish; or Discard.
+        </div>
+      )}
+
       <form action={saveBlurb}>
         <input type="hidden" name="venue_key" value={venue.venue_key} />
         <textarea
           name="blurb"
-          defaultValue={venue.blurb ?? ""}
+          defaultValue={venue.blurb ?? venue.blurb_draft ?? ""}
           placeholder="No blurb yet — write one in the site's neighbor voice (no em dashes; don't invent hours or names you can't verify)."
           style={textareaStyle}
         />
@@ -237,13 +277,29 @@ function VenueBlurbCard({ venue }: { venue: VenueRow }) {
           }}
         >
           <button type="submit" style={adminBtn.primary}>
-            Save blurb
+            {hasDraft ? "Publish blurb" : "Save blurb"}
           </button>
           <span style={{ color: SUBTLE, fontSize: 13 }}>
-            {hasBlurb ? `Last saved ${fmtWhen(venue.blurb_generated_at)}` : "Not written yet"}
+            {hasBlurb
+              ? `Last saved ${fmtWhen(venue.blurb_generated_at)}`
+              : hasDraft
+                ? `AI-drafted ${fmtWhen(venue.blurb_draft_at)}`
+                : "Not written yet"}
           </span>
         </div>
       </form>
+
+      {hasDraft && (
+        <form action={discardDraft} style={{ marginTop: 8 }}>
+          <input type="hidden" name="venue_key" value={venue.venue_key} />
+          <ConfirmSubmit
+            message={`Discard the AI draft for ${venue.canonical}? The venue stays unblurbed and it won't be re-drafted automatically (write one by hand any time).`}
+            style={adminBtn.danger}
+          >
+            Discard draft
+          </ConfirmSubmit>
+        </form>
+      )}
 
       {hasBlurb && (
         <form action={clearBlurb} style={{ marginTop: 8 }}>

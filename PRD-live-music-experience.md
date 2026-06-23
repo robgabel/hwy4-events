@@ -33,7 +33,7 @@ The venue-facts gap was narrow (246/259 already linked) but concentrated in real
 Friction at a seam is a structural boundary, not a surface bug. Indian Rock was blank because of the gap between the **scraper write-path** and the **venue registry**; hand-editing rows forever treats the symptom.
 
 - **`create_venue_row` proposer** — mirror the Agent Cockpit's `propose-link-gaps.ts` / `create_org_row` loop: drain a "unregistered venue with ≥N upcoming events" worklist into `/admin/actions`, pre-filled with the geocoded address (Tier-A research), for one-click human approval. A new winery hosting music gets *proposed* within a week instead of rendering bare for months. (`/api/check-events` already reports unresolved venues — wire that worklist in.)
-- **Auto-queue blurb drafts into `/admin/venues`** — after the weekly Places sync, draft a Tier-B blurb for any venue missing one and surface it on the page for one-click approve (like the submission-reply loop). Hands-off to draft, never auto-published.
+- **Auto-queue blurb drafts into `/admin/venues`** ✅ **SHIPPED 2026-06-21** — `draft-venue-blurbs.ts --queue` writes a Tier-B draft to the new pending `blurb_draft` column (migration `20260621c_add_venue_blurb_draft.sql`) for any venue missing one; the weekly `Weekly Venue Blurb Drafts` GitHub Action (`.github/workflows/draft-blurbs.yml`, Mondays after the Places sync) runs it. `/admin/venues` surfaces the draft pre-filled with an "AI draft, not yet published" banner: **Save** publishes + clears the draft, **Discard** clears the text but keeps `blurb_draft_at` so it isn't re-proposed. Idempotent, self-limiting, never auto-published — a human Save is the only path to the live `blurb`.
 
 ## Phase 2 — Compose the live-music *night* (roadmap)
 
@@ -42,6 +42,8 @@ The leap from tolerance to love. Every ingredient already exists; they're just n
 - the **band** (`artists`), the **venue vibe** (blurb), the **weather chip** (per-town, event-hour — built for an outdoor winery show), the **practical signals** (`places_attributes`: dog/kids/patio/parking), the **poster**, and one-tap **directions + calendar + share**.
 
 Answer, at a glance: *who's playing, what's the place like, what's the weather at showtime, can I bring the kids/dog, how do I get there.* This is where Mia ("show me the vibe") and Jen ("can I bring a 4-year-old?") convert.
+
+**Shipped so far (2026-06-21): the practical-signals badges.** `practicalBadges` in [components/VenueInfo.tsx](components/VenueInfo.tsx) renders the decision-driving `places_attributes` (dog-friendly / kid-friendly / patio / good for groups / parking) as a quiet badge row under the venue facts strip on every event detail page (Tier A, attributed to Google). Curated on purpose — the few that change a go/no-go, not an attribute dump (the Jobs/Shiva discipline). This was the single highest-value, lowest-risk add for Jen/Mia. **Still roadmap:** the full above-the-fold *composed* "night" block (band + weather + badges + actions arranged as one anticipation moment), gated on `category='live_music'`.
 
 ## Phase 3 — Bets (validate with behavior first)
 

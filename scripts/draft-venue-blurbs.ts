@@ -8,10 +8,18 @@
  * Usage:
  *   ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
  *     tsx draft-venue-blurbs.ts                 # dry-run, venues missing a blurb
- *     tsx draft-venue-blurbs.ts --apply         # write to hwy4_venues
+ *     tsx draft-venue-blurbs.ts --apply         # write the published blurb to hwy4_venues
+ *     tsx draft-venue-blurbs.ts --queue --apply # stage a PENDING draft (blurb_draft) for human review
  *     tsx draft-venue-blurbs.ts --all           # include venues that already have a blurb
  *     tsx draft-venue-blurbs.ts --limit 5       # cap the batch
  *     tsx draft-venue-blurbs.ts murphys-irish-pub poor-house   # specific keys
+ *
+ * --queue is the self-healing path (PRD-live-music-experience.md Phase 1B): a
+ * weekly GitHub Action runs `--queue --apply` and writes a Tier-B draft to
+ * `blurb_draft` (never to the published `blurb`) for every venue missing one.
+ * A human reviews + publishes (or discards) it at /admin/venues. It selects only
+ * venues with no blurb AND no pending draft AND a resolved place_id, so it is
+ * idempotent and self-limiting — once every venue is covered it does no work.
  *
  * Voice rules (no em dashes, no invented facts/hours, named-entity specifics)
  * are enforced in the system prompt and re-checked after generation, mirroring
@@ -26,6 +34,9 @@ import { withVoice } from "../lib/voice.js";
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
 const ALL = args.includes("--all");
+// Queue mode: stage a pending draft in blurb_draft for human review instead of
+// publishing to blurb. The auto-drafting path (see header).
+const QUEUE = args.includes("--queue");
 const limitArg = args.find((a) => a.startsWith("--limit"));
 const LIMIT = limitArg
   ? parseInt(limitArg.split("=")[1] ?? args[args.indexOf(limitArg) + 1] ?? "", 10) || Infinity
@@ -89,6 +100,7 @@ interface VenueRow {
   town: string;
   address: string | null;
   blurb: string | null;
+  blurb_draft: string | null;
   place_id: string | null;
   places_attributes: Record<string, unknown> | null;
 }
@@ -168,10 +180,24 @@ async function main() {
 
   let query = supabaseAdmin
     .from("hwy4_venues")
-    .select("venue_key, canonical, town, address, blurb, place_id, places_attributes")
+    .select("venue_key, canonical, town, address, blurb, blurb_draft, place_id, places_attributes")
     .order("venue_key");
-  if (explicitKeys.length > 0) query = query.in("venue_key", explicitKeys);
-  else if (!ALL) query = query.is("blurb", null);
+  if (explicitKeys.length > 0) {
+    query = query.in("venue_key", explicitKeys);
+  } else if (QUEUE) {
+    // Only venues with no published blurb, no pending draft, and that have never
+    // been drafted before (blurb_draft_at NULL) AND a resolved Places listing (so
+    // the draft is grounded). Idempotent: re-running never re-drafts a venue that
+    // already has a draft awaiting review, and a human's discard keeps
+    // blurb_draft_at set so we don't re-propose one they declined.
+    query = query
+      .is("blurb", null)
+      .is("blurb_draft", null)
+      .is("blurb_draft_at", null)
+      .not("place_id", "is", null);
+  } else if (!ALL) {
+    query = query.is("blurb", null);
+  }
 
   const { data, error } = await query;
   if (error) {
@@ -186,7 +212,9 @@ async function main() {
   }
 
   console.log(
-    `${APPLY ? "APPLY" : OUT_FILE ? "PROPOSE" : "DRY RUN"} — drafting ${venues.length} venue blurb(s) with Opus.\n`
+    `${APPLY ? "APPLY" : OUT_FILE ? "PROPOSE" : "DRY RUN"}${
+      QUEUE ? " (queue → blurb_draft, pending review)" : ""
+    } — drafting ${venues.length} venue blurb(s) with Opus.\n`
   );
 
   const proposals: { venue_key: string; canonical: string; blurb: string; has_source: boolean }[] = [];
@@ -250,16 +278,20 @@ Lean on the Places signals for practical persona facts (dogs, kids, groups, outd
         console.log(`  ↳ skipped write (voice-rule violation)`);
         continue;
       }
+      const now = new Date().toISOString();
+      // Queue mode stages a PENDING draft for review at /admin/venues and never
+      // touches the published `blurb` (the accuracy contract: a machine drafts,
+      // a human publishes). Default mode writes the published blurb directly
+      // (the original review-in-chat workflow).
+      const patch = QUEUE
+        ? { blurb_draft: blurb, blurb_draft_at: now, updated_at: now }
+        : { blurb, blurb_generated_at: now, updated_at: now };
       const { error: upErr } = await supabaseAdmin
         .from("hwy4_venues")
-        .update({
-          blurb,
-          blurb_generated_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .update(patch)
         .eq("venue_key", v.venue_key);
       if (upErr) console.error(`  ✗ write failed: ${upErr.message}`);
-      else console.log(`  ✓ written`);
+      else console.log(QUEUE ? `  ✓ queued draft for review` : `  ✓ written`);
     }
   }
 

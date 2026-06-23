@@ -116,6 +116,10 @@ export interface Hwy4Venue {
   website: string | null;
   maps_url: string | null;
   hours: string[] | null;
+  // Factual Google Places attributes (dogs / kids / patio / groups / parking …),
+  // synced weekly by /api/sync-venue-facts. Rendered as practical badges on the
+  // event detail page (Tier A — verified, attributed to Google).
+  places_attributes: Record<string, unknown> | null;
   places_synced_at: string | null;
 }
 

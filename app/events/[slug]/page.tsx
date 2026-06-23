@@ -38,7 +38,7 @@ import { resolveEventLinkFromOrgs, promotableVenueUrl, aggregatorHostLabel, type
 export const revalidate = 3600;
 
 const VENUE_COLUMNS =
-  "venue_key, canonical, town, address, blurb, place_id, rating, user_ratings_total, phone, website, maps_url, hours, places_synced_at";
+  "venue_key, canonical, town, address, blurb, place_id, rating, user_ratings_total, phone, website, maps_url, hours, places_attributes, places_synced_at";
 
 const findVenue = cache(async (venueKey: string): Promise<Hwy4Venue | null> => {
   const { supabase } = await import("@/lib/supabase");
