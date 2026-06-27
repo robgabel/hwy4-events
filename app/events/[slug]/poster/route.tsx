@@ -9,9 +9,19 @@ import QRCode from "qrcode";
 
 // Node runtime so we can Buffer-encode the inline SVG art and load the bundled
 // brand fonts via import.meta.url. Cached hard: a poster is a pure function of
-// the event row, so it rarely needs regenerating.
+// the event row, so it rarely needs regenerating. Because this handler reads
+// req.url (origin), Next treats it as dynamic and the `revalidate` hint alone
+// won't cache it — so every response below also carries an explicit
+// Cache-Control so the Vercel CDN serves repeat/crawler hits without re-running
+// Satori + QR + font loads each time (the CPU draw that tripped the plan cap).
 export const runtime = "nodejs";
 export const revalidate = 86400;
+
+// CDN cache: a day at the edge, a week of stale-while-revalidate. Not immutable
+// because an organizer poster-swap (or an edit) can change what should render;
+// a swap sets image_url -> posterKind "supplied" -> this route redirects anyway.
+const POSTER_CACHE =
+  "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800";
 
 const W = 1080;
 const H = 1350;
@@ -188,12 +198,21 @@ export async function GET(
 ) {
   const { slug } = await params;
   const event = (await findEventBySlug(slug)) as Hwy4Event | null;
-  if (!event) return new NextResponse("Not found", { status: 404 });
+  if (!event)
+    return new NextResponse("Not found", {
+      status: 404,
+      headers: { "Cache-Control": "public, max-age=0, s-maxage=300" },
+    });
 
   // Branding rule: never stamp the organizer's own art. If they supplied a
   // poster, redirect to it untouched rather than generating a branded one.
   if (posterKind(event) === "supplied" && event.image_url) {
-    return NextResponse.redirect(event.image_url);
+    const res = NextResponse.redirect(event.image_url);
+    res.headers.set(
+      "Cache-Control",
+      "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+    );
+    return res;
   }
 
   const skin = SKINS[event.category] ?? SKINS.other;
@@ -402,6 +421,7 @@ export async function GET(
     {
       width: W,
       height: H,
+      headers: { "Cache-Control": POSTER_CACHE },
       fonts: [
         { name: "Bitter", data: b700, weight: 700, style: "normal" },
         { name: "Bitter", data: b900, weight: 900, style: "normal" },
