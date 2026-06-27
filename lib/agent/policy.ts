@@ -16,7 +16,7 @@ export type ActionStatus =
 
 // The action types the executor knows how to run (Stage 1). Add a type here and
 // give it a handler in actions-executor.ts + a row in agent_policy.
-export type ActionType = "create_org_row" | "flag_spam_submission";
+export type ActionType = "create_org_row" | "flag_spam_submission" | "create_venue_row";
 
 export type AgentActionRow = {
   id: string;

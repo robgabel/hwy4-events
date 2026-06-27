@@ -6,6 +6,7 @@ import { failRedirect, flashRedirect, field, requireField } from "@/lib/admin/fl
 import { executeAction, revertAction } from "@/lib/agent/actions-executor";
 import type { AgentActionRow } from "@/lib/agent/policy";
 import { proposeLinkGapActions, researchActionById } from "@/lib/agent/propose-link-gaps";
+import { proposeVenueRowActions, researchVenueById } from "@/lib/agent/propose-venue-rows";
 import { runAutoExecutor } from "@/lib/agent/auto-runner";
 
 const ADMIN_PATH = "/admin/actions";
@@ -30,6 +31,20 @@ function mergeEdits(action: AgentActionRow, formData: FormData): Record<string, 
       match_patterns: mp
         ? mp.split(",").map((s) => s.trim()).filter(Boolean)
         : (p.match_patterns ?? []),
+    };
+  }
+  if (action.type === "create_venue_row") {
+    const p = action.payload as Record<string, unknown>;
+    const aliases = field(formData, "aliases");
+    return {
+      ...p,
+      venue_key: field(formData, "venue_key") || (p.venue_key as string),
+      canonical: field(formData, "canonical") || (p.canonical as string),
+      town: field(formData, "town") || (p.town as string) || null,
+      address: field(formData, "address"),
+      aliases: aliases
+        ? aliases.split(",").map((s) => s.trim()).filter(Boolean)
+        : (p.aliases ?? []),
     };
   }
   return action.payload;
@@ -130,13 +145,14 @@ export async function revertExecuted(formData: FormData) {
 export async function scanForActions() {
   const supabase = getAdminClient();
   const result = await proposeLinkGapActions(supabase);
+  const venues = await proposeVenueRowActions(supabase);
   const auto = await runAutoExecutor(supabase);
   revalidatePath(ADMIN_PATH);
   if (auto.executed > 0) revalidatePath("/");
   const autoBit = auto.executed > 0 ? `, ${auto.executed} auto-executed` : "";
   flashRedirect(
     ADMIN_PATH,
-    `Scan: ${result.proposed} new proposal(s) from ${result.gaps} gap venue(s)${autoBit}. Use "Research URL" on a card to auto-find its link.`
+    `Scan: ${result.proposed} link-gap + ${venues.proposed} venue proposal(s) from ${result.gaps} link gap(s) and ${venues.gaps} venue gap(s)${autoBit}. Use "Research URL"/"Research address" on a card to auto-fill it.`
   );
 }
 
@@ -153,6 +169,23 @@ export async function researchAction(formData: FormData) {
     result.url
       ? `Found a ${result.confidence}-confidence URL — review and approve.`
       : "Couldn't find a canonical URL; paste the organizer's events page manually."
+  );
+}
+
+// Per-card: web-research one create_venue_row proposal's street address (one
+// Anthropic call, ~15-25s). The Tier-A address fill; isolated to a single card so
+// it can't time out a batch.
+export async function researchVenueAction(formData: FormData) {
+  const id = requireField(formData, "id", ADMIN_PATH, "action id");
+  const supabase = getAdminClient();
+  const result = await researchVenueById(supabase, id);
+  revalidatePath(ADMIN_PATH);
+  if (!result.ok) failRedirect(ADMIN_PATH, `Research failed: ${result.error}`);
+  flashRedirect(
+    ADMIN_PATH,
+    result.address
+      ? `Found a ${result.confidence}-confidence address — verify and approve.`
+      : "Couldn't find a verified address; paste the venue's street address manually."
   );
 }
 
