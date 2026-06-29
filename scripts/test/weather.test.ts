@@ -48,6 +48,17 @@ test("weather qualifier stays plain and conservative", () => {
     }),
     "bring layers"
   );
+  // A long event with a modest swing still renders as a range, but the spread
+  // isn't big enough to earn the "bring layers" verdict — no tag.
+  assert.equal(
+    weatherQualifier({
+      temp: 64,
+      condition: "clear",
+      precipPct: 0,
+      range: { low: 53, high: 64 },
+    }),
+    null
+  );
   // Mild and unremarkable → no tag at all.
   assert.equal(
     weatherQualifier({ temp: 68, condition: "cloudy", precipPct: 0 }),

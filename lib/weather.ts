@@ -318,11 +318,13 @@ export function getWeatherForDate(
   return forecast.byDate[date] ?? null;
 }
 
-// A long event whose temperature swings this much across its hours shows a
-// range (low->high) + a verdict instead of one number — in the mountains a
-// 10-5 fair really can run 60 to 85.
+// A long event (this many hours or more) shows a range (low->high) instead of
+// one number whenever the forecast actually moves across its hours — in the
+// mountains a 9-to-3 day camp runs cold-morning to warm-afternoon, and pinning
+// it to the chilly start hour undersells the day. The size of the swing only
+// decides the *verdict* ("bring layers"), not whether a range shows; that lives
+// in weatherQualifier (LAYERS_SWING_F).
 const LONG_EVENT_HOURS = 4;
-const SWING_THRESHOLD_F = 12;
 
 // Most notable condition wins the icon across a multi-hour window: one rainy
 // stretch in an otherwise clear day should still warn.
@@ -367,8 +369,9 @@ export function resolveEventWeather(
   const startHour = event.start_time ? eventHour(event.start_time) : null;
   const endHour = event.end_time ? eventHour(event.end_time) : null;
 
-  // Long, swingy event -> range. Walk every hour from start to end; if it runs
-  // several hours AND the temp moves a lot, show the spread instead of a point.
+  // Long event -> range. Walk every hour from start to end; if it runs several
+  // hours and the temp moves at all across them, show the spread instead of a
+  // single point so a 9am-3pm event isn't anchored to its cold start hour.
   if (
     startHour !== null &&
     endHour !== null &&
@@ -385,7 +388,7 @@ export function resolveEventWeather(
     if (temps.length >= 2) {
       const low = Math.min(...temps);
       const high = Math.max(...temps);
-      if (high - low >= SWING_THRESHOLD_F) {
+      if (high > low) {
         const condition =
           CONDITION_PRIORITY.find((c) =>
             readings.some((r) => r.condition === c)
