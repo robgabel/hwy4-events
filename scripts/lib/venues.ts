@@ -183,6 +183,21 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Bear Valley",
     address: "265 Bear Valley Rd, Bear Valley, CA 95223",
   },
+  "lake-alpine-lodge": {
+    canonical: "Lake Alpine Lodge",
+    aliases: [
+      "lake alpine lodge",
+      "lake alpine resort",
+      "lake alpine",
+    ],
+    // ~4 miles east of Bear Valley Village on Hwy 4, across from Lake Alpine
+    // (~7,300 ft). Nearest corridor town is Bear Valley. Casual bar/restaurant
+    // with deck seating; runs an image-only summer live-music schedule that the
+    // scrapers can't read (seed-lake-alpine-lodge-2026.ts; blocklisted in
+    // manual-sources.ts).
+    town: "Bear Valley",
+    address: "4000 Highway 4, Bear Valley, CA 95223",
+  },
   "sequoia-woods": {
     canonical: "Sequoia Woods Country Club",
     aliases: [

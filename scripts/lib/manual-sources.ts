@@ -55,6 +55,13 @@ const MANUAL_VENUE_PATTERNS: readonly string[] = [
   // so a re-scrape can't revert them. Matches the event name ("Hot Copper Car
   // Show") regardless of the source's doubling.
   "hot copper car show",
+  // Lake Alpine Lodge publishes its summer "Music Schedule" only as a season
+  // graphic posted to Facebook (the lodge is off-grid, "just above the middle of
+  // nowhere"), so the scrapers can't read it. The lineup is transcribed by hand
+  // (scripts/seed-lake-alpine-lodge-2026.ts). This keeps an aggregator from later
+  // re-listing the shows with wrong/flattened dates over the curated rows. Matches
+  // the venue_name ("Lake Alpine Lodge") on every variant.
+  "lake alpine",
 ];
 
 export interface MatchableEvent {
