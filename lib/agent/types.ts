@@ -1,3 +1,5 @@
+import type { ScrapeHealthForAgent } from "@/lib/scrape-health";
+
 // Shared shape for the chief-of-staff digest. Produced by
 // /api/agent/chief-of-staff and rendered by /admin/today, so the shape lives
 // in one place and cannot drift. Stage 0 (read-only) — see PRD-agent-cockpit.md.
@@ -22,6 +24,7 @@ export type Vitals = {
   pending_submissions: number;
   merges_24h: number;
   seo_rows: number;
+  degraded_sources: number; // automated scrapers stale or failing (lib/scrape-health.ts)
 };
 
 // Exactly what the reasoner is handed, and what we persist as context_in.
@@ -51,6 +54,9 @@ export type DigestContext = {
     captured_at: string | null;
     top: { query: string; clicks: number; impressions: number; position: number }[];
   };
+  // Scrape-source health (lib/scrape-health.ts): degraded automated event
+  // sources. A dark source means missing events, so the digest leads with it.
+  scrape_health: ScrapeHealthForAgent;
 };
 
 export function emptyDigest(summary: string): Digest {
@@ -178,6 +184,10 @@ export type GrowthContext = {
     pending_submissions: number;
     needs_verification: number;
   };
+  // Pipeline health (lib/scrape-health.ts): degraded event sources. Dark sources
+  // mean missing inventory and weaker discovery, so this is a growth signal, not
+  // just ops.
+  sources: ScrapeHealthForAgent;
 };
 
 // Defensive coercion of model JSON into a GrowthDigest. Never throws; returns

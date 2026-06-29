@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GrowthContext, GrowthVitals } from "./types";
 import { getNewsletterStats } from "@/lib/newsletter-stats";
+import { computeScrapeHealth, summarizeForAgent } from "@/lib/scrape-health";
 
 // Gathers the growth signal pack handed to the Head-of-Growth reasoner
 // (PRD-growth-agent.md). Every number here is real and queried; the model may
@@ -155,6 +156,10 @@ export async function gatherGrowthContext(
   // ── network virality (see growth_share_stats) ─────────────────────────────
   const shareBySrc = numMap(shareAgg.data);
 
+  // ── pipeline health: degraded event sources (lib/scrape-health.ts) ────────
+  // Dark sources mean missing inventory, an upstream drag on discovery + growth.
+  const scrapeHealth = summarizeForAgent(await computeScrapeHealth(supabase));
+
   const vitals: GrowthVitals = {
     newsletter_active: nlStats.total_active,
     newsletter_net_7d: nlStats.net_7d,
@@ -235,5 +240,6 @@ export async function gatherGrowthContext(
       pending_submissions: pendingSubs.count ?? 0,
       needs_verification: needsVerif.count ?? 0,
     },
+    sources: scrapeHealth,
   };
 }

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { SITE_URL } from "@/lib/constants";
+import { computeScrapeHealth, summarizeForAgent } from "@/lib/scrape-health";
 import {
   coerceDigest,
   emptyDigest,
@@ -24,6 +25,8 @@ const SYSTEM_PROMPT = `You are the chief of staff for Hwy4Events.com, a one-pers
 You are given structured signals: real counts and samples. Summarize ONLY what you are given. Never invent numbers, events, issues, or trends. If a section has nothing, return an empty array for it.
 
 Community submissions: each pending submission may carry an agent triage verdict (in pending_submissions_sample): publish_new (a real new event to add), duplicate (already on the site), duplicate_needs_update (on the site but the submission adds info), or reject (spam / out of corridor / unverifiable), plus a one-line headline. Use these to tell Rob what is actually waiting: lead with the count that needs a real decision (publish_new and duplicate_needs_update), and note if any look like spam or duplicates he can clear fast. A submission with verdict still null has not been analyzed yet; say it is pending analysis, do not guess.
+
+Scrape health: scrape_health lists automated event sources that are degraded — stale (stopped producing past their cadence) or failing (the last run hard-errored), with how many days since each last produced and any error. A dark source means the site is silently missing events, the most upstream thing that can go wrong here. If scrape_health.degraded_count is above 0, put it at the TOP of needs_you: name each degraded source, its state, and its days stale, with a why that says missing events starve discovery. There is no per-source fix button, so do not attach a link (the detail lives at /admin/sources). If degraded_count is 0, do not raise it (at most a one-line all-clear in fyi).
 
 Triage into three buckets:
 - needs_you: things that genuinely need Rob's decision today (events waiting in the verification queue, new community submissions to review, anything anomalous in the numbers). Each gets a one-line "why" stating what is at stake.
@@ -97,17 +100,25 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
     }));
   }
 
+  // Scrape-source health — degraded automated event sources (lib/scrape-health.ts).
+  // A dark source means we are silently missing events, the most upstream thing
+  // that can break on the site.
+  const health = await computeScrapeHealth(supabase);
+  const scrapeHealth = summarizeForAgent(health);
+
   const vitals: Vitals = {
     upcoming_events_14d: upcoming.count ?? 0,
     needs_verification: needsVerif.count ?? 0,
     pending_submissions: pendingSubs.count ?? 0,
     merges_24h: merges.count ?? 0,
     seo_rows: seoTop.length,
+    degraded_sources: health.degraded_count,
   };
 
   return {
     date: today,
     vitals,
+    scrape_health: scrapeHealth,
     needs_verification_sample: ((needsVerif.data ?? []) as Record<string, unknown>[]).map((e) => ({
       name: String(e.name ?? ""),
       date: String(e.date ?? ""),

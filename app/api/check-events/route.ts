@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { findDuplicateClusters } from "@/lib/dedupe-events";
 import { computeActionableLinkGaps, GAP_VENUE_THRESHOLD } from "@/lib/link-gaps";
+import { computeScrapeHealth } from "@/lib/scrape-health";
 
 export const maxDuration = 60;
 
@@ -327,6 +328,24 @@ export async function GET(request: Request) {
   }
   const analyticsStale = analyticsStaleReason !== null;
 
+  // Scrape-source health — the freshness alarm for the event pipeline itself.
+  // Flags automated sources that have gone stale (no new events past their
+  // cadence) or hard-failed a run. This is the INDEPENDENT external observer: it
+  // runs here on Vercel cron regardless of whether the GitHub scrape job lived or
+  // died, so a timeout-cancelled scrape (which writes no success and never reaches
+  // its own end-of-run health check) still gets caught the next day. Combines DB
+  // liveness + scrape_runs telemetry — see lib/scrape-health.ts. Guarded so it
+  // never breaks the audit.
+  let degradedSources: Awaited<ReturnType<typeof computeScrapeHealth>>["degraded"] = [];
+  let scrapeOkCount = 0;
+  try {
+    const health = await computeScrapeHealth(supabase);
+    degradedSources = health.degraded;
+    scrapeOkCount = health.ok_count;
+  } catch (err) {
+    console.error("[check-events] scrape-health computation failed:", err);
+  }
+
   const summary = {
     audited_at: new Date().toISOString(),
     total_future_events: rows.length,
@@ -339,6 +358,17 @@ export async function GET(request: Request) {
       latest_pageviews: analyticsLatest?.pageviews ?? null,
       stale: analyticsStale,
       stale_reason: analyticsStaleReason,
+    },
+    scrape_health: {
+      ok: scrapeOkCount,
+      degraded: degradedSources.length,
+      degraded_sources: degradedSources.map((s) => ({
+        source: s.label,
+        org_slug: s.org_slug,
+        state: s.state,
+        days_since_success: s.days_since_success,
+        future_events: s.future_events,
+      })),
     },
     issues: {
       duplicates: duplicates.length,
@@ -359,14 +389,32 @@ export async function GET(request: Request) {
   // Post to Slack if there are issues, a high-frequency link gap to nudge, or the
   // analytics snapshot has gone stale (a data-loss risk — see the freshness check).
   const webhook = process.env.SLACK_WEBHOOK_URL;
-  if (webhook && (totalIssues > 0 || actionableLinkGaps.length > 0 || analyticsStale)) {
+  if (
+    webhook &&
+    (totalIssues > 0 || actionableLinkGaps.length > 0 || analyticsStale || degradedSources.length > 0)
+  ) {
     const header =
       totalIssues > 0
         ? `${totalIssues} issue(s)`
-        : analyticsStale
-          ? "analytics snapshot stale"
-          : "no issues — link-gap nudge";
+        : degradedSources.length > 0
+          ? `${degradedSources.length} scrape source(s) down`
+          : analyticsStale
+            ? "analytics snapshot stale"
+            : "no issues — link-gap nudge";
     const lines: string[] = [`*Hwy4 events audit — ${header}*`];
+    if (degradedSources.length > 0) {
+      lines.push(`\n:rotating_light: *${degradedSources.length} scrape source(s) down or stale:*`);
+      for (const s of degradedSources) {
+        const age =
+          s.days_since_success != null ? `${s.days_since_success}d stale` : "never produced";
+        const why =
+          s.state === "failing" && s.last_error ? ` — last run failed: ${s.last_error.slice(0, 120)}` : "";
+        lines.push(`• ${s.label} (\`${s.org_slug}\`) — ${age}, ${s.future_events} future events${why}`);
+      }
+      lines.push(
+        `_Automated event sources past their cadence. Check the daily GitHub scrape run + the source site. Detail at /admin/sources._`
+      );
+    }
     if (analyticsStale) {
       lines.push(`\n:rotating_light: *Analytics snapshot stale:* ${analyticsStaleReason}.`);
       lines.push(
@@ -460,6 +508,7 @@ export async function GET(request: Request) {
       invalid_category: invalidCategory,
       missing_image_bls: missingImageBls,
       stale_scrapes: stale,
+      degraded_sources: degradedSources,
     },
   });
 }
