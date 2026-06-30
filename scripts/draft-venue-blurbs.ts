@@ -30,6 +30,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { supabaseAdmin } from "./lib/supabase-admin.js";
 import { withVoice } from "../lib/voice.js";
+import { getActiveFacts } from "../lib/local-facts.js";
 
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
@@ -221,9 +222,16 @@ async function main() {
 
   for (const v of venues) {
     const reviews = await fetchReviewSnippets(v.place_id);
+    // KB capture loop (lib/local-facts.ts): a human-approved blurb this venue had
+    // before (e.g. cleared then re-queued) is the highest-confidence grounding we
+    // have. Feed it back so a regeneration preserves vetted knowledge.
+    const priorFacts = await getActiveFacts(supabaseAdmin, "venue", v.venue_key);
     const userPrompt = `Write the blurb for this venue:
 - Name: ${v.canonical}
 - Town: ${v.town}, California${v.address ? `\n- Address: ${v.address}` : ""}
+
+=== PREVIOUSLY HUMAN-APPROVED KNOWLEDGE (a person vetted this — highest confidence; prefer and preserve it) ===
+${priorFacts.length ? priorFacts.map((f) => `- ${f.fact}`).join("\n") : "(none on file yet)"}
 
 === GOOGLE PLACES SIGNALS (factual — safe to state directly) ===
 ${attributesBlock(v.places_attributes)}
