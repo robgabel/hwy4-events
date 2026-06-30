@@ -1,5 +1,5 @@
 import { cache, Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
@@ -10,7 +10,7 @@ import WeatherChip from "@/components/WeatherChip";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
 import { buildEventOffer } from "@/lib/schema";
-import { findEventBySlug } from "@/lib/events";
+import { findEventBySlug, findEventFallback, canonicalEventPath } from "@/lib/events";
 import { truncateMeta } from "@/lib/description-quality";
 import { posterKind, posterImageUrl, generatedPosterPath, withSrc, humanizeHost } from "@/lib/poster";
 import { format, parseISO } from "date-fns";
@@ -190,7 +190,14 @@ function EventJsonLd({
 export default async function EventPage({ params }: PageProps) {
   const { slug } = await params;
   const event = await findEventBySlug(slug);
-  if (!event) notFound();
+  if (!event) {
+    // Stale/non-canonical slug (renamed event, dedup-merged title, or a bare
+    // /events/{id} link): 301 to the live URL instead of 404ing, so Google's
+    // indexed link, old shares, and the calendar deep-link all recover.
+    const fallback = await findEventFallback(slug);
+    if (fallback) permanentRedirect(canonicalEventPath(fallback));
+    notFound();
+  }
 
   // Load the venue row before resolving the link: its registry website is the
   // durable "venue canonical" destination (resolver priority #2), but only for
