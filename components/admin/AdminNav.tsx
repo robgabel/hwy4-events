@@ -6,16 +6,14 @@ import { INK, MUTED, ACCENT, BORDER } from "@/components/admin/ui";
 
 export type NavBadges = {
   inbox: number;
-  venues: number;
 };
 
-// Slimmed admin nav. "Act" (the Inbox — the unified review queue) is separated
-// from "look / tend" (Pulse = read-only agent briefings + experiments; Analytics;
-// Newsletter; Venues). The five former queue routes (submissions / posters /
-// verification / feedback / actions) still exist as pages — the Inbox links into
-// them — but they're no longer top-level nav, so drilling into one keeps the
-// "Inbox" tab lit. Venues is a blurb backlog rather than a triage queue, so it
-// stays its own destination instead of folding into the Inbox.
+// Slimmed admin nav: four destinations. "Act" (the Inbox — the unified review
+// queue) is separated from "look / tend" (Pulse = the read-only agent + growth
+// surfaces: briefings, experiments, venues; Analytics; Newsletter). The five
+// former queue routes (submissions / posters / verification / feedback / actions)
+// still exist as pages — the Inbox links into them — but they're no longer
+// top-level nav, so drilling into one keeps the "Inbox" tab lit.
 const INBOX_ROUTES = [
   "/admin/inbox",
   "/admin/submissions",
@@ -25,8 +23,9 @@ const INBOX_ROUTES = [
   "/admin/actions",
 ];
 
-// Pulse spans the briefings page (Today + Growth-memo tabs) and Experiments.
-const PULSE_ROUTES = ["/admin/briefings", "/admin/experiments"];
+// Pulse spans the briefings page (Today + Growth-memo tabs), Experiments, and
+// Venues (a blurb backlog — its missing-count badge lives on the Pulse Venues tab).
+const PULSE_ROUTES = ["/admin/briefings", "/admin/experiments", "/admin/venues"];
 
 export default function AdminNav({ badges }: { badges: NavBadges }) {
   const pathname = usePathname();
@@ -75,9 +74,6 @@ export default function AdminNav({ badges }: { badges: NavBadges }) {
       </NavLink>
       <NavLink href="/admin/newsletter" active={startsWith("/admin/newsletter")}>
         Newsletter
-      </NavLink>
-      <NavLink href="/admin/venues" active={startsWith("/admin/venues")} badge={badges.venues}>
-        Venues
       </NavLink>
     </nav>
   );
