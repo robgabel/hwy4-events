@@ -218,6 +218,59 @@ function writeSavedListState(state: SavedListState): void {
   }
 }
 
+type SavedFilterPrefs = {
+  categories: EventCategory[];
+  towns: string[];
+  showWeekly: boolean;
+  orgs: string[];
+};
+
+// The homepage filter selections (event types, towns, weekly, clubs), saved to
+// localStorage so they survive across visits — a Blue Lake Springs resident's
+// club stays on, a retiree who unchecks Kids/Weekly keeps them off, no re-doing
+// it every visit. The quick chips (This Weekend / Free / Kids / Live Music) are
+// deliberately NOT persisted: those are momentary browsing, not a standing
+// preference. Read after mount only, so the server render uses defaults and
+// there's no hydration mismatch (same pattern as the `now` clock).
+const FILTER_PREFS_KEY = "hwy4:filter-prefs";
+
+function readFilterPrefs(): SavedFilterPrefs | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(FILTER_PREFS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SavedFilterPrefs>;
+    return {
+      // Validate against the current known lists so a removed category/town in
+      // an old saved blob can't wedge the filter into an empty state.
+      categories: Array.isArray(parsed.categories)
+        ? parsed.categories.filter((c): c is EventCategory =>
+            (ALL_CATEGORIES as string[]).includes(c)
+          )
+        : [...ALL_CATEGORIES],
+      towns: Array.isArray(parsed.towns)
+        ? parsed.towns.filter((t) => (TOWNS as readonly string[]).includes(t))
+        : [...TOWNS],
+      showWeekly:
+        typeof parsed.showWeekly === "boolean" ? parsed.showWeekly : true,
+      orgs: Array.isArray(parsed.orgs)
+        ? parsed.orgs.filter((o): o is string => typeof o === "string")
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeFilterPrefs(prefs: SavedFilterPrefs): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(FILTER_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // storage full / unavailable — best-effort, ignore
+  }
+}
+
 export default function EventList({
   initialEvents,
   orgs,
@@ -242,20 +295,56 @@ export default function EventList({
   const [categoryQuick, setCategoryQuick] = useState<EventCategory | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const [filterHeight, setFilterHeight] = useState(0);
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
+  // True when the current towns selection came from a ?town= deep link the user
+  // hasn't touched yet. While true we don't persist towns (a town-page click
+  // shouldn't permanently pin someone to that town); cleared on any manual town
+  // edit or reset.
+  const urlTownScopedRef = useRef(false);
 
-  // URL-based town filtering: ?town=Avery or ?town=Avery&town=Arnold
+  // Hydrate persistent filters on mount. A ?town= deep link (from a town/about
+  // page) wins for the towns dimension and is treated as a transient scoped
+  // view; otherwise restore the saved towns. Event types, weekly, and clubs
+  // always restore from saved prefs. Runs after mount (no hydration mismatch).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const townParams = params.getAll("town");
+    const townParams = params
+      .getAll("town")
+      .filter((t) => (TOWNS as readonly string[]).includes(t));
+    const prefs = readFilterPrefs();
+
     if (townParams.length > 0) {
-      const validTowns = townParams.filter((t) =>
-        (TOWNS as readonly string[]).includes(t)
-      );
-      if (validTowns.length > 0) {
-        setSelectedTowns(new Set(validTowns));
-      }
+      setSelectedTowns(new Set(townParams));
+      urlTownScopedRef.current = true;
+    } else if (prefs) {
+      setSelectedTowns(new Set(prefs.towns));
     }
+    if (prefs) {
+      setSelectedCategories(new Set(prefs.categories));
+      setShowWeekly(prefs.showWeekly);
+      setEnabledOrgs(new Set(prefs.orgs));
+    }
+    setPrefsHydrated(true);
   }, []);
+
+  // Persist filters whenever they change — but only after hydration, so the
+  // initial default state can't clobber saved prefs before they're read. While
+  // a ?town= scoped view is untouched, preserve the previously-saved towns
+  // instead of writing the scoped subset.
+  useEffect(() => {
+    if (!prefsHydrated) return;
+    const saved = urlTownScopedRef.current ? readFilterPrefs() : null;
+    const towns =
+      urlTownScopedRef.current
+        ? saved?.towns ?? [...TOWNS]
+        : [...selectedTowns];
+    writeFilterPrefs({
+      categories: [...selectedCategories],
+      towns,
+      showWeekly,
+      orgs: [...enabledOrgs],
+    });
+  }, [prefsHydrated, selectedCategories, selectedTowns, showWeekly, enabledOrgs]);
 
   useEffect(() => {
     const el = filterRef.current;
@@ -278,6 +367,32 @@ export default function EventList({
       return next;
     });
   }, []);
+
+  // A manual town edit means the user owns the towns selection now — stop
+  // treating it as a transient ?town= scoped view, so it persists going forward.
+  const handleTownsChange = useCallback((towns: Set<string>) => {
+    urlTownScopedRef.current = false;
+    setSelectedTowns(towns);
+  }, []);
+
+  const resetFilters = useCallback(() => {
+    urlTownScopedRef.current = false;
+    setSelectedCategories(new Set(ALL_CATEGORIES));
+    setSelectedTowns(new Set(TOWNS));
+    setShowWeekly(true);
+    setEnabledOrgs(new Set());
+    setWeekendOnly(false);
+    setFreeOnly(false);
+    setCategoryQuick(null);
+  }, []);
+
+  // Whether the persistent filters (not the momentary quick chips) sit at their
+  // defaults — drives the "your filters are saved · show all" escape hatch.
+  const filtersAreDefault =
+    selectedCategories.size === ALL_CATEGORIES.length &&
+    selectedTowns.size === TOWNS.length &&
+    showWeekly &&
+    enabledOrgs.size === 0;
 
   const weekendRange = useMemo(() => getThisWeekendRange(), []);
 
@@ -535,7 +650,7 @@ export default function EventList({
           selectedCategories={selectedCategories}
           onCategoriesChange={setSelectedCategories}
           selectedTowns={selectedTowns}
-          onTownsChange={setSelectedTowns}
+          onTownsChange={handleTownsChange}
           showWeekly={showWeekly}
           onShowWeeklyChange={setShowWeekly}
           eventCount={visible.length}
@@ -543,6 +658,23 @@ export default function EventList({
           enabledOrgs={enabledOrgs}
           onToggleOrg={toggleOrg}
         />
+        {/* Escape hatch — appears only when the persistent filters are narrowed,
+         * so a remembered (or deep-linked) view never silently eats content. */}
+        {!filtersAreDefault && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs text-stone">
+            <span>
+              {urlTownScopedRef.current
+                ? "Showing one town."
+                : "Your filters are saved on this device."}
+            </span>
+            <button
+              onClick={resetFilters}
+              className="cursor-pointer font-medium text-pine hover:underline"
+            >
+              Show all events
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Event list */}
@@ -560,15 +692,7 @@ export default function EventList({
               Nothing matching those filters. Millie&apos;s bored too.
             </p>
             <button
-              onClick={() => {
-                setSelectedCategories(new Set(ALL_CATEGORIES));
-                setSelectedTowns(new Set(TOWNS));
-                setShowWeekly(true);
-                setEnabledOrgs(new Set());
-                setWeekendOnly(false);
-                setFreeOnly(false);
-                setCategoryQuick(null);
-              }}
+              onClick={resetFilters}
               className="mt-2 cursor-pointer text-sm font-medium text-pine hover:underline"
             >
               Clear filters
