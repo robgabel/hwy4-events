@@ -55,6 +55,12 @@ Some venues publish their schedule in a form the scrapers can't read — e.g. Th
 
 For schedules the scrapers can't read, a watcher cron fingerprints the source and pings Slack on change without auto-writing: `/api/check-lube-schedule` (the Lube Room's image), `/api/check-bigtrees-schedule` (Big Trees' program text on parks.ca.gov), and `/api/check-camp-connell-schedule` (the Camp Connell General Store's Squarespace poster).
 
+### Festival "umbrella" rows (intentional duplicates — do NOT merge)
+
+A multi-week festival reads as ~13 look-alike daily cards with no single "this is a festival, here are the dates" entry (the schema is single-date — no `end_date`). The fix is a **purposefully duplicative umbrella row**: one curated event dated the festival's opening day with a NULL `start_time` and a year-suffixed title, alongside the real nightly shows. The NULL start parks it in its own read-time dedup bucket (`town|date|start|visibility` in `lib/dedupe-events.ts`) and its title differs from the nightly rows, so neither the read-time collapse nor the write-time matcher nor `/api/reconcile-dupes` ever merges it into the opening-night show. It carries `robs_pick=true` so it rides the homepage from now through opening day. **If you see two same-day festival cards (e.g. "Bear Valley Music Festival 2026" + "Bear Valley Music Festival" on Jul 17), that is by design — not a dedup bug.**
+
+- **Bear Valley Music Festival** (Jul 17 – Aug 2, 2026): the umbrella + a band-name backfill for the nightly shows are owned by `scripts/seed-bear-valley-music-festival-2026.ts` (idempotent; `--dry-run` to preview, `--cleanup-capstone` to also delete the older "(through Aug 2)" row). The nightly rows stay **scraped** (GoCalaveras) and are deliberately **not** blocklisted in `manual-sources.ts` — instead of renaming them (which would churn their title-based `dedup_key`), the script fills each night's act into `artists` (rendered as a card chip), guarded on `artists IS NULL` so re-runs and re-scrapes (which union artists) preserve it. To refresh for next year, edit the lineup/dates in that script and re-run. The Big White Tent is venue_key `big-white-tent`; the umbrella links durably to `bearvalleymusicfestival.org/2026-festival`.
+
 ## Cron Jobs (vercel.json)
 
 | Route | Schedule | Purpose |
