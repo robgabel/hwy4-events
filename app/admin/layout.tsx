@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { countPending, countMissing } from "@/lib/admin/db";
+import { countPending, countMissingEither } from "@/lib/admin/db";
 import { ADMIN_MAX_WIDTH, PAGE_BG } from "@/components/admin/ui";
 import AdminNav from "@/components/admin/AdminNav";
 
@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     countPending("poster_submissions", "status", "pending"),
     countPending("event_feedback", "status", "pending"),
     countPending("agent_actions", "status", "proposed"),
-    countMissing("hwy4_venues", "blurb", "venue_key"),
+    countMissingEither("hwy4_venues", "blurb", "address", "venue_key"),
   ]);
   const inbox = verification + submissions + posters + feedback + proposedActions;
 

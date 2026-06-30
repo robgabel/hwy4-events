@@ -7,6 +7,7 @@ import {
   CardHeader,
   EmptyCard,
   adminBtn,
+  adminInput,
   INK,
   MUTED,
   SUBTLE,
@@ -15,16 +16,25 @@ import {
   SUBTLE_BG,
 } from "@/components/admin/ui";
 import { ConfirmSubmit } from "@/components/admin/ConfirmSubmit";
-import { saveBlurb, clearBlurb, discardDraft } from "./actions";
+import { saveBlurb, clearBlurb, discardDraft, saveAddress, discardAddressDraft } from "./actions";
 import type { CSSProperties } from "react";
 
 export const dynamic = "force-dynamic";
+
+type AddressDraftMeta = {
+  confidence?: "high" | "medium" | "low";
+  notes?: string | null;
+  sources?: { title?: string; url: string }[];
+};
 
 type VenueRow = {
   venue_key: string;
   canonical: string;
   town: string;
   address: string | null;
+  address_draft: string | null;
+  address_draft_at: string | null;
+  address_draft_meta: AddressDraftMeta | null;
   blurb: string | null;
   blurb_generated_at: string | null;
   blurb_draft: string | null;
@@ -40,14 +50,32 @@ type VenueRow = {
 };
 
 const COLUMNS =
-  "venue_key, canonical, town, address, blurb, blurb_generated_at, blurb_draft, blurb_draft_at, rating, user_ratings_total, phone, website, maps_url, places_attributes, places_synced_at, places_locked";
+  "venue_key, canonical, town, address, address_draft, address_draft_at, address_draft_meta, blurb, blurb_generated_at, blurb_draft, blurb_draft_at, rating, user_ratings_total, phone, website, maps_url, places_attributes, places_synced_at, places_locked";
 
-// Order by where the work is: a pending AI draft (one click to approve) first,
-// then venues with no blurb and no draft (write from scratch), then published
-// blurbs. Alphabetical within each band.
+// Order by where the work is: anything with a pending AI suggestion (a blurb draft
+// or an address suggestion — one click to approve) first, then venues still missing
+// a blurb or address (write/fill from scratch), then fully-done venues. Alphabetical
+// within each band.
 function workRank(v: VenueRow): number {
-  if (v.blurb) return 2;
-  return v.blurb_draft ? 0 : 1;
+  const hasSuggestion = (!v.blurb && v.blurb_draft) || (!v.address && v.address_draft);
+  if (hasSuggestion) return 0;
+  if (!v.blurb || !v.address) return 1;
+  return 2;
+}
+
+// A scripts/lib/venues.ts KNOWN_VENUES entry to paste + commit, so an approved
+// address survives a registry re-seed (the matcher is registry-driven). Seeds a
+// single alias from the lowercased canonical; add spelling/variant aliases by hand.
+function venuesTsSnippet(v: { venue_key: string; canonical: string; town: string; address: string }): string {
+  return `  ${JSON.stringify(v.venue_key)}: {
+    canonical: ${JSON.stringify(v.canonical)},
+    aliases: [
+      ${JSON.stringify(v.canonical.toLowerCase())},
+      // add common spellings / variants here
+    ],
+    town: ${JSON.stringify(v.town)},
+    address: ${JSON.stringify(v.address)},
+  },`;
 }
 
 async function loadVenues(): Promise<VenueRow[]> {
@@ -112,25 +140,35 @@ export default async function VenuesAdminPage({
   const venues = await loadVenues();
   const withBlurb = venues.filter((v) => v.blurb).length;
   const withDraft = venues.filter((v) => !v.blurb && v.blurb_draft).length;
+  const addrSuggested = venues.filter((v) => !v.address && v.address_draft).length;
 
   return (
     <QueueShell
-      title="Venue blurbs"
+      title="Venues"
       intro={
         <>
-          The local-voice blurb shown on every event&rsquo;s detail page for that venue. Google facts
-          (rating, hours, attributes) sync automatically; the blurb is written in our voice and edited
-          here. {withBlurb} of {venues.length} venues have one.{" "}
+          The local-voice blurb and street address shown on every event&rsquo;s detail page for that
+          venue. Google facts (rating, hours, attributes) sync automatically; the blurb is written in
+          our voice, and both the blurb and the address are auto-suggested for any venue missing one
+          (a daily job researches the address, a daily job drafts the blurb) and edited here.{" "}
+          {withBlurb} of {venues.length} venues have a blurb.{" "}
           {withDraft > 0 && (
             <>
               <strong>
-                {withDraft} AI draft{withDraft === 1 ? "" : "s"}
+                {withDraft} AI blurb draft{withDraft === 1 ? "" : "s"}
               </strong>{" "}
-              waiting for review (edit if needed, then Save to publish). A draft is never shown
-              publicly until you save it.{" "}
+              waiting for review.{" "}
             </>
           )}
-          Empty the box and Save to clear.
+          {addrSuggested > 0 && (
+            <>
+              <strong>
+                {addrSuggested} suggested address{addrSuggested === 1 ? "" : "es"}
+              </strong>{" "}
+              waiting for review.{" "}
+            </>
+          )}
+          A suggestion is never shown publicly until you Save it.
         </>
       }
       error={error}
@@ -163,6 +201,122 @@ const textareaStyle: CSSProperties = {
   resize: "vertical",
   fontFamily: "inherit",
 };
+
+const snippetPre: CSSProperties = {
+  fontSize: 12,
+  color: "#333",
+  background: "#FDF8F3",
+  border: "1px solid #E7E0D5",
+  padding: 12,
+  borderRadius: 8,
+  overflow: "auto",
+  margin: "8px 0 0",
+  lineHeight: 1.5,
+};
+
+// The street-address surface for a venue card. Three states:
+//  - published address  → confirm line + a collapsible venues.ts snippet to commit
+//  - no address + AI suggestion (address_draft) → review banner + editable field +
+//    Save/Discard + a snippet preview built from the suggested address
+//  - no address, none suggested yet → muted hint + a manual entry field
+// A human Save is the only path that writes the live `address` column.
+function AddressSection({ venue }: { venue: VenueRow }) {
+  const hasAddress = Boolean(venue.address);
+  const hasSuggestion = !hasAddress && Boolean(venue.address_draft);
+  const suggested = venue.address_draft ?? "";
+  const meta = venue.address_draft_meta;
+  const snippetAddress = venue.address ?? suggested;
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        padding: "10px 12px",
+        marginBottom: 12,
+        background: hasSuggestion ? "#fff7ed" : SUBTLE_BG,
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 6 }}>
+        📍 Street address{" "}
+        {hasAddress ? (
+          <span style={{ fontWeight: 400, color: MUTED }}>· set</span>
+        ) : hasSuggestion ? (
+          <span style={{ fontWeight: 400, color: ACCENT }}>· AI suggestion, not yet applied</span>
+        ) : (
+          <span style={{ fontWeight: 400, color: SUBTLE }}>· missing</span>
+        )}
+      </div>
+
+      {hasSuggestion && (
+        <div style={{ fontSize: 13, color: INK, lineHeight: 1.5, marginBottom: 8 }}>
+          The daily address scan researched this from the web. Verify it before applying (a wrong
+          address drops the map pin in the wrong place).
+          {meta?.confidence && (
+            <>
+              {" "}
+              Confidence: <strong>{meta.confidence}</strong>.
+            </>
+          )}
+          {meta?.sources && meta.sources.length > 0 && (
+            <>
+              {" "}
+              Sources:{" "}
+              {meta.sources.slice(0, 3).map((s, i) => (
+                <span key={s.url}>
+                  {i > 0 && ", "}
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" style={{ color: INK }}>
+                    {hostname(s.url)} ↗
+                  </a>
+                </span>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {!hasAddress && !hasSuggestion && (
+        <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
+          No street address yet. The daily venue scan will research and suggest one, or enter it here.
+        </div>
+      )}
+
+      <form action={saveAddress} style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <input type="hidden" name="venue_key" value={venue.venue_key} />
+        <input
+          name="address"
+          defaultValue={venue.address ?? suggested}
+          placeholder="1154 Pennsylvania Gulch Rd, Murphys, CA 95247"
+          style={{ ...adminInput, flex: 1, minWidth: 240 }}
+        />
+        <button type="submit" style={adminBtn.primary}>
+          {hasSuggestion ? "Apply address" : "Save address"}
+        </button>
+        {hasSuggestion && (
+          <button type="submit" formAction={discardAddressDraft} formNoValidate style={adminBtn.danger}>
+            Discard
+          </button>
+        )}
+      </form>
+
+      {snippetAddress && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: INK }}>
+            Registry snippet for scripts/lib/venues.ts (commit so it survives a re-seed)
+          </summary>
+          <pre style={snippetPre}>
+            {venuesTsSnippet({
+              venue_key: venue.venue_key,
+              canonical: venue.canonical,
+              town: venue.town,
+              address: snippetAddress,
+            })}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
 
 function VenueBlurbCard({ venue }: { venue: VenueRow }) {
   const hasBlurb = Boolean(venue.blurb);
@@ -238,6 +392,8 @@ function VenueBlurbCard({ venue }: { venue: VenueRow }) {
           ))}
         </div>
       )}
+
+      <AddressSection venue={venue} />
 
       {hasDraft && (
         <div

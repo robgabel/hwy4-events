@@ -54,6 +54,53 @@ export async function clearBlurb(formData: FormData) {
   flashRedirect(ADMIN_PATH, `Cleared blurb for ${venueKey}.`);
 }
 
+// Approve (or hand-enter) a venue's street ADDRESS. Mirrors saveBlurb: a human
+// click is the only path that writes the live `address` column; the daily address
+// drafter only ever stages address_draft. Writing the address consumes any pending
+// draft. The map pin + directions read the address at request time, so revalidate
+// "/" too. The /admin/venues card also shows a scripts/lib/venues.ts snippet to
+// commit so the address survives a registry re-seed (the row is the immediate fix).
+export async function saveAddress(formData: FormData) {
+  const venueKey = requireField(formData, "venue_key", ADMIN_PATH, "venue");
+  const address = field(formData, "address");
+  const supabase = getAdminClient();
+  const { error } = await supabase
+    .from("hwy4_venues")
+    .update({
+      address: address || null,
+      address_draft: null,
+      address_draft_meta: null,
+      // Stamp the "looked" marker so an emptied/saved venue isn't re-researched.
+      address_draft_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("venue_key", venueKey);
+  if (error) failRedirect(ADMIN_PATH, error.message);
+  revalidatePath(ADMIN_PATH);
+  revalidatePath("/");
+  flashRedirect(
+    ADMIN_PATH,
+    address
+      ? `Saved address for ${venueKey}. Commit the venues.ts snippet so it survives a re-seed.`
+      : `Cleared address for ${venueKey}.`
+  );
+}
+
+// Discard a pending AI address draft without applying it — clears the suggested
+// text but KEEPS address_draft_at as the "already proposed, human declined" marker
+// so the daily drafter won't re-research it. (Editing + Save is the "yes" path.)
+export async function discardAddressDraft(formData: FormData) {
+  const venueKey = requireField(formData, "venue_key", ADMIN_PATH, "venue");
+  const supabase = getAdminClient();
+  const { error } = await supabase
+    .from("hwy4_venues")
+    .update({ address_draft: null, address_draft_meta: null, updated_at: new Date().toISOString() })
+    .eq("venue_key", venueKey);
+  if (error) failRedirect(ADMIN_PATH, error.message);
+  revalidatePath(ADMIN_PATH);
+  flashRedirect(ADMIN_PATH, `Discarded address suggestion for ${venueKey}. It won't be re-researched automatically.`);
+}
+
 // Discard a pending AI draft without publishing — clears the draft text so the
 // venue stays unblurbed and the box goes empty. The one-click "no thanks" on a
 // draft the machine queued. (Editing + Save is the "yes, with tweaks" path.)

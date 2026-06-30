@@ -58,3 +58,23 @@ export async function countMissing(
     .is(column, null);
   return count ?? 0;
 }
+
+// Nav-badge count for rows missing EITHER of two columns (e.g. venues missing a
+// blurb or a street address). A row missing both still counts once. Same
+// never-throw contract as countMissing.
+export async function countMissingEither(
+  table: string,
+  columnA: string,
+  columnB: string,
+  idColumn = "id"
+): Promise<number> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return 0;
+  const supabase = createClient(url, key);
+  const { count } = await supabase
+    .from(table)
+    .select(idColumn, { count: "exact", head: true })
+    .or(`${columnA}.is.null,${columnB}.is.null`);
+  return count ?? 0;
+}
