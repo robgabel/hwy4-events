@@ -27,7 +27,17 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
+      # The scripts tests import root lib/ modules (e.g. lib/events.ts, whose
+      # pickFallbackEvent is locked by events-fallback.test.ts). Some of those
+      # modules import app deps like react (`import { cache } from "react"`),
+      # resolved from the repo-root node_modules — so install root deps too, not
+      # just scripts/. Without this CI fails with "Cannot find module 'react'"
+      # (it only passed locally because the worktree is nested inside the app's
+      # node_modules, where react already resolves).
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install scripts dependencies
         run: npm install
         working-directory: scripts
 
