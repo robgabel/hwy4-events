@@ -49,6 +49,11 @@ export function conditionColorClass(
   }
 }
 
+// A long event shows its temp as a range whenever the forecast moves at all,
+// but "bring layers" is only worth saying when the swing is genuinely big —
+// otherwise the numeric spread speaks for itself.
+const LAYERS_SWING_F = 12;
+
 /**
  * A short scene-setting tag from the event-HOUR reading. Temp is the forecast
  * temperature at the event's start hour, so "patio weather" / "bring a layer"
@@ -62,9 +67,12 @@ export function weatherQualifier(w: {
 }): string | null {
   if (w.precipPct >= 50) return "rain likely";
   if (w.precipPct >= 30) return "showers possible";
-  // Long event with a real temperature swing: the spread is the headline, and
-  // "bring layers" is the one thing the reader needs to do about it.
-  if (w.range) return "bring layers";
+  // Long event with a big temperature swing: "bring layers" is the one thing
+  // the reader needs to do about it. A smaller spread still renders as a range,
+  // it just doesn't earn the verdict.
+  if (w.range && w.range.high - w.range.low >= LAYERS_SWING_F) {
+    return "bring layers";
+  }
   if (
     w.temp !== null &&
     w.temp >= 80 &&
