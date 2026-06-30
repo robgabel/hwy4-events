@@ -29,6 +29,13 @@ export interface FirecrawlSource {
   defaultTown: string;
   defaultAddress?: string;
   /**
+   * Member-only sources (e.g. a country club whose public calendar we gate
+   * behind the Clubs filter) set "private" so every row written carries
+   * visibility='private' + org_slug=slug — driving the "Members & Guests" badge
+   * and the per-org Clubs gating. Defaults to "public".
+   */
+  defaultVisibility?: "public" | "private";
+  /**
    * Optional override of the default Firecrawl scrapeUrl options. Useful for
    * pages that need longer JS-render wait, full-page content, etc.
    */
@@ -119,6 +126,23 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
     defaultVenue: "Murphys Irish Pub",
     defaultTown: "Murphys",
     defaultAddress: "415 Main St, Murphys, CA 95247",
+  },
+  {
+    // Sequoia Woods Country Club posts its calendar publicly, but the events are
+    // members-only — defaultVisibility "private" gates them behind the Clubs
+    // filter + the "Members & Guests" badge (same pattern as Blue Lake Springs).
+    // The venue registry already has the "sequoia-woods" key, so venue_key + the
+    // venue section resolve automatically.
+    slug: "sequoia-woods",
+    name: "Sequoia Woods Country Club",
+    pageTitle: "Sequoia Woods Country Club Events Calendar",
+    url: "https://www.sequoiawoods.com/calendar",
+    defaultVenue: "Sequoia Woods Country Club",
+    defaultTown: "Arnold",
+    defaultAddress: "1000 Cypress Point Drive, Arnold, CA 95223",
+    defaultVisibility: "private",
+    firecrawl: { waitFor: 8000, onlyMainContent: false },
+    dumpOnEmpty: true,
   },
   {
     slug: "watering-hole",

@@ -116,7 +116,13 @@ export async function scrapeFirecrawlSource(source: FirecrawlSource): Promise<vo
 
   let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
   if (futureEvents.length > 0) {
-    totalResult = await upsertEvents(futureEvents, source.name, source.slug, sourceUrl);
+    totalResult = await upsertEvents(
+      futureEvents,
+      source.name,
+      source.slug,
+      sourceUrl,
+      source.defaultVisibility ?? "public"
+    );
   }
 
   console.log(`\n=== ${source.name} Summary ===`);

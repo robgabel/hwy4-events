@@ -348,7 +348,8 @@ async function upsertEventsBatched(
   events: ExtractedEvent[],
   sourceName: string,
   orgSlug: string,
-  sourceUrl: string
+  sourceUrl: string,
+  visibility: "public" | "private" = "public"
 ): Promise<UpsertResult> {
   const result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
   const now = new Date().toISOString();
@@ -570,7 +571,7 @@ async function upsertEventsBatched(
       image_url: event.image_url ?? null,
       source_url: sourceUrl,
       source_name: sourceName,
-      visibility: "public",
+      visibility,
       org_slug: orgSlug,
       dedup_key: dedupKey,
       source_event_id: event.source_event_id ?? null,
@@ -594,12 +595,16 @@ export async function upsertEvents(
   events: ExtractedEvent[],
   sourceName: string,
   orgSlug: string,
-  sourceUrl: string
+  sourceUrl: string,
+  // Member-only sources (Blue Lake Springs, Sequoia Woods, …) pass "private" so
+  // rows are gated behind the Clubs filter + render the "Members & Guests" badge.
+  // Defaults to "public" so every existing caller is unchanged.
+  visibility: "public" | "private" = "public"
 ): Promise<UpsertResult> {
   // Opt-in batched path. Falls back to the serial path so the rollout can be
   // gated per scrape run via `BATCH_DEDUP=1 npm run scrape`.
   if (process.env.BATCH_DEDUP === "1") {
-    return upsertEventsBatched(events, sourceName, orgSlug, sourceUrl);
+    return upsertEventsBatched(events, sourceName, orgSlug, sourceUrl, visibility);
   }
 
   const result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
@@ -780,7 +785,7 @@ export async function upsertEvents(
         image_url: event.image_url ?? null,
         source_url: sourceUrl,
         source_name: sourceName,
-        visibility: "public",
+        visibility,
         org_slug: orgSlug,
         dedup_key: dedupKey,
         source_event_id: event.source_event_id ?? null,
