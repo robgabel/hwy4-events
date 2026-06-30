@@ -2,6 +2,7 @@ import { scrapeBistroEspresso } from "./scrapers/bistro-espresso.js";
 import { scrapeGoCalaveras } from "./scrapers/gocalaveras.js";
 import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
+import { scrapeHwy4FbGroups } from "./scrapers/hwy4-fb-groups.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeRedCross } from "./scrapers/red-cross.js";
 import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
@@ -26,6 +27,7 @@ const SOURCE_TO_ORG_SLUG: Record<string, string> = {
  *   - gocalaveras: EventON AJAX with nonce extraction
  *   - mystic-saloon: Facebook primary + multi-URL website fallback
  *   - hwy4-fb-discover: Apify Facebook events scraper
+ *   - hwy4-fb-groups: Apify Facebook Groups scraper (corridor community groups)
  *   - visit-murphys: Tribe (The Events Calendar) WordPress REST API
  *   - red-cross: Firecrawl JSON extraction of the Red Cross drive-results SPA,
  *     many hosts per search across multiple corridor ZIP anchors
@@ -37,6 +39,7 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   "gocalaveras": scrapeGoCalaveras,
   "mystic-saloon": scrapeMysticSaloon,
   "hwy4-fb-discover": scrapeHwy4FbDiscover,
+  "hwy4-fb-groups": scrapeHwy4FbGroups,
   "visit-murphys": scrapeVisitMurphys,
   "red-cross": scrapeRedCross,
 };

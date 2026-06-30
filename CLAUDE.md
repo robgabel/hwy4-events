@@ -127,7 +127,17 @@ files a GitHub issue (the old `if: failure()` swallowed timeouts, which report a
 - **Config-driven Firecrawl** — one entry in `scripts/scrapers/firecrawl-sources.ts`
   (single fixed venue/town). The generic runner fetches markdown + LLM-extracts.
 - **Special scrapers** — hand-written files for non-generic shapes (GoCalaveras
-  EventON AJAX, visit-murphys WP REST, **red-cross**, …), registered in `SPECIAL_SCRAPERS`.
+  EventON AJAX, visit-murphys WP REST, **red-cross**, the **Facebook page + groups**
+  Apify scrapers, …), registered in `SPECIAL_SCRAPERS`.
+
+### Facebook community groups (`scripts/scrapers/hwy4-fb-groups.ts`)
+
+Scrapes corridor community Facebook groups (currently `uh4ccc`, `UpperHwy4`, group `388511408445423`) via Apify's **`facebook-groups-scraper`** (actor `2chN8UQcH1CfxLRNE`), reusing the page scraper's posts→LLM-extract pipeline (`scripts/lib/facebook.ts`, now actor-parameterized). Unlike a single-venue page, a group spans the whole corridor, so `extractEvents` is told to **infer the town per post** and drop out-of-corridor events (the `townDirective`/`venueDirective` overrides). Heavy overlap with GoCalaveras / venue feeds is absorbed by the shared dedup layers.
+
+- Each group is its own `org_slug` (`fb-group-*`) so scrape-health / `/admin/sources` shows which group is productive. Org rows are seeded by migration `20260629b_fb_groups_orgs.sql` (satisfies `fk_hwy4_events_org`); the 3 sources are in `EXPECTED_SOURCES`.
+- Per-group telemetry records a token-scope `403` as **failing** (the Apify error is otherwise swallowed by `fetchFacebookEvents`). A brand-new group starts `never_ran`/`empty` (informational), so a quiet group never false-alarms.
+- **Requires `facebook-groups-scraper` to be in the `APIFY_API_TOKEN` scope.** If the token is scoped to specific actors, this one must be added or every group `403`s.
+- To add a group: add a `GROUP_CONFIGS` row + an `hwy4_orgs` row + an `EXPECTED_SOURCES` entry.
 
 ### American Red Cross blood drives (`scripts/scrapers/red-cross.ts`)
 

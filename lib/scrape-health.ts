@@ -68,6 +68,12 @@ export const EXPECTED_SOURCES: ExpectedSource[] = [
     note: "Facebook-primary; its events also arrive via GoCalaveras, so a quiet run is not always a problem.",
   },
   { org_slug: "fb-discover-arnold", label: "Facebook Discover (Arnold)", cadence: "daily", writer: "github-scrape" },
+  // Corridor community Facebook groups (scripts/scrapers/hwy4-fb-groups.ts). New
+  // sources start at never_ran/empty (informational) until they produce, so a
+  // genuinely quiet group never false-alarms; a token-scope 403 records as failing.
+  { org_slug: "fb-group-uh4ccc", label: "FB Group: uh4ccc", cadence: "daily", writer: "github-scrape", note: "Community group; corridor-wide, town inferred per post." },
+  { org_slug: "fb-group-upperhwy4", label: "FB Group: Upper Hwy 4", cadence: "daily", writer: "github-scrape", note: "Community group; corridor-wide, town inferred per post." },
+  { org_slug: "fb-group-388511408445423", label: "FB Group: Hwy 4 (388511408445423)", cadence: "daily", writer: "github-scrape", note: "Community group; corridor-wide, town inferred per post." },
   { org_slug: "red-cross", label: "Red Cross blood drives", cadence: "daily", writer: "github-scrape" },
   { org_slug: "bear-valley", label: "Bear Valley Resort", cadence: "daily", writer: "github-scrape" },
   { org_slug: "branding-iron", label: "Branding Iron Saloon", cadence: "daily", writer: "github-scrape" },
