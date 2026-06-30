@@ -12,9 +12,13 @@ name: Weekly Venue Blurb Drafts
 
 on:
   schedule:
-    # Mondays 13:00 UTC, just after the weekly Places-facts sync (sync-venue-facts,
-    # Mondays 12:00 UTC) so drafts are grounded in freshly synced attributes.
-    - cron: '0 13 * * 1'
+    # Daily 13:00 UTC. The weekly Places-facts sync (sync-venue-facts, Mondays
+    # 12:00 UTC) resolves a new venue's place_id; running daily means that once a
+    # venue has a place_id it gets a blurb draft within a day instead of waiting
+    # for the next Monday. Idempotent + self-limiting (--queue selects only venues
+    # with no blurb AND no pending draft AND a resolved place_id), so the extra
+    # daily runs are no-ops until there's a new venue to draft.
+    - cron: '0 13 * * *'
   workflow_dispatch: # Manual trigger (also: `tsx draft-venue-blurbs.ts --queue --apply` locally)
 
 jobs:
