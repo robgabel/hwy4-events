@@ -680,18 +680,37 @@ async function enrichEventDetails(event: ExtractedEvent): Promise<void> {
   }
 }
 
-/** Enrich a batch of events with simple throttling (~3 req/sec). */
+// Detail-page enrichment with bounded concurrency. enrichEvents runs on EVERY
+// parsed event in a month (the whole county, before the corridor filter — see
+// fetchMonth), so a 6-month run is hundreds of detail fetches; the old strictly
+// sequential loop (one fetch + a 350ms sleep each) spent ~1-2 min in pure
+// throttle wait. Fetching ENRICH_CONCURRENCY pages at once, with a short pause
+// between batches, caps simultaneous load on gocalaveras.com (same ceiling as
+// the URL validator) while cutting wall-clock ~5x. Mirrors the polite-batch
+// pattern in lib/validate-urls.ts.
+const ENRICH_CONCURRENCY = 5; // concurrent detail-page fetches
+const ENRICH_BATCH_DELAY_MS = 350; // pause between batches (politeness throttle)
+
+/** Enrich a batch of events from their detail pages with bounded concurrency. */
 async function enrichEvents(events: ExtractedEvent[]): Promise<void> {
-  let enriched = 0;
-  for (const e of events) {
-    if (!e.event_url) continue;
-    await enrichEventDetails(e);
-    enriched++;
-    await new Promise((r) => setTimeout(r, 350));
+  const toEnrich = events.filter((e) => e.event_url);
+  if (toEnrich.length === 0) return;
+
+  for (let i = 0; i < toEnrich.length; i += ENRICH_CONCURRENCY) {
+    const batch = toEnrich.slice(i, i + ENRICH_CONCURRENCY);
+    // enrichEventDetails mutates each event in place and never throws (its fetch
+    // + parse are internally guarded), so Promise.all won't reject on a bad page.
+    await Promise.all(batch.map((e) => enrichEventDetails(e)));
+
+    // Pause between batches to stay polite (skip after the last batch).
+    if (i + ENRICH_CONCURRENCY < toEnrich.length) {
+      await new Promise((r) => setTimeout(r, ENRICH_BATCH_DELAY_MS));
+    }
   }
-  if (enriched > 0) {
-    console.log(`  Enriched ${enriched}/${events.length} events from detail pages`);
-  }
+
+  console.log(
+    `  Enriched ${toEnrich.length}/${events.length} events from detail pages`
+  );
 }
 
 // ---------- LLM-based category classification ----------
