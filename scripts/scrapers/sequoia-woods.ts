@@ -80,7 +80,12 @@ For each event return:
 
 Only return events actually printed on the calendar. Never invent an event.`;
 
-async function fetchEvents(firecrawl: FirecrawlApp): Promise<SwEvent[]> {
+interface ExtractResult {
+  events: SwEvent[];
+  monthLabel: string | null;
+}
+
+async function fetchEvents(firecrawl: FirecrawlApp): Promise<ExtractResult> {
   // schema is a plain JSON Schema — the SDK types want a Zod schema, but the API
   // accepts JSON Schema and scripts/ isn't type-checked. Same idiom as red-cross.
   const params = {
@@ -98,13 +103,16 @@ async function fetchEvents(firecrawl: FirecrawlApp): Promise<SwEvent[]> {
         `  Firecrawl failed for ${PAGE_URL}:`,
         (result as { error?: string }).error ?? "unknown error"
       );
-      return [];
+      return { events: [], monthLabel: null };
     }
-    const payload = (result.json ?? {}) as { events?: SwEvent[] };
-    return Array.isArray(payload.events) ? payload.events : [];
+    const payload = (result.json ?? {}) as { events?: SwEvent[]; month_label?: string };
+    return {
+      events: Array.isArray(payload.events) ? payload.events : [],
+      monthLabel: payload.month_label ?? null,
+    };
   } catch (err) {
     console.warn(`  Error fetching ${PAGE_URL}:`, err);
-    return [];
+    return { events: [], monthLabel: null };
   }
 }
 
@@ -119,6 +127,40 @@ const MEMBER_SIGNAL =
 // Deterministic floor TOWARD skipping: third-party private rentals are not
 // community events and shouldn't be listed at all.
 const PRIVATE_RENTAL_SIGNAL = /private event|wedding|corporate (event|buyout|party)/i;
+
+// The calendar widget renders ONE month (its header, e.g. "June 2026", is the
+// authoritative month+year) plus a few spillover days from the next month. The
+// Firecrawl JSON extractor is non-deterministic about the YEAR it stamps on each
+// row (it has been seen to emit a stale year), so we trust the LLM's month+day
+// but recompute the year from the header. Deterministic, and only adjusts rows
+// whose month matches the header month or its immediate spillover.
+const MONTHS: Record<string, number> = {
+  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+};
+
+function parseMonthLabel(label: string | null): { year: number; month: number } | null {
+  const m = label?.match(/([A-Za-z]+)\s+(\d{4})/);
+  if (!m) return null;
+  const month = MONTHS[m[1].toLowerCase()];
+  if (month === undefined) return null;
+  return { year: parseInt(m[2], 10), month };
+}
+
+function repairYear(date: string, label: string | null): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  const parsed = parseMonthLabel(label);
+  if (!parsed) return date;
+  const [, mm, dd] = date.split("-");
+  const evMonth = parseInt(mm, 10) - 1;
+  if (evMonth === parsed.month) return `${parsed.year}-${mm}-${dd}`;
+  // Spillover into the next month (Dec → Jan rolls the year forward).
+  if (evMonth === (parsed.month + 1) % 12) {
+    return `${parsed.month === 11 ? parsed.year + 1 : parsed.year}-${mm}-${dd}`;
+  }
+  // Month doesn't line up with the header — leave the LLM's date untouched.
+  return date;
+}
 
 function slugify(text: string): string {
   return text
@@ -183,13 +225,24 @@ export async function scrapeSequoiaWoods(): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
 
   // 1. Pull + classify events from the visible calendar month(s).
-  const raw = await fetchEvents(firecrawl);
-  console.log(`  Firecrawl returned ${raw.length} calendar entr(ies)`);
+  const { events: raw, monthLabel } = await fetchEvents(firecrawl);
+  console.log(`  Firecrawl returned ${raw.length} calendar entr(ies), month header: ${monthLabel ?? "(none)"}`);
 
   const mapped: MappedEvent[] = [];
   for (const e of raw) {
+    // Correct the LLM's year from the authoritative month header before mapping.
+    e.date = repairYear(e.date?.trim() ?? "", monthLabel);
     const m = mapEvent(e);
     if (m) mapped.push(m);
+  }
+
+  // Full pre-filter list, so a "0 future" run is diagnosable (date stamps,
+  // classification) without a second trip.
+  console.log(`  Mapped ${mapped.length} event(s) (pre-future-filter):`);
+  for (const m of mapped) {
+    console.log(
+      `    ${m.event.date} | ${m.visibility === "private" ? "MEMBERS" : "public "} | ${m.event.name}`
+    );
   }
 
   // 2. Future only, then dedupe by stable source id.
