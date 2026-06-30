@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import FirecrawlApp from "@mendable/firecrawl-js";
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
@@ -10,9 +11,19 @@ import { classifyEventCategory } from "../../lib/categorize.js";
 /**
  * Visit Murphys runs The Events Calendar (Tribe) WordPress plugin. Its REST
  * API returns clean structured event JSON (venue, organizer, dates, image,
- * categories) — far more reliable than Firecrawl-markdown + LLM extraction.
+ * categories) — far more reliable than markdown + LLM extraction, so we still
+ * read that structured JSON and map it deterministically.
  *
- * This scraper replaces the previous `visit-murphys` Firecrawl source.
+ * Transport, however, goes through Firecrawl. visitmurphys.com put the site
+ * behind a Cloudflare "checking your browser" JS challenge (~2026-06): a plain
+ * fetch first 403'd, then started returning HTTP 200 with an HTML interstitial
+ * instead of the JSON body, which a non-browser client can't clear. So each
+ * paginated Tribe API request is rendered through Firecrawl (the same
+ * FIRECRAWL_API_KEY the other Firecrawl sources use), exactly like
+ * scripts/scrapers/red-cross.ts does for its Akamai-walled SPA. Firecrawl runs a
+ * real browser that solves the challenge and returns the raw JSON, which we then
+ * parse. The request originates from Firecrawl's infrastructure, not the GitHub
+ * Actions runner IP, so the runner IP no longer matters.
  */
 
 const API_URL = "https://visitmurphys.com/wp-json/tribe/events/v1/events";
@@ -157,38 +168,148 @@ function mapTribeEvent(ev: TribeEvent): ExtractedEvent | null {
   };
 }
 
-// ---------- Pagination ----------
+// ---------- Pagination (via Firecrawl) ----------
+
+const FIRECRAWL_WAIT_MS = 8000;
+const FIRECRAWL_TIMEOUT_MS = 60000;
+
+/**
+ * Firecrawl's rawHtml for the Tribe endpoint is the raw JSON body verbatim (a
+ * headless browser renders an `application/json` document as its body text, so
+ * there's no `<pre>` wrapper to strip — confirmed live). Parse it directly; fall
+ * back to the outermost {…} span only in case Firecrawl ever wraps the payload
+ * in page chrome. Returns null when no JSON object can be recovered (e.g. the
+ * Cloudflare interstitial was returned instead of the API body).
+ */
+function parseJsonFromBody(raw: string): unknown | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    /* not verbatim JSON — try to recover an embedded object below */
+  }
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first !== -1 && last > first) {
+    try {
+      return JSON.parse(trimmed.slice(first, last + 1));
+    } catch {
+      /* a challenge page's inline JS braces won't parse as Tribe JSON — give up */
+    }
+  }
+  return null;
+}
+
+/**
+ * Render one paginated Tribe API page through Firecrawl and parse the JSON body.
+ * Returns the parsed TribeResponse, or `{ data: null }` when the page yielded no
+ * events array — with `error` set for a genuine failure (Firecrawl error or an
+ * unparseable/challenge body) and `error: null` for a clean end-of-results (a
+ * parseable non-events body, e.g. Tribe's 400 "page not found" past the last
+ * page). The caller decides whether a null is fatal (page 1) or a stop signal.
+ */
+async function fetchTribePage(
+  firecrawl: FirecrawlApp,
+  url: string
+): Promise<{ data: TribeResponse | null; error: string | null }> {
+  // schema/params are a plain object; the SDK types want a Zod schema, but the
+  // API accepts this and scripts/ is not type-checked (CI runs tsx without tsc).
+  // Cast keeps intent clear. Mirrors scripts/scrapers/red-cross.ts.
+  const params = {
+    formats: ["rawHtml"],
+    waitFor: FIRECRAWL_WAIT_MS,
+    timeout: FIRECRAWL_TIMEOUT_MS,
+    onlyMainContent: false,
+  } as Parameters<typeof firecrawl.scrapeUrl>[1];
+
+  let result;
+  try {
+    result = await firecrawl.scrapeUrl(url, params);
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  if (!result.success) {
+    return {
+      data: null,
+      error: (result as { error?: string }).error ?? "unknown Firecrawl error",
+    };
+  }
+
+  const raw = (result as { rawHtml?: string }).rawHtml ?? "";
+  const parsed = parseJsonFromBody(raw);
+
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as TribeResponse).events)) {
+    return { data: parsed as TribeResponse, error: null };
+  }
+  // Parsed JSON but no events array → a Tribe error response (the natural
+  // end-of-results past the last page). Clean stop, not a failure.
+  if (parsed && typeof parsed === "object") {
+    return { data: null, error: null };
+  }
+  // No JSON recovered → the challenge wasn't solved or the response was HTML.
+  return {
+    data: null,
+    error: "response body was not parseable JSON (Cloudflare challenge not cleared?)",
+  };
+}
 
 async function fetchAllEvents(): Promise<TribeEvent[]> {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing FIRECRAWL_API_KEY environment variable");
+  }
+  const firecrawl = new FirecrawlApp({ apiKey });
+
   const today = new Date().toISOString().slice(0, 10);
   const events: TribeEvent[] = [];
+  // Bounded by the count Tribe reports on page 1 so we never request an
+  // out-of-range page. Starts at MAX_PAGES until page 1 tells us the real total.
+  let totalPages = MAX_PAGES;
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
+  for (let page = 1; page <= Math.min(totalPages, MAX_PAGES); page++) {
     const url = `${API_URL}?per_page=${PER_PAGE}&start_date=${today}&page=${page}`;
-    console.log(`  fetching page ${page} …`);
-    const resp = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
-        Accept: "application/json",
-      },
-    });
-    if (!resp.ok) {
-      // Tribe returns 400 for pages past the last one — that's the natural stop.
-      if (resp.status === 400 && page > 1) {
-        console.log(`  page ${page} returned 400 — end of results`);
-        break;
+    console.log(`  fetching page ${page} via Firecrawl …`);
+
+    const { data, error } = await fetchTribePage(firecrawl, url);
+
+    if (!data) {
+      // Page 1 must yield events. A failure here (challenge not cleared, Firecrawl
+      // error, or API change) is a hard failure — throw so the orchestrator
+      // records the source as `failed` (see the telemetry in scripts/scrape.ts).
+      if (page === 1) {
+        throw new Error(
+          `Visit Murphys: Firecrawl returned no usable Tribe JSON on page 1` +
+            (error ? ` — ${error}` : ` — empty result on the first page`)
+        );
       }
-      throw new Error(`Tribe API request failed: ${resp.status} on page ${page}`);
+      // Later pages: keep what we already have rather than failing the whole run.
+      // A clean end-of-results (error === null) is expected; an unparseable body
+      // is a transient miss we warn about but tolerate.
+      if (error) {
+        console.warn(`  page ${page}: ${error} — stopping with ${events.length} event(s) so far`);
+      } else {
+        console.log(`  page ${page}: end of results — stopping`);
+      }
+      break;
     }
-    const data = (await resp.json()) as TribeResponse;
-    if (!data.events || data.events.length === 0) {
+
+    if (page === 1 && typeof data.total_pages === "number" && data.total_pages > 0) {
+      totalPages = data.total_pages;
+      console.log(`    Tribe reports ${data.total} event(s) across ${data.total_pages} page(s)`);
+    }
+
+    if (data.events.length === 0) {
       console.log(`  page ${page} empty — stopping`);
       break;
     }
+
     events.push(...data.events);
     console.log(`    +${data.events.length} (running total ${events.length})`);
+
+    // Defensive secondary stop: a short page means there's no next one.
     if (data.events.length < PER_PAGE) break;
-    if (!data.next_rest_url) break;
   }
 
   return events;
