@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getAdminClient } from "@/lib/admin/db";
 import { failRedirect, field, flashRedirect, requireField } from "@/lib/admin/flash";
+import { captureBlurbFact } from "@/lib/local-facts";
 
 const ADMIN_PATH = "/admin/venues";
 
@@ -13,6 +14,16 @@ export async function saveBlurb(formData: FormData) {
   const venueKey = requireField(formData, "venue_key", ADMIN_PATH, "venue");
   const blurb = field(formData, "blurb");
   const supabase = getAdminClient();
+
+  // Capture what the AI had proposed (if anything) BEFORE the update clears it,
+  // so the local_facts record can carry the AI-draft -> human-approved delta.
+  const { data: before } = await supabase
+    .from("hwy4_venues")
+    .select("blurb_draft")
+    .eq("venue_key", venueKey)
+    .maybeSingle();
+  const priorDraft = (before?.blurb_draft as string | null) ?? null;
+
   const { error } = await supabase
     .from("hwy4_venues")
     .update({
@@ -27,6 +38,18 @@ export async function saveBlurb(formData: FormData) {
     })
     .eq("venue_key", venueKey);
   if (error) failRedirect(ADMIN_PATH, error.message);
+
+  // KB capture loop (lib/local-facts.ts): persist the human-approved blurb as
+  // durable, provenance-carrying knowledge so it grounds future regenerations.
+  // Best-effort — a capture failure must never block the publish. Skipped on a
+  // clear (empty blurb), which carries no knowledge to keep.
+  if (blurb) {
+    const cap = await captureBlurbFact(supabase, { venueKey, blurb, priorDraft });
+    if (!cap.ok) {
+      console.error(`[saveBlurb] local_facts capture failed for ${venueKey}: ${cap.error}`);
+    }
+  }
+
   revalidatePath(ADMIN_PATH);
   revalidatePath("/");
   flashRedirect(ADMIN_PATH, blurb ? `Saved blurb for ${venueKey}.` : `Cleared blurb for ${venueKey}.`);
