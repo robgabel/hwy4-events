@@ -135,6 +135,35 @@ cross-source merge). Two source shapes:
   (access-denied / bot-walled ≠ dead link) and never nulls those URLs. Without this the
   nightly check would HEAD the Red Cross page, get a 403, and wipe the booking CTA every run.
 
+### Visit Murphys (`scripts/scrapers/visit-murphys.ts`)
+
+- Reads The Events Calendar (**Tribe**) WordPress REST API
+  (`/wp-json/tribe/events/v1/events?per_page=50&start_date=<today>&page=<n>`), which returns
+  clean structured event JSON (venue, organizer, dates, image, categories). We keep that
+  structured-JSON path and map it deterministically — no markdown + LLM extraction.
+- **Transport goes through Firecrawl**, like red-cross. visitmurphys.com put the site behind a
+  Cloudflare "checking your browser" JS challenge (~2026-06): a plain `fetch` first **403**'d
+  (a prior fix swapped to a real-browser UA, which got past the 403), then the site escalated and
+  began returning **HTTP 200 with an HTML interstitial** instead of the JSON body, so
+  `resp.json()` threw `Unexpected token '<'`. A non-browser client can't clear the challenge, so
+  each paginated request is rendered through **Firecrawl** (`FIRECRAWL_API_KEY`, already set) with
+  `formats: ["rawHtml"]`; for this `application/json` endpoint Firecrawl's `rawHtml` is the **raw
+  JSON body verbatim** (no `<pre>` wrapper), which we `JSON.parse` directly (with a defensive
+  outermost-`{…}` fallback). Because Firecrawl fetches from **its own infrastructure, not the
+  GitHub Actions runner IP**, the runner IP no longer matters — a local run is representative of CI.
+- **Pagination** is bounded by the `total_pages` Tribe reports on page 1 (so we never request an
+  out-of-range page); `~255` listings → ~6 pages at `per_page=50`. `ORG_SLUG='visit-murphys'`, the
+  Tribe `id` is the stable `source_event_id`, and the write path is the shared
+  `upsertEvents(...)` — all unchanged.
+- **Failure contract:** a page-1 miss (challenge not cleared / Firecrawl error / API change)
+  **throws**, so the scrape-health telemetry in `scripts/scrape.ts` records the source `failed`;
+  a clean run returns normally and the liveness signal (`scrape_source_liveness()`) sees fresh
+  events. Later-page misses are tolerated (keep what we have) rather than failing the whole run.
+- **`SWITCH-IF-IT-REVERTS`:** if Firecrawl ever can't cleanly return the JSON API body, fall back
+  to rendering the HTML calendar at `https://visitmurphys.com/events/` and LLM-extracting via
+  `scripts/lib/extract.ts` (model on `scripts/scrapers/firecrawl-generic.ts`) — but the HTML
+  calendar surfaces fewer events than the API, so prefer the API-through-Firecrawl path.
+
 ## Event Verification
 
 Aggregator scrapers (e.g., GoCalaveras) occasionally get event dates wrong. For organizers we trust as canonical (e.g., Arnold Rim Trail), we cross-check scraped data against the organizer's own events page.
