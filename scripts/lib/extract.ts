@@ -88,10 +88,20 @@ export async function extractEvents(
   url: string,
   content: string,
   year: number,
-  venueContext?: VenueContext
+  venueContext?: VenueContext,
+  // Optional prompt overrides for multi-town sources (e.g. corridor-wide
+  // Facebook groups): infer town/venue per post instead of pinning to a default.
+  opts?: { townDirective?: string; venueDirective?: string }
 ): Promise<ExtractedEvent[]> {
   const ctx = venueContext ?? DEFAULT_VENUE_CONTEXT;
-  const prompt = `Extract all discrete events from this venue's events page.
+  // Single-venue page: town/venue default to that venue's context. Multi-town
+  // source: the caller passes directives so the model infers town/venue per post
+  // rather than stamping every event with one town (which would be wrong for a
+  // corridor-wide community feed).
+  const venueLine = opts?.venueDirective ?? `Specific venue if mentioned, else "${ctx.defaultVenue}"`;
+  const townLine = opts?.townDirective ?? `"${ctx.defaultTown}"`;
+  const sourceKind = opts ? "community post feed" : "venue's events page";
+  const prompt = `Extract all discrete events from this ${sourceKind}.
 For each event, return JSON with these fields:
 
 - name: Event name
@@ -99,8 +109,8 @@ For each event, return JSON with these fields:
 - date: ISO date (YYYY-MM-DD)
 - start_time: HH:MM (24h) or null
 - end_time: HH:MM (24h) or null
-- venue_name: Specific venue if mentioned, else "${ctx.defaultVenue}"
-- town: "${ctx.defaultTown}"
+- venue_name: ${venueLine}
+- town: ${townLine}
 - address: Street address if mentioned, else ${ctx.defaultAddress ? `"${ctx.defaultAddress}"` : "null"}
 - category: One of: live_music, festival, civic, hike_walk, kids, wine, games, fine_arts, other (describe WHAT the event is, not where: hike_walk = guided hikes/nature walks/trail runs; kids = kid-focused activities and camps; wine = wine tastings/blending/winery events; games = social/pub games like bingo/trivia/pool/bocce/cribbage; civic = community gatherings/markets/holiday meals; fine_arts = theater/plays, comedy, and visual/craft arts like pottery, ceramics, painting, drawing classes; other = golf, fitness, cooking classes, anything else)
 - price: Price string (e.g., "$30", "Free") or null

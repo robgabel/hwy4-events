@@ -136,6 +136,8 @@ function VitalsStrip({ vitals }: { vitals: Vitals }) {
     { label: "Needs verification", value: vitals.needs_verification },
     { label: "Pending submissions", value: vitals.pending_submissions },
     { label: "Auto-merges (24h)", value: vitals.merges_24h },
+    // degraded_sources is newer than some stored runs, so coalesce for old rows.
+    { label: "Sources down", value: vitals.degraded_sources ?? 0 },
   ];
   return (
     <div

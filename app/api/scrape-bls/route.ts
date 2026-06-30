@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { recordScrapeRun } from "@/lib/scrape-health";
 
 export const maxDuration = 120; // Vision API calls can be slow
 
@@ -353,6 +354,15 @@ export async function GET(request: Request) {
 
     console.log("[scrape-bls] Complete:", stats);
 
+    // Scrape-health telemetry: BLS is insert-only, so its rows' last_scraped_at
+    // can't tell us the cron ran. A completed run (even 0 new flyers) is healthy.
+    await recordScrapeRun(supabase, {
+      source: "blue-lake-springs",
+      status: "ok",
+      trigger: "vercel-cron",
+      inserted: insertedCount,
+    });
+
     return NextResponse.json({
       ok: true,
       stats,
@@ -366,6 +376,12 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     console.error("[scrape-bls] Scraper failed:", err);
+    await recordScrapeRun(supabase, {
+      source: "blue-lake-springs",
+      status: "failed",
+      trigger: "vercel-cron",
+      error: err instanceof Error ? err.message : String(err),
+    });
     return NextResponse.json(
       { error: "Scraper failed", details: String(err) },
       { status: 500 }

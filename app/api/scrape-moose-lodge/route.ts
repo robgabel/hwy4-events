@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
+import { recordScrapeRun } from "@/lib/scrape-health";
 
 /**
  * Scrape the Ebbetts Pass Moose Lodge monthly calendar PDF and upsert events
@@ -488,6 +489,14 @@ export async function GET(request: Request) {
 
     console.log("[scrape-moose-lodge] Complete:", stats);
 
+    await recordScrapeRun(supabase, {
+      source: LODGE.orgSlug,
+      status: "ok",
+      trigger: "vercel-cron",
+      inserted: stats.created,
+      updated: stats.updated,
+    });
+
     return NextResponse.json({
       ok: true,
       pdf_url: pdfUrl,
@@ -498,6 +507,12 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     console.error("[scrape-moose-lodge] Scraper failed:", err);
+    await recordScrapeRun(supabase, {
+      source: LODGE.orgSlug,
+      status: "failed",
+      trigger: "vercel-cron",
+      error: err instanceof Error ? err.message : String(err),
+    });
     return NextResponse.json(
       { error: "Scraper failed", details: String(err) },
       { status: 500 }

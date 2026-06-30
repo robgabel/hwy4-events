@@ -14,10 +14,17 @@ export function getFacebookStatus(): Record<string, { failed: boolean; error?: s
 }
 
 interface ApifyPostResult {
+  // facebook-posts-scraper and facebook-groups-scraper use slightly different
+  // field names for the same things; read all known variants.
   text?: string;
   postText?: string;
-  timestamp?: string;
+  message?: string;
+  timestamp?: string | number;
+  time?: string | number;
+  date?: string | number;
   url?: string;
+  postUrl?: string;
+  link?: string;
   [key: string]: unknown;
 }
 
@@ -54,6 +61,7 @@ async function getLastScrapeDate(orgSlug: string): Promise<string | null> {
 async function fetchApifyPosts(
   pageUrl: string,
   orgSlug: string,
+  actor: string = "apify~facebook-posts-scraper",
   maxPosts: number = 20
 ): Promise<ApifyPostResult[]> {
   // Determine date window: since last scrape, or last 14 days for first run
@@ -67,7 +75,7 @@ async function fetchApifyPosts(
   console.log(`  Fetching posts since: ${dateFrom}${lastScrape ? " (last scrape)" : " (first run, 14-day window)"}`);
 
   return runApifyActorSync<ApifyPostResult>({
-    actor: "apify~facebook-posts-scraper",
+    actor,
     input: {
       startUrls: [{ url: pageUrl }],
       resultsLimit: maxPosts,
@@ -125,7 +133,7 @@ function formatTimestamp(ts: string | number | undefined): string {
  */
 function postsToText(posts: ApifyPostResult[]): string {
   const eventPosts = posts.filter((post) => {
-    const text = post.text || post.postText || "";
+    const text = post.text || post.postText || post.message || "";
     return text.trim().length > 0 && isEventLikePost(text);
   });
 
@@ -133,9 +141,9 @@ function postsToText(posts: ApifyPostResult[]): string {
 
   return eventPosts
     .map((post, i) => {
-      const text = post.text || post.postText || "";
-      const dateStr = formatTimestamp(post.timestamp);
-      const url = post.url || "";
+      const text = post.text || post.postText || post.message || "";
+      const dateStr = formatTimestamp(post.timestamp ?? post.time ?? post.date);
+      const url = post.url || post.postUrl || post.link || "";
       return `--- Post ${i + 1} (posted ${dateStr}) ---\n${text}\n${url ? `Link: ${url}` : ""}`;
     })
     .join("\n\n");
@@ -151,8 +159,19 @@ function postsToText(posts: ApifyPostResult[]): string {
 export async function fetchFacebookEvents(
   pageUrl: string,
   venue: VenueContext,
-  orgSlug: string = ""
+  orgSlug: string = "",
+  opts?: {
+    /** Apify actor slug. Defaults to the page-posts scraper. */
+    actor?: string;
+    /** Title passed to the extractor (e.g. "Facebook Group Events"). */
+    sourceLabel?: string;
+    /** Prompt overrides for a multi-town source (groups infer town per post). */
+    extractOpts?: { townDirective?: string; venueDirective?: string };
+  }
 ): Promise<ExtractedEvent[]> {
+  const actor = opts?.actor ?? "apify~facebook-posts-scraper";
+  const sourceLabel = opts?.sourceLabel ?? "Facebook Page Events";
+
   if (!getApifyToken()) {
     console.log("  Skipping Facebook (no APIFY_API_TOKEN set)");
     fbStatus[pageUrl] = { failed: false, error: "No API token configured" };
@@ -163,7 +182,7 @@ export async function fetchFacebookEvents(
 
   let posts: ApifyPostResult[];
   try {
-    posts = await fetchApifyPosts(pageUrl, orgSlug);
+    posts = await fetchApifyPosts(pageUrl, orgSlug, actor);
   } catch (err: any) {
     const errorMsg = err?.message || String(err);
     // Log the full Apify error response for debugging
@@ -200,11 +219,12 @@ export async function fetchFacebookEvents(
 
   try {
     const events = await extractEvents(
-      "Facebook Page Events",
+      sourceLabel,
       pageUrl,
       truncated,
       currentYear,
-      venue
+      venue,
+      opts?.extractOpts
     );
 
     fbStatus[pageUrl] = { failed: false };

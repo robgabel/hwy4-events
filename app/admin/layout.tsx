@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { countPending, countMissing } from "@/lib/admin/db";
+import { countPending, countMissing, getAdminClientOrNull } from "@/lib/admin/db";
+import { countDegradedSources } from "@/lib/scrape-health";
 import { ADMIN_MAX_WIDTH, PAGE_BG } from "@/components/admin/ui";
 import AdminNav from "@/components/admin/AdminNav";
 
@@ -10,13 +11,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Venues (a blurb backlog, not a triage queue) is its own surface, badged
   // separately. countPending / countMissing return 0 (never throw) on a
   // misconfigured env so the whole admin tree can't 500 over a missing badge.
-  const [verification, submissions, posters, feedback, proposedActions, venues] = await Promise.all([
+  const [verification, submissions, posters, feedback, proposedActions, venues, pulse] = await Promise.all([
     countPending("hwy4_events", "verification_status", "needs_verification"),
     countPending("event_submissions", "status", "pending"),
     countPending("poster_submissions", "status", "pending"),
     countPending("event_feedback", "status", "pending"),
     countPending("agent_actions", "status", "proposed"),
     countMissing("hwy4_venues", "blurb", "venue_key"),
+    // Degraded scrape sources (stale or failing) — the Pulse tab's badge.
+    countDegradedSources(getAdminClientOrNull()),
   ]);
   const inbox = verification + submissions + posters + feedback + proposedActions;
 
@@ -31,7 +34,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     >
       <div style={{ maxWidth: ADMIN_MAX_WIDTH, margin: "0 auto 20px" }}>
         <Suspense fallback={<div style={{ height: 36 }} />}>
-          <AdminNav badges={{ inbox, venues }} />
+          <AdminNav badges={{ inbox, venues, pulse }} />
         </Suspense>
       </div>
       {children}

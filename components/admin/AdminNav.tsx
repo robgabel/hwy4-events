@@ -7,6 +7,7 @@ import { INK, MUTED, ACCENT, BORDER } from "@/components/admin/ui";
 export type NavBadges = {
   inbox: number;
   venues: number;
+  pulse: number; // degraded scrape sources — surfaced on the Pulse tab (Sources)
 };
 
 // Slimmed admin nav. "Act" (the Inbox — the unified review queue) is separated
@@ -25,8 +26,9 @@ const INBOX_ROUTES = [
   "/admin/actions",
 ];
 
-// Pulse spans the briefings page (Today + Growth-memo tabs) and Experiments.
-const PULSE_ROUTES = ["/admin/briefings", "/admin/experiments"];
+// Pulse spans the briefings page (Today + Growth-memo tabs), Experiments, and
+// the Sources health panel.
+const PULSE_ROUTES = ["/admin/briefings", "/admin/experiments", "/admin/sources"];
 
 export default function AdminNav({ badges }: { badges: NavBadges }) {
   const pathname = usePathname();
@@ -67,7 +69,7 @@ export default function AdminNav({ badges }: { badges: NavBadges }) {
 
       <NavDivider />
 
-      <NavLink href="/admin/briefings" active={inActive(PULSE_ROUTES)}>
+      <NavLink href="/admin/briefings" active={inActive(PULSE_ROUTES)} badge={badges.pulse}>
         Pulse
       </NavLink>
       <NavLink href="/admin/analytics" active={startsWith("/admin/analytics")}>

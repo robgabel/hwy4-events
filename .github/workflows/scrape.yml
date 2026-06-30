@@ -8,7 +8,11 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 10m was too tight: GoCalaveras alone can eat ~9m (worsened by LLM JSON
+    # retries), starving the scrapers that run after it — Mystic Saloon (FB),
+    # FB Discover, Visit Murphys, Red Cross — so the job was cancelled every day
+    # before they ran. Give the tail room; a healthy run still finishes early.
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -40,20 +44,36 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      - name: Create failure issue
-        if: failure()
+      # Fire on failure() OR cancelled(). A job timeout is reported as
+      # `cancelled`, NOT `failure`, so the old `if: failure()` silently swallowed
+      # every timeout — which is exactly how the daily scrape went 40 days
+      # cancelled-at-10m with no alert. cancelled()/always() steps still run
+      # during a cancellation, so this issue gets created on a timeout too.
+      # NOTE: the status functions (cancelled(), failure()) are only valid in an
+      # `if:`; they cannot appear in a ${{ }} expression elsewhere (e.g. inside
+      # this script). So we detect a timeout from the step OUTCOMES instead, which
+      # ARE valid in ${{ }}: a timeout cancels whichever step was running.
+      - name: Report scrape failure or timeout
+        if: failure() || cancelled()
         uses: actions/github-script@v7
         with:
           script: |
             const today = new Date().toISOString().split('T')[0];
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const failedStep = '${{ steps.sanity.outcome }}' === 'failure'
-              ? 'Location sanity check'
-              : 'Scrape';
+            const scrapeOutcome = '${{ steps.scrape.outcome }}';
+            const sanityOutcome = '${{ steps.sanity.outcome }}';
+            const wasCancelled = scrapeOutcome === 'cancelled' || sanityOutcome === 'cancelled';
+            const sanityFailed = sanityOutcome === 'failure';
+            const label = wasCancelled
+              ? 'Scrape cancelled (likely the job timeout)'
+              : sanityFailed ? 'Location sanity check failed' : 'Scrape failed';
+            const detail = wasCancelled
+              ? 'The daily scrape job was cancelled before finishing — almost always the job timeout. GoCalaveras can consume most of the time budget, so the scrapers after it (Mystic Saloon/Facebook, FB Discover, Visit Murphys, Red Cross) may not have run. Check the logs for the last source that started.'
+              : `The daily ${sanityFailed ? 'location sanity check' : 'scrape'} step failed on ${today}.`;
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `${failedStep} failed: ${today}`,
-              body: `The daily ${failedStep.toLowerCase()} step failed on ${today}.\n\n[View run logs](${runUrl})`,
-              labels: ['bug', 'automated']
+              title: `${label}: ${today}`,
+              body: `${detail}\n\n[View run logs](${runUrl})`,
+              labels: ['bug', 'automated'],
             });
