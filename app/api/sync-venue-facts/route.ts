@@ -168,18 +168,30 @@ export async function GET(request: Request) {
     Math.max(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 1),
     200
   );
+  // `?only=new` onboards brand-new venues: sync ONLY never-synced rows
+  // (places_synced_at IS NULL), skipping the weekly staleness refresh. A daily
+  // cron uses this so a freshly-added venue gets its Places facts (and place_id,
+  // which the blurb drafter needs) within a day instead of waiting for the
+  // weekly full refresh — without re-billing the whole registry every day
+  // (Google's free credit is sized to the weekly cadence). Once synced, the row
+  // has a timestamp and drops out of this set; the weekly run maintains it.
+  const onlyNew = url.searchParams.get("only") === "new";
   // Refresh anything never synced or synced more than a week ago.
   const staleBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  const { data: venuesRaw, error } = await supabase
+  let query = supabase
     .from("hwy4_venues")
     .select("venue_key, canonical, town, address, place_id, places_synced_at")
     // Locked venues (no correct Places listing — closed, or private/no distinct
     // listing) are never touched, so the sync can't re-populate a wrong match.
-    .eq("places_locked", false)
-    .or(`places_synced_at.is.null,places_synced_at.lt.${staleBefore}`)
+    .eq("places_locked", false);
+  query = onlyNew
+    ? query.is("places_synced_at", null)
+    : query.or(`places_synced_at.is.null,places_synced_at.lt.${staleBefore}`);
+
+  const { data: venuesRaw, error } = await query
     .order("places_synced_at", { ascending: true, nullsFirst: true })
     .limit(limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
