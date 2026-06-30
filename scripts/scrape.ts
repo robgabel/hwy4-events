@@ -4,6 +4,7 @@ import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeRedCross } from "./scrapers/red-cross.js";
+import { scrapeSequoiaWoods } from "./scrapers/sequoia-woods.js";
 import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
 import { FIRECRAWL_SOURCES } from "./scrapers/firecrawl-sources.js";
 import { validateEventUrls } from "./lib/validate-urls.js";
@@ -18,6 +19,8 @@ import { runHealthCheck } from "./lib/health.js";
  *   - visit-murphys: Tribe (The Events Calendar) WordPress REST API
  *   - red-cross: Firecrawl JSON extraction of the Red Cross drive-results SPA,
  *     many hosts per search across multiple corridor ZIP anchors
+ *   - sequoia-woods: Firecrawl JSON extraction of the country club's month-grid
+ *     calendar, classifying each event public vs members-only (private)
  *
  * Everything else goes through the config-driven generic Firecrawl runner.
  */
@@ -28,6 +31,7 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   "hwy4-fb-discover": scrapeHwy4FbDiscover,
   "visit-murphys": scrapeVisitMurphys,
   "red-cross": scrapeRedCross,
+  "sequoia-woods": scrapeSequoiaWoods,
 };
 
 const SCRAPERS: Record<string, () => Promise<void>> = {
