@@ -8,6 +8,7 @@ import {
   EmptyCard,
   adminBtn,
   adminInput,
+  ADMIN_MAX_WIDTH,
   INK,
   MUTED,
   SUBTLE,
@@ -15,6 +16,7 @@ import {
   BORDER,
   SUBTLE_BG,
 } from "@/components/admin/ui";
+import { PulseTabs } from "@/components/admin/PulseTabs";
 import { ConfirmSubmit } from "@/components/admin/ConfirmSubmit";
 import { saveBlurb, clearBlurb, discardDraft, saveAddress, discardAddressDraft } from "./actions";
 import type { CSSProperties } from "react";
@@ -143,9 +145,13 @@ export default async function VenuesAdminPage({
   const addrSuggested = venues.filter((v) => !v.address && v.address_draft).length;
 
   return (
-    <QueueShell
-      title="Venues"
-      intro={
+    <>
+      <div style={{ maxWidth: ADMIN_MAX_WIDTH, margin: "0 auto" }}>
+        <PulseTabs active="venues" />
+      </div>
+      <QueueShell
+        title="Venues"
+        intro={
         <>
           The local-voice blurb and street address shown on every event&rsquo;s detail page for that
           venue. Google facts (rating, hours, attributes) sync automatically; the blurb is written in
@@ -183,7 +189,8 @@ export default async function VenuesAdminPage({
           ))}
         </CardList>
       )}
-    </QueueShell>
+      </QueueShell>
+    </>
   );
 }
 
