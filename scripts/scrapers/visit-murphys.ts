@@ -17,6 +17,19 @@ import { classifyEventCategory } from "../../lib/categorize.js";
 
 const API_URL = "https://visitmurphys.com/wp-json/tribe/events/v1/events";
 const PAGE_URL = "https://visitmurphys.com/events/";
+
+// visitmurphys.com started 403-ing this endpoint ~2026-05-30. The old request
+// sent "User-Agent: Hwy4EventsScraper/1.0", which a WAF blocks on sight, so
+// present as a real browser instead (UA + language + Referer from the events
+// page). If the site escalates to a JS challenge and this still 403s, route the
+// request through Firecrawl like scripts/scrapers/red-cross.ts does for Akamai.
+const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  Referer: PAGE_URL,
+};
 const SOURCE_NAME = "Visit Murphys";
 const ORG_SLUG = "visit-murphys";
 const PER_PAGE = 50;
@@ -166,12 +179,7 @@ async function fetchAllEvents(): Promise<TribeEvent[]> {
   for (let page = 1; page <= MAX_PAGES; page++) {
     const url = `${API_URL}?per_page=${PER_PAGE}&start_date=${today}&page=${page}`;
     console.log(`  fetching page ${page} …`);
-    const resp = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
-        Accept: "application/json",
-      },
-    });
+    const resp = await fetch(url, { headers: BROWSER_HEADERS });
     if (!resp.ok) {
       // Tribe returns 400 for pages past the last one — that's the natural stop.
       if (resp.status === 400 && page > 1) {
