@@ -89,10 +89,6 @@
       "schedule": "0 18 * * 1"
     },
     {
-      "path": "/api/agent/collect-seo",
-      "schedule": "0 11 * * *"
-    },
-    {
       "path": "/api/agent/triage-submissions",
       "schedule": "30 18 * * *"
     },
