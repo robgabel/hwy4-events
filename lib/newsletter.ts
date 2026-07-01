@@ -104,6 +104,7 @@ export async function getUpcomingEvents() {
     .gte("date", today)
     .lte("date", tenDaysOut)
     .neq("status", "cancelled")
+    .neq("is_routine", true)
     .eq("visibility", "public")
     .order("date", { ascending: true })
     .order("start_time", { ascending: true });

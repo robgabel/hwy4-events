@@ -23,6 +23,15 @@ export interface ExtractedEvent {
    * changes in place rather than creating a duplicate.
    */
   source_event_id?: string | null;
+  /**
+   * Notability: true => a mundane recurring venue operation to hide. Computed
+   * centrally in upsertEvents for the operational venues (sequoia-woods,
+   * moose-lodge); left undefined by every other scraper, which means the upsert
+   * writes `false`. A scraper MAY set it directly (e.g. a future floor+LLM pass)
+   * and upsertEvents will prefer that value over recomputing the floor.
+   */
+  is_routine?: boolean;
+  routine_reason?: string | null;
 }
 
 const client = new Anthropic();

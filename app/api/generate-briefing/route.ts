@@ -57,6 +57,7 @@ async function getEventsForBriefing() {
     .gte("date", today)
     .lte("date", nextWeek)
     .neq("status", "cancelled")
+    .neq("is_routine", true)
     .order("date", { ascending: true })
     .order("start_time", { ascending: true });
 

@@ -53,6 +53,11 @@ async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
       .select(EVENT_COLUMNS) // no `count: exact` — it fired a second full scan
       .gte("date", today)
       .neq("status", "cancelled")
+      // Hide mundane recurring venue operations (Thursday dinners, Sunday
+      // brunches) the same way cancelled rows are hidden. Only the
+      // sequoia-woods/moose-lodge writers ever set is_routine=true; null-safe
+      // because the column is NOT NULL DEFAULT false. See lib/notability.ts.
+      .neq("is_routine", true)
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
