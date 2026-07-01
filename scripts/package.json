@@ -16,7 +16,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.52.0",
+    "@anthropic-ai/sdk": "^0.78.0",
     "@mendable/firecrawl-js": "^1.15.0",
     "@supabase/supabase-js": "^2.98.0",
     "axios": "^1.7.0",
