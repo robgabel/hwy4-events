@@ -65,7 +65,7 @@ A multi-week festival reads as ~13 look-alike daily cards with no single "this i
 
 | Route | Schedule | Purpose |
 |---|---|---|
-| `/api/generate-briefing` | Daily 2pm UTC | Generate daily briefing via Opus |
+| `/api/generate-briefing` | Daily 8am UTC | Generate daily briefing via Opus. Runs at 08:00 UTC (1am PDT / midnight PST) — the earliest time safely past Pacific midnight, so the route's UTC-based "today" still matches Pacific's today while the pre-regen "yesterday's briefing" window early risers see shrinks to ~1hr. Do not move earlier than 08:00 UTC or UTC-today will advance while it's still the prior evening in Pacific. |
 | `/api/check-briefing` | Daily 5pm UTC | Verify briefing was generated |
 | `/api/generate-weekend-briefing` | Fridays 2pm UTC | Weekend-specific briefing |
 | `/api/newsletter/prepare` | Wednesdays 3pm UTC | Generate the weekly newsletter body and store it as a **pending** `newsletter_drafts` row for the coming Thursday, then Slack-ping a review link. Writes a draft only — never emails. Idempotent per target Thursday; won't clobber a vetoed/edited draft unless `?force=1`. |
