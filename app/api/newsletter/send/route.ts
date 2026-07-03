@@ -103,7 +103,12 @@ export async function GET(request: Request) {
         to: testEmail,
         subject: `[TEST] ${subject}`,
         html: buildEmailHtml(robNoteResult.body, content, unsubscribeUrl, testTracking),
-        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+          // RFC 8058 one-click (Gmail/Yahoo bulk-sender requirement): mail
+          // clients POST to the URL above, which the unsubscribe route handles.
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
       });
       return NextResponse.json({
         ok: true,
@@ -180,7 +185,12 @@ export async function GET(request: Request) {
         to: sub.email,
         subject,
         html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
-        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+          // RFC 8058 one-click (Gmail/Yahoo bulk-sender requirement): mail
+          // clients POST to the URL above, which the unsubscribe route handles.
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
       };
     };
 
@@ -366,7 +376,12 @@ export async function POST(request: Request) {
           unsubscribeUrl,
           tracking
         ),
-        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+          // RFC 8058 one-click (Gmail/Yahoo bulk-sender requirement): mail
+          // clients POST to the URL above, which the unsubscribe route handles.
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
       };
     };
 
