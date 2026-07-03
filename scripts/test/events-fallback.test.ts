@@ -10,7 +10,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pickFallbackEvent } from "../../lib/events.js";
+import { pickFallbackEvent, matchMergedSlug } from "../../lib/events.js";
 import { generateEventSlug } from "../../lib/slugs.js";
 
 type Ev = { name: string; date: string; town: string };
@@ -68,4 +68,38 @@ test("prefix tokens match (fest ↔ festival) but trivial short tokens don't", (
   // 'festival' token carries the match. Use a slug whose name part is "arts-fest".
   const stale = "arts-fest-2026-08-01-murphys";
   assert.equal(pickFallbackEvent([festival], stale), festival);
+});
+
+// --- matchMergedSlug (merge-loser recovery) --------------------------------
+// The reconcile engine deletes merged losers, and precisely those rows carry
+// titles too different for the fuzzy matcher above (that's why they were
+// dupes). This pins the exact snapshot-slug → survivor mapping.
+
+const mergeRow = (name: string, date: string, town: string, survivor: string) => ({
+  survivor_id: survivor,
+  merged_snapshot: { name, date, town },
+});
+
+test("recovers a merged loser's slug to its survivor id (different titles)", () => {
+  // The real GoCalaveras case: umbrella listing merged into the specific act.
+  const rows = [
+    mergeRow("Live Music @ The Lube Room", "2026-07-11", "Arnold", "surv-1"),
+    mergeRow("Bistro Summer Concert Series", "2026-07-11", "Murphys", "surv-2"),
+  ];
+  const loserSlug = "live-music-the-lube-room-2026-07-11-arnold";
+  assert.equal(matchMergedSlug(rows, loserSlug), "surv-1");
+});
+
+test("no snapshot-slug match returns null (never guesses)", () => {
+  const rows = [mergeRow("Trivia Night", "2026-07-11", "Arnold", "surv-1")];
+  assert.equal(matchMergedSlug(rows, "karaoke-night-2026-07-11-arnold"), null);
+});
+
+test("tolerates malformed snapshots (missing fields, null snapshot)", () => {
+  const rows = [
+    { survivor_id: "surv-x", merged_snapshot: null },
+    { survivor_id: "surv-y", merged_snapshot: { name: "X", date: null, town: "Arnold" } },
+    mergeRow("Karaoke Night", "2026-07-11", "Arnold", "surv-z"),
+  ];
+  assert.equal(matchMergedSlug(rows, "karaoke-night-2026-07-11-arnold"), "surv-z");
 });
