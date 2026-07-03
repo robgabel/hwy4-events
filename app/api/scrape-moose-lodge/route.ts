@@ -79,6 +79,14 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+// Convert a Google Drive share link (…/file/d/<id>/view) into a direct-download
+// URL that fetch() can pull PDF bytes from. Pass-through for any other URL.
+function normalizePdfUrl(url: string): string {
+  const drive = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  if (drive) return `https://drive.google.com/uc?export=download&id=${drive[1]}`;
+  return url;
+}
+
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -259,34 +267,47 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing ANTHROPIC_API_KEY" }, { status: 500 });
   }
 
+  // Optional override: ?pdf_url=… points the pipeline at an off-site PDF (e.g.
+  // the lodge's newsletter on Google Drive) when their /current-calendar page
+  // still serves last month's PDF. A manual, one-off run — see the sweep guard
+  // below (a partial/newsletter PDF must not delete real rows).
+  const overridePdfUrl = new URL(request.url).searchParams.get("pdf_url");
+
   const anthropic = new Anthropic({ apiKey: anthropicKey });
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    // 1. Find the current PDF link on /current-calendar
-    const calPage = await fetch(LODGE.calendarUrl);
-    if (!calPage.ok) {
-      return NextResponse.json(
-        { error: `Calendar page returned ${calPage.status}` },
-        { status: 502 }
-      );
-    }
-    const calHtml = await calPage.text();
+    // 1. Resolve the PDF URL — an explicit override, else the current link on
+    //    /current-calendar.
+    let pdfUrl: string;
+    if (overridePdfUrl) {
+      pdfUrl = normalizePdfUrl(overridePdfUrl);
+      console.log(`[scrape-moose-lodge] Override PDF URL: ${pdfUrl}`);
+    } else {
+      const calPage = await fetch(LODGE.calendarUrl);
+      if (!calPage.ok) {
+        return NextResponse.json(
+          { error: `Calendar page returned ${calPage.status}` },
+          { status: 502 }
+        );
+      }
+      const calHtml = await calPage.text();
 
-    const pdfMatch =
-      calHtml.match(/href=["']((?:https?:)?\/\/[^"']*?\.pdf)["']/i) ||
-      calHtml.match(/href=["']([^"']*?\.pdf)["']/i);
-    if (!pdfMatch) {
-      return NextResponse.json(
-        { error: "No PDF link found on /current-calendar page" },
-        { status: 404 }
-      );
-    }
-    let pdfUrl = pdfMatch[1];
-    if (pdfUrl.startsWith("//")) pdfUrl = "https:" + pdfUrl;
-    else if (pdfUrl.startsWith("/")) pdfUrl = "https://ebbettspassmoose.com" + pdfUrl;
+      const pdfMatch =
+        calHtml.match(/href=["']((?:https?:)?\/\/[^"']*?\.pdf)["']/i) ||
+        calHtml.match(/href=["']([^"']*?\.pdf)["']/i);
+      if (!pdfMatch) {
+        return NextResponse.json(
+          { error: "No PDF link found on /current-calendar page" },
+          { status: 404 }
+        );
+      }
+      pdfUrl = pdfMatch[1];
+      if (pdfUrl.startsWith("//")) pdfUrl = "https:" + pdfUrl;
+      else if (pdfUrl.startsWith("/")) pdfUrl = "https://ebbettspassmoose.com" + pdfUrl;
 
-    console.log(`[scrape-moose-lodge] PDF URL: ${pdfUrl}`);
+      console.log(`[scrape-moose-lodge] PDF URL: ${pdfUrl}`);
+    }
 
     // 2. Download PDF as base64
     const pdfResp = await fetch(pdfUrl);
@@ -458,31 +479,41 @@ export async function GET(request: Request) {
     //    Grace: 14 days = 2 weekly scrapes worth of buffer, so a single
     //    transient LLM extraction failure does not delete real events.
     //    Past events are preserved as historical record.
-    const STALE_GRACE_DAYS = 14;
-    const staleCutoff = new Date(
-      Date.now() - STALE_GRACE_DAYS * 24 * 60 * 60 * 1000
-    ).toISOString();
-    const todayDate = new Date().toISOString().split("T")[0];
-
-    const { data: swept, error: sweepErr } = await supabase
-      .from("hwy4_events")
-      .delete()
-      .eq("org_slug", LODGE.orgSlug)
-      .gte("date", todayDate)
-      .or(`last_scraped_at.is.null,last_scraped_at.lt.${staleCutoff}`)
-      .select("id, name, date, last_scraped_at");
-
-    if (sweepErr) {
-      console.error("[scrape-moose-lodge] Stale sweep failed:", sweepErr);
-      errors.push({ name: "(sweep)", reason: sweepErr.message });
-      stats.errors++;
+    //
+    //    SKIPPED on an override run (?pdf_url=…): that PDF may be a partial or
+    //    newsletter document, so absence of a row in it does not mean the event
+    //    was cancelled. A manual override is purely additive.
+    let swept: Array<{ id: string; name: string; date: string; last_scraped_at: string | null }> | null = null;
+    if (overridePdfUrl) {
+      console.log("[scrape-moose-lodge] Override run — skipping stale sweep");
     } else {
-      stats.swept = swept?.length ?? 0;
-      if (stats.swept > 0) {
-        console.log(
-          `[scrape-moose-lodge] Swept ${stats.swept} stale rows:`,
-          swept?.map((r) => `${r.date} ${r.name}`).join(", ")
-        );
+      const STALE_GRACE_DAYS = 14;
+      const staleCutoff = new Date(
+        Date.now() - STALE_GRACE_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString();
+      const todayDate = new Date().toISOString().split("T")[0];
+
+      const { data: sweptRows, error: sweepErr } = await supabase
+        .from("hwy4_events")
+        .delete()
+        .eq("org_slug", LODGE.orgSlug)
+        .gte("date", todayDate)
+        .or(`last_scraped_at.is.null,last_scraped_at.lt.${staleCutoff}`)
+        .select("id, name, date, last_scraped_at");
+
+      if (sweepErr) {
+        console.error("[scrape-moose-lodge] Stale sweep failed:", sweepErr);
+        errors.push({ name: "(sweep)", reason: sweepErr.message });
+        stats.errors++;
+      } else {
+        swept = sweptRows;
+        stats.swept = swept?.length ?? 0;
+        if (stats.swept > 0) {
+          console.log(
+            `[scrape-moose-lodge] Swept ${stats.swept} stale rows:`,
+            swept?.map((r) => `${r.date} ${r.name}`).join(", ")
+          );
+        }
       }
     }
 
