@@ -54,10 +54,15 @@ async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
       .gte("date", today)
       .neq("status", "cancelled")
       // Hide mundane recurring venue operations (Thursday dinners, Sunday
-      // brunches) the same way cancelled rows are hidden. Only the
-      // sequoia-woods/moose-lodge writers ever set is_routine=true; null-safe
-      // because the column is NOT NULL DEFAULT false. See lib/notability.ts.
-      .neq("is_routine", true)
+      // brunches) from the PUBLIC feed the same way cancelled rows are hidden —
+      // but keep them for members-only (private) events. A Moose/Sequoia member
+      // using the Clubs filter *wants* the lodge dinner and its menu; that's the
+      // whole value of the members view, so the routine hide would over-apply
+      // there. Private rows only render when their club is toggled on (client-
+      // side enabledOrgs), so exempting them never leaks routine meals into the
+      // public feed. Only sequoia-woods/moose-lodge writers set is_routine=true;
+      // null-safe because the column is NOT NULL DEFAULT false. See lib/notability.ts.
+      .or("is_routine.neq.true,visibility.eq.private")
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
