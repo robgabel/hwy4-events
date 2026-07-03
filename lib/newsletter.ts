@@ -8,13 +8,15 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
-import { generateEventSlug } from "@/lib/slugs";
-import { SITE_URL } from "@/lib/constants";
-import { isHttpUrl } from "@/lib/url";
+// Relative (not "@/") imports so the scripts/ test runner, which doesn't load
+// the app's tsconfig path alias, can import this module directly.
+import { generateEventSlug } from "./slugs";
+import { SITE_URL } from "./constants";
+import { isHttpUrl } from "./url";
 import {
   renderParagraphs as renderParagraphsSafe,
   type HrefResolver,
-} from "@/lib/newsletter-render";
+} from "./newsletter-render";
 import { withVoice } from "./voice";
 
 export const NEWSLETTER_MODEL = "claude-opus-4-7";
@@ -441,4 +443,29 @@ export function buildEmailHtml(
   </div>
 </body>
 </html>`;
+}
+
+/**
+ * Welcome email, sent once when a subscriber first confirms. Reuses the same
+ * shell as the Thursday issue (buildEmailHtml) so the first thing a new
+ * subscriber sees matches what they signed up for. Copy lives here, not in a
+ * prompt — it's fixed, human-written, and voice-locked by
+ * scripts/test/newsletter-welcome.test.ts.
+ */
+export function buildWelcomeEmailHtml(unsubscribeUrl: string): {
+  subject: string;
+  html: string;
+} {
+  const robNote = `Hey, Rob here. You're in. Every Thursday, Millie and I send one quick read on what's happening along the 4, from Angels Camp up to Bear Valley. The good stuff first, no filler.`;
+
+  const content = `Your first issue lands Thursday morning. Between issues the site updates daily, and [this weekend's lineup](${SITE_URL}/this-weekend) is the fast answer when you're making plans.
+
+Know about something happening that we don't? [Send it in](${SITE_URL}/submit) and it goes on the calendar. A lot of the good stuff gets here that way.
+
+One favor: if a neighbor would use this, forward it along. Word of mouth is the whole engine up here.`;
+
+  return {
+    subject: "You're on the list",
+    html: buildEmailHtml(robNote, content, unsubscribeUrl),
+  };
 }
