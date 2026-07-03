@@ -1,6 +1,6 @@
 # Handoff — Newsletter send reconcile
 
-**Status:** Not started. **Owner:** next session (Rob or Claude). **Created:** 2026-06-21.
+**Status: EXECUTED 2026-07-03.** Ledger + Batch transport live: `lib/newsletter-send.ts` (`sendCampaign`), migration `20260703_newsletter_send_log.sql` (applied; adds `newsletter_send_log` + `newsletter_suppressions`), both GET cron and POST recovery rewired as thin wrappers, pure core locked by `scripts/test/newsletter-send.test.ts`. The veto gate is untouched. Kept below as the design record. **Created:** 2026-06-21.
 
 ## TL;DR / the decision to make
 
