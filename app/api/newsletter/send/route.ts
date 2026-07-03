@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { Resend } from "resend";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import {
@@ -42,11 +43,8 @@ export async function GET(request: Request) {
   // preview=1 is read-only (no send) — exempt from CRON_SECRET so the admin
   // page's "Preview email →" link works in a normal browser session.
   if (!preview) {
-    const authHeader = request.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const cronDenied = requireCronAuth(request);
+    if (cronDenied) return cronDenied;
   }
 
   if (preview) {
@@ -301,11 +299,8 @@ export async function GET(request: Request) {
 //
 //   POST /api/newsletter/send  { "targets": ["a@b.com", ...] }
 export async function POST(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const cronDenied = requireCronAuth(request);
+  if (cronDenied) return cronDenied;
 
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) {

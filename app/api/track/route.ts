@@ -40,6 +40,12 @@ export async function POST(request: Request) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) return ok();
 
+  // Cheap flood guard: a legit beacon is a few hundred bytes. Reject an
+  // oversized body before parsing so this write-path can't be used to shovel
+  // large payloads. Still 200 (best-effort beacon; never error to the client).
+  const len = Number(request.headers.get("content-length") ?? 0);
+  if (len > 4096) return ok();
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();

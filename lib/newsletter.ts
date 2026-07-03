@@ -10,6 +10,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL } from "@/lib/constants";
+import { isHttpUrl } from "@/lib/url";
+import {
+  renderParagraphs as renderParagraphsSafe,
+  type HrefResolver,
+} from "@/lib/newsletter-render";
 import { withVoice } from "./voice";
 
 export const NEWSLETTER_MODEL = "claude-opus-4-7";
@@ -305,78 +310,46 @@ function eventSlugFromUrl(url: string): string | null {
   }
 }
 
-function markdownLinksToHtml(text: string, tracking?: NewsletterTracking): string {
-  return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
-    // Rewrite event links to the first-party click tracker on a map hit.
+// Build the href resolver handed to the (pure, escaping) renderer. Encapsulates
+// the three URL rules: (1) an event link with a click-tracking map hit rewrites
+// to the first-party /r/n redirect; (2) any other http(s) link gets UTM tags;
+// (3) a non-http(s) link (javascript:/data:/junk) resolves to null so the label
+// renders as inert escaped text instead of a live href. Escaping of the label
+// and the returned href happens in lib/newsletter-render.ts.
+function makeHrefResolver(tracking?: NewsletterTracking): HrefResolver {
+  return (rawUrl: string): string | null => {
     if (tracking) {
-      const slug = eventSlugFromUrl(url);
+      const slug = eventSlugFromUrl(rawUrl);
       const eventId = slug ? tracking.slugToEventId.get(slug) : undefined;
       if (eventId) {
-        const href = `${SITE_URL}/r/n/${encodeURIComponent(tracking.campaignId)}/${eventId}`;
-        return `<a href="${href}" style="color: #2d5016; text-decoration: underline;">${label}</a>`;
+        return `${SITE_URL}/r/n/${encodeURIComponent(tracking.campaignId)}/${eventId}`;
       }
     }
+    // Only http(s) may become a link. mailto:/tel: aren't used in the body;
+    // javascript:/data: must never render as an href.
+    if (!isHttpUrl(rawUrl)) return null;
     let utmContent = "body_link";
     try {
-      const u = new URL(url);
+      const u = new URL(rawUrl);
       const parts = u.pathname.split("/").filter(Boolean);
       if (parts.length > 0) utmContent = parts[parts.length - 1];
     } catch {
       // ignore — keep default
     }
-    const tagged = withUtm(url, utmContent);
-    return `<a href="${tagged}" style="color: #2d5016; text-decoration: underline;">${label}</a>`;
-  });
+    return withUtm(rawUrl, utmContent);
+  };
 }
 
-// Bold the "scannable spine" so a skimming reader gets the plan at a glance —
-// do the scanning for them rather than making them parse prose. Render-time and
-// deterministic, so it lands on EVERY draft (freshly generated, hand-edited, or
-// already queued) with no dependency on the model emitting markup. Scoped to
-// DATED weekday anchors ("Friday, June 5", "Saturday the 6th") and the "Rob's
-// Pick" lead-in; a bare day name is left alone, since by convention only the
-// first, dated mention is the anchor. Runs on raw text BEFORE link conversion,
-// so it can never inject into a tag or an href.
-const MONTHS =
-  "January|February|March|April|May|June|July|August|September|October|November|December";
-const DATED_DAY_ANCHOR = new RegExp(
-  "\\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)" +
-    "(,?\\s+(?:the\\s+\\d{1,2}(?:st|nd|rd|th)|(?:" +
-    MONTHS +
-    ")\\s+\\d{1,2}(?:st|nd|rd|th)?))",
-  "g"
-);
-const ROBS_PICK_LEADIN = /\bRob['’]s(?:\s+family)?\s+[Pp]ick\b[^:\n.]*:/g;
-
-function boldEventAnchors(text: string): string {
-  return text
-    .replace(ROBS_PICK_LEADIN, (m) => `<strong>${m}</strong>`)
-    .replace(DATED_DAY_ANCHOR, (m) => `<strong>${m}</strong>`);
-}
-
-// Render a markdown-ish block (with [label](url) links) into stacked <p> tags.
-// Normalizes line endings FIRST: hand-edits saved from the /admin/newsletter
-// <textarea> come back with CRLF (browsers normalize textarea newlines to \r\n on
-// form submit), so a paragraph break is "\r\n\r\n" — which a naive split on "\n\n"
-// misses, collapsing the whole email into one block. Normalize CRLF/CR to LF, then
-// split on one-or-more blank lines so runs of 3+ newlines don't yield empty <p>s.
-// When emphasizeAnchors is set, bold the scannable spine before linkifying.
+// Render a markdown-ish block into stacked, HTML-escaped <p> tags. Thin wrapper
+// over the pure renderer with this module's href resolver. `emphasizeAnchors`
+// bolds the scannable spine (dated weekday anchors + the "Rob's Pick" lead-in).
 function renderParagraphs(
   text: string,
   pStyle: string,
   emphasizeAnchors = false,
   tracking?: NewsletterTracking
 ): string {
-  return text
-    .replace(/\r\n?/g, "\n")
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => {
-      const spine = emphasizeAnchors ? boldEventAnchors(p) : p;
-      return `<p style="${pStyle}">${markdownLinksToHtml(spine, tracking)}</p>`;
-    })
-    .join("");
+  return renderParagraphsSafe(text, pStyle, emphasizeAnchors, makeHrefResolver(tracking));
 }
 
 export function buildEmailHtml(

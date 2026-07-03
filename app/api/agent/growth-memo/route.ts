@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { SITE_URL } from "@/lib/constants";
 import { gatherGrowthContext } from "@/lib/agent/growth-context";
 import {
@@ -134,11 +135,8 @@ async function postSlack(digest: GrowthDigest): Promise<void> {
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const cronDenied = requireCronAuth(request);
+  if (cronDenied) return cronDenied;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

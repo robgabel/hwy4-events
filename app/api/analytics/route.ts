@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { getAnalyticsSnapshot, lastNDays } from "@/lib/cloudflare-analytics";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +15,8 @@ export const maxDuration = 30;
  * persisted analytics_daily table instead. See PRD-cloudflare-analytics.md.
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const cronDenied = requireCronAuth(request);
+  if (cronDenied) return cronDenied;
 
   const { searchParams } = new URL(request.url);
   const requested = parseInt(searchParams.get("days") || "7", 10);

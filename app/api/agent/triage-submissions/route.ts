@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { triageSubmissionById, triagePendingBatch } from "@/lib/agent/submission-triage";
 
 // Agent Cockpit Stage 1 (submissions) — the triage worker.
@@ -14,11 +15,8 @@ import { triageSubmissionById, triagePendingBatch } from "@/lib/agent/submission
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const cronDenied = requireCronAuth(request);
+  if (cronDenied) return cronDenied;
 
   const url = new URL(request.url);
   const id = url.searchParams.get("id");

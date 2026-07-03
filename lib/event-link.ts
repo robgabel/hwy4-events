@@ -25,6 +25,8 @@
 // reused by /api/verify-events — so "where does this link go" can't drift.
 // Locked by scripts/test/event-link.test.ts.
 
+import { isHttpUrl } from "./url";
+
 /** Aggregator hosts we render as a best-effort CTA but never *trust*: their
  *  per-event permalinks 403 server-side validators and can churn slugs, so we
  *  keep them out of JSON-LD and out of validateEventUrls, and mark the resolved
@@ -160,6 +162,7 @@ export function promotableVenueUrl(
   website: string | null | undefined
 ): string | null {
   if (!website) return null;
+  if (!isHttpUrl(website)) return null; // javascript:/data:/junk can never be a CTA
   if (isMultiTenantVenue(venueName)) return null;
   if (isUnstableHost(website)) return null; // GoCalaveras et al. (also catches unparseable)
   const h = hostOf(website);
@@ -213,7 +216,7 @@ export function resolveEventLink(
   //    the event fall through to the non-durable aggregator fallback below, so a
   //    churnable permalink can never be laundered into JSON-LD via an org row.
   const org = opts?.org;
-  if (org?.canonical_url && !isUnstableHost(org.canonical_url)) {
+  if (org?.canonical_url && isHttpUrl(org.canonical_url) && !isUnstableHost(org.canonical_url)) {
     return {
       href: org.canonical_url,
       label: `Visit ${org.display_name?.trim() || "event organizer"}`,
@@ -232,8 +235,11 @@ export function resolveEventLink(
     };
   }
 
-  // 3. Scraped per-event link — from a host we trust to be durable.
-  if (ev.event_url) {
+  // 3. Scraped per-event link — from a host we trust to be durable. Gate on
+  //    isHttpUrl first: a scraped `event_url` is attacker-adjacent (it comes
+  //    from an aggregator's external-link field), so a javascript:/data: value
+  //    must be treated as absent, never rendered as an href.
+  if (ev.event_url && isHttpUrl(ev.event_url)) {
     if (!isUnstableHost(ev.event_url)) {
       return { href: ev.event_url, label: "Visit Event Page", kind: "source", durable: true };
     }

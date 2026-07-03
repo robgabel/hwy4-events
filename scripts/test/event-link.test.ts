@@ -201,6 +201,37 @@ test("unparseable event_url → none (junk never renders as a link)", () => {
   assert.equal(resolveEventLink(ev({ name: "x", event_url: "not a url" })).kind, "none");
 });
 
+// --- URL scheme allowlist (2026-07-02 review, P1): a javascript:/data: URL in
+//     ANY slot is treated as absent, never rendered as an href. ---
+
+test("javascript: event_url never becomes a link", () => {
+  const r = resolveEventLink(
+    ev({ name: "x", event_url: "javascript://evil.com/%0aalert(1)" })
+  );
+  assert.equal(r.kind, "none");
+  assert.equal(r.href, null);
+});
+
+test("javascript: organizer canonical_url is not durable — falls through", () => {
+  const EVIL_ORG: LinkOrg = {
+    slug: "evil",
+    display_name: "Evil",
+    canonical_url: "javascript://evil.com/%0aalert(1)",
+    match_patterns: ["evil show"],
+  };
+  const r = resolveEventLinkFromOrgs(
+    ev({ name: "Evil Show", org_slug: "evil" }),
+    [EVIL_ORG]
+  );
+  assert.equal(r.kind, "none");
+  assert.equal(r.href, null);
+});
+
+test("promotableVenueUrl rejects a javascript: / data: website", () => {
+  assert.equal(promotableVenueUrl("My Bar", "javascript://evil.com/%0aalert(1)"), null);
+  assert.equal(promotableVenueUrl("My Bar", "data:text/html,<script>alert(1)</script>"), null);
+});
+
 // --- Venue-canonical promotion guard (the resolver's priority-#2 path) ---
 
 test("promotableVenueUrl promotes a single-operator venue website", () => {

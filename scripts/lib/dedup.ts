@@ -13,6 +13,21 @@ import {
 } from "../../lib/event-identity.js";
 import { sanitizeDescription } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
+import { isHttpUrl } from "../../lib/url.js";
+
+/**
+ * Strip HTML tag-like sequences from scraped free-text. Defense in depth for
+ * the JSON-LD sink: `serializeJsonLd` escapes "<" at render, and this removes
+ * tag shapes at the source so a scraped `</script><script>…` title never even
+ * reaches the DB. Deliberately narrow — only `<tag>` / `</tag>` shapes (a letter
+ * after "<"), so "5 < 10" or "<3 Music" survive untouched. Returns null when the
+ * field collapses to empty, EXCEPT the caller keeps a required field's original.
+ */
+function stripTagLike(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const cleaned = s.replace(/<\/?[a-zA-Z][^<>]*>/g, "").replace(/\s+/g, " ").trim();
+  return cleaned || null;
+}
 
 // Re-exported for scripts that import these from this module.
 export { normalizeName, generateDedupKey };
@@ -180,6 +195,25 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
   if (event.description) {
     event.description = sanitizeDescription(event.description) || null;
   }
+
+  // Security defense in depth (2026-07-02 review). Strip HTML tag-like text from
+  // scraped free-text so an injected `</script><script>…` can't reach the DB
+  // (the JSON-LD serializer also escapes it at render). Keep a required field's
+  // original if stripping empties it. And null a non-http(s) `event_url` so a
+  // `javascript:`/`data:` link can never be stored and later rendered as an href.
+  event.name = stripTagLike(event.name) ?? event.name;
+  event.venue_name = stripTagLike(event.venue_name) ?? event.venue_name;
+  if (event.description) {
+    event.description = stripTagLike(event.description);
+  }
+  if (event.artists && event.artists.length > 0) {
+    event.artists = event.artists
+      .map((a) => stripTagLike(a))
+      .filter((a): a is string => !!a);
+  }
+  if (event.event_url && !isHttpUrl(event.event_url)) {
+    event.event_url = null;
+  }
 }
 
 /**
@@ -323,11 +357,15 @@ function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked";
+  "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked";
 
 type ExistingRow = {
   id: string;
   name: string;
+  // Included so a rescheduled event (same stable source_event_id, new date) is
+  // detected as changed and the new date propagates. Without it a moved date is
+  // silently dropped and the stored row keeps showing the old day.
+  date: string;
   venue_name: string;
   description: string | null;
   start_time: string | null;
@@ -348,9 +386,13 @@ type ExistingRow = {
   notability_locked?: boolean | null;
 };
 
-function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
+export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
   return (
     existing.name !== event.name ||
+    // A rescheduled event keeps its stable source_event_id but changes date.
+    // (For sources whose source_event_id or dedup_key already embeds the date,
+    // the matched row's date equals the incoming date, so this is a no-op.)
+    existing.date !== event.date ||
     existing.venue_name !== event.venue_name ||
     // A locked field can't be written, so a diff there is not a change.
     (!existing.description_locked && existing.description !== event.description) ||
@@ -531,6 +573,9 @@ async function upsertEventsBatched(
         const payload = changed
           ? {
               name: event.name,
+              // Propagate a rescheduled date (dedup_key is recomputed from it
+              // below, keeping identity self-consistent).
+              date: event.date,
               venue_name: event.venue_name,
               venue_key: resolveVenueKey(event),
               // Locked fields are human-set — never overwrite them.
@@ -674,6 +719,7 @@ export async function upsertEvents(
     let existing: {
       id: string;
       name: string;
+      date: string;
       venue_name: string;
       description: string | null;
       start_time: string | null;
@@ -695,7 +741,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked"
+          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -706,7 +752,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked"
+          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -720,6 +766,9 @@ export async function upsertEvents(
       // so a diff there doesn't count as a change.
       const changed =
         existing.name !== event.name ||
+        // Rescheduled event (stable source_event_id, new date). No-op for sources
+        // whose source_event_id / dedup_key already embeds the date.
+        existing.date !== event.date ||
         existing.venue_name !== event.venue_name ||
         (!existing.description_locked && existing.description !== event.description) ||
         existing.start_time !== event.start_time ||
@@ -737,6 +786,8 @@ export async function upsertEvents(
           .from("hwy4_events")
           .update({
             name: event.name,
+            // Propagate a rescheduled date; dedup_key below is recomputed from it.
+            date: event.date,
             venue_name: event.venue_name,
             venue_key: resolveVenueKey(event),
             // Locked fields are human-set — never overwrite them.

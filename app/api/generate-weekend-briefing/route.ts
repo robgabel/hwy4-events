@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL } from "@/lib/constants";
 import { dedupeEvents } from "@/lib/dedupe-events";
@@ -265,12 +266,9 @@ async function saveWeekendBriefing(text: string, eventCount: number) {
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const cronDenied = requireCronAuth(request);
+  if (cronDenied) return cronDenied;
 
   try {
     const [events, recentBriefings, cancelledEvents] = await Promise.all([

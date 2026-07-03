@@ -39,6 +39,11 @@ export default function SubmitEventForm() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Honeypot: an off-screen field a human never sees or fills, but bots that
+  // auto-populate every input will. The server silently drops any submission
+  // where it's non-empty (see /api/submit-event) so a scripted flood can't
+  // trigger the per-submission web-search + model triage.
+  const [hp, setHp] = useState("");
 
   function update(field: keyof FormData, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -67,6 +72,7 @@ export default function SubmitEventForm() {
       for (const [key, value] of Object.entries(form)) {
         body.append(key, value);
       }
+      body.append("company_url", hp); // honeypot — empty for humans
       if (flyer) body.append("flyer", flyer);
 
       const res = await fetch("/api/submit-event", {
@@ -131,6 +137,26 @@ export default function SubmitEventForm() {
       onSubmit={handleSubmit}
       className="rounded-xl border border-stone-light/30 bg-white px-6 py-6 shadow-sm"
     >
+      {/* Honeypot: off-screen + aria-hidden + not tabbable, so no human sees or
+          reaches it, but form-filling bots populate it. Server drops any
+          submission where it's non-empty. Not display:none (some bots skip that). */}
+      <div
+        aria-hidden="true"
+        style={{ position: "absolute", left: "-9999px", top: "-9999px", width: 1, height: 1, overflow: "hidden" }}
+      >
+        <label>
+          Company website (leave blank)
+          <input
+            type="text"
+            name="company_url"
+            tabIndex={-1}
+            autoComplete="off"
+            value={hp}
+            onChange={(e) => setHp(e.target.value)}
+          />
+        </label>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className={labelClass}>

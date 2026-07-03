@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { createClient } from "@supabase/supabase-js";
 import { proposeLinkGapActions, researchPendingProposals } from "@/lib/agent/propose-link-gaps";
 import { proposeVenueRowActions, researchPendingVenueProposals } from "@/lib/agent/propose-venue-rows";
@@ -14,11 +15,8 @@ export const maxDuration = 120; // each new proposal does one web-research call
 // human click in the cockpit). Idempotent. CRON_SECRET-gated; also triggered
 // manually by the "Scan now" button on /admin/actions.
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const secret = process.env.CRON_SECRET;
-  if (secret && auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const cronDenied = requireCronAuth(request);
+  if (cronDenied) return cronDenied;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

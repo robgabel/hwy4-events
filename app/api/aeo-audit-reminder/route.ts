@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireCronAuth } from "@/lib/cron-auth";
 
 /**
  * Monthly AEO prompt-audit reminder.
@@ -36,12 +37,9 @@ const DOC_URL =
   "https://github.com/robgabel/hwy4-events/blob/main/AEO-SEO-MEASUREMENT.md";
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const cronDenied = requireCronAuth(request);
+  if (cronDenied) return cronDenied;
 
   const month = new Date().toLocaleString("en-US", {
     month: "long",

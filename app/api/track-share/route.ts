@@ -14,6 +14,11 @@ export async function POST(request: Request) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) return ok();
 
+  // Cheap flood guard: a legit share ping is a few hundred bytes. Reject an
+  // oversized body before parsing. Still 200 (best-effort; never error).
+  const len = Number(request.headers.get("content-length") ?? 0);
+  if (len > 4096) return ok();
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();

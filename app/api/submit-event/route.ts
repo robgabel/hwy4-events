@@ -54,6 +54,14 @@ export async function POST(request: Request) {
   }
 
   const str = (k: string) => ((formData.get(k) as string | null) ?? "").trim();
+
+  // Honeypot: a hidden form field no human fills. A non-empty value means a bot
+  // auto-populated every input, so drop it silently — pretend success (200) so
+  // the bot learns nothing, but never insert or fire the (expensive) triage.
+  if (str("company_url")) {
+    return NextResponse.json({ ok: true });
+  }
+
   const event_name = str("event_name");
   const event_date = str("event_date");
   const start_time = str("start_time");
@@ -112,6 +120,26 @@ export async function POST(request: Request) {
   }
 
   const supabase = createClient(supabaseUrl, serviceKey);
+
+  // Per-email daily cap: past the honeypot, a single address can still loop the
+  // form and drive one web-search + model triage per submission. Cap how many a
+  // given email can file in 24h. Fails OPEN — a transient count error must never
+  // block a genuine neighbor — but a scripted address hits the wall fast.
+  const SUBMISSIONS_PER_EMAIL_PER_DAY = 10;
+  {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count, error: countErr } = await supabase
+      .from("event_submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("submitter_email", submitter_email)
+      .gte("created_at", since);
+    if (!countErr && (count ?? 0) >= SUBMISSIONS_PER_EMAIL_PER_DAY) {
+      return NextResponse.json(
+        { error: "You've submitted several events today — thanks! Please try again tomorrow." },
+        { status: 429 }
+      );
+    }
+  }
 
   // Optional flyer: validate + stash in the public event-posters bucket (service
   // role), then store its URL on the submission. The reviewer can use it as the
