@@ -174,7 +174,11 @@ export async function publishSubmission(formData: FormData) {
     source_name: "Community Submission",
     source_url: `${SITE_URL}/submit`,
     cost_tier: "unknown",
-    verification_status: "unchecked",
+    // Publishing IS the verification: a human reviewed this submission before
+    // clicking Publish, so the event never shows the "Worth a call first"
+    // disclosure (lib/confidence.ts). Seed-owned community rows (e.g. the Arnold
+    // Library storytime) don't pass through here and keep their own status.
+    verification_status: "verified",
     is_weekly: false,
     dedup_key: generateDedupKey(name, date, town),
     last_scraped_at: new Date().toISOString(),
