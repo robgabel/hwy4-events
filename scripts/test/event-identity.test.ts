@@ -170,6 +170,33 @@ const cases: { label: string; a: EventIdentity; b: EventIdentity; same: boolean 
     b: ev({ name: "Trivia Night", venue_name: "Murphys Irish Pub", artists: ["Quizmaster"] }),
     same: true,
   },
+  {
+    // Venue veto (2026-07-02 review, P3): the SAME generic title at two DIFFERENT
+    // known venues on the same night is two different events — must NOT merge,
+    // even though the titles are byte-identical (textSimilarity = 1).
+    label: "same 'Trivia Night' title, two different known venues — NOT same",
+    a: ev({ name: "Trivia Night", date: "2026-07-10", town: "Murphys", venue_name: "Murphys Irish Pub", start_time: "19:00:00" }),
+    b: ev({ name: "Trivia Night", date: "2026-07-10", town: "Murphys", venue_name: "V Restaurant & Bar", start_time: "19:00:00" }),
+    same: false,
+  },
+  {
+    // Venue veto extends to the artist-overlap shortcut: a shared act at two
+    // different known venues at the same time is a data artifact, not one event.
+    label: "shared artist, two different known venues — NOT same",
+    a: ev({ name: "Open Mic", date: "2026-07-10", venue_name: "The Lube Room Saloon", start_time: "19:00:00", artists: ["Jane Doe"] }),
+    b: ev({ name: "Songwriter Night", date: "2026-07-10", venue_name: "Alchemy Market", start_time: "19:00:00", artists: ["Jane Doe"] }),
+    same: false,
+  },
+  {
+    // The veto must NOT block the legitimate cross-source merge where one feed
+    // names the venue and the other leaves it unknown — that pairing is the whole
+    // reason the matcher exists. One side generic → veto does not fire → merges
+    // on the identical title.
+    label: "same title, one venue known + one 'Unknown Venue' — same",
+    a: ev({ name: "Spring Peddlers Faire", date: "2026-05-02", town: "Arnold", venue_name: "Independence Hall", start_time: "09:00:00" }),
+    b: ev({ name: "Spring Peddlers Faire", date: "2026-05-02", town: "Arnold", venue_name: "Unknown Venue", start_time: "09:00:00" }),
+    same: true,
+  },
 ];
 
 for (const c of cases) {

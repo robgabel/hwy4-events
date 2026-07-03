@@ -1,4 +1,5 @@
 import type { Hwy4Venue } from "@/lib/types";
+import { isHttpUrl } from "@/lib/url";
 
 /**
  * Venue context on the event detail page: a local-voice blurb (sourced from the
@@ -112,7 +113,7 @@ export default function VenueInfo({ venue }: { venue: Hwy4Venue }) {
             </a>
           )}
 
-          {venue.website && (
+          {venue.website && isHttpUrl(venue.website) && (
             <a
               href={venue.website}
               target="_blank"

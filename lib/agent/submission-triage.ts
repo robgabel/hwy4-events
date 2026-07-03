@@ -151,7 +151,7 @@ async function findCandidates(
   supabase: SupabaseClient,
   sub: SubmissionForTriage
 ): Promise<{ rows: DbCandidateRow[]; tagged: TriageCandidate[]; exactId: string | null }> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("hwy4_events")
     .select(
       "id, name, date, start_time, end_time, venue_name, town, description, artists, category, event_url, source_name, community_sourced, status, dedup_key"
@@ -160,6 +160,11 @@ async function findCandidates(
     .lte("date", addDays(sub.event_date, 3))
     .neq("status", "cancelled");
 
+  // Do NOT treat a failed read as "no candidates found" — that would make the
+  // triage conclude publish_new and invite a duplicate (2026-07-02 review, P6).
+  // Throw instead; the triage is best-effort and re-run by the cron backstop
+  // (ai_analyzed_at stays NULL), so a transient blip retries with full data.
+  if (error) throw error;
   const all = (data as DbCandidateRow[] | null) ?? [];
   const subTown = normalizeTown(sub.town);
   const rows = all.filter((r) => normalizeTown(r.town) === subTown);

@@ -60,12 +60,27 @@ export async function getNewsletterStats(
   days = 60,
   tz: string = DEFAULT_TZ
 ): Promise<NewsletterStats> {
-  // Pull the whole table once and derive everything. RLS-bypassing service role.
-  const { data } = await supabase
-    .from("newsletter_subscribers")
-    .select("created_at, confirmed, confirmed_at, unsubscribed_at, visitor_class, signup_source")
-    .limit(100000);
-  const rows = (data ?? []) as SubRow[];
+  // Pull the whole table and derive everything (RLS-bypassing service role).
+  // PostgREST caps a single response at ~1,000 rows regardless of .limit(), so
+  // once there are >1,000 subscribers a one-shot select silently undercounts
+  // EVERY tally here — total_active, the daily net series, the North Star proxy
+  // (2026-07-02 review, P6). Paginate with .range() instead (each page is ≤1,000,
+  // under the cap) ordered by a unique column for stable, gap-free paging, and
+  // THROW on a read error rather than treating a failed read as "0 subscribers"
+  // (which would make the growth memo report the list as dead).
+  const rows: SubRow[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("newsletter_subscribers")
+      .select("created_at, confirmed, confirmed_at, unsubscribed_at, visitor_class, signup_source")
+      .order("email", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    const page = (data ?? []) as SubRow[];
+    rows.push(...page);
+    if (page.length < PAGE) break;
+  }
 
   const today = civilDay(new Date().toISOString(), tz);
   const windowStart = addDays(today, -(days - 1));

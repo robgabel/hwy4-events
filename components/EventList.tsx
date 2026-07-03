@@ -15,9 +15,6 @@ import EventCard from "./EventCard";
 import type { TownForecasts } from "@/lib/weather";
 import {
   parseDate,
-  isToday,
-  isTomorrow,
-  isThisWeek,
   differenceInCalendarDays,
   startOfDay,
   getNextFriday,
@@ -26,6 +23,7 @@ import {
   formatLongMonthDay,
   formatISODate,
 } from "@/lib/date-utils";
+import { pacificToday, pacificDateGroupKind } from "@/lib/date-windows";
 import { nowPacificMinutes, hasEventEnded, hasEventStarted } from "@/lib/event-time";
 
 // Lazy-load non-critical components so they don't block hydration
@@ -132,15 +130,21 @@ function groupEventsByDate(events: CollapsedEvent[]) {
     [];
   let currentDate = "";
 
+  // Anchor the Today/Tomorrow/This-<day> labels to the corridor's Pacific civil
+  // date, computed identically on the server (UTC runtime) and the client via
+  // Intl — so SSR and hydration agree and an evening event is never mislabeled.
+  const { iso: todayIso, dow } = pacificToday();
+
   for (const event of events) {
     if (event.date !== currentDate) {
       currentDate = event.date;
       const dateObj = parseDate(event.date);
       let label = formatFullDate(dateObj);
-      if (isToday(dateObj)) label = `Today — ${formatLongMonthDay(dateObj)}`;
-      else if (isTomorrow(dateObj))
+      const kind = pacificDateGroupKind(event.date, todayIso, dow);
+      if (kind === "today") label = `Today — ${formatLongMonthDay(dateObj)}`;
+      else if (kind === "tomorrow")
         label = `Tomorrow — ${formatLongMonthDay(dateObj)}`;
-      else if (isThisWeek(dateObj))
+      else if (kind === "this-week")
         label = `This ${formatLongWeekday(dateObj)} — ${formatLongMonthDay(dateObj)}`;
 
       groups.push({ label, date: event.date, events: [] });

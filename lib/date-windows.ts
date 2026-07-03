@@ -53,6 +53,32 @@ export interface DateWindow {
 }
 
 /**
+ * Classify an event's date relative to a Pacific "today" anchor, for the
+ * homepage date-group labels ("Today", "Tomorrow", "This Friday").
+ *
+ * Pure + string-based (ISO dates compare lexicographically = chronologically),
+ * so it returns the SAME answer on the server (UTC runtime) and the client (any
+ * browser TZ) as long as both pass a Pacific `todayIso`/`dow` from
+ * pacificToday(). This replaces the old browser-local isToday/isTomorrow, which
+ * were computed with the UTC clock during SSR — mislabeling a Pacific-evening
+ * event as "Tomorrow" and tripping a hydration mismatch when the client re-ran
+ * them in local time (2026-07-02 review, P5). "this-week" preserves the prior
+ * Sun–Sat calendar-week semantics (through this week's Saturday).
+ */
+export function pacificDateGroupKind(
+  eventIso: string,
+  todayIso: string,
+  dow: number
+): "today" | "tomorrow" | "this-week" | "future" {
+  if (eventIso === todayIso) return "today";
+  const tomorrowIso = addDays(todayIso, 1);
+  if (eventIso === tomorrowIso) return "tomorrow";
+  const saturdayIso = addDays(todayIso, 6 - dow); // Saturday of the current Sun–Sat week
+  if (eventIso > tomorrowIso && eventIso <= saturdayIso) return "this-week";
+  return "future";
+}
+
+/**
  * This weekend = Friday through Sunday.
  * Fri/Sat/Sun → the weekend in progress. Mon–Thu → the upcoming weekend.
  * Mirrors components/EventList.tsx::getThisWeekendRange so the dedicated

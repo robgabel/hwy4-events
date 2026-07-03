@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { isUnstableHost } from "@/lib/event-link";
+import { isHttpUrl } from "@/lib/url";
 
 export const maxDuration = 120;
 
@@ -147,11 +149,8 @@ async function fetchDetails(
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const cronDenied = requireCronAuth(request);
+  if (cronDenied) return cronDenied;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -230,11 +229,15 @@ export async function GET(request: Request) {
           user_ratings_total: details.userRatingCount ?? null,
           phone: details.nationalPhoneNumber ?? null,
           // Drop an aggregator/unstable-host website (Google sometimes returns a
-          // GoCalaveras listing as a venue's "website" — e.g. Angels Camp Museum).
+          // GoCalaveras listing as a venue's "website" — e.g. Angels Camp Museum),
+          // and any non-http(s) value (defense in depth — Places shouldn't return
+          // one, but a stored javascript:/data: URL would render as a live href).
           // A churning aggregator is never a durable destination; mirrors
           // promotableVenueUrl's read-time guard so the STORED data stays clean too.
           website:
-            details.websiteUri && !isUnstableHost(details.websiteUri)
+            details.websiteUri &&
+            isHttpUrl(details.websiteUri) &&
+            !isUnstableHost(details.websiteUri)
               ? details.websiteUri
               : null,
           maps_url: details.googleMapsUri ?? null,

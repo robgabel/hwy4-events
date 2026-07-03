@@ -230,6 +230,24 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   if (a.date && b.date && a.date !== b.date) return false;
   if (a.town && b.town && normalizeTown(a.town) !== normalizeTown(b.town)) return false;
   if (!timesAnchor(a, b)) return false;
+
+  const va = normalizeVenue(a.venue_name);
+  const vb = normalizeVenue(b.venue_name);
+
+  // Venue veto (2026-07-02 security/correctness review, P3). Two events at
+  // DIFFERENT *known* venues are never the same show — even with an identical
+  // title or a shared artist. "Trivia Night", "Open Mic", "Karaoke", "Bingo"
+  // run at many venues on the same night at the same time; merging them would
+  // hide one immediately and let a later reconcile/delete permanently drop it.
+  // Only fires when BOTH venues are known and non-generic: a row with an
+  // empty/"Unknown Venue" side stays eligible for the legitimate cross-source
+  // merge (one feed names the venue, the other doesn't). The generic/umbrella +
+  // actNamedInOther paths below already require venueMatch, so this veto only
+  // removes the title/artist/description shortcuts across conflicting venues.
+  const bothVenuesKnown =
+    !!va && !!vb && !GENERIC_VENUES.has(va) && !GENERIC_VENUES.has(vb);
+  if (bothVenuesKnown && !venueMatch(va, vb)) return false;
+
   if (a.name && b.name && textSimilarity(a.name, b.name) >= 0.85) return true;
   if (artistsOverlap(a.artists, b.artists)) return true;
   if (
@@ -239,8 +257,6 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   ) {
     return true;
   }
-  const va = normalizeVenue(a.venue_name);
-  const vb = normalizeVenue(b.venue_name);
   if (venueMatch(va, vb) && (isGenericTitle(a.name) || isGenericTitle(b.name))) {
     return true;
   }
