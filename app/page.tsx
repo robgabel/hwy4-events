@@ -6,6 +6,8 @@ import Header from "@/components/Header";
 import EventList from "@/components/EventList";
 import { getForecastsByTown } from "@/lib/weather";
 import WeeklyBriefing from "@/components/WeeklyBriefing";
+import RobsPicks from "@/components/RobsPicks";
+import { pacificToday } from "@/lib/date-windows";
 import ShareSiteLink from "@/components/ShareSiteLink";
 import Link from "next/link";
 
@@ -130,6 +132,10 @@ export default async function Home() {
               weekendLabel={weekendBriefing.label}
             />
           )}
+          {/* Curation layer: the one-thing spotlight + up to 4 picks. Server-
+           * rendered from the same fetched rows; renders nothing when no
+           * upcoming robs_pick exists. */}
+          <RobsPicks events={events} todayIso={pacificToday().iso} />
           {/* Project to the lightweight list shape (trimmed description, no
            * scrape-only columns): the page ships the whole upcoming set into the
            * client for filtering, so only what a card renders should cross the
