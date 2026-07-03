@@ -27,6 +27,7 @@ import ShareButton from "@/components/ShareButton";
 import ShareTracker from "@/components/ShareTracker";
 import OutboundTracker from "@/components/OutboundTracker";
 import SuggestFixInline from "@/components/SuggestFixInline";
+import BrowseSimilar from "@/components/BrowseSimilar";
 import type { Hwy4Venue } from "@/lib/types";
 import PatrioticEventDetail from "@/components/PatrioticEventDetail";
 import PatrioticBanner from "@/components/PatrioticBanner";
@@ -582,6 +583,8 @@ export default async function EventPage({ params }: PageProps) {
         </section>
 
         {venue && <VenueInfo venue={venue} />}
+
+        <BrowseSimilar event={event} />
       </article>
 
       <div className="mt-10 border-t border-stone-light/30 pt-6">

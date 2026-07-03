@@ -5,6 +5,7 @@
 import { SITE_URL } from "@/lib/constants";
 import { getPublishedTownSlugs } from "@/app/towns/town-content";
 import { TEMPORAL_CONFIG } from "@/lib/date-windows";
+import { INTENT_CONFIG } from "@/lib/intent-pages";
 import { renderUrlset, type SitemapUrl } from "@/lib/sitemap";
 
 export const revalidate = 3600;
@@ -27,6 +28,14 @@ export async function GET() {
       lastmod: todayISO,
       changefreq: "weekly" as const,
       priority: 0.9,
+    })),
+    // Intent landing pages (visitor search: "things to do near …"). Live
+    // calendar data, so a daily lastmod is honest.
+    ...Object.values(INTENT_CONFIG).map((cfg) => ({
+      loc: `${SITE_URL}${cfg.path}`,
+      lastmod: todayISO,
+      changefreq: "daily" as const,
+      priority: 0.8,
     })),
     { loc: `${SITE_URL}/about`, changefreq: "monthly", priority: 0.7 },
     { loc: `${SITE_URL}/about/rob-gabel`, changefreq: "yearly", priority: 0.5 },
