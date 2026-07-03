@@ -10,12 +10,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // countPending returns 0 (never throws) on a misconfigured env so the whole
   // admin tree can't 500 over a missing badge. (Venues' missing blurb/address
   // count is badged on the Pulse "Venues" tab, fetched inside PulseTabs.)
-  const [verification, submissions, posters, feedback, proposedActions] = await Promise.all([
+  const [verification, submissions, posters, feedback, proposedActions, proposedTasks] = await Promise.all([
     countPending("hwy4_events", "verification_status", "needs_verification"),
     countPending("event_submissions", "status", "pending"),
     countPending("poster_submissions", "status", "pending"),
     countPending("event_feedback", "status", "pending"),
     countPending("agent_actions", "status", "proposed"),
+    // Roadmap badge: agent-filed tickets awaiting human promotion (Phase 1 has no
+    // agent inflow yet, so this reads 0 until the cockpit proposers land in Phase 2).
+    countPending("hwy4_tasks", "status", "proposed"),
   ]);
   const inbox = verification + submissions + posters + feedback + proposedActions;
 
@@ -30,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     >
       <div style={{ maxWidth: ADMIN_MAX_WIDTH, margin: "0 auto 20px" }}>
         <Suspense fallback={<div style={{ height: 36 }} />}>
-          <AdminNav badges={{ inbox }} />
+          <AdminNav badges={{ inbox, roadmap: proposedTasks }} />
         </Suspense>
       </div>
       {children}

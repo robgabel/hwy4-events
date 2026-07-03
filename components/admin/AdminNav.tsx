@@ -6,6 +6,7 @@ import { INK, MUTED, ACCENT, BORDER } from "@/components/admin/ui";
 
 export type NavBadges = {
   inbox: number;
+  roadmap: number;
 };
 
 // Slimmed admin nav: four destinations. "Act" (the Inbox — the unified review
@@ -74,6 +75,9 @@ export default function AdminNav({ badges }: { badges: NavBadges }) {
       </NavLink>
       <NavLink href="/admin/newsletter" active={startsWith("/admin/newsletter")}>
         Newsletter
+      </NavLink>
+      <NavLink href="/admin/roadmap" active={startsWith("/admin/roadmap")} badge={badges.roadmap}>
+        Roadmap
       </NavLink>
     </nav>
   );
