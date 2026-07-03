@@ -12,9 +12,36 @@ import {
   generateDedupKey,
 } from "../../lib/event-identity.js";
 import { sanitizeDescription } from "../../lib/description-quality.js";
+import { classifyNotabilityDetailed } from "../../lib/notability.js";
 
 // Re-exported for scripts that import these from this module.
 export { normalizeName, generateDedupKey };
+
+// Notability is written ONLY for these two operational venues — the ones that
+// publish their own restaurant/lodge calendar, so their "Thursday Night Dinner"
+// / "Sunday Brunch" rows leak in as fake events. Every other source leaves
+// is_routine = false. See lib/notability.ts + the read-time filters.
+const OPERATIONAL_ORG_SLUGS = new Set(["sequoia-woods", "moose-lodge"]);
+
+/**
+ * Stamp `is_routine` / `routine_reason` onto an event before it's keyed/written.
+ * No-op (writes false) for non-operational sources, so a global read-time filter
+ * stays correct while only these two venues can ever set the flag. If a scraper
+ * already classified the event (e.g. a future floor+LLM pass), its value stands.
+ */
+function resolveNotability(event: ExtractedEvent, orgSlug: string): void {
+  if (event.is_routine !== undefined) return;
+  if (!OPERATIONAL_ORG_SLUGS.has(orgSlug)) {
+    event.is_routine = false;
+    event.routine_reason = null;
+    return;
+  }
+  const d = classifyNotabilityDetailed(`${event.name} ${event.description ?? ""}`, {
+    category: event.category,
+  });
+  event.is_routine = d.isRoutine;
+  event.routine_reason = d.isRoutine ? d.rule : null;
+}
 
 /**
  * Emit one structured log line per data-quality failure at write time.
@@ -235,6 +262,7 @@ type MergeableRow = MatchableRow & {
   price_locked?: boolean | null;
   description_locked?: boolean | null;
   poster_locked?: boolean | null;
+  notability_locked?: boolean | null;
 };
 
 const isArtifactVenue = (v: string | null | undefined): boolean =>
@@ -279,6 +307,10 @@ function buildStrongMatchUpdate(
     event_url: pick(event.event_url, existing.event_url),
     address: pick(event.address, existing.address),
     ...(existing.poster_locked ? {} : { image_url: pick(event.image_url ?? null, existing.image_url) }),
+    // Notability is human-set when locked — otherwise write the freshly-resolved flag.
+    ...(existing.notability_locked
+      ? {}
+      : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),
     // Self-heal category, upgrade-only (never write "other" over a specific type).
     ...(event.category && event.category !== "other"
       ? { category: event.category }
@@ -291,7 +323,7 @@ function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked";
+  "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked";
 
 type ExistingRow = {
   id: string;
@@ -312,6 +344,8 @@ type ExistingRow = {
   price_locked?: boolean | null;
   description_locked?: boolean | null;
   poster_locked?: boolean | null;
+  is_routine?: boolean | null;
+  notability_locked?: boolean | null;
 };
 
 function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
@@ -330,7 +364,10 @@ function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
     // counts as a change (so a stuck "other" row updates). Never a downgrade —
     // the update payload itself refuses to write "other" over a specific value.
     (event.category !== "other" && existing.category !== event.category) ||
-    (!existing.poster_locked && existing.image_url !== (event.image_url ?? null))
+    (!existing.poster_locked && existing.image_url !== (event.image_url ?? null)) ||
+    // Re-classification: a routine flag that flips counts as a change (unless the
+    // human locked it). Keeps a re-scrape self-healing.
+    (!existing.notability_locked && !!existing.is_routine !== !!(event.is_routine ?? false))
   );
 }
 
@@ -360,6 +397,7 @@ async function upsertEventsBatched(
   const prepared = events.map((event) => {
     normalizeEventTimes(event);
     normalizeEventLocation(event);
+    resolveNotability(event, orgSlug);
     emitDataQualitySignal(event, sourceName, orgSlug);
     return {
       event,
@@ -424,7 +462,7 @@ async function upsertEventsBatched(
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
       .select(
-        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked"
+        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked, notability_locked"
       )
       .in("date", unmatchedDates);
 
@@ -504,6 +542,9 @@ async function upsertEventsBatched(
               address: event.address,
               town: event.town,
               ...(existing.poster_locked ? {} : { image_url: event.image_url ?? null }),
+              ...(existing.notability_locked
+                ? {}
+                : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),
               dedup_key: dedupKey,
               ...(event.source_event_id && { source_event_id: event.source_event_id }),
               last_scraped_at: now,
@@ -575,6 +616,8 @@ async function upsertEventsBatched(
       org_slug: orgSlug,
       dedup_key: dedupKey,
       source_event_id: event.source_event_id ?? null,
+      is_routine: event.is_routine ?? false,
+      routine_reason: event.routine_reason ?? null,
       last_scraped_at: now,
     }));
     const { data, error } = await supabaseAdmin
@@ -617,6 +660,7 @@ export async function upsertEvents(
     // from the venue registry where possible.
     normalizeEventTimes(event);
     normalizeEventLocation(event);
+    resolveNotability(event, orgSlug);
 
     // Last-chance data-quality signal: anything still generic / address-less
     // at this point is a real gap the matcher + registry couldn't close.
@@ -643,13 +687,15 @@ export async function upsertEvents(
       price_locked?: boolean | null;
       description_locked?: boolean | null;
       poster_locked?: boolean | null;
+      is_routine?: boolean | null;
+      notability_locked?: boolean | null;
     } | null = null;
 
     if (event.source_event_id) {
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked"
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -660,7 +706,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked"
+          "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -683,7 +729,8 @@ export async function upsertEvents(
         existing.address !== event.address ||
         existing.town !== event.town ||
         (event.category !== "other" && existing.category !== event.category) ||
-        (!existing.poster_locked && existing.image_url !== (event.image_url ?? null));
+        (!existing.poster_locked && existing.image_url !== (event.image_url ?? null)) ||
+        (!existing.notability_locked && !!existing.is_routine !== !!(event.is_routine ?? false));
 
       if (changed) {
         await supabaseAdmin
@@ -708,6 +755,9 @@ export async function upsertEvents(
               ? { category: event.category }
               : {}),
             ...(existing.poster_locked ? {} : { image_url: event.image_url ?? null }),
+            ...(existing.notability_locked
+              ? {}
+              : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),
             // Keep dedup_key in sync with the (possibly-changed) town so
             // dedup_key lookups still find this row if source_event_id
             // ever disappears.
@@ -743,7 +793,7 @@ export async function upsertEvents(
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked"
+          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked, notability_locked"
         )
         .eq("date", event.date);
 
@@ -789,6 +839,8 @@ export async function upsertEvents(
         org_slug: orgSlug,
         dedup_key: dedupKey,
         source_event_id: event.source_event_id ?? null,
+        is_routine: event.is_routine ?? false,
+        routine_reason: event.routine_reason ?? null,
         last_scraped_at: now,
       });
 

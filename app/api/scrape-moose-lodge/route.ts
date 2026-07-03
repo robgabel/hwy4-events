@@ -2,6 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
+import {
+  classifyNotabilityDetailed,
+  reconcileNotability,
+} from "@/lib/notability";
 
 /**
  * Scrape the Ebbetts Pass Moose Lodge monthly calendar PDF and upsert events
@@ -107,6 +111,9 @@ interface ExtractedEvent {
   price: string | null;
   visibility: "public" | "private";
   category: string;
+  // True => a routine lodge operation (weekly dinner, "open for a holiday"),
+  // hidden from the public site. The floor reconciles a whiffed LLM value.
+  is_routine?: boolean;
 }
 
 const VALID_CATEGORIES = [
@@ -215,7 +222,8 @@ Extract every distinct event into a JSON array. Each object:
   "description": "Brief details (menu, cooking crew, special notes). No em dashes — use commas, periods, or semicolons.",
   "price": "$XX" or null,
   "visibility": "public" or "private",
-  "category": "live_music|festival|civic|hike_walk|kids|wine|games|other"
+  "category": "live_music|festival|civic|hike_walk|kids|wine|games|other",
+  "is_routine": true or false
 }
 
 CATEGORY (describe WHAT the event is, not where it happens):
@@ -228,6 +236,11 @@ CATEGORY (describe WHAT the event is, not where it happens):
 VISIBILITY CLASSIFICATION:
 - "public" = open to the general public, large community events, or matches the public events page below
 - "private" = members-only: board / officer / chapter meetings, bingo, queen of hearts, regular weekly dinners, workdays, karaoke, moose legion meetings
+
+IS_ROUTINE (is this a real event, or just the lodge doing its normal thing?):
+- true = mundane, standing operations that aren't events: regular weekly/monthly dinners, breakfasts, brunches, "Prime Rib Night", "Taco Tuesday", deli/daily specials, and "open for [holiday]" meal service. Being open to serve a meal is NOT an event.
+- false = a genuine event with a hook: live music / bands / karaoke, the car show, crab feeds, themed one-offs, guest performers, fundraisers with entertainment. A special dinner WITH live music is false (an event), even though it involves a meal.
+- If unsure, use false.
 
 Here is text from the lodge's PUBLIC events page (events listed here are confirmed public):
 ---
@@ -414,6 +427,14 @@ export async function GET(request: Request) {
 
       const dedupKey = generateDedupKey(evt.name, evt.date, LODGE.town);
 
+      // Notability: the deterministic floor reconciles a whiffed LLM verdict
+      // (an authoritative floor beats the model; a soft one defers to it).
+      const floor = classifyNotabilityDetailed(
+        `${evt.name} ${evt.description ?? ""}`,
+        { category: normalizeCategory(evt.category) },
+      );
+      const isRoutine = reconcileNotability(floor, evt.is_routine);
+
       const row = {
         name: evt.name.trim(),
         description: evt.description || null,
@@ -432,6 +453,8 @@ export async function GET(request: Request) {
         visibility: vis,
         org_slug: LODGE.orgSlug,
         dedup_key: dedupKey,
+        is_routine: isRoutine,
+        routine_reason: isRoutine ? (floor.rule ?? "llm") : null,
         last_scraped_at: new Date().toISOString(),
         is_weekly: false,
         robs_pick: false,
@@ -440,14 +463,23 @@ export async function GET(request: Request) {
       // Upsert: existing dedup_key → update; otherwise insert
       const { data: existing } = await supabase
         .from("hwy4_events")
-        .select("id")
+        .select("id, notability_locked")
         .eq("dedup_key", dedupKey)
         .maybeSingle();
 
       if (existing) {
+        // A human-locked notability must survive the re-scrape.
+        const updateRow = existing.notability_locked
+          ? (() => {
+              const { is_routine, routine_reason, ...rest } = row;
+              void is_routine;
+              void routine_reason;
+              return rest;
+            })()
+          : row;
         const { error } = await supabase
           .from("hwy4_events")
-          .update(row)
+          .update(updateRow)
           .eq("id", existing.id);
         if (error) {
           errors.push({ name: evt.name, reason: `update: ${error.message}` });

@@ -69,6 +69,7 @@ async function getWeekendEvents() {
     .gte("date", friday)
     .lte("date", sunday)
     .neq("status", "cancelled")
+    .neq("is_routine", true)
     .order("date", { ascending: true })
     .order("start_time", { ascending: true });
 

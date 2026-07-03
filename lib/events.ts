@@ -34,7 +34,8 @@ export const findEventBySlug = cache(
         .from("hwy4_events")
         .select(EVENT_COLUMNS)
         .eq("date", dateMatch[0])
-        .neq("status", "cancelled");
+        .neq("status", "cancelled")
+        .neq("is_routine", true);
       const hit = matchSlug(data as unknown as Hwy4Event[] | null, slug);
       if (hit) return gateEventDescription(hit);
     }
@@ -49,6 +50,7 @@ export const findEventBySlug = cache(
         .select(EVENT_COLUMNS)
         .gte("date", today)
         .neq("status", "cancelled")
+        .neq("is_routine", true)
         .order("date", { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
       if (error || !data) break;
@@ -150,6 +152,7 @@ export const findEventFallback = cache(
         .select(EVENT_COLUMNS)
         .eq("id", slug)
         .neq("status", "cancelled")
+        .neq("is_routine", true)
         .maybeSingle();
       return data ? gateEventDescription(data as unknown as Hwy4Event) : null;
     }
@@ -160,7 +163,8 @@ export const findEventFallback = cache(
       .from("hwy4_events")
       .select(EVENT_COLUMNS)
       .eq("date", date)
-      .neq("status", "cancelled");
+      .neq("status", "cancelled")
+      .neq("is_routine", true);
     const hit = pickFallbackEvent(
       (data as unknown as Hwy4Event[] | null) ?? [],
       slug

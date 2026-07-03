@@ -131,6 +131,11 @@ create table hwy4_events (
   price_locked boolean not null default false,
   description_locked boolean not null default false,
   poster_locked boolean not null default false,
+  -- Notability: hide a venue's mundane recurring operations (see lib/notability.ts).
+  -- Only the sequoia-woods / moose-lodge writers set is_routine.
+  is_routine boolean not null default false,
+  notability_locked boolean not null default false,
+  routine_reason text,
   pick_reason text,
   constraint fk_hwy4_events_org foreign key (org_slug) references hwy4_orgs(slug)
 );
@@ -146,6 +151,8 @@ create index idx_hwy4_events_org_slug on hwy4_events (org_slug);
 create index hwy4_events_venue_key_idx on hwy4_events (venue_key);
 create index idx_hwy4_events_is_weekly on hwy4_events (is_weekly)
   where is_weekly = true;
+create index idx_hwy4_events_is_routine on hwy4_events (is_routine)
+  where is_routine = true;
 create index idx_hwy4_events_needs_verification
   on hwy4_events (verification_checked_at desc)
   where verification_status = 'needs_verification';

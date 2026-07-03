@@ -51,6 +51,14 @@ export interface Hwy4Event {
   description_locked?: boolean;
   // When true, image_url is human-pinned; no scraper may overwrite it.
   poster_locked?: boolean;
+  // True => a mundane recurring venue operation (Thursday dinner, Sunday brunch),
+  // hidden from every public list. Only the sequoia-woods/moose-lodge write paths
+  // set it. See lib/notability.ts + the read-time filters in lib/events-data.ts.
+  is_routine?: boolean;
+  // When true, is_routine is human-set; no scraper may overwrite it.
+  notability_locked?: boolean;
+  // Which notability rule (or "llm") fired — audit only, never rendered.
+  routine_reason?: string | null;
   event_url: string | null;
   source_url: string;
   source_name: string | null;
