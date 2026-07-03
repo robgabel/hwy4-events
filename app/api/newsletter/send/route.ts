@@ -14,15 +14,15 @@ import {
   buildSubject,
   todayISO,
 } from "@/lib/newsletter";
+import { sendCampaign } from "@/lib/newsletter-send";
 
-// Bumped from 120s: the per-message retry pass and the POST recovery loop pace
-// their sends, so a larger subscriber list needs more wall-clock headroom.
+// Bumped from 120s: the retry pass paces its sends, so a larger subscriber
+// list needs more wall-clock headroom.
 export const maxDuration = 300;
 
-// Delay between individual (per-message) Resend sends — used by the retry pass and
-// the POST recovery loop, and as a small gap between batch requests. ~2/sec keeps
-// us clear of Resend's 5 req/sec limit. (A no-delay per-message burst is what
-// tripped the rate limit on 2026-06-18; the weekly GET send now uses the Batch API.)
+// Pause between Batch API requests (and pacing for the retry pass) inside
+// sendCampaign. ~2/sec keeps us clear of Resend's 5 req/sec limit. (A no-delay
+// per-message burst is what tripped the rate limit on 2026-06-18.)
 const SEND_THROTTLE_MS = 500;
 
 // Thursday cron. The weekly newsletter now ships on a 24h veto window: the day
@@ -171,18 +171,8 @@ export async function GET(request: Request) {
     const subject = draft.subject;
     const resend = new Resend(resendApiKey);
 
-    let sent = 0;
-    const failures: { email: string; error: string }[] = [];
-
-    // CRITICAL: resend.batch.send() / resend.emails.send() return { data, error }
-    // and do NOT throw on API errors (rate-limit, validation, suppression). The
-    // original code did `await send(); sent++` without inspecting the result, so a
-    // rejected send was silently counted as delivered — on 2026-06-04 that delivered
-    // 30/72, and on 2026-06-18 reported 81 sent when only 56 went out (rate-limited
-    // away, incl. the owner's own address). Every result is now inspected.
-
     // Build one message per subscriber, each with its own personalized unsubscribe
-    // link. Shared by the batch primary pass and the per-message retry below.
+    // link.
     const buildMessage = (sub: { email: string; unsubscribe_token: string }) => {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
       return {
@@ -196,79 +186,45 @@ export async function GET(request: Request) {
       };
     };
 
-    const sendOne = async (sub: {
-      email: string;
-      unsubscribe_token: string;
-    }): Promise<{ ok: boolean; error?: string }> => {
-      try {
-        const { data, error } = await resend.emails.send(buildMessage(sub));
-        if (error) return { ok: false, error: error.message || "resend error" };
-        if (!data?.id) return { ok: false, error: "resend returned no id" };
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : "unknown error" };
-      }
-    };
+    // The ledger-backed idempotent send (lib/newsletter-send.ts + the
+    // newsletter_send_log table): every recipient the ledger already records as
+    // `sent` for this draft is skipped, each batch is pre-marked `pending` and
+    // then upserted with its per-recipient Resend result, and a throttled retry
+    // pass covers transient failures. Net effect: re-running this route while
+    // the draft is still `pending` RESUMES the send instead of re-blasting —
+    // that is the recovery path for a crash/timeout mid-send. (The pre-ledger
+    // history: 2026-06-04 delivered 30/72 and 2026-06-18 recorded 81/56 because
+    // Resend results went uninspected and a burst tripped the rate limit;
+    // results are now inspected per-recipient AND remembered durably.)
+    const summary = await sendCampaign({
+      supabase,
+      resend,
+      campaignId: draft.id,
+      subscribers,
+      buildMessage,
+      throttleMs: SEND_THROTTLE_MS,
+    });
+    // The honest delivered count across all runs of this campaign (ledger), not
+    // just this invocation.
+    const sent = summary.deliveredTotal;
 
-    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    // Primary pass — Resend's Batch API sends up to 100 messages per request, so the
-    // whole list ships in a handful of HTTP calls instead of one-per-recipient. That
-    // is structurally immune to the 5 req/sec rate limit (what dropped recipients on
-    // 2026-06-04 and 2026-06-18) and far faster than pacing each send. batch.send
-    // still returns { data, error } and does NOT throw, so we inspect it; a whole-
-    // batch rejection drops every recipient in that chunk to the retry pass below.
-    const BATCH_SIZE = 100;
-    const outbound = subscribers.map((sub) => ({ sub, msg: buildMessage(sub) }));
-    for (let i = 0; i < outbound.length; i += BATCH_SIZE) {
-      const chunk = outbound.slice(i, i + BATCH_SIZE);
-      try {
-        const { data, error } = await resend.batch.send(chunk.map((m) => m.msg));
-        if (error) {
-          for (const m of chunk) {
-            failures.push({ email: m.sub.email, error: error.message || "batch rejected" });
-          }
-        } else {
-          // Batch is all-or-nothing per request; on success Resend returns one id
-          // per message.
-          const ids = (data as { data?: unknown[] } | null)?.data;
-          sent += Array.isArray(ids) ? ids.length : chunk.length;
-        }
-      } catch (err) {
-        for (const m of chunk) {
-          failures.push({
-            email: m.sub.email,
-            error: err instanceof Error ? err.message : "unknown error",
-          });
-        }
-      }
-      if (i + BATCH_SIZE < outbound.length) await sleep(SEND_THROTTLE_MS);
-    }
-
-    // Retry pass — per-message and throttled, for anyone a batch rejection dropped.
-    // Most such failures are transient 429s; back off, try once more, then give up.
-    if (failures.length > 0) {
-      const toRetry = failures.splice(0, failures.length);
-      for (const f of toRetry) {
-        const sub = subscribers.find((s) => s.email === f.email);
-        if (!sub) continue;
-        await sleep(1200);
-        const res = await sendOne(sub);
-        if (res.ok) sent++;
-        else failures.push({ email: sub.email, error: res.error || "unknown" });
-      }
-    }
-
-    // Never fail silently again: if anyone was dropped (or the delivered count came
-    // up short of the active list), log it and shout in Slack with the addresses.
-    if (failures.length > 0 || sent < subscribers.length) {
+    // Never fail silently: if anyone failed, is stuck `pending` from a crashed
+    // run, or the ledger total still trails the active list, log + Slack it.
+    if (
+      summary.failures.length > 0 ||
+      summary.blockedPending.length > 0 ||
+      sent < subscribers.length
+    ) {
       console.error(
-        `[newsletter/send] delivered ${sent}/${subscribers.length}; ${failures.length} failed:`,
-        failures
+        `[newsletter/send] delivered ${sent}/${subscribers.length}; ` +
+          `${summary.failures.length} failed, ${summary.blockedPending.length} blocked-pending:`,
+        summary.failures,
+        summary.blockedPending
       );
       const webhook = process.env.SLACK_WEBHOOK_URL;
       if (webhook) {
-        const sample = failures.slice(0, 25).map((f) => f.email).join(", ");
+        const failSample = summary.failures.slice(0, 25).map((f) => f.email).join(", ");
+        const pendSample = summary.blockedPending.slice(0, 25).join(", ");
         try {
           await fetch(webhook, {
             method: "POST",
@@ -276,10 +232,13 @@ export async function GET(request: Request) {
             body: JSON.stringify({
               text:
                 `*⚠️ Newsletter ${today}: delivered ${sent}/${subscribers.length}*` +
-                (failures.length > 0
-                  ? `\n${failures.length} not sent: ${sample}${failures.length > 25 ? " …" : ""}`
+                (summary.failures.length > 0
+                  ? `\n${summary.failures.length} failed: ${failSample}${summary.failures.length > 25 ? " …" : ""}`
                   : "") +
-                `\nSee ${SITE_URL}/admin/newsletter.`,
+                (summary.blockedPending.length > 0
+                  ? `\n${summary.blockedPending.length} blocked as \`pending\` from a prior run (delivery unknown — check newsletter_send_log): ${pendSample}`
+                  : "") +
+                `\nRecover with POST /api/newsletter/send {"targets":[…]} — the ledger skips anyone already sent.\nSee ${SITE_URL}/admin/newsletter.`,
             }),
           });
         } catch (err) {
@@ -318,10 +277,15 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      sent,
+      sent: summary.sentNow,
+      delivered_total: sent,
       total: subscribers.length,
+      already_sent: summary.alreadySent,
+      suppressed: summary.suppressed,
+      blocked_pending:
+        summary.blockedPending.length > 0 ? summary.blockedPending : undefined,
       subject,
-      failures: failures.length > 0 ? failures : undefined,
+      failures: summary.failures.length > 0 ? summary.failures : undefined,
     });
   } catch (err) {
     console.error("Newsletter send failed:", err);
@@ -330,10 +294,10 @@ export async function GET(request: Request) {
 }
 
 // Targeted re-send of the most recent SENT issue to an explicit address list, for
-// recovering recipients a prior send dropped. Mirrors the GET send loop's
-// robustness (inspect { error }, throttle, retry) on purpose — it is a manual
-// remediation tool, deliberately separate from the unattended weekly cron send so
-// it can never blast the whole list. CRON_SECRET-gated.
+// recovering recipients a prior send dropped. Runs through the same ledger-backed
+// sendCampaign as the weekly cron (newsletter_send_log dedups, so it can never
+// double-send) and stays deliberately targets-scoped so it can never blast the
+// whole list. CRON_SECRET-gated.
 //
 //   POST /api/newsletter/send  { "targets": ["a@b.com", ...] }
 export async function POST(request: Request) {
@@ -393,54 +357,37 @@ export async function POST(request: Request) {
       slugToEventId: buildSlugToEventId(events),
     };
     const resend = new Resend(resendApiKey);
-    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-    const sendOne = async (sub: {
-      email: string;
-      unsubscribe_token: string;
-    }): Promise<{ ok: boolean; error?: string }> => {
+    const buildMessage = (sub: { email: string; unsubscribe_token: string }) => {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
-      try {
-        const { data, error } = await resend.emails.send({
-          from: `${SITE_NAME} <newsletter@hwy4events.com>`,
-          replyTo: "robgabel@gmail.com",
-          to: sub.email,
-          subject: draft.subject as string,
-          html: buildEmailHtml(
-            robNoteResult.body,
-            draft.content as string,
-            unsubscribeUrl,
-            tracking
-          ),
-          headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
-        });
-        if (error) return { ok: false, error: error.message || "resend error" };
-        if (!data?.id) return { ok: false, error: "resend returned no id" };
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : "unknown error" };
-      }
+      return {
+        from: `${SITE_NAME} <newsletter@hwy4events.com>`,
+        replyTo: "robgabel@gmail.com",
+        to: sub.email,
+        subject: draft.subject as string,
+        html: buildEmailHtml(
+          robNoteResult.body,
+          draft.content as string,
+          unsubscribeUrl,
+          tracking
+        ),
+        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+      };
     };
 
-    let resent = 0;
-    const failures: { email: string; error: string }[] = [];
-    for (const sub of recipients) {
-      const res = await sendOne(sub);
-      if (res.ok) resent++;
-      else failures.push({ email: sub.email, error: res.error || "unknown" });
-      await sleep(SEND_THROTTLE_MS);
-    }
-    if (failures.length > 0) {
-      const toRetry = failures.splice(0, failures.length);
-      for (const f of toRetry) {
-        const sub = recipients.find((s) => s.email === f.email);
-        if (!sub) continue;
-        await sleep(1200);
-        const res = await sendOne(sub);
-        if (res.ok) resent++;
-        else failures.push({ email: sub.email, error: res.error || "unknown" });
-      }
-    }
+    // Same ledger-backed send as the weekly cron: anyone newsletter_send_log
+    // already records as `sent` for this campaign is skipped, so a recovery
+    // can never double-send. Issues that predate the ledger have no rows and
+    // behave exactly as before (every requested active address gets the send,
+    // now recorded).
+    const summary = await sendCampaign({
+      supabase,
+      resend,
+      campaignId: draft.id as string,
+      subscribers: recipients,
+      buildMessage,
+      throttleMs: SEND_THROTTLE_MS,
+    });
 
     // Surface any requested addresses that were not active subscribers (skipped).
     const skipped = targets.filter(
@@ -453,9 +400,13 @@ export async function POST(request: Request) {
       subject: draft.subject,
       requested: targets.length,
       eligible: recipients.length,
-      resent,
+      resent: summary.sentNow,
+      already_sent: summary.alreadySent,
+      suppressed: summary.suppressed,
+      blocked_pending:
+        summary.blockedPending.length > 0 ? summary.blockedPending : undefined,
       skipped_not_active: skipped.length > 0 ? skipped : undefined,
-      failures: failures.length > 0 ? failures : undefined,
+      failures: summary.failures.length > 0 ? summary.failures : undefined,
     });
   } catch (err) {
     console.error("Newsletter re-send failed:", err);

@@ -125,7 +125,7 @@ Cash total ≈ **$50–80/mo**: not the problem. The real scaling cost is operat
 4. ~~Align `scripts/` dependency versions with root.~~ **Done 2026-07-01** — scripts `@anthropic-ai/sdk` ^0.52 → ^0.78 (matches root; 164/164 tests pass). Root's `@mendable/firecrawl-js` ^4.16 turned out to have **zero importers** and was deleted instead of aligned; scripts (the only Firecrawl consumer) stays deliberately on 1.x — a 1.x→4.x migration of six scrapers is risk with no payoff.
 
 **This month (structure):**
-5. Newsletter reconcile per the HANDOFF (ledger + batch; also the Eugene merge rehearsal).
+5. ~~Newsletter reconcile per the HANDOFF (ledger + batch; also the Eugene merge rehearsal).~~ **Done 2026-07-03** — `sendCampaign` in `lib/newsletter-send.ts` (Peter's ledger + our Batch transport), migration applied, both cron + recovery rewired, veto gate untouched. The first upstream merge from a downstream fork, proving the engine-core flow.
 6. Collapse the 4 watcher crons into one config-driven route.
 7. Move BLS + Moose Lodge scrapes into the GitHub Action orchestrator.
 8. Add `lib/tables.ts` and sweep the 335 call sites.
