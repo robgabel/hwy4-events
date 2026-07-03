@@ -180,6 +180,18 @@ export default function RootLayout({
               <Link href="/this-month" className="text-pine hover:underline">
                 This Month
               </Link>
+              <span className="mx-1.5 text-stone-light/50">·</span>
+              <Link href="/things-to-do" className="text-pine hover:underline">
+                Things To Do
+              </Link>
+              <span className="mx-1.5 text-stone-light/50">·</span>
+              <Link href="/free" className="text-pine hover:underline">
+                Free
+              </Link>
+              <span className="mx-1.5 text-stone-light/50">·</span>
+              <Link href="/date-night" className="text-pine hover:underline">
+                Date Night
+              </Link>
             </nav>
 
             {/* Town directory: only rendered for towns with published landing
