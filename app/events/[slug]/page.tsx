@@ -6,6 +6,7 @@ import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
 import { getForecast, resolveEventWeather } from "@/lib/weather";
 import { weatherQualifier } from "@/lib/weather-conditions";
+import { serializeJsonLd } from "@/lib/json-ld";
 import WeatherChip from "@/components/WeatherChip";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
@@ -182,7 +183,7 @@ function EventJsonLd({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
     />
   );
 }
