@@ -11,6 +11,7 @@ import { Hwy4Event } from "@/lib/types";
 import { generateEventSlug } from "@/lib/slugs";
 import { resolveDisplayAddress } from "@/lib/address";
 import { TownInfo } from "@/lib/towns";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 // ----- shared component -----
 
@@ -18,7 +19,7 @@ export function JsonLd({ data }: { data: object }) {
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(data) }}
     />
   );
 }

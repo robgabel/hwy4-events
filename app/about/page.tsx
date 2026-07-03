@@ -8,6 +8,7 @@ import { getPublishedTownSlugs } from "@/app/towns/town-content";
 import { getSupabase } from "@/lib/supabase";
 import FeedbackForm from "@/components/FeedbackForm";
 import NewsletterSignup from "@/components/NewsletterSignup";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 export const metadata: Metadata = {
   title: "About Hwy 4 Events",
@@ -83,7 +84,7 @@ function BreadcrumbSchema() {
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
     />
   );
 }

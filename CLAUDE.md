@@ -313,6 +313,7 @@ lib/
 - **Cursor:** Every `<button>` and clickable non-`<a>`/non-`<Link>` element MUST include `cursor-pointer` in its Tailwind classes. Tailwind v4 does not set `cursor: pointer` on buttons by default — the browser shows an arrow, which makes buttons look non-interactive.
 - **Client bundle weight:** Avoid importing heavy libraries (date-fns, lodash, etc.) in `"use client"` components. Use `lib/date-utils.ts` for date formatting on the client. Heavy/non-critical components should be lazy-loaded with `next/dynamic`.
 - **Hydration budget:** Links and navigation must work within 1–2s on mobile. Keep the client component tree shallow; prefer server components with small client wrappers (see `WeeklyBriefing.tsx` + `WeeklyBriefingTabs.tsx` pattern).
+- **JSON-LD sinks:** every `<script type="application/ld+json">` must serialize via `serializeJsonLd()` in [lib/json-ld.ts](lib/json-ld.ts), never raw `JSON.stringify` into `dangerouslySetInnerHTML`. `JSON.stringify` leaves `<` unescaped, so scraped text containing `</script>` becomes stored XSS (Eugene fork security review 2026-07-02, `docs/research/2026-07-02-peter-security-handoff.md`). Locked by `scripts/test/json-ld.test.ts`.
 
 ## Content & Brand Rules
 
