@@ -10,6 +10,7 @@ import {
   type DigestContext,
   type Vitals,
 } from "@/lib/agent/types";
+import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
 
 // Agent Cockpit Stage 0 reasoner. Reads the day's signals (verification queue,
 // pending submissions, recent auto-merges, latest SEO capture), asks Sonnet to
@@ -232,22 +233,39 @@ export async function GET(request: Request) {
       }
     }
 
-    const { error } = await supabase.from("agent_runs").insert({
-      status,
-      model: MODEL,
-      input_tokens: usage.input,
-      output_tokens: usage.output,
-      context_in: context,
-      digest,
-    });
+    const { data: runRow, error } = await supabase
+      .from("agent_runs")
+      .insert({
+        status,
+        model: MODEL,
+        input_tokens: usage.input,
+        output_tokens: usage.output,
+        context_in: context,
+        digest,
+      })
+      .select("id")
+      .single();
     if (error) throw error;
 
     await postSlack(digest);
+
+    // Phase 2 (PRD-roadmap-board.md): file `proposed` roadmap tickets for any
+    // concrete dev work the digest implies. Best-effort — never fails the digest.
+    let proposed_tasks = 0;
+    if (status === "ok") {
+      const r = await proposeTasksFromDigest(supabase, {
+        source: "chief_of_staff",
+        runId: (runRow as { id?: string } | null)?.id ?? null,
+        digest,
+      });
+      proposed_tasks = r.proposed;
+    }
 
     return NextResponse.json({
       ok: true,
       status,
       needs_you: digest.needs_you.length,
+      proposed_tasks,
       summary: digest.summary,
     });
   } catch (err) {

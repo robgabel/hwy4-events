@@ -1,6 +1,6 @@
 # PRD — Roadmap Board (agent-fed kanban inside `/admin`)
 
-**Status:** Phase 1 built (2026-07-03). Phases 2–4 pending.
+**Status:** Phase 1 built + live in prod (2026-07-03). Phase 2 built (2026-07-04). Phases 3–4 pending.
 **Origin:** Rob wants to manage hwy4-events with a kanban + tickets — AI agents (growth/QA) file and prioritize work, Rob adds incremental features, **Claude Code implements them and updates the ticket**, and the `/admin` panel shows the cards and links over.
 **Decision (build, not buy):** a lightweight kanban on **Supabase** (`hwy4_tasks`), rendered natively in `/admin/roadmap`, linked to **GitHub PRs** (not GitHub Issues). See "Why build" below.
 **Confirmed by Rob:** table name `hwy4_tasks`, kept **separate** from PAOS `paos_improvements`; the build command is **repo-local** (`.claude/commands/build-ticket.md`); autonomy is **auto-draft, you approve** (Claude Code opens a draft PR, never merges).
@@ -53,7 +53,7 @@ RLS on, **service-role only** (no public read), mirroring `agent_runs` / `site_e
 
 | Source | Wiring | Phase |
 |---|---|---|
-| **Existing cockpit agents** (`chief_of_staff`, `growth_memo`) | Extend each reasoner to `INSERT` a `status='proposed'` row (`linked_run_id`, `ai_rationale`) when its digest surfaces an actionable build/bug item — not only a Slack ping. New `lib/agent/propose-tasks.ts`, same shape as `propose-link-gaps.ts`. | 2 |
+| **Existing cockpit agents** (`chief_of_staff`, `growth_memo`) | ✅ **Built 2026-07-04.** After each reasoner writes its `agent_runs` digest, `lib/agent/propose-tasks.ts` asks Sonnet to extract any concrete *dev* work (a build/bug/data fix — **not** an ops task like "review a submission" or "send an email"), dedups it against open + recently-dismissed tickets by normalized title (so a daily reasoner can't refile), and `INSERT`s `status='proposed'` rows (`source`, `linked_run_id`, `ai_rationale`). Best-effort (never fails the digest), ≤2/run. Pure core locked by `scripts/test/propose-tasks.test.ts`. | ✅ 2 |
 | **New QA agent** | New cron `/api/agent/qa-audit` (sibling to `/api/check-events`): UX/data/link/regression checks against the live site → `type='bug'` `proposed` tickets, deduped on a content key. `lib/agent/qa-audit.ts`. | 3 |
 | **Rob, manually** | "+ New ticket" form on the board. The day-to-day surface. | ✅ 1 |
 | **Claude Code / Cowork sessions** | A session files a follow-up ticket for out-of-scope work (same instinct as `spawn_task` chips), via the Supabase MCP `INSERT`. | ✅ 1 |
@@ -75,7 +75,7 @@ No agent ever merges.
 - **New nav tab — "Roadmap"** ([components/admin/AdminNav.tsx](components/admin/AdminNav.tsx)): `Inbox · Pulse · Analytics · Newsletter · Roadmap`. Badge = count of `proposed` tickets (agent inflow; reads 0 until Phase 2).
 - **`/admin/roadmap`** ([app/admin/roadmap/page.tsx](app/admin/roadmap/page.tsx) + [actions.ts](app/admin/roadmap/actions.ts)) — a horizontally-scrolling kanban (columns `Proposed · Backlog · Ready · In progress · In review · Done`) using the shared admin kit ([components/admin/ui.tsx](components/admin/ui.tsx)). Cards show `ref` · priority/type chips · title · body preview · source · age · PR link. Controls: move (status `<select>`), set priority, inline edit; `proposed` cards get Promote / Dismiss. A "+ New ticket" form up top.
 - **MVP omits drag-and-drop** (status `<select>` + priority as the ordering lever) to respect the client-bundle rule. Add DnD later, lazy-loaded, only if the board earns it (PRD §10).
-- **Inbox integration deferred to Phase 2** — the `task` row type joins the unified Inbox list + badge once agents actually file `proposed` tickets (otherwise it's an always-empty source). The dedicated Roadmap tab is the Phase 1 surface.
+- **Inbox integration (Phase 2, built)** — a `task` row type (teal "Ticket" chip → `/admin/roadmap`) joins the unified Inbox list + `CountStrip`, and proposed tickets are added to the Inbox badge total ([app/admin/inbox/page.tsx](app/admin/inbox/page.tsx) + [app/admin/layout.tsx](app/admin/layout.tsx)). A proposed ticket shows in both the Inbox (the front door) and the Roadmap tab's own badge — one thing that needs you, reachable from either.
 - All behind the existing Basic-Auth `middleware.ts`; reuses `getAdminClient` + `flash`/`field` helpers.
 
 ## 8. Reuse map (don't reinvent)
@@ -94,7 +94,7 @@ No agent ever merges.
 ## 9. Phasing
 
 - **Phase 1 — MVP ✅ (2026-07-03).** Migration + `/admin/roadmap` board + `actions.ts` (manual CRUD + move/priority/promote/dismiss) + Roadmap nav tab & badge + `/build-ticket` repo-local command. Rob files tickets; Claude Code implements + sets `in_review`. *No merge webhook yet — Rob eyeballs the board.*
-- **Phase 2 — agent inflow.** Wire `chief_of_staff` + `growth_memo` to file `proposed` tickets; join the Inbox list + badge; the promote/dismiss gate already exists.
+- **Phase 2 — agent inflow. ✅ (2026-07-04).** `lib/agent/propose-tasks.ts` wired into the `chief_of_staff` (daily) + `growth_memo` (weekly) routes; the `task` row type joined the Inbox list + badge. No new cron — it piggybacks the existing reasoner crons. The promote/dismiss gate already existed. Locked by `scripts/test/propose-tasks.test.ts`.
 - **Phase 3 — QA agent + auto-Done.** `/api/agent/qa-audit` files bug tickets; `task-done.yml` Action + `/api/tasks/pr-merged` closes tickets on merge.
 - **Phase 4 — optional graduation.** `agent_policy`-gated auto-draft for low-risk types. Human still merges.
 

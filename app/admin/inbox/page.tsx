@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 // not built until the per-source pages prove insufficient. Ranking is recency for
 // now; stakes-weighted ordering is the next increment, on purpose.
 
-type Kind = "submission" | "poster" | "verify" | "feedback" | "action";
+type Kind = "submission" | "poster" | "verify" | "feedback" | "action" | "task";
 type Tone = "ok" | "warn" | "bad" | "muted";
 
 type InboxItem = {
@@ -47,6 +47,7 @@ const KIND: Record<Kind, { label: string; accent: string; href: string }> = {
   verify: { label: "Verify", accent: ACCENT, href: "/admin/verification" },
   feedback: { label: "Feedback", accent: INK, href: "/admin/feedback" },
   action: { label: "Action", accent: "#3730a3", href: "/admin/actions" },
+  task: { label: "Ticket", accent: "#0f766e", href: "/admin/roadmap" },
 };
 
 // Triage verdict → human label + tone. Only submissions carry one.
@@ -122,12 +123,21 @@ type ActionRow = {
   rationale: string | null;
   created_at: string;
 };
+type TaskRowLite = {
+  id: string;
+  ref: string;
+  title: string;
+  type: string;
+  source: string | null;
+  ai_rationale: { rationale?: string } | null;
+  created_at: string;
+};
 
 async function loadInbox(): Promise<InboxItem[]> {
   const supabase = getAdminClientOrNull();
   if (!supabase) return [];
 
-  const [subs, posters, verifies, feedback, actions] = await Promise.all([
+  const [subs, posters, verifies, feedback, actions, tasks] = await Promise.all([
     supabase
       .from("event_submissions")
       .select("id, event_name, event_date, town, source, created_at, ai_verdict, ai_headline")
@@ -151,6 +161,11 @@ async function loadInbox(): Promise<InboxItem[]> {
     supabase
       .from("agent_actions")
       .select("id, type, title, rationale, created_at")
+      .eq("status", "proposed")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("hwy4_tasks")
+      .select("id, ref, title, type, source, ai_rationale, created_at")
       .eq("status", "proposed")
       .order("created_at", { ascending: false }),
   ]);
@@ -247,6 +262,25 @@ async function loadInbox(): Promise<InboxItem[]> {
     });
   }
 
+  // Agent-filed roadmap tickets awaiting human promotion (Phase 2). Link into the
+  // Roadmap board's Proposed column.
+  for (const t of (tasks.data as TaskRowLite[] | null) ?? []) {
+    items.push({
+      id: `task-${t.id}`,
+      kind: "task",
+      chip: KIND.task.label,
+      title: `${t.ref} · ${t.title}`,
+      summary: clip(t.ai_rationale?.rationale) ?? `Proposed ${t.type} ticket`,
+      meta: [t.type, t.source && t.source !== "manual" ? `via ${t.source.replace(/_/g, " ")}` : null]
+        .filter(Boolean)
+        .join(" · ") || null,
+      when: t.created_at,
+      href: KIND.task.href,
+      badge: "proposed",
+      badgeTone: "muted",
+    });
+  }
+
   // Recency order (newest first). Stakes-weighted ranking is the next increment.
   items.sort((a, b) => (b.when ?? "").localeCompare(a.when ?? ""));
   return items;
@@ -259,7 +293,7 @@ export default async function InboxPage() {
       acc[it.kind]++;
       return acc;
     },
-    { submission: 0, poster: 0, verify: 0, feedback: 0, action: 0 }
+    { submission: 0, poster: 0, verify: 0, feedback: 0, action: 0, task: 0 }
   );
 
   return (
@@ -298,6 +332,7 @@ function CountStrip({ counts, total }: { counts: Record<Kind, number>; total: nu
     { label: "to verify", n: counts.verify, accent: KIND.verify.accent },
     { label: "feedback", n: counts.feedback, accent: KIND.feedback.accent },
     { label: counts.action === 1 ? "proposal" : "proposals", n: counts.action, accent: KIND.action.accent },
+    { label: counts.task === 1 ? "ticket" : "tickets", n: counts.task, accent: KIND.task.accent },
   ].filter((p) => p.n > 0);
 
   return (
