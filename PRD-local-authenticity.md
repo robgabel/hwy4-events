@@ -1,5 +1,7 @@
 # PRD: Make Hwy4Events Feel Like a Local Built It
 
+> **Status (2026-07-04):** Frozen record — the direction shipped piecemeal (Millie, local design, named-entity copy), and the voice layer is now governed by content/VOICE.md + `withVoice()`; see docs/CONTENT-MAP.md.
+
 **Author:** Rob Gabel
 **Date:** 2026-03-13
 **Status:** Draft

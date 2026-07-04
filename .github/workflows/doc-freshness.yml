@@ -1,0 +1,70 @@
+name: Doc Freshness
+
+# Drift catcher for the living-docs registry (CLAUDE.md § Living Documents Registry).
+# The AEO/SEO monthly log (AEO-SEO-MEASUREMENT.md Part 4) is a manual ritual with a
+# Slack reminder on the 1st — and a reminder proved insufficient (June 2026 was never
+# logged). This is the binding trigger: past the 7th of the month, if the file has no
+# `### YYYY-MM` entry for the current month, file a GitHub issue (deduped against any
+# open `doc-freshness` issue). Read-only against the docs; it never edits anything.
+
+on:
+  schedule:
+    - cron: '0 15 * * 1' # Mondays 15:00 UTC
+  workflow_dispatch: # Manual trigger
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check AEO monthly log entry
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const now = new Date();
+            if (now.getUTCDate() <= 7) {
+              core.info('Grace window (1st-7th): the monthly audit is not due yet.');
+              return;
+            }
+            const ym = now.toISOString().slice(0, 7); // YYYY-MM
+            const text = fs.readFileSync('AEO-SEO-MEASUREMENT.md', 'utf8');
+            const entries = [...text.matchAll(/^### (\d{4}-\d{2})\s*$/gm)].map((m) => m[1]);
+            if (entries.includes(ym)) {
+              core.info(`Found the ${ym} entry — the log is current.`);
+              return;
+            }
+            const title = `AEO/SEO monthly log missing: ${ym}`;
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'doc-freshness',
+            });
+            if (open.data.some((i) => i.title === title)) {
+              core.info('Issue already open — not duplicating.');
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: [
+                `The monthly AEO/SEO audit for **${ym}** has not been logged in`,
+                '`AEO-SEO-MEASUREMENT.md` (Part 4).',
+                '',
+                'Run the 13-query prompt audit + the GSC scoreboard (the Slack reminder from',
+                '`/api/aeo-audit-reminder` on the 1st carries the checklist), then add the',
+                `\`### ${ym}\` entry using the Part 4 template. Logging the entry is what`,
+                'clears this — the check runs weekly until the entry exists.',
+              ].join('\n'),
+              labels: ['doc-freshness', 'automated'],
+            });
+            core.info('Filed a doc-freshness issue.');

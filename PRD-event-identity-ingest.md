@@ -1,5 +1,7 @@
 # PRD: Self-Healing Event Identity — Make Duplicates Structurally Impossible at Rest
 
+> **Status (2026-07-04):** Shipped — reconcile live in execute mode since 2026-07-01. Open item: retire read-time `dedupeEvents` after 4 clean weeks (earliest ~2026-07-29; see CLAUDE.md § Deduplication).
+
 > Move 3 of the dedup work. Moves 1+2 (single-source the matcher + lock it with tests) shipped in `lib/event-identity.ts` + `scripts/test/event-identity.test.ts`. This is the deferred prize: **one event, one row** — so read-time collapse stops being a permanent per-render crutch.
 >
 > Musk-algorithm framing: **make the requirement less dumb → delete → simplify → accelerate → automate.** Moves 1+2 did delete/simplify on the *matcher*. This move does step 1 on the *system*: stop asking every writer to be smart; make the data self-heal so the duplicate can't survive at rest.

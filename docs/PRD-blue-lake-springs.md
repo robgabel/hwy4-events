@@ -1,5 +1,7 @@
 # PRD: Blue Lake Springs — Members-Only Events & Club Integration
 
+> **Status (2026-07-04):** Frozen record — shipped (Vision scraping cron `/api/scrape-bls`, the `club` category, Members & Guests badge). Current behavior lives in CLAUDE.md.
+
 **Author:** Rob Gabel + Claude
 **Date:** 2026-03-23
 **Status:** Draft

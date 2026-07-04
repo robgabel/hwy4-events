@@ -28,6 +28,9 @@ const TOWN_CONFIGS: TownLocationConfig[] = [
   // 1. Open https://www.facebook.com/events/ in a browser
   // 2. Search for the town name and click the location filter
   // 3. Copy the URL — slug is the "/explore/<slug>/" segment, ID is the numeric tail
+  // 4. Insert the matching org row so events FK-resolve:
+  //    INSERT INTO hwy4_orgs (slug, display_name) VALUES ('fb-discover-<town>', 'Facebook Events (<Town>)');
+  // 5. Verify before committing: cd scripts && npm run scrape -- --source hwy4-fb-discover
   // { orgSlug: "fb-discover-murphys",     label: "Murphys",     defaultTown: "Murphys",     exploreSlug: "murphys-ca",     locationId: "..." },
   // { orgSlug: "fb-discover-angels-camp", label: "Angels Camp", defaultTown: "Angels Camp", exploreSlug: "angels-camp-ca", locationId: "..." },
   // { orgSlug: "fb-discover-bear-valley", label: "Bear Valley", defaultTown: "Bear Valley", exploreSlug: "bear-valley-ca", locationId: "..." },

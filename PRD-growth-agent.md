@@ -1,5 +1,7 @@
 # PRD: Growth Agent — Repointing the Business Manager from Ops Triage to Demand Generation
 
+> **Status (2026-07-04):** Live roadmap — Phases 1/3/4 built (weekly memo, experiment memory, `src` attribution). Pending: GSC month-over-month (needs `GOOGLE_SEARCH_CONSOLE_SA_JSON`).
+
 > The Agent Cockpit (`PRD-agent-cockpit.md`) gave us a daily "chief of staff" that reads system state and flags what needs a human. It works, but its lens is **inward**: verification queue, submissions, merges. None of that moves the number the business actually lives on. This PRD adds a **second reasoner with a growth lens** — a weekly Head-of-Growth memo that optimizes for Weekly Returning Residents, the newsletter, and the organizer network, and **drafts the one move worth making that week**. Same read-only cockpit discipline; different question.
 
 ## The shift

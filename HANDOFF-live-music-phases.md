@@ -1,5 +1,7 @@
 # HANDOFF — Live Music Experience, Phases 1–3
 
+> **Status (2026-07-04):** Live execution guide — Phase 1A (venue-gap proposer) + Phase 1B (blurb-draft queue) executed 2026-06-22; Phases 2–3 remain.
+
 **For:** a fresh session picking up the live-music work after Phase 0 shipped (2026-06-21).
 **Read first:** [`PRD-live-music-experience.md`](PRD-live-music-experience.md) — the *why*, the persona map, and the **Tier A/B/C accuracy contract** that governs every "fill the blank." This doc is the *how*: concrete steps, files, patterns to clone, and guardrails so you can execute without re-deriving anything.
 

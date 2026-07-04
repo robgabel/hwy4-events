@@ -1,5 +1,7 @@
 # PRD: About Page Redesign
 
+> **Status (2026-07-04):** Record — the About page has since been rebuilt and revised repeatedly (voice pass, FAQ rewrite, JSON-LD hardening); treat app/about/page.tsx as truth and this doc as the original design intent.
+
 **Author:** Rob Gabel + Claude
 **Date:** 2026-03-22
 **Status:** Draft
