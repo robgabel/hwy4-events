@@ -98,3 +98,17 @@ export const MOVABLE_STATUSES: TaskStatus[] = [
 export function priorityRank(p: TaskPriority): number {
   return TASK_PRIORITIES.indexOf(p);
 }
+
+// Parse the ticket refs a PR closes out of its body. Claude Code writes
+// "Builds HWY-42" (per .claude/commands/build-ticket.md); the task-done.yml Action
+// POSTs the merged PR body to /api/tasks/pr-merged, which calls this to flip those
+// tickets to done. Matches "build"/"builds" + a HWY-N ref, case-insensitive, and
+// returns unique upper-cased refs. Pure — locked by scripts/test/pr-refs.test.ts.
+export function parseBuiltRefs(body: string | null | undefined): string[] {
+  if (!body) return [];
+  const out = new Set<string>();
+  const re = /\bbuilds?\s+(HWY-\d+)\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) out.add(m[1].toUpperCase());
+  return [...out];
+}

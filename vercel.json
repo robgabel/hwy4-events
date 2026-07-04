@@ -95,6 +95,10 @@
     {
       "path": "/api/agent/chief-of-staff",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/agent/qa-audit",
+      "schedule": "0 20 * * 0"
     }
   ]
 }

@@ -1,0 +1,38 @@
+name: Roadmap ticket auto-done
+
+# When a PR that "Builds HWY-N" merges to main, tell the Roadmap board so it flips
+# the ticket to Done (PRD-roadmap-board.md Phase 3). Closes the board loop: no
+# manual status change after a merge. Needs the CRON_SECRET repo Actions secret
+# (same value as the Vercel env); without it the job no-ops gracefully.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  close-ticket:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close linked ticket(s)
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET not set — skipping (add it in repo Settings → Secrets → Actions)."
+            exit 0
+          fi
+          # Build JSON with jq so an arbitrary PR body can't break the shell.
+          payload=$(jq -n \
+            --arg body "$PR_BODY" \
+            --argjson n "${PR_NUMBER:-null}" \
+            --arg url "$PR_URL" \
+            '{body: $body, pr_number: $n, pr_url: $url}')
+          curl -sS -X POST "https://hwy4events.com/api/tasks/pr-merged" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$payload"
