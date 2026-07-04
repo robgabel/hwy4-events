@@ -1,5 +1,7 @@
 # PRD: Bear Valley Events Integration
 
+> **Status (2026-07-04):** Frozen record — the resort-source scraping pipeline shipped; Bear Valley coverage has since evolved (incl. the 2026 Music Festival umbrella seed; see CLAUDE.md).
+
 ## Overview
 
 Add Bear Valley Mountain Resort as an event source for Hwy 4 Events, ingesting events from [bearvalley.com/events-activities](https://www.bearvalley.com/events-activities) via automated web crawling. This is the first resort-category source and establishes the general-purpose scraping pipeline that will also serve future sources (Moose Lodge, Sequoia Woods, etc.).

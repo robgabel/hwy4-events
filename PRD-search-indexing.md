@@ -1,5 +1,7 @@
 # PRD: Search Indexing — Win Crawl Budget on a Young Domain
 
+> **Status (2026-07-04):** Partially shipped — Tier 0 + Tier 1 live 2026-06-03 (sitemap index + crawl-trimmed events sitemap). Tiers 2–4 remain unbuilt roadmap; check CLAUDE.md before acting.
+
 > Google Search Console reports **"Discovered – currently not indexed"** on the bulk of the site's URLs. That status is not a content rejection — Google has *not crawled* the pages. It's a trust/priority signal: a ~1-week-old, zero-authority domain was handed **1,023 event URLs** (plus towns/temporal/static), ~70% of which are near-duplicate recurring instances stretching to **2028**. The crawler notes they exist and declines to spend its small budget proving they're worth indexing.
 >
 > The fix is not a toggle. **Stop asking Google to index 1,000+ thin recurring pages. Make it trivial to index the ~50–100 pages that drive traffic, prove the domain's value, and let the long tail index over time.** Same arc as the dedup and link-resolution work: render-time first, single source of truth, lock with a test, ship reversibly.

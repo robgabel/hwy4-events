@@ -5,12 +5,18 @@ flows from source to screen. Built for the Voice & Content Quality System work
 (`PRD: Hwy4Events Voice & Content Quality System`, June 9 2026). Read this before
 touching any content surface.
 
-> **TL;DR of the architecture:** there is **no shared prompt/voice module** — every
-> generator carries its own inline system prompt. There is **no description sanitizer**
-> and **no quality gate**; scraped junk and LLM stubs render as-is. Town/FAQ/About copy
-> is **static source code**, not a CMS. Quality work therefore splits cleanly: render-time
-> guards (pure functions in `lib/`, no DB mutation, self-healing) for the live fixes, and
-> a single `content/VOICE.md` injected into each inline prompt for the voice work.
+> **Status (2026-07-04, living doc):** the June 9 survey below has been partially
+> overtaken by the work it planned — reverify a claim against code before leaning on it.
+> Shipped since: **WS-1/2** the description sanitizer + quality gate
+> (`lib/description-quality.ts`, see implementation notes at the bottom), **WS-3** the
+> shared voice module (`content/VOICE.md` mirrored in `lib/voice.ts`, injected via
+> `withVoice()` into briefing, weekend briefing, newsletter, extract, venue blurbs, town
+> content), **WS-4** voice lint (`scripts/voice-lint.ts`, hard-fails in `npm test`, warns
+> in CI), **WS-5** the FAQ rewrite, **WS-6** briefing shape rotation
+> (`content/briefing-shapes.md`). **Still true:** Town/FAQ/About copy is **static source
+> code**, not a CMS; the agent prompts in `lib/agent/*` and the vision/PDF scrapers
+> (`scrape-bls`, `scrape-moose-lodge`) still carry inline prompts. **Not built:** WS-7
+> (`pick_reason`) and the `needs_review`/`confidence` columns.
 
 ---
 
@@ -26,10 +32,11 @@ touching any content surface.
   a banned-phrase list post-generation and refuses to emit violations.
 - **Distinctive-string anchors** (per §3): `"burned me more than once"`, `"Worth knowing"`,
   `"if this gets too busy"` all resolve here.
-- **Known fingerprints in this file:**
-  - `town-content.ts:241` — **the live editorial leak** `(Rob: if this gets too busy, this bullet comes off the site.)` on the Arnold / Sequoia Woods bullet. (WS-1.1)
-  - `town-content.ts:125` and `:293` — `"punches above its weight"` ×2 (Murphys-area; Avery/Day-O). (WS-4)
-  - `town-content.ts:479` `"legitimate dinner option"` and `:515` `"legitimate dinner stop"` — duplicate construction on Copperopolis. (WS-4)
+- **Known fingerprints in this file (re-checked 2026-07-04):**
+  - ~~the live editorial leak at `town-content.ts:241`~~ — **fixed** (WS-1.1; string gone).
+  - ~~`"punches above its weight"` ×2~~ — **fixed** (0 occurrences remain).
+  - `"legitimate dinner …"` on Copperopolis — **1 of 2 remains**; the duplicate
+    construction itself is resolved. (WS-4)
 
 ## 2. Daily "Millie" briefing
 
@@ -77,9 +84,10 @@ There is **no column tagging which shape produced a given row** (source type is 
   [`scripts/lib/dedup.ts`](../scripts/lib/dedup.ts); the three raw-insert writers
   (scrape-bls, scrape-moose-lodge, bistro-espresso) bypass it. A **render-time** guard is
   therefore the only way to cover every path at once without touching six writers.
-- **Sanitization today:** only HTML-tag/entity stripping per-scraper. **No calendar-widget
-  junk removal** anywhere (the "Add to calendar / Google Calendar / iCalendar / Outlook"
-  text on the Boyle MacDonald "Live Music Upstairs" row is unfiltered). (WS-1.2)
+- **Sanitization (updated 2026-07-04):** per-scraper HTML-tag/entity stripping **plus**
+  the WS-1/2 gate — write-time sanitize in `scripts/lib/dedup.ts::normalizeEventLocation`
+  and the render-time `lib/description-quality.ts` pipeline at both read loaders (details
+  in the implementation notes at the bottom). Calendar-widget junk no longer renders.
 - **Quality-relevant existing columns:** `description_locked` (mig `20260530b`),
   `price_locked`, `cost_tier`, `price_extracted_at`, `needs_verification`,
   `verification_status`. **No `needs_review`, no `confidence`, no `pick_reason`** columns
@@ -100,12 +108,11 @@ There is **no column tagging which shape produced a given row** (source type is 
 
 ## 6. Meta descriptions
 
-- **Event detail:** [`app/events/[slug]/page.tsx`](../app/events/[slug]/page.tsx) ~L123–125
-  builds OG + Twitter description with `event.description.slice(0, 155)` — **naive, cuts
-  mid-word** (the `for purc` / `find a w` SERP fingerprints). (WS-2 fix: truncate at last
-  sentence ≤155, else last word + `…`.)
-- **Briefing Article schema:** `components/WeeklyBriefing.tsx` ~L107 `briefing.slice(0, 280)`
-  — same mid-word risk.
+- **Event detail:** [`app/events/[slug]/page.tsx`](../app/events/[slug]/page.tsx) builds
+  OG + Twitter description via `truncateMeta` — **fixed by WS-2** (the old naive
+  `slice(0, 155)` mid-word cuts, the `for purc` / `find a w` SERP fingerprints, are gone).
+- **Briefing Article schema:** `components/WeeklyBriefing.tsx` — wired through the same
+  WS-2 gate (**fixed**).
 - Town meta descriptions come from `town-content.ts` `metaDescription` (authored, fine).
 - FAQ/static page metadata is hand-written in each `page.tsx`.
 
@@ -114,20 +121,21 @@ There is **no column tagging which shape produced a given row** (source type is 
 - **Static array** in [`app/faq/page.tsx`](../app/faq/page.tsx) `faqs[]` (L12–53), rendered
   as `<details>` and emitted as `FAQPage` JSON-LD (L55–75) — **answers must be updated in
   both the array and the schema, they share the same strings**.
-- **Confirmed problems:** `"numerous festivals"` (L26); `"the most complete and up-to-date
-  listing available"` (L36); `"Yes!"` opener (L31); and the **site contradiction** (L51):
-  the submit answer says "reach out through the community channels" while every page links
-  `/submit`. (WS-5)
+- **Confirmed problems — all fixed by the WS-5 rewrite** (June 2026, re-grepped
+  2026-07-04): `"numerous festivals"`, `"the most complete and up-to-date listing
+  available"`, the `"Yes!"` opener, and the submit-answer site contradiction are gone.
 
 ---
 
 ## Cross-cutting facts for implementation
 
-- **No shared prompt module.** Inline system prompts live in: `generate-briefing`,
-  `generate-weekend-briefing`, `lib/newsletter.ts` (`NEWSLETTER_SYSTEM_PROMPT`),
-  `draft-venue-blurbs.ts`, `draft-town-content.ts`, `scripts/lib/extract.ts`,
-  `scrape-bls`, `scrape-moose-lodge`, plus the agent prompts in `lib/agent/*`. WS-3 wires
-  `content/VOICE.md` into each by reference.
+- **The shared voice module exists (WS-3 shipped).** `lib/voice.ts` (`VOICE_MD` +
+  `withVoice()`, pinned to `content/VOICE.md` by `voice-md-sync.test.ts`) is injected
+  into: `generate-briefing`, `generate-weekend-briefing`, `lib/newsletter.ts`,
+  `draft-venue-blurbs.ts`, `draft-town-content.ts`, `scripts/lib/extract.ts`. **Still
+  inline:** the vision/PDF scrapers (`scrape-bls`, `scrape-moose-lodge` — each carries
+  its own no-em-dash rule) and the agent prompts in `lib/agent/*` (not public-voice
+  surfaces).
 - **Tests + CI already exist.** `scripts/package.json` → `"test": "tsx --test test/*.test.ts"`;
   tests live in `scripts/test/*.test.ts` (node:test, import `lib` via `.js` ESM specifiers,
   zero extra deps). `.github/workflows/test.yml` runs `cd scripts && npm test` on PRs

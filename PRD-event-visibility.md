@@ -1,5 +1,7 @@
 # PRD: Event Visibility & Classification
 
+> **Status (2026-07-04):** Frozen record — shipped (visibility tiers, `importance_override`, the Clubs filter are live). Current behavior lives in CLAUDE.md.
+
 ## Overview
 
 Add event visibility tiers (Public/Private) and importance scoring (Major/Minor) to Hwy 4 Events. This enables member-only events from organizations like Ebbetts Pass Moose Lodge to coexist alongside the public event listing, while also surfacing the most notable public events.

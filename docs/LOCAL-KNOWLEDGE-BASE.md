@@ -4,6 +4,13 @@ Comprehensive hyperlocal knowledge for the Highway 4 corridor in Calaveras and A
 
 *Last fact-checked: 2026-05-25. All web sources in the Source column were accessed on that date unless otherwise noted. Cells marked `[unverified]` are claims we could not confirm from public sources — keep but treat as soft.*
 
+> **Direction of authority (2026-07-04):** for venue facts a human has approved at
+> `/admin/venues`, the Supabase **`local_facts`** table is authoritative and grows
+> automatically (see CLAUDE.md § Venue Info); this markdown is the narrative/draft layer
+> and is not auto-updated. On conflict, `local_facts` wins. Either way this file is a
+> **draft input, never a verified source** — verify cadence/hours claims before they
+> reach public copy.
+
 ---
 
 ## Table of Contents

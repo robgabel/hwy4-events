@@ -1,5 +1,7 @@
 # PRD: Cloudflare Analytics Read API
 
+> **Status (2026-07-04):** Frozen record — Phases 1–3 shipped 2026-06-03 (read client, nightly `analytics_daily` snapshot, `/admin/analytics` Growth tab). Current behavior lives in CLAUDE.md (cron table + env vars).
+
 **Status:** Shipped 2026-06-03. Phases 1–3 live in production — read path (`/api/analytics`), nightly persistence (`/api/snapshot-analytics` → `analytics_daily`, 30-day history backfilled), and the admin **Growth tab** (`/admin/analytics`) surfacing traffic + answer-engine (AEO) referral counts. Remaining: fold GSC/search into the Growth tab once `seo_snapshots` has data.
 **Created:** 2026-06-01
 **Owner:** Rob

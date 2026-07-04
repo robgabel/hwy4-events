@@ -1,5 +1,7 @@
 # PRD: Agent Cockpit — A Supervised Business-Manager Layer Over the Existing Automation
 
+> **Status (2026-07-04):** Live roadmap — Stages 0–2 built (digest, submission triage, action queue, auto-runner; `agent_policy.auto_execute` still false for all types). Remaining: FB-group + AEO collectors. Current behavior lives in CLAUDE.md.
+
 > The data layer already runs itself: ~13 crons scrape, dedup, price, verify, brief, and sync with no human. What is still 100% manual is the *decision* layer — reading the Slack alerts, working the `/admin/verification` queue, approving community submissions, adding `hwy4_orgs` rows, flipping gates, locking stale fields. This PRD adds a **reasoning layer** that proposes those decisions and a **cockpit** to approve them, then graduates trusted decisions to autonomous, **one action type at a time**.
 >
 > Framing (the one this codebase already lives by): **dry-run → canary → reversible → live.** `reconcile-dupes` shipped report-only, earned trust over a clean streak, then flipped behind `RECONCILE_EXECUTE`. This is that same Responsible-Scaling arc applied to *judgment* instead of row-merges. The goal is **not** "zero person." It is **one person plus an agent fleet, where the human owns every irreversible and outward-facing call.**

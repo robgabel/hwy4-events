@@ -1,5 +1,7 @@
 # PRD — Live Music Experience
 
+> **Status (2026-07-04):** Live roadmap — Phases 0/1A/1B shipped (venues registered, venue-gap proposer, blurb-draft queue). Phases 2–3 remain; execution guide: HANDOFF-live-music-phases.md.
+
 **Status:** Phase 0 shipped 2026-06-21 · Phases 1–3 roadmap
 **Origin:** `/brain shiva-rajaraman` session (2026-06-21), prompted by venues (Indian Rock, Camp Connell) "lacking venue details."
 

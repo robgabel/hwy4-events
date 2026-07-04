@@ -1,5 +1,7 @@
 # PRD — Event Poster Loop
 
+> **Status (2026-07-04):** Partially shipped — Phase 1 poster generator + detail-page rebuild + share attribution (2026-06-03) and the organizer poster-swap loop (2026-06-04) are live. Remaining roadmap: real QR encoder, full 8-category motif set, download-click attribution.
+
 **Status:** Phase 1 + generator (2026-06-03) and the organizer poster-swap / claim-upload (§10, 2026-06-04) shipped — see Implementation status below.
 **Owner:** Rob
 **Origin:** `/brain scott-belsky` working session + `/predict` cascade, 2026-06-02.

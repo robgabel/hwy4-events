@@ -4,11 +4,12 @@ How to measure whether the site is winning in search (SEO) and in AI answer engi
 (AEO) without paying for tooling. Companion to [PLAN-seo-aeo.md](PLAN-seo-aeo.md),
 which covers the build. This doc is about the scoreboard, not the build.
 
-**Status of the build (2026-05-28):** the SEO foundation is already live. `app/robots.ts`,
-`app/sitemap.ts` (static pages + published towns + all upcoming events), JSON-LD across
-every page type (`lib/schema.tsx`), `metadataBase`, OG images, and Cloudflare Web
-Analytics (`NEXT_PUBLIC_CF_BEACON_TOKEN`) are all shipped. What is missing is
-*measurement*. That is what this doc sets up.
+**Status of the build (2026-05-28; sitemap note updated 2026-07-04):** the SEO foundation
+is live. `app/robots.ts`, the sitemap (since 2026-06-03 a `<sitemapindex>` over
+`sitemap-core.xml` + a crawl-trimmed `sitemap-events.xml` — see PRD-search-indexing.md),
+JSON-LD across every page type (`lib/schema.tsx`), `metadataBase`, OG images, and
+Cloudflare Web Analytics (`NEXT_PUBLIC_CF_BEACON_TOKEN`) are all shipped. What was
+missing was *measurement*. That is what this doc sets up.
 
 ---
 
@@ -188,6 +189,13 @@ citation accuracy, and logs results in the Part 4 template. Smoke-test anytime:
 curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/aeo-audit-reminder
 ```
 
+**Enforcement (added 2026-07-04):** the reminder alone proved insufficient (June 2026 was
+never logged). The **doc-freshness** GitHub Action
+([.github/workflows/doc-freshness.yml](.github/workflows/doc-freshness.yml), Mondays)
+greps this file for a `### YYYY-MM` entry matching the current month and files a GitHub
+issue if it is missing after the 7th — a binding trigger, not a reminder. Clear it by
+logging the entry, not by closing the issue.
+
 ---
 
 ## Open items
@@ -196,4 +204,6 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/aeo-audi
 - [x] Confirm Cloudflare Web Analytics is recording (2026-05-28 — live, site created 2026-05-26)
 - [x] Monthly prompt-audit reminder built (`/api/aeo-audit-reminder`, cron `0 16 1 * *`, 2026-05-28)
 - [x] Confirmed `SLACK_WEBHOOK_URL` posts to #hwy4 (smoke-tested 2026-05-28, message delivered)
-- [ ] First monthly log entry after GSC has ~2 weeks of data (~mid-June 2026)
+- [ ] First monthly log entry — the planned ~mid-June 2026 entry was missed; the
+  doc-freshness workflow now files a GitHub issue any month whose entry is missing after
+  the 7th. July's entry clears it.

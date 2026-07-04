@@ -1,5 +1,7 @@
 # PRD: Email-to-Event Ingestion
 
+> **Status (2026-07-04):** Built, dormant — code + migration shipped June 2026; goes live at Phase 4 (create the `.resend.app` inbound address + webhook, set `RESEND_INBOUND_WEBHOOK_SECRET` + `INBOUND_EMAIL_ALLOWLIST`, live test).
+
 **Status:** Built 2026-06 as a thin **front door** on top of the shipped Agent Cockpit Stage 1 submission engine. Phase 4 (Resend go-live) pending.
 
 ## Problem

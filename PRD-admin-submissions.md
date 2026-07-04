@@ -1,5 +1,7 @@
 # PRD: Community Submissions Review — Act on Them Inside `/admin`
 
+> **Status (2026-07-04):** Frozen record — built + deployed 2026-06-03. The page has since gained agent triage verdicts, one-click merge, and reply drafts; current behavior lives in CLAUDE.md § Architecture.
+
 > Neighbors submit events at `/submit`; they land in `event_submissions` as `pending`, and then nothing happens. There is no UI to act on them. The chief-of-staff digest now *surfaces* them ("2 pending community submissions"), but you cannot *do* anything from the cockpit, so they rot, one was dated the same day it finally got noticed. This builds the missing surface: an `/admin/submissions` page to **complete, publish, or dismiss** each submission, reusing the verification admin pattern and the one dedup-key definition.
 >
 > This is the **human-first half of the agent cockpit's Stage 1** (`PRD-agent-cockpit.md`). The review queue exists for a person first; later the agent *proposes* `publish_community_submission` / `flag_spam_submission` into this same surface, and a human still clicks Publish. Build the cockpit, then let the agent drive it.

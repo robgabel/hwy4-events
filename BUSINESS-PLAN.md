@@ -1,6 +1,6 @@
 # Hwy4Events — Business Plan
 
-*Last revised: 2026-06-08. Lens: Gokul Rajaram (8 Moats, behavior-change outcomes, golden-channel, niche-domination then concentric expansion, platform-architecture-at-founding, value-delivery-precedes-monetization).*
+*Last revised: 2026-06-08 (strategy); status figures refreshed 2026-07-04 (§2, §12). Maintenance is trigger-bound: refresh on a traction-gate crossing (§9), any monetization/port decision, or quarterly — see CLAUDE.md § Living Documents Registry. Lens: Gokul Rajaram (8 Moats, behavior-change outcomes, golden-channel, niche-domination then concentric expansion, platform-architecture-at-founding, value-delivery-precedes-monetization).*
 
 > **Thesis:** Hwy4Events is not an events listing. It is a **hyperlocal demand-generation engine** whose job is to route visitor attention into a struggling rural economy and help local businesses. Calaveras is the **beachhead to dominate**. The system underneath (scrape, dedupe, identity, poster, newsletter, AEO, venue graph) is a **portable platform**. The proven Calaveras playbook then ports, in concentric circles, to a market where ARPU actually exists (30A Florida or Los Gatos), and *that* port is the monetization.
 
@@ -23,18 +23,18 @@ These are not in tension. Goal 2 (locals) seeds the corpus that powers Goal 1 (v
 
 ---
 
-## 2. Current state, in numbers (2026-06-08)
+## 2. Current state, in numbers (refreshed 2026-07-04)
 
 | Signal | Now | Read |
 |---|---|---|
-| Upcoming public events | **1,008** across 9 towns (1,490 all-time) | Near-total corridor coverage. The completeness moat. |
-| Supply graph | 36 orgs, 50 venues, 27 sources, 43 community-sourced | The seed side. Hard to rebuild, easy to let rot. |
-| Newsletter | **77 confirmed subs** (76 in last 30d), 1 issue sent | Brand-new. The retention product, barely exercised. |
-| Traffic | ~1,290 pageviews / 30d; **876 in the last 7d** | A LinkedIn-driven spike. Baseline ~40/day. We do not yet know how much is visitor vs local. |
-| Submissions | 15, all approved | The local seed loop works, but thin. |
-| Machinery | dedupe/identity engine, triage agent, poster loop, AEO, analytics, newsletter gate, venue facts | The real asset, and the thing that ports. Mostly unattended. |
+| Upcoming public events | **884** across the 9-town corridor (1,721 all-time) | Near-total coverage. Down from June's 1,008 headline because the corpus got *cleaner*, not thinner: routine venue operations are now hidden (`is_routine`) and the reconcile engine merges duplicates at rest. |
+| Supply graph | 44 orgs, 64 venues, 27 sources, 47 community-sourced | The seed side keeps compounding (was 36 / 50 / 27 / 43 in June). Hard to rebuild, easy to let rot. |
+| Newsletter | **85 confirmed subs**, 5 issues sent | The retention product is now a weekly ritual: Wed draft → human veto window → Thu ledger-backed send (re-blast structurally impossible since 2026-07-03). |
+| Traffic | 4,611 pageviews / 30d (~154/day); 1,909 in the last 7d | Baseline ~3-4x the June read (~40/day), without a LinkedIn spike in the window. Visitor-vs-local is now measurable (Gate 0). |
+| Submissions | 20 total, 0 pending | The seed loop works and the triage agent keeps the queue drained. Still thin. |
+| Machinery | dedupe/identity + reconcile, triage agent, poster loop, AEO, analytics, newsletter gate + send ledger, venue facts + blurb/address draft queues, growth memo, intent pages | The real asset, and the thing that ports. Mostly unattended. |
 
-**The biggest measurement gap:** we cannot currently distinguish *visitor* traffic from *local* traffic, and we do not track *business referral* clicks. Both goals (economy, ego) are invisible until we instrument them. That is move #1 (§15).
+**The June measurement gap is closed:** Gate 0 shipped 2026-06-08 (`site_events` + `/api/track`) — visitor-vs-local and business-referral clicks read out on the `/admin/analytics` Growth tab. Remaining gaps: newsletter open rate (Gate 1's threshold) is not wired into the DB, and GSC collection stays dormant until `GOOGLE_SEARCH_CONSOLE_SA_JSON` is set.
 
 ---
 
@@ -205,7 +205,7 @@ This is also the answer to "you cannot be a single-product company": the ported,
 
 Everything in Calaveras is a retention product (no profit product here, by design):
 
-- **The newsletter = the retention product.** Already exists, barely exercised. Converts a one-time visitor into a weekly habit without re-navigation. Highest-leverage existing asset. Make it reliably great before building anything new.
+- **The newsletter = the retention product.** Now exercised weekly (5 issues sent, 85 confirmed subs, veto-gated + ledger-backed sends as of 2026-07-03). Converts a one-time visitor into a weekly habit without re-navigation. Highest-leverage existing asset. Keep it reliably great before building anything new.
 - **The venue/business directory = a long-half-life local graph** that also ports.
 - **Editorial / trip-planning guides** = retention + visitor acquisition + SEO + Rob's-voice showcase, one artifact.
 

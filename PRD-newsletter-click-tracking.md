@@ -1,5 +1,7 @@
 # PRD: Newsletter Click Tracking — Which Events Get Clicked, in the Growth Tab
 
+> **Status (2026-07-04):** Frozen record — built 2026-06-03. Current behavior lives in CLAUDE.md.
+
 > The weekly newsletter links every event to its page on hwy4events.com, but we have no idea which events people actually click. The links already carry UTM tags, yet Cloudflare RUM (the Growth tab's only data source) records the **path, not the query string**, and email clicks arrive with **no referer** — so newsletter clicks are invisible and unattributable per-event. The fix: route each newsletter event link through a **first-party redirect** that logs the click, then surface per-event clicks for each send in the Growth tab. First-party, $0, own the data — the same arc as building our own Cloudflare reader instead of eyeballing a dashboard.
 
 ## Context

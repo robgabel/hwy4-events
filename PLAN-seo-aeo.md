@@ -1,5 +1,7 @@
 # SEO & AEO Improvement Plan — Hwy 4 Events
 
+> **Status (2026-07-04):** Frozen record — the build this plans shipped through May–June 2026; the "Current State" table below is a March snapshot (robots/sitemaps/JSON-LD all exist now). Scoreboard: AEO-SEO-MEASUREMENT.md; indexing strategy: PRD-search-indexing.md.
+
 ## Current State
 
 **SEO Maturity: ~40%**
