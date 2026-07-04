@@ -9,6 +9,7 @@ import {
   type GrowthContext,
   type GrowthDigest,
 } from "@/lib/agent/types";
+import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
 
 // Growth memo (PRD-growth-agent.md, Phase 1). The weekly Head-of-Growth
 // reasoner: reads the growth signal pack and writes one memo — the North Star
@@ -149,24 +150,42 @@ export async function GET(request: Request) {
     const context = await gatherGrowthContext(supabase);
     const { digest, status, failure, usage } = await generateMemo(context);
 
-    const { error } = await supabase.from("agent_runs").insert({
-      run_type: "growth_memo",
-      status,
-      model: MODEL,
-      input_tokens: usage.input,
-      output_tokens: usage.output,
-      context_in: context,
-      digest,
-      error: failure,
-    });
+    const { data: runRow, error } = await supabase
+      .from("agent_runs")
+      .insert({
+        run_type: "growth_memo",
+        status,
+        model: MODEL,
+        input_tokens: usage.input,
+        output_tokens: usage.output,
+        context_in: context,
+        digest,
+        error: failure,
+      })
+      .select("id")
+      .single();
     if (error) throw error;
 
     if (digest) await postSlack(digest);
+
+    // Phase 2 (PRD-roadmap-board.md): file `proposed` roadmap tickets for any
+    // concrete dev work the memo implies (a build, not an outreach email — those
+    // stay drafts on the memo). Best-effort — never fails the memo.
+    let proposed_tasks = 0;
+    if (digest) {
+      const r = await proposeTasksFromDigest(supabase, {
+        source: "growth_memo",
+        runId: (runRow as { id?: string } | null)?.id ?? null,
+        digest,
+      });
+      proposed_tasks = r.proposed;
+    }
 
     return NextResponse.json({
       ok: true,
       status,
       move: digest?.move_of_the_week?.title ?? null,
+      proposed_tasks,
       summary: digest?.summary ?? null,
     });
   } catch (err) {

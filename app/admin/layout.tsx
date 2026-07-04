@@ -20,7 +20,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     // agent inflow yet, so this reads 0 until the cockpit proposers land in Phase 2).
     countPending("hwy4_tasks", "status", "proposed"),
   ]);
-  const inbox = verification + submissions + posters + feedback + proposedActions;
+  // Proposed tickets show in both the unified Inbox total and the Roadmap tab's own
+  // badge (they're one thing that needs you, reachable from either surface).
+  const inbox = verification + submissions + posters + feedback + proposedActions + proposedTasks;
 
   return (
     <main
