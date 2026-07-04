@@ -1,6 +1,6 @@
 # PRD — Roadmap Board (agent-fed kanban inside `/admin`)
 
-**Status:** Phase 1 built + live in prod (2026-07-03). Phase 2 built (2026-07-04). Phases 3–4 pending.
+**Status:** Phases 1 + 2 + 3 built (2026-07-03 → 07-04), live in prod. Phase 4 pending. **One manual step for the auto-Done loop:** add `CRON_SECRET` as a GitHub Actions repo secret (see §9 Phase 3).
 **Origin:** Rob wants to manage hwy4-events with a kanban + tickets — AI agents (growth/QA) file and prioritize work, Rob adds incremental features, **Claude Code implements them and updates the ticket**, and the `/admin` panel shows the cards and links over.
 **Decision (build, not buy):** a lightweight kanban on **Supabase** (`hwy4_tasks`), rendered natively in `/admin/roadmap`, linked to **GitHub PRs** (not GitHub Issues). See "Why build" below.
 **Confirmed by Rob:** table name `hwy4_tasks`, kept **separate** from PAOS `paos_improvements`; the build command is **repo-local** (`.claude/commands/build-ticket.md`); autonomy is **auto-draft, you approve** (Claude Code opens a draft PR, never merges).
@@ -54,7 +54,7 @@ RLS on, **service-role only** (no public read), mirroring `agent_runs` / `site_e
 | Source | Wiring | Phase |
 |---|---|---|
 | **Existing cockpit agents** (`chief_of_staff`, `growth_memo`) | ✅ **Built 2026-07-04.** After each reasoner writes its `agent_runs` digest, `lib/agent/propose-tasks.ts` asks Sonnet to extract any concrete *dev* work (a build/bug/data fix — **not** an ops task like "review a submission" or "send an email"), dedups it against open + recently-dismissed tickets by normalized title (so a daily reasoner can't refile), and `INSERT`s `status='proposed'` rows (`source`, `linked_run_id`, `ai_rationale`). Best-effort (never fails the digest), ≤2/run. Pure core locked by `scripts/test/propose-tasks.test.ts`. | ✅ 2 |
-| **New QA agent** | New cron `/api/agent/qa-audit` (sibling to `/api/check-events`): UX/data/link/regression checks against the live site → `type='bug'` `proposed` tickets, deduped on a content key. `lib/agent/qa-audit.ts`. | 3 |
+| **New QA agent** | ✅ **Built 2026-07-04.** Weekly cron `/api/agent/qa-audit` (`lib/agent/qa-audit.ts`) HTTP-checks the live site's money pages + funnel + sitemaps (plus a sample of event-detail + town pages) for CODE/regression bugs — non-200s, missing `<title>`, missing JSON-LD, malformed sitemaps — and files `type='bug'` `proposed` tickets. One ticket per check-class, deduped by a stable `check_key` in `ai_rationale` (so a recurring failure never floods the board). Pure `checkPage` core locked by `scripts/test/qa-audit.test.ts`. | ✅ 3 |
 | **Rob, manually** | "+ New ticket" form on the board. The day-to-day surface. | ✅ 1 |
 | **Claude Code / Cowork sessions** | A session files a follow-up ticket for out-of-scope work (same instinct as `spawn_task` chips), via the Supabase MCP `INSERT`. | ✅ 1 |
 
@@ -66,7 +66,7 @@ No agent ever merges.
 
 1. Rob drags/moves a ticket to **Ready for dev** (the approval).
 2. **`/build-ticket HWY-N`** ([.claude/commands/build-ticket.md](.claude/commands/build-ticket.md)) → Claude Code: reads the row (Supabase MCP), `git fetch` + branches off **`origin/main`** (the stale-base lesson), implements per `body`, runs the relevant `scripts/test/*` + `voice-lint`, `gh pr create --draft` with `Builds HWY-N` in the body, then `update hwy4_tasks set status='in_review', pr_url=…, pr_number=…, branch=…`.
-3. Rob reviews + merges. **Phase 3:** a `task-done.yml` Action parses `Builds HWY-\d+` from the merged PR and POSTs `/api/tasks/pr-merged` (CRON_SECRET-gated) → row → `done`.
+3. Rob reviews + merges. **✅ Phase 3 (built):** the `.github/workflows/task-done.yml` Action fires on a merged-to-main PR and POSTs its body + number to `/api/tasks/pr-merged` (CRON_SECRET-gated), which parses `Builds HWY-N` (`parseBuiltRefs`, locked by `scripts/test/pr-refs.test.ts`) and flips those tickets → `done` (recording the PR). Needs `CRON_SECRET` as a GitHub Actions repo secret; without it the Action no-ops gracefully.
 
 **Stage 2 (Phase 4, optional):** low-risk `chore`/`bug` tickets graduate to a cron that auto-drafts the PR — gated by an `agent_policy`-style flag + `canAutoExecute` (low blast + reversible + internal + policy on). The merge stays human; outward/editorial tickets can never graduate.
 
@@ -95,15 +95,16 @@ No agent ever merges.
 
 - **Phase 1 — MVP ✅ (2026-07-03).** Migration + `/admin/roadmap` board + `actions.ts` (manual CRUD + move/priority/promote/dismiss) + Roadmap nav tab & badge + `/build-ticket` repo-local command. Rob files tickets; Claude Code implements + sets `in_review`. *No merge webhook yet — Rob eyeballs the board.*
 - **Phase 2 — agent inflow. ✅ (2026-07-04).** `lib/agent/propose-tasks.ts` wired into the `chief_of_staff` (daily) + `growth_memo` (weekly) routes; the `task` row type joined the Inbox list + badge. No new cron — it piggybacks the existing reasoner crons. The promote/dismiss gate already existed. Locked by `scripts/test/propose-tasks.test.ts`.
-- **Phase 3 — QA agent + auto-Done.** `/api/agent/qa-audit` files bug tickets; `task-done.yml` Action + `/api/tasks/pr-merged` closes tickets on merge.
+- **Phase 3 — QA agent + auto-Done. ✅ (2026-07-04).** `/api/agent/qa-audit` (weekly cron, Sun 20:00 UTC) files `type='bug'` tickets from live-site HTTP checks; `.github/workflows/task-done.yml` + `/api/tasks/pr-merged` close tickets when their PR merges. Locked by `scripts/test/qa-audit.test.ts` + `scripts/test/pr-refs.test.ts`. **Manual step:** add `CRON_SECRET` to the repo's GitHub Actions secrets (Settings → Secrets and variables → Actions) so `task-done.yml` can call the webhook. The QA cron reuses the existing Vercel `CRON_SECRET` and needs nothing new.
 - **Phase 4 — optional graduation.** `agent_policy`-gated auto-draft for low-risk types. Human still merges.
 
 ## 10. Open items (deferred, on purpose)
 
 - [ ] **Drag-and-drop** — status `<select>` is the MVP mover; add DnD (lazy-loaded) + wire the reserved `rank` column if the board earns it.
-- [ ] **Merge webhook** — `task-done.yml` + `/api/tasks/pr-merged` (Phase 3). Until then a merged ticket stays `in_review` until Rob moves it to Done.
-- [ ] **Inbox integration** — add the `task` row type to `/admin/inbox` in Phase 2 alongside agent inflow.
-- [ ] **QA agent scope** — decide the first audit set (broken links, data-quality, missing venue sections, a11y).
+- [x] **Merge webhook** — `task-done.yml` + `/api/tasks/pr-merged` shipped (Phase 3). *Needs `CRON_SECRET` added as a GitHub Actions repo secret to activate.*
+- [x] **Inbox integration** — `task` row type added to `/admin/inbox` (Phase 2).
+- [x] **QA agent scope** — first audit set = live-site HTTP health (money pages + funnel + sitemaps + sampled event/town pages): non-200s, missing `<title>`, missing JSON-LD, malformed sitemaps. Expand later (broken poster images, a11y, missing venue sections).
+- [ ] **Phase 4** — `agent_policy`-gated auto-draft for low-risk ticket types (the merge stays human).
 
 ## 11. Success criteria
 
