@@ -122,6 +122,7 @@ function buildFill(survivor: ReconcileRow, losers: ReconcileRow[]): Partial<Reco
       if (t) artistSet.add(t);
     }
     if (!survivor.description && l.description && !fill.description) fill.description = l.description;
+    if (!survivor.end_time && l.end_time && !fill.end_time) fill.end_time = l.end_time;
     if (!survivor.image_url && l.image_url && !fill.image_url) fill.image_url = l.image_url;
     if (!survivor.event_url && l.event_url && !fill.event_url) fill.event_url = l.event_url;
     if (!survivor.address && l.address && !fill.address) fill.address = l.address;
