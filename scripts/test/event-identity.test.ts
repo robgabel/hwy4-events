@@ -13,8 +13,28 @@ import {
   isSameEvent,
   isGenericTitle,
   generateDedupKey,
+  normalizeForMatch,
   type EventIdentity,
 } from "../../lib/event-identity.js";
+
+test("normalizeForMatch folds '&' and strips a leading ordinal-annual prefix", () => {
+  assert.equal(
+    normalizeForMatch("54th Annual Sierra Nevada Arts & Crafts Festival"),
+    "sierra nevada arts and crafts festival"
+  );
+  assert.equal(normalizeForMatch("Annual Fireman's Muster"), "fireman's muster");
+  // Mid-title "annual" is untouched; only the leading prefix is stripped.
+  assert.equal(normalizeForMatch("The Big Annual Bash"), "big annual bash");
+});
+
+test("generateDedupKey is NOT affected by match-time normalization (key stability)", () => {
+  // "&" vs "and" must still hash differently — the stored keys were generated
+  // with normalizeName, and changing the hash would orphan the whole catalog.
+  assert.notEqual(
+    generateDedupKey("Arts & Crafts Fair", "2026-07-04", "Arnold"),
+    generateDedupKey("Arts and Crafts Fair", "2026-07-04", "Arnold")
+  );
+});
 
 test("generateDedupKey: 32 hex chars, deterministic, normalization-invariant", () => {
   const k = generateDedupKey("Storytime with Miss Debbie", "2026-06-03", "Arnold");
@@ -196,6 +216,52 @@ const cases: { label: string; a: EventIdentity; b: EventIdentity; same: boolean 
     a: ev({ name: "Spring Peddlers Faire", date: "2026-05-02", town: "Arnold", venue_name: "Independence Hall", start_time: "09:00:00" }),
     b: ev({ name: "Spring Peddlers Faire", date: "2026-05-02", town: "Arnold", venue_name: "Unknown Venue", start_time: "09:00:00" }),
     same: true,
+  },
+  {
+    // The 2026-07-04 Arts & Crafts Festival dupe (real prod rows): a hand-entered
+    // Rob's Pick and a GoCalaveras scrape of the same festival. Two failures
+    // compounded: (1) the sources named the same lot differently, so the venue
+    // veto fired before any title check; (2) "54th Annual … Arts & Crafts" vs
+    // "… Arts and Crafts" scored ~0.7, under the 0.85 title bar. Fixed by the
+    // same-street-number address anchor + match-time "&"/ordinal normalization.
+    label: "annual-prefix + '&' title, renamed venue but same street number — same",
+    a: ev({
+      name: "Sierra Nevada Arts and Crafts Festival",
+      date: "2026-07-04",
+      town: "Arnold",
+      venue_name: "Bristol's Ranch House Cafe",
+      address: "961 Highway 4",
+      start_time: "10:00:00",
+      end_time: null,
+      description: "The 54th annual Sierra Nevada Arts & Crafts Festival takes over the park-like grounds.",
+    }),
+    b: ev({
+      name: "54th Annual Sierra Nevada Arts & Crafts Festival",
+      date: "2026-07-04",
+      town: "Arnold",
+      venue_name: "Bristols’s Cafe Parking Lot",
+      address: "961 CA-4, Arnold, CA 95223",
+      start_time: "10:00:00",
+      end_time: "17:00:00",
+      description: "We are excited to invite you to the 54th Annual Sierra Nevada Arts & Crafts Festival.",
+    }),
+    same: true,
+  },
+  {
+    // Guard: the address anchor must not weaken the veto when the street
+    // numbers genuinely differ — same generic title, two real venues.
+    label: "same 'Trivia Night' title, different venues + different street numbers — NOT same",
+    a: ev({ name: "Trivia Night", date: "2026-07-10", town: "Murphys", venue_name: "Murphys Irish Pub", address: "402 Main St, Murphys, CA", start_time: "19:00:00" }),
+    b: ev({ name: "Trivia Night", date: "2026-07-10", town: "Murphys", venue_name: "V Restaurant & Bar", address: "3009 Main St, Murphys, CA", start_time: "19:00:00" }),
+    same: false,
+  },
+  {
+    // Guard: a town-only address ("Arnold, CA") has no street number and must
+    // never anchor two different venues together.
+    label: "different venues, town-only addresses — NOT same",
+    a: ev({ name: "Trivia Night", date: "2026-07-10", town: "Murphys", venue_name: "Murphys Irish Pub", address: "Murphys, CA", start_time: "19:00:00" }),
+    b: ev({ name: "Trivia Night", date: "2026-07-10", town: "Murphys", venue_name: "V Restaurant & Bar", address: "Murphys, CA", start_time: "19:00:00" }),
+    same: false,
   },
 ];
 

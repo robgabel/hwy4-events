@@ -31,6 +31,7 @@ export interface EventIdentity {
   date?: string;
   town?: string;
   venue_name?: string | null;
+  address?: string | null;
   start_time?: string | null;
   end_time?: string | null;
   description?: string | null;
@@ -111,12 +112,26 @@ function levenshtein(a: string, b: string): number {
   return dp[n];
 }
 
+/** Comparison-only normalization on top of `normalizeName`: fold "&" to "and"
+ *  and strip a leading "Nth Annual" / "Annual" ordinal prefix, so "54th Annual
+ *  Sierra Nevada Arts & Crafts Festival" and "Sierra Nevada Arts and Crafts
+ *  Festival" read as the same title. Deliberately NOT applied in
+ *  `generateDedupKey` — changing that hash would orphan every stored dedup_key
+ *  and re-duplicate the whole catalog on the next scrape. */
+export function normalizeForMatch(name: string): string {
+  return normalizeName(name)
+    .replace(/&/g, " and ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(?:\d+(?:st|nd|rd|th)\s+)?annual\s+/, "");
+}
+
 /** Normalized-string similarity in [0,1]. Normalizes both inputs, returns 1 on
  *  exact match, a containment ratio when one is a substring of the other, else
  *  Levenshtein-based similarity. */
 export function textSimilarity(a: string, b: string): number {
-  const na = normalizeName(a);
-  const nb = normalizeName(b);
+  const na = normalizeForMatch(a);
+  const nb = normalizeForMatch(b);
   if (na === nb) return 1;
   const shorter = na.length <= nb.length ? na : nb;
   const longer = na.length > nb.length ? na : nb;
@@ -124,6 +139,26 @@ export function textSimilarity(a: string, b: string): number {
   if (longer.includes(shorter)) return shorter.length / longer.length;
   const maxLen = Math.max(na.length, nb.length);
   return 1 - levenshtein(na, nb) / maxLen;
+}
+
+/** Two rows carry addresses anchored to the same street number — "961 Highway
+ *  4" and "961 CA-4, Arnold, CA 95223" are the same lot even though the venue
+ *  *names* diverge ("Bristol's Ranch House Cafe" vs "Bristols's Cafe Parking
+ *  Lot"). Sources routinely rename the same physical place, and the venue-name
+ *  fuzzy can't see through it; the street number can. Requires ≥2 digits so a
+ *  bare "4 Main St"-style token can't anchor. Callers already require same
+ *  town + date + exact start time, so a same-number-different-street collision
+ *  would additionally need another identity signal to cause a false merge. */
+function sameStreetNumber(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const num = (addr: string | null | undefined): string => {
+    const m = (addr ?? "").trim().match(/^(\d{2,6})\b/);
+    return m ? m[1] : "";
+  };
+  const na = num(a);
+  return !!na && na === num(b);
 }
 
 function venueMatch(a: string, b: string): boolean {
@@ -246,7 +281,11 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   // removes the title/artist/description shortcuts across conflicting venues.
   const bothVenuesKnown =
     !!va && !!vb && !GENERIC_VENUES.has(va) && !GENERIC_VENUES.has(vb);
-  if (bothVenuesKnown && !venueMatch(va, vb)) return false;
+  // Venue-name fuzzy OR same-street-number address anchor: two sources naming
+  // the same lot differently ("Bristol's Ranch House Cafe" vs "Bristols's Cafe
+  // Parking Lot", both at 961 Highway 4) must not trip the veto below.
+  const venuesAgree = venueMatch(va, vb) || sameStreetNumber(a.address, b.address);
+  if (bothVenuesKnown && !venuesAgree) return false;
 
   if (a.name && b.name && textSimilarity(a.name, b.name) >= 0.85) return true;
   if (artistsOverlap(a.artists, b.artists)) return true;
@@ -257,10 +296,10 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   ) {
     return true;
   }
-  if (venueMatch(va, vb) && (isGenericTitle(a.name) || isGenericTitle(b.name))) {
+  if (venuesAgree && (isGenericTitle(a.name) || isGenericTitle(b.name))) {
     return true;
   }
-  if (venueMatch(va, vb) && actNamedInOther(a, b)) {
+  if (venuesAgree && actNamedInOther(a, b)) {
     return true;
   }
   return false;
