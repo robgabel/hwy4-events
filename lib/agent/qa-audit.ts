@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TaskPriority } from "../tasks";
+import { generateEventSlug } from "../slugs";
 
 // QA agent (PRD-roadmap-board.md Phase 3). A sibling to /api/check-events, but where
 // that audit reports DATA issues to Slack, this one HTTP-checks the live SITE for
@@ -111,17 +112,26 @@ async function dynamicTargets(supabase: SupabaseClient): Promise<QaTarget[]> {
   const today = new Date().toISOString().split("T")[0];
   const targets: QaTarget[] = [];
 
-  const { data: events } = await supabase
+  // Event-detail URLs are COMPUTED from name+date+town (there is no `slug` column —
+  // the app builds them via generateEventSlug, mirrored here). Exclude is_routine
+  // rows: those 404 on the detail page by design, so sampling one would be a false bug.
+  const { data: events, error } = await supabase
     .from("hwy4_events")
-    .select("slug")
+    .select("name, date, town")
     .gte("date", today)
     .eq("visibility", "public")
     .neq("status", "cancelled")
-    .not("slug", "is", null)
+    .neq("is_routine", true)
     .order("date", { ascending: true })
     .limit(3);
-  for (const e of (events ?? []) as { slug: string }[]) {
-    targets.push({ path: `/events/${e.slug}`, kind: "event", keyScope: "event-detail", label: "Event detail pages" });
+  if (error) console.error("[qa-audit] event sample query failed:", error.message);
+  for (const e of (events ?? []) as { name: string; date: string; town: string }[]) {
+    targets.push({
+      path: `/events/${generateEventSlug(e.name, e.date, e.town)}`,
+      kind: "event",
+      keyScope: "event-detail",
+      label: "Event detail pages",
+    });
   }
 
   // A small, stable set of town pages (town slugs don't rotate like event slugs).
