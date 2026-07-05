@@ -161,7 +161,7 @@ Aggregator scrapers (e.g., GoCalaveras) occasionally get event dates wrong. For 
 - `hwy4_orgs.match_patterns` — substrings to identify the org's events when `org_slug` points at an aggregator
 - `hwy4_events.verification_status` — `unchecked | verified | needs_verification | dismissed`
 - `/api/verify-events` runs daily; fetches each canonical URL once, asks Haiku to confirm each event's date appears on the page
-- Flagged events show a subtle "Date unconfirmed" badge on the public site and queue up at `/admin/verification` for manual review (confirm / dismiss / hide / delete)
+- Flagged events show **nothing on the public site** (the "Date unconfirmed" badge was removed 2026-07-05 — it undermined reader trust). The flag is operator-facing: `/api/verify-events` posts a Slack alert (`SLACK_WEBHOOK_URL`) listing newly flagged events, and they queue up at `/admin/verification` (and the admin Inbox) for manual review (confirm / dismiss / hide / delete)
 
 Currently enabled: **Arnold Rim Trail** (`arnoldrimtrail.org/events/`). Add more orgs by setting `canonical_url` + `canonical_check_enabled=true` (plus `match_patterns` if upstream scrapers tag the org's events with an aggregator's `org_slug`).
 

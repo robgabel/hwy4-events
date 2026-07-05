@@ -21,9 +21,11 @@ export interface EventConfidence {
   level: ConfidenceLevel;
   /**
    * Whether to render the "I couldn't confirm this, call ahead" note. Only the
-   * community-submitted-unverified case gets the note; `stale_source` already has
-   * its own "Date unconfirmed" badge from the /api/verify-events flow, and
-   * `verified` (or a normal trusted-source row) shows nothing.
+   * community-submitted-unverified case gets the note. `stale_source` shows
+   * nothing publicly (the "Date unconfirmed" badge was removed 2026-07-05 — the
+   * /api/verify-events flag is operator-facing now: Slack alert +
+   * /admin/verification), and `verified` (or a normal trusted-source row) also
+   * shows nothing.
    */
   showDisclosure: boolean;
 }

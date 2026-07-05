@@ -19,7 +19,7 @@ test("verified status wins -> no disclosure even if community-sourced", () => {
   assert.equal(c.showDisclosure, false);
 });
 
-test("needs_verification -> stale_source, no note (existing 'Date unconfirmed' badge covers it)", () => {
+test("needs_verification -> stale_source, no note (flag is operator-facing: Slack + /admin/verification)", () => {
   const c = eventConfidence({ verification_status: "needs_verification" });
   assert.equal(c.level, "stale_source");
   assert.equal(c.showDisclosure, false);

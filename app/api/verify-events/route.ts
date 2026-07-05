@@ -91,6 +91,24 @@ async function fetchCanonicalText(url: string): Promise<string | null> {
   }
 }
 
+// The public site shows NO "Date unconfirmed" badge (removed 2026-07-05 — it
+// undermined reader trust). This alert + the /admin/verification queue are the
+// only surfaces for a flag, so the Slack ping is what puts a fresh flag in
+// front of a human the same day.
+async function postToSlack(text: string): Promise<void> {
+  const webhook = process.env.SLACK_WEBHOOK_URL;
+  if (!webhook) return;
+  try {
+    await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+  } catch (err) {
+    console.error("[verify-events] Slack post failed:", err);
+  }
+}
+
 // Org matching lives in lib/event-link.ts (matchOrgForEvent) — the single
 // definition shared with the link resolver, so date-verification and link
 // resolution always agree on which org owns an event.
@@ -211,10 +229,25 @@ export async function GET(request: Request) {
     }
   }
 
+  const flagged = results.filter((r) => r.status === "needs_verification");
+  if (flagged.length > 0) {
+    const byId = new Map(pairs.map((p) => [p.ev.id, p.ev]));
+    const lines = flagged.slice(0, 10).map((r) => {
+      const ev = byId.get(r.id);
+      return ev
+        ? `• *${ev.name}* — ${ev.date}, ${ev.town}: ${r.reason}`
+        : `• ${r.id}: ${r.reason}`;
+    });
+    const more = flagged.length > 10 ? `\n…and ${flagged.length - 10} more.` : "";
+    await postToSlack(
+      `🔎 Date verification flagged ${flagged.length} event(s) against the organizer's page (not shown publicly):\n${lines.join("\n")}${more}\nReview: https://hwy4events.com/admin/verification`
+    );
+  }
+
   return NextResponse.json({
     checked: results.length,
     verified: results.filter((r) => r.status === "verified").length,
-    flagged: results.filter((r) => r.status === "needs_verification").length,
+    flagged: flagged.length,
     orgs_enabled: orgs.length,
     events_scanned: events.length,
     results,
