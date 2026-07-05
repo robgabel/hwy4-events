@@ -61,13 +61,51 @@ export function isNonCorridorVenue(venue: string | null | undefined): boolean {
 }
 
 /**
- * Drop test for the upsert path: an event is out-of-corridor if either its
- * address names a non-corridor city or its venue is a known out-of-corridor
- * venue.
+ * Detect a strong *locative* out-of-corridor signal in free-text (a
+ * description/blurb). This exists because aggregators like gocalaveras.com are
+ * county-wide, and a listing's structured venue/town/address can be flat wrong
+ * while its own prose states the truth. The real-world case that motivated it:
+ * the "Calaveras Community Band" July 4 concert whose description read "at
+ * Turner Park in San Andreas" while the scraped town/venue/address were all
+ * (wrongly) tagged Murphys, so the address-only corridor filter let it through.
+ *
+ * We deliberately require a locative phrase — "in <city>" or "<city>, CA" —
+ * rather than a bare substring, and explicitly exclude "San Andreas Fault"
+ * (a geological feature, not a location), so in-corridor trail/nature listings
+ * that merely name the fault, or a Murphys event that mentions driving over
+ * from a neighboring town, are never wrongly dropped. Low false-positive by
+ * design. Mirrors the DB-layer backstop trigger so ingest and the database
+ * agree on what "in San Andreas" means.
+ */
+export function isNonCorridorDescription(
+  text: string | null | undefined
+): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return NON_CORRIDOR_CITIES.some((city) => {
+    const esc = city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // "in <city>" or "<city>, CA/California", but never "<city> Fault".
+    const re = new RegExp(
+      `(?:\\bin\\s+${esc}|\\b${esc}\\s*,\\s*(?:ca\\b|california\\b))(?!\\s*fault)`
+    );
+    return re.test(lower);
+  });
+}
+
+/**
+ * Drop test for the upsert path: an event is out-of-corridor if its address
+ * names a non-corridor city, its venue is a known out-of-corridor venue, or its
+ * description carries a strong locative out-of-corridor signal (the last covers
+ * rows whose structured location was mislabeled to a corridor town).
  */
 export function isOutOfCorridor(
   address: string | null | undefined,
-  venueName: string | null | undefined
+  venueName: string | null | undefined,
+  description?: string | null | undefined
 ): boolean {
-  return isNonCorridorAddress(address) || isNonCorridorVenue(venueName);
+  return (
+    isNonCorridorAddress(address) ||
+    isNonCorridorVenue(venueName) ||
+    isNonCorridorDescription(description)
+  );
 }

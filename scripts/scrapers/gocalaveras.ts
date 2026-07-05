@@ -4,7 +4,7 @@ import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
-import { isNonCorridorAddress } from "../lib/corridor.js";
+import { isNonCorridorAddress, isNonCorridorDescription } from "../lib/corridor.js";
 import {
   classifyEventCategory,
   classifyEventCategoryDetailed,
@@ -297,14 +297,25 @@ async function fetchMonth(
     console.log(`  Town validation: corrected ${townFixedFromAddr} town(s) from address`);
   }
 
-  // Drop events whose address is clearly outside the Hwy 4 corridor.
-  // Without this, an LLM that guessed a corridor town for a non-corridor venue
-  // (e.g. Renegade Winery in Mokelumne Hill → labeled "Copperopolis") leaks
-  // through the HWY4_TOWNS filter in scrapeGoCalaveras().
+  // Drop events that are clearly outside the Hwy 4 corridor. Two signals:
+  //   1. Address names a non-corridor city. Catches an LLM that guessed a
+  //      corridor town for a non-corridor venue (e.g. Renegade Winery in
+  //      Mokelumne Hill → labeled "Copperopolis"), which would otherwise leak
+  //      through the HWY4_TOWNS filter in scrapeGoCalaveras().
+  //   2. Description states an out-of-corridor location ("in San Andreas")
+  //      while the structured town/venue/address were mislabeled to a corridor
+  //      town — the county-wide aggregator's own data was wrong but its prose
+  //      is right. This is the Calaveras Community Band July 4 / Turner Park,
+  //      San Andreas case: town/venue/address said Murphys, description said
+  //      San Andreas. Description-locative only, so "San Andreas Fault" trail
+  //      listings are unaffected.
   const dropped: ExtractedEvent[] = [];
   const kept: ExtractedEvent[] = [];
   for (const event of events) {
-    if (isNonCorridorAddress(event.address)) {
+    if (
+      isNonCorridorAddress(event.address) ||
+      isNonCorridorDescription(event.description)
+    ) {
       dropped.push(event);
     } else {
       kept.push(event);
@@ -313,7 +324,7 @@ async function fetchMonth(
   if (dropped.length > 0) {
     console.log(`  Dropped ${dropped.length} non-corridor event(s):`);
     for (const e of dropped) {
-      console.log(`    ✕ ${e.name} | ${e.date} | ${e.address}`);
+      console.log(`    ✕ ${e.name} | ${e.date} | ${e.town} | ${e.address}`);
     }
   }
 
