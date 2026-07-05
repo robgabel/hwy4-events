@@ -3,6 +3,8 @@ import { Hwy4Event } from "@/lib/types";
 import { isDateNightEvent, isFreeEvent } from "@/lib/intent-pages";
 import { townSlug } from "@/lib/slugs";
 import { getTownContent } from "@/app/towns/town-content";
+import { festivalGuideForEvent } from "@/lib/event-guides";
+import { pacificToday } from "@/lib/date-windows";
 
 /**
  * Contextual internal links from an event detail page into the browse
@@ -14,6 +16,11 @@ export default function BrowseSimilar({ event }: { event: Hwy4Event }) {
   const chips: { href: string; label: string }[] = [
     { href: "/this-weekend", label: "This weekend" },
   ];
+  // A festival guide (e.g. the Bear Valley Music Festival page) leads the chips
+  // for its own events: it's the most specific "what else" answer, and this is
+  // the internal link that keeps that landing page from being an orphan.
+  const guide = festivalGuideForEvent(event, pacificToday().iso);
+  if (guide) chips.unshift({ href: guide.path, label: guide.label });
   if (isFreeEvent(event)) chips.push({ href: "/free", label: "Free events" });
   if (isDateNightEvent(event)) {
     chips.push({ href: "/date-night", label: "Date night" });
