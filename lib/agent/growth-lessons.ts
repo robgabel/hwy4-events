@@ -103,17 +103,21 @@ export async function getActiveLessons(supabase: SupabaseClient, limit = 20): Pr
  * week's move land?" Reads agent_runs (run_type=growth_memo), skips degraded/empty.
  */
 export async function getPriorMoves(supabase: SupabaseClient, limit = 4): Promise<PriorMove[]> {
-  const { data } = await supabase
+  // agent_runs timestamps its rows with `ran_at` (NOT created_at). Selecting the
+  // wrong column errors the query, which silently returns [] and kills this half
+  // of the memory loop — verify column names against the table.
+  const { data, error } = await supabase
     .from("agent_runs")
-    .select("created_at, digest")
+    .select("ran_at, digest")
     .eq("run_type", "growth_memo")
     .eq("status", "ok")
-    .order("created_at", { ascending: false })
+    .order("ran_at", { ascending: false })
     .limit(limit);
+  if (error) console.error("[growth-lessons] getPriorMoves query failed:", error.message);
   const out: PriorMove[] = [];
-  for (const r of (data ?? []) as { created_at: string; digest: unknown }[]) {
+  for (const r of (data ?? []) as { ran_at: string; digest: unknown }[]) {
     const move = (r.digest as { move_of_the_week?: { title?: string } } | null)?.move_of_the_week;
-    if (move?.title) out.push({ date: String(r.created_at).split("T")[0], title: move.title });
+    if (move?.title) out.push({ date: String(r.ran_at).split("T")[0], title: move.title });
   }
   return out;
 }
