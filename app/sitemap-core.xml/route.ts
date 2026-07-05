@@ -37,6 +37,13 @@ export async function GET() {
       changefreq: "daily" as const,
       priority: 0.8,
     })),
+    // Seasonal festival landing page (HWY-3): live lineup data, daily lastmod.
+    {
+      loc: `${SITE_URL}/bear-valley-music-festival-2026`,
+      lastmod: todayISO,
+      changefreq: "daily",
+      priority: 0.8,
+    },
     { loc: `${SITE_URL}/about`, changefreq: "monthly", priority: 0.7 },
     { loc: `${SITE_URL}/about/rob-gabel`, changefreq: "yearly", priority: 0.5 },
     { loc: `${SITE_URL}/faq`, changefreq: "monthly", priority: 0.6 },
