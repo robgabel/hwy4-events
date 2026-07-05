@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GrowthContext, GrowthVitals } from "./types";
 import { getNewsletterStats } from "@/lib/newsletter-stats";
 import { getSeoOverview } from "@/lib/seo-data";
+import { getActiveLessons, getPriorMoves } from "@/lib/agent/growth-lessons";
 
 // Gathers the growth signal pack handed to the Head-of-Growth reasoner
 // (PRD-growth-agent.md). Every number here is real and queried; the model may
@@ -137,6 +138,12 @@ export async function gatherGrowthContext(
   // (striking distance), not the raw daily series.
   const seoOverview = await getSeoOverview(supabase, { topN: 10, strikeLimit: 8 });
 
+  // ── memory (HWY-5): durable lessons + the agent's own recent moves ────────
+  const [lessons, priorMoves] = await Promise.all([
+    getActiveLessons(supabase, 20),
+    getPriorMoves(supabase, 4),
+  ]);
+
   // ── network virality (see growth_share_stats) ─────────────────────────────
   const shareBySrc = numMap(shareAgg.data);
 
@@ -165,6 +172,8 @@ export async function gatherGrowthContext(
     date: today,
     vitals,
     experiments,
+    lessons,
+    prior_moves: priorMoves,
     newsletter: {
       active: nlStats.total_active,
       net_7d: nlStats.net_7d,

@@ -10,6 +10,7 @@ import {
   type GrowthDigest,
 } from "@/lib/agent/types";
 import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
+import { captureLessonsFromConcludedExperiments } from "@/lib/agent/growth-lessons";
 
 // Growth memo (PRD-growth-agent.md, Phase 1). The weekly Head-of-Growth
 // reasoner: reads the growth signal pack and writes one memo — the North Star
@@ -52,7 +53,9 @@ north_star.headline is the one-line read on the North Star this week (e.g. local
 
 Brevity is the product: lead Rob to one action, do not bury it in prose. summary is AT MOST 2 sentences and must NOT restate the move or the north star (the page renders those as their own cards); if there is nothing to add beyond them, return an empty string for summary. north_star.detail is at most one sentence. move_of_the_week.why is at most one sentence. If a line does not help Rob decide or act, cut it.
 
-experiments: you are given the team's LOGGED experiments in the "experiments" field of the signal pack, each with a name, hypothesis, metric, baseline, and status. Report ONE experiments item per logged experiment that is still running (or concluded very recently). For each, give an honest early read from this week's numbers against its stated metric and baseline: is it moving, flat, or too early to tell. Do NOT invent experiments that are not in the list, and do not omit a running one. If there are no logged experiments, return an empty experiments array. You are reading results, not designing tests.`;
+experiments: you are given the team's LOGGED experiments in the "experiments" field of the signal pack, each with a name, hypothesis, metric, baseline, and status. Report ONE experiments item per logged experiment that is still running (or concluded very recently). For each, give an honest early read from this week's numbers against its stated metric and baseline: is it moving, flat, or too early to tell. Do NOT invent experiments that are not in the list, and do not omit a running one. If there are no logged experiments, return an empty experiments array. You are reading results, not designing tests.
+
+Your memory: the signal pack carries two durable memory fields so you compound instead of starting fresh each week. "lessons" is a list of distilled findings from past concluded experiments plus hand-added notes (what has already worked or flopped on this site). Treat them as accumulated ground truth: do not re-propose a move a lesson says failed, and lean toward a move a lesson says worked. "prior_moves" is your OWN move_of_the_week from recent weeks, dated. Before you name this week's move, glance at prior_moves against the live signals and, when the numbers actually show it, say in one line (in watching, or in the move's why) whether a recent move landed (e.g. a page you pushed now appears in seo.top or its query climbed in seo.striking). At least once per memo, ground yourself in a specific prior lesson or a read on a prior move, so the reader sees the agent building on itself. Never fabricate an outcome the numbers do not show; if you cannot tell whether a prior move worked yet, say it is too early.`;
 
 function safeJson(text: string): unknown {
   const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
@@ -149,6 +152,15 @@ export async function GET(request: Request) {
   const supabase: SupabaseClient = createClient(supabaseUrl, serviceKey);
 
   try {
+    // HWY-5: distill any newly-concluded experiments into the durable lessons
+    // store BEFORE gathering context, so this run already reads them back.
+    // Best-effort — a capture failure must never block the memo.
+    try {
+      await captureLessonsFromConcludedExperiments(supabase);
+    } catch (err) {
+      console.error("[growth-memo] lesson capture failed:", err);
+    }
+
     const context = await gatherGrowthContext(supabase);
     const { digest, status, failure, usage } = await generateMemo(context);
 

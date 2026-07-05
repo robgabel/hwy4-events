@@ -118,6 +118,10 @@ export type GrowthContext = {
   date: string;
   vitals: GrowthVitals;
   experiments: GrowthExperimentRow[];
+  // The agent's durable memory (HWY-5): distilled lessons it reads back each run,
+  // and its own recent move_of_the_week so it can check whether last week landed.
+  lessons: string[];
+  prior_moves: { date: string; title: string }[];
   newsletter: {
     active: number;
     net_7d: number; // confirmed minus unsubscribed, last 7d

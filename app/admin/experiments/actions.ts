@@ -61,3 +61,25 @@ export async function deleteExperiment(formData: FormData) {
   await supabase.from("growth_experiments").delete().eq("id", id);
   revalidatePath(ADMIN_PATH);
 }
+
+// ── Growth lessons (HWY-5): the agent's durable memory. Auto-captured from
+// concluded experiments; a human can also add one or archive a wrong one. ──
+
+export async function addLesson(formData: FormData) {
+  const lesson = field(formData, "lesson");
+  if (!lesson) return;
+  const supabase = getAdminClient();
+  await supabase.from("growth_lessons").insert({ lesson, source: "manual", status: "active" });
+  revalidatePath(ADMIN_PATH);
+}
+
+export async function archiveLesson(formData: FormData) {
+  const id = field(formData, "id");
+  if (!id) return;
+  const supabase = getAdminClient();
+  await supabase
+    .from("growth_lessons")
+    .update({ status: "archived", updated_at: new Date().toISOString() })
+    .eq("id", id);
+  revalidatePath(ADMIN_PATH);
+}

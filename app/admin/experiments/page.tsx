@@ -7,6 +7,8 @@ import {
   concludeExperiment,
   reopenExperiment,
   deleteExperiment,
+  addLesson,
+  archiveLesson,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,8 @@ type Experiment = {
   started_on: string;
   concluded_on: string | null;
 };
+
+type Lesson = { id: string; lesson: string; source: string; created_at: string };
 
 async function loadExperiments(): Promise<Experiment[]> {
   const supabase = getAdminClientOrNull();
@@ -40,6 +44,18 @@ async function loadExperiments(): Promise<Experiment[]> {
   });
 }
 
+async function loadLessons(): Promise<Lesson[]> {
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("growth_lessons")
+    .select("id, lesson, source, created_at")
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(30);
+  return (data ?? []) as Lesson[];
+}
+
 const STATUS_COLOR: Record<string, string> = {
   running: "#2563eb",
   won: "#16a34a",
@@ -49,7 +65,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default async function ExperimentsPage() {
-  const experiments = await loadExperiments();
+  const [experiments, lessons] = await Promise.all([loadExperiments(), loadLessons()]);
   const running = experiments.filter((e) => e.status === "running");
 
   return (
@@ -90,6 +106,8 @@ export default async function ExperimentsPage() {
           ))}
         </div>
       )}
+
+      <LessonsSection lessons={lessons} />
       </QueueShell>
     </>
   );
@@ -164,6 +182,68 @@ function ExperimentCard({ e }: { e: Experiment }) {
         </div>
       )}
     </article>
+  );
+}
+
+function LessonsSection({ lessons }: { lessons: Lesson[] }) {
+  return (
+    <section style={{ ...cardStyle, marginTop: 28 }}>
+      <h2 style={{ color: "#1B3A2D", fontSize: 17, margin: "0 0 4px" }}>
+        What the growth agent has learned
+      </h2>
+      <p style={{ color: "#8a7b66", fontSize: 13, margin: "0 0 14px", lineHeight: 1.5 }}>
+        The agent&rsquo;s durable memory. Concluded experiments become lessons automatically; the
+        weekly memo reads these back so it stops re-proposing what already flopped. Add one by hand,
+        or archive one that&rsquo;s wrong.
+      </p>
+
+      <form action={addLesson} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input
+          name="lesson"
+          placeholder="e.g. Poster QR cards in rentals produced no measurable scans in 30 days."
+          style={{ ...inputStyle, flex: 1 }}
+        />
+        <button type="submit" style={primaryBtn}>Add lesson</button>
+      </form>
+
+      {lessons.length === 0 ? (
+        <p style={{ color: "#666", fontSize: 15, margin: 0 }}>
+          No lessons yet. They appear here once an experiment concludes with a result.
+        </p>
+      ) : (
+        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          {lessons.map((l) => (
+            <li
+              key={l.id}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: "10px 12px",
+                background: "#faf8f4",
+                border: "1px solid #ece6db",
+                borderRadius: 8,
+              }}
+            >
+              <span style={{ flex: 1, fontSize: 15, lineHeight: 1.5, color: "#3a3a3a" }}>
+                {l.lesson}
+                {l.source === "experiment" && (
+                  <span style={{ marginLeft: 8, fontSize: 11, color: "#8a7b66", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    auto
+                  </span>
+                )}
+              </span>
+              <form action={archiveLesson} style={{ flexShrink: 0 }}>
+                <input type="hidden" name="id" value={l.id} />
+                <button type="submit" style={{ ...secondaryBtn, padding: "4px 10px", fontSize: 13 }}>
+                  Archive
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
