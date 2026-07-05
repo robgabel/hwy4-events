@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GrowthContext, GrowthVitals } from "./types";
 import { getNewsletterStats } from "@/lib/newsletter-stats";
+import { getSeoOverview } from "@/lib/seo-data";
 
 // Gathers the growth signal pack handed to the Head-of-Growth reasoner
 // (PRD-growth-agent.md). Every number here is real and queried; the model may
@@ -51,7 +52,6 @@ export async function gatherGrowthContext(
     sessionAgg,
     outboundAgg,
     analytics,
-    seoLatest,
     durableOrgs,
     shareAgg,
     posterPending,
@@ -67,7 +67,6 @@ export async function gatherGrowthContext(
     // 30d of outbound business clicks, the referral signal (DB-aggregated).
     supabase.rpc("growth_outbound_stats", { p_d7: d7, p_d30: d30 }),
     supabase.from("analytics_daily").select("date, pageviews, top_pages, ai_referrals").order("date", { ascending: false }).limit(14),
-    supabase.from("seo_snapshots").select("captured_at").order("captured_at", { ascending: false }).limit(1),
     supabase.from("hwy4_orgs").select("id", { count: "exact", head: true }).not("canonical_url", "is", null),
     // 7d of share hits by src (DB-aggregated).
     supabase.rpc("growth_share_stats", { p_d7: d7 }),
@@ -132,25 +131,11 @@ export async function gatherGrowthContext(
     ? (latestA.ai_referrals as Record<string, number>)
     : {});
 
-  // ── seo (latest capture) ────────────────────────────────────────────────
-  let seoCaptured: string | null = null;
-  let seoTop: GrowthContext["seo"]["top"] = [];
-  const latestCap = (rows(seoLatest)[0]?.captured_at as string | undefined) ?? null;
-  if (latestCap) {
-    seoCaptured = latestCap;
-    const { data: seoRows } = await supabase
-      .from("seo_snapshots")
-      .select("query, clicks, impressions, position")
-      .eq("captured_at", latestCap)
-      .order("impressions", { ascending: false })
-      .limit(10);
-    seoTop = ((seoRows ?? []) as Row[]).map((r) => ({
-      query: String(r.query ?? ""),
-      clicks: num(r.clicks),
-      impressions: num(r.impressions),
-      position: num(r.position),
-    }));
-  }
+  // ── seo (Search Console overview: totals, MoM, top queries, striking) ─────
+  // The full analysis (trend spine + latest query snapshot) lives in lib/seo-data;
+  // the memo cares about the direction (MoM) and the highest-leverage work
+  // (striking distance), not the raw daily series.
+  const seoOverview = await getSeoOverview(supabase, { topN: 10, strikeLimit: 8 });
 
   // ── network virality (see growth_share_stats) ─────────────────────────────
   const shareBySrc = numMap(shareAgg.data);
@@ -225,7 +210,38 @@ export async function gatherGrowthContext(
       top_pages: topPages,
       ai_referrals: aiReferrals,
     },
-    seo: { captured_at: seoCaptured, top: seoTop },
+    seo: {
+      captured_at: seoOverview.capturedAt,
+      window: seoOverview.window,
+      totals: seoOverview.hasData
+        ? {
+            clicks: seoOverview.totals.clicks,
+            impressions: seoOverview.totals.impressions,
+            ctr: seoOverview.totals.ctr,
+            avg_position: seoOverview.totals.avgPosition,
+          }
+        : null,
+      mom: seoOverview.mom
+        ? {
+            clicks_delta_pct: seoOverview.mom.clicksDeltaPct,
+            impressions_delta_pct: seoOverview.mom.impressionsDeltaPct,
+            position_delta: seoOverview.mom.positionDelta,
+          }
+        : null,
+      top: seoOverview.topQueries.map((q) => ({
+        query: q.query,
+        clicks: q.clicks,
+        impressions: q.impressions,
+        position: q.position,
+      })),
+      striking: seoOverview.striking.map((q) => ({
+        query: q.query,
+        clicks: q.clicks,
+        impressions: q.impressions,
+        position: q.position,
+        potential: q.potential,
+      })),
+    },
     network: {
       durable_orgs: durableOrgs.count ?? 0,
       share_hits_7d: shareBySrc,

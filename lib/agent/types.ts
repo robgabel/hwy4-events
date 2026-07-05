@@ -167,7 +167,22 @@ export type GrowthContext = {
   };
   seo: {
     captured_at: string | null;
+    window: { start: string; end: string } | null; // GSC date range of the trend spine
+    totals: { clicks: number; impressions: number; ctr: number; avg_position: number } | null; // last 28d
+    mom: {
+      clicks_delta_pct: number | null;
+      impressions_delta_pct: number | null;
+      position_delta: number | null; // negative = rank improved
+    } | null;
     top: { query: string; clicks: number; impressions: number; position: number }[];
+    // Highest-leverage SEO work: page-1/2 fringe queries a rank nudge would convert.
+    striking: {
+      query: string;
+      clicks: number;
+      impressions: number;
+      position: number;
+      potential: number; // un-captured impressions
+    }[];
   };
   network: {
     durable_orgs: number; // hwy4_orgs with a canonical_url (organizers with a durable link)

@@ -76,6 +76,7 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
     supabase
       .from("seo_snapshots")
       .select("captured_at")
+      .eq("dimension", "query")
       .order("captured_at", { ascending: false })
       .limit(1),
   ]);
@@ -89,6 +90,7 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
       .from("seo_snapshots")
       .select("query, clicks, impressions, position")
       .eq("captured_at", latestCap)
+      .eq("dimension", "query")
       .order("impressions", { ascending: false })
       .limit(10);
     seoTop = ((seoRows ?? []) as Record<string, unknown>[]).map((r) => ({

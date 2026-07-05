@@ -93,6 +93,10 @@
       "schedule": "30 18 * * *"
     },
     {
+      "path": "/api/agent/collect-seo",
+      "schedule": "0 11 * * *"
+    },
+    {
       "path": "/api/agent/chief-of-staff",
       "schedule": "0 19 * * *"
     },
