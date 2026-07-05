@@ -1,6 +1,7 @@
 import { getAdminClientOrNull } from "@/lib/admin/db";
 import type { CountRow } from "@/lib/cloudflare-analytics";
 import { getNewsletterStats, type NewsletterStats } from "@/lib/newsletter-stats";
+import { getSeoOverview, type SeoOverview } from "@/lib/seo-data";
 
 export const dynamic = "force-dynamic";
 
@@ -283,12 +284,21 @@ async function loadSignupsVsVisitors(rows: DailyRow[]): Promise<SvvDay[]> {
   }));
 }
 
+// Google Search Console overview (lib/seo-data.ts), written daily by
+// /api/agent/collect-seo. Null-safe: dormant until the collector has run.
+async function loadSeo(): Promise<SeoOverview | null> {
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return null;
+  return getSeoOverview(supabase);
+}
+
 export default async function GrowthPage() {
   const rows = await loadDaily();
   const newsletterClicks = await loadNewsletterClicks();
   const newsletter = await loadNewsletterStats();
   const gate0 = await loadGate0();
   const svv = await loadSignupsVsVisitors(rows);
+  const seo = await loadSeo();
   const nlMax = newsletterClicks ? Math.max(1, ...newsletterClicks.perEvent.map((e) => e.clicks)) : 1;
   const hasData = rows.some((r) => r.pageviews > 0);
 
@@ -358,6 +368,13 @@ export default async function GrowthPage() {
         </>
       )}
 
+      {/* Search — the visitor-acquisition channel (BUSINESS-PLAN: Miguel). */}
+      <GroupHeader
+        title="Search (Google)"
+        sub="What people search to find us, from Search Console — the visitor-acquisition channel. Data lags ~2 days."
+      />
+      <SearchConsoleSection seo={seo} />
+
       {/* Traffic detail — demoted below the metrics that matter. */}
       <GroupHeader
         title="Traffic detail"
@@ -424,8 +441,7 @@ export default async function GrowthPage() {
 
           <p style={{ color: "#aaa", fontSize: 14, margin: "28px 0 0", lineHeight: 1.5 }}>
             Source: Cloudflare Web Analytics (RUM){lastSynced ? ` · snapshot updated ${new Date(lastSynced).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}.
-            Search-engine performance (Google/Bing) is tracked separately by the cockpit&rsquo;s SEO
-            collector and surfaces in the nightly digest on <a href="/admin/briefings" style={{ color: "#1B3A2D" }}>Today</a>.
+            Google search performance is in the <strong>Search (Google)</strong> section above.
           </p>
         </>
       )}
@@ -922,6 +938,149 @@ function RankedList({ title, rows, kind }: { title: string; rows: CountRow[]; ki
           })}
         </div>
       )}
+    </section>
+  );
+}
+
+// Google Search Console — top-of-funnel demand. Ordered by what steers action:
+// the striking-distance opportunities first (the highest-leverage SEO work),
+// then queries, pages, and the clicks trend. Data via lib/seo-data.ts.
+function SearchConsoleSection({ seo }: { seo: SeoOverview | null }) {
+  if (!seo || !seo.hasData) {
+    return (
+      <section style={emptyCardStyle}>
+        <p style={{ color: "#1B3A2D", fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>
+          No Search Console data yet.
+        </p>
+        <p style={{ color: "#666", fontSize: 16, margin: 0, lineHeight: 1.5 }}>
+          The collector runs daily at 11:00 UTC once <code>GOOGLE_SEARCH_CONSOLE_SA_JSON</code> is
+          set in Vercel. Data appears here within a day of the first run.
+        </p>
+      </section>
+    );
+  }
+
+  const { totals, mom, striking, topQueries, topPages, trend, window: win } = seo;
+  const pctSub = (d: number | null) =>
+    d === null ? undefined : `${d >= 0 ? "▲" : "▼"} ${Math.abs(d)}% vs prior 28d`;
+  const posSub = (d: number | null) =>
+    d === null ? undefined : d <= 0 ? `▲ ${Math.abs(d)} better vs prior` : `▼ ${d} worse vs prior`;
+
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+        <Stat label="Clicks · 28d" value={nf(totals.clicks)} sub={mom ? pctSub(mom.clicksDeltaPct) : undefined} />
+        <Stat label="Impressions · 28d" value={nf(totals.impressions)} sub={mom ? pctSub(mom.impressionsDeltaPct) : undefined} />
+        <Stat label="Avg CTR" value={`${(totals.ctr * 100).toFixed(1)}%`} />
+        <Stat label="Avg position" value={totals.avgPosition ? totals.avgPosition.toFixed(1) : "—"} sub={mom ? posSub(mom.positionDelta) : undefined} />
+      </div>
+
+      <SectionHeader>Striking distance · biggest SEO upside</SectionHeader>
+      {striking.length === 0 ? (
+        <section style={cardStyle}>
+          <p style={{ color: "#888", fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+            No page-1/2 fringe queries with real impressions yet. As the site earns rankings,
+            queries sitting at position 4–20 show up here — the ones a small content tweak converts.
+          </p>
+        </section>
+      ) : (
+        <section style={cardStyle}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+            {striking.map((q, i) => {
+              const max = Math.max(1, ...striking.map((s) => s.potential));
+              return (
+                <div key={i}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                    <span style={{ color: "#2d3a22", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {q.query}
+                    </span>
+                    <span style={{ color: "#888", fontSize: 12, flexShrink: 0, whiteSpace: "nowrap" }}>
+                      pos {q.position.toFixed(1)} · {nf(q.impressions)} impr · {nf(q.clicks)} clicks
+                    </span>
+                  </div>
+                  <div style={{ height: 5, background: "#f0ede8", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.round((q.potential / max) * 100)}%`, background: "#c98a3a", borderRadius: 2 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
+            Queries ranking on the back of page 1 or top of page 2 with real impressions. The bar is
+            un-captured impressions — the clicks a rank nudge would unlock. Highest bar = write/improve
+            that page first.
+          </p>
+        </section>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 16, marginTop: 20 }}>
+        <SeoRankTable title="Top queries · 28d" rows={topQueries.map((q) => ({ label: q.query, clicks: q.clicks, impressions: q.impressions, position: q.position }))} />
+        <SeoRankTable title="Top pages · 28d" rows={topPages.map((p) => ({ label: p.page, clicks: p.clicks, impressions: p.impressions, position: p.position }))} />
+      </div>
+
+      {trend.length > 1 && (
+        <>
+          <SectionHeader>Clicks per day{win ? ` · ${shortDay(win.start)}–${shortDay(win.end)}` : ""}</SectionHeader>
+          <SeoTrendChart points={trend.slice(-TREND_DAYS)} />
+        </>
+      )}
+    </>
+  );
+}
+
+function SeoRankTable({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: { label: string; clicks: number; impressions: number; position: number }[];
+}) {
+  return (
+    <section style={cardStyle}>
+      <h3 style={{ ...labelStyle, margin: "0 0 12px", fontSize: 13 }}>{title}</h3>
+      {rows.length === 0 ? (
+        <p style={{ color: "#aaa", fontSize: 14, margin: 0 }}>No data yet.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rows.map((r, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+              <span style={{ color: "#2d3a22", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {r.label || "—"}
+              </span>
+              <span style={{ color: "#888", fontSize: 12, flexShrink: 0, whiteSpace: "nowrap" }}>
+                <strong style={{ color: "#1B3A2D" }}>{nf(r.clicks)}</strong> · {nf(r.impressions)} impr · pos {r.position.toFixed(1)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Clicks-per-day bars with an impressions ghost behind, mirroring
+// DailyTrafficChart's HTML-bar approach so labels stay legible on mobile.
+function SeoTrendChart({ points }: { points: { date: string; clicks: number; impressions: number }[] }) {
+  if (points.length === 0) return null;
+  const maxClicks = Math.max(1, ...points.map((p) => p.clicks));
+  const maxImpr = Math.max(1, ...points.map((p) => p.impressions));
+  return (
+    <section style={cardStyle}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 130 }}>
+        {points.map((p, i) => (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+            <span style={{ fontSize: 11, color: "#1B3A2D", fontWeight: 600, marginBottom: 2 }}>{p.clicks || ""}</span>
+            <div style={{ width: "100%", position: "relative", display: "flex", justifyContent: "center", alignItems: "flex-end", height: "100%" }}>
+              <div title={`${p.impressions} impressions`} style={{ position: "absolute", bottom: 0, width: "100%", height: `${Math.round((p.impressions / maxImpr) * 100)}%`, background: "#eef0e6", borderRadius: 3 }} />
+              <div title={`${p.clicks} clicks`} style={{ position: "relative", width: "62%", height: `${Math.round((p.clicks / maxClicks) * 100)}%`, background: "#9bb87a", borderRadius: 3, minHeight: p.clicks > 0 ? 2 : 0 }} />
+            </div>
+            <span style={{ ...axisStyle, marginTop: 4, whiteSpace: "nowrap" }}>{shortDay(p.date)}</span>
+          </div>
+        ))}
+      </div>
+      <p style={{ color: "#999", fontSize: 12, margin: "10px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 8 }}>
+        Green bar = clicks; pale ghost = impressions (scaled independently). Google finalizes each day ~2 days late.
+      </p>
     </section>
   );
 }
