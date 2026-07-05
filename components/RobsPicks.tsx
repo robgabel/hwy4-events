@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Hwy4Event } from "@/lib/types";
 import { generateEventSlug } from "@/lib/slugs";
 import { selectPicks } from "@/lib/picks";
+import { festivalGuideForEvent } from "@/lib/event-guides";
 import {
   parseDate,
   formatShortWeekday,
@@ -27,6 +28,16 @@ function formatTime(time: string | null): string | null {
   return `${display}:${m} ${ampm}`;
 }
 
+// A pick's destination: its festival guide page when it has one (the umbrella
+// "Bear Valley Music Festival 2026" pick points at the guide, not its thin
+// season-placeholder event page), otherwise its own event detail page. This also
+// makes the guide a one-click link from the homepage. Only picks that match a
+// guide are affected; every other pick keeps its /events/<slug> link.
+function pickHref(event: Hwy4Event, todayIso: string): string {
+  const guide = festivalGuideForEvent(event, todayIso);
+  return guide ? guide.path : `/events/${generateEventSlug(event.name, event.date, event.town)}`;
+}
+
 function PawBadge({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
@@ -42,8 +53,8 @@ function PawBadge({ label }: { label: string }) {
   );
 }
 
-function Spotlight({ event }: { event: Hwy4Event }) {
-  const slug = generateEventSlug(event.name, event.date, event.town);
+function Spotlight({ event, todayIso }: { event: Hwy4Event; todayIso: string }) {
+  const href = pickHref(event, todayIso);
   const d = parseDate(event.date);
   const time = formatTime(event.start_time);
   // Same junk-venue heuristic the about page uses: a comma means an
@@ -65,7 +76,7 @@ function Spotlight({ event }: { event: Hwy4Event }) {
 
   return (
     <Link
-      href={`/events/${slug}`}
+      href={href}
       className="card-warm group flex gap-4 rounded-xl border border-earth/20 bg-white p-4 ring-1 ring-earth/10 transition-all duration-200 hover:-translate-y-0.5 hover:border-earth/40 sm:p-5"
     >
       <div className="flex w-16 shrink-0 flex-col items-center justify-center rounded-lg bg-earth/8 py-2.5">
@@ -90,12 +101,12 @@ function Spotlight({ event }: { event: Hwy4Event }) {
   );
 }
 
-function PickCard({ event }: { event: Hwy4Event }) {
-  const slug = generateEventSlug(event.name, event.date, event.town);
+function PickCard({ event, todayIso }: { event: Hwy4Event; todayIso: string }) {
+  const href = pickHref(event, todayIso);
   const d = parseDate(event.date);
   return (
     <Link
-      href={`/events/${slug}`}
+      href={href}
       className="card-warm group rounded-lg border border-stone-light/30 bg-white p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-sage/40"
     >
       <p className="text-[11px] font-semibold uppercase tracking-wide text-pine">
@@ -126,7 +137,7 @@ export default function RobsPicks({
           <h2 className="font-display mb-2 text-sm font-semibold uppercase tracking-wider text-earth">
             If you do one thing this week
           </h2>
-          <Spotlight event={spotlight} />
+          <Spotlight event={spotlight} todayIso={todayIso} />
         </>
       )}
       {picks.length > 0 && (
@@ -143,7 +154,7 @@ export default function RobsPicks({
           </h2>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {picks.map((e) => (
-              <PickCard key={e.id} event={e} />
+              <PickCard key={e.id} event={e} todayIso={todayIso} />
             ))}
           </div>
         </>
