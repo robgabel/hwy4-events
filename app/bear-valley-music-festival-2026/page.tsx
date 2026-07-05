@@ -368,7 +368,7 @@ export default async function BvmfPage() {
         <NewsletterSignup
           source="bvmf_2026"
           heading="Coming up for the festival?"
-          description="One email Thursday morning with what's on across the corridor, Angels Camp to Bear Valley. No spam, no ads."
+          description="Get one email every Thursday morning with all the events in the coming week from Angels Camp to Bear Valley. No spam, no ads."
         />
       </section>
     </main>
