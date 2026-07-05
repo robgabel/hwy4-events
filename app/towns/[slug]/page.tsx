@@ -25,6 +25,8 @@ import SimpleEventList from "@/components/SimpleEventList";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecast, type TownForecasts } from "@/lib/weather";
 import { linkifyPhones } from "@/lib/linkify";
+import { festivalGuidesForTown } from "@/lib/event-guides";
+import { pacificToday } from "@/lib/date-windows";
 
 export const revalidate = 3600;
 
@@ -105,6 +107,10 @@ export default async function TownPage({ params }: PageProps) {
   const forecastsByTown: TownForecasts = { [town.name]: townForecast };
 
   const nearby = pickNearbyTowns(town, 3);
+  // Seasonal festival guide(s) this town hosts (e.g. Bear Valley Music Festival).
+  // These are the town-page inbound link that keeps the guide page from being an
+  // orphan; empty for every town without a live guide.
+  const guides = festivalGuidesForTown(slug, pacificToday().iso);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -211,6 +217,29 @@ export default async function TownPage({ params }: PageProps) {
           </details>
         )}
       </section>
+
+      {/* Seasonal festival guide callout (internal link into the guide page). */}
+      {guides.length > 0 && (
+        <section className="mb-10 flex flex-col gap-2">
+          {guides.map((g) => (
+            <Link
+              key={g.path}
+              href={g.path}
+              className="flex items-center justify-between gap-3 rounded-xl border border-earth/30 bg-warm-white px-5 py-4 transition-colors hover:border-pine/40"
+            >
+              <span>
+                <span className="font-display block font-bold text-forest">
+                  {g.heading}
+                </span>
+                <span className="mt-0.5 block text-sm text-stone">{g.blurb}</span>
+              </span>
+              <span aria-hidden className="shrink-0 font-semibold text-pine">
+                Guide &rarr;
+              </span>
+            </Link>
+          ))}
+        </section>
+      )}
 
       {/* Upcoming events: moved above the long-form intro because repeat
        * visitors want "what's tonight" first. */}
