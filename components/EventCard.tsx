@@ -336,28 +336,11 @@ export default function EventCard({
               </span>
             </span>
           )}
-          {event.verification_status === "needs_verification" && (
-            <span className="group/tip relative inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-              Date unconfirmed
-              <svg
-                className="h-3 w-3 opacity-70"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-                />
-              </svg>
-              <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 hidden w-56 -translate-x-1/2 rounded-lg bg-forest px-3 py-2 text-center text-[11px] leading-snug font-normal text-white shadow-lg group-hover/tip:block">
-                We couldn&rsquo;t confirm this date on the organizer&rsquo;s site. Check with them before heading out.
-                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-forest" />
-              </span>
-            </span>
-          )}
+          {/* needs_verification deliberately renders NOTHING here (2026-07-05):
+              the "Date unconfirmed" badge undermined reader trust on the public
+              site. The signal is operator-facing now — /api/verify-events
+              Slack-alerts on newly flagged events and they queue at
+              /admin/verification (+ the admin Inbox). */}
           {isPrivate && (
             <span className="inline-flex items-center gap-1 rounded-full bg-earth/10 px-2 py-0.5 text-xs font-medium text-earth">
               <svg
