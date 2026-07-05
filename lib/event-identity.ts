@@ -184,14 +184,29 @@ function artistsOverlap(
 /** Two rows describe the same time slot: starts must be known and equal, and
  *  end times must agree *only when both are known*. A source that omits the end
  *  time ("7:00 PM") must still anchor to the same source's fuller listing
- *  ("7:00 PM – 10:00 PM") — keying on an exact end would split them apart. */
-function timesAnchor(a: EventIdentity, b: EventIdentity): boolean {
+ *  ("7:00 PM – 10:00 PM") — keying on an exact end would split them apart.
+ *
+ *  `venuesAgree` softens the end-time rule (2026-07-05, the Coffee & Cars
+ *  triple): three sources listed the SAME Meadowmont Lodge car show with three
+ *  different extracted end times (11:00 / 17:00 / 12:00 — one source's own
+ *  description said "8am to 11am" while its structured end said 5pm), and the
+ *  end-disagreement veto made every dedup layer blind to it. When two rows
+ *  agree on the physical venue (name fuzzy or street-number anchor) and start
+ *  at the same instant on the same date, a conflicting end is scrape noise,
+ *  not a different show — one room can't host two events that begin together.
+ *  Ends still split rows when the venues DON'T provably agree (one side
+ *  unknown), keeping the conservative default. */
+function timesAnchor(
+  a: EventIdentity,
+  b: EventIdentity,
+  venuesAgree: boolean
+): boolean {
   const sa = normalizeTime(a.start_time);
   const sb = normalizeTime(b.start_time);
   if (!sa || !sb || sa !== sb) return false;
   const ea = normalizeTime(a.end_time);
   const eb = normalizeTime(b.end_time);
-  if (ea && eb && ea !== eb) return false;
+  if (ea && eb && ea !== eb && !venuesAgree) return false;
   return true;
 }
 
@@ -231,6 +246,25 @@ function actNamedInOther(a: EventIdentity, b: EventIdentity): boolean {
   return hit(actStrings(a), bBlob) || hit(actStrings(b), aBlob);
 }
 
+/** The venue string to use for matching. Facebook-style place fields often
+ *  carry a locality instead of a venue — "Meadowmont, California" for an event
+ *  at Meadowmont Lodge (2026-07-05, the Coffee & Cars triple). Strip a trailing
+ *  ", California" / ", CA" so the place core ("meadowmont") can fuzzy-match the
+ *  real venue name ("meadowmont lodge") via the existing containment rule. If
+ *  what remains is just the event's own town ("Arnold, California"), the field
+ *  carried no venue at all — return "" so the row is treated as venue-unknown
+ *  (eligible for cross-source merge on title/artists/description, but never
+ *  able to anchor a venue-based signal). The comma is required, so a venue
+ *  genuinely NAMED "… California" (no comma) is untouched. */
+function venueForMatch(e: EventIdentity): string {
+  const raw = (e.venue_name ?? "").trim();
+  const m = raw.match(/^(.+?),\s*(?:california|calif\.?|ca)\.?$/i);
+  if (!m) return normalizeVenue(raw);
+  const core = normalizeVenue(m[1]);
+  if (!core || normalizeTown(core) === normalizeTown(e.town ?? "")) return "";
+  return core;
+}
+
 /** A title generic enough that it's an aggregator placeholder for whatever act
  *  is playing — "Live Music @ The Lube Room". A generic + a specific title at
  *  the same venue and exact time are the same show. */
@@ -253,8 +287,9 @@ export function isGenericTitle(name: string): boolean {
  *  read-time collapse and the write-time merge.
  *
  *  Requires: same date + town when both are known (defensive — callers already
- *  guarantee it), the same time slot (`timesAnchor`: equal start, end agreeing
- *  only when both known), AND at least one identity signal:
+ *  guarantee it), the same time slot (`timesAnchor`: equal start; conflicting
+ *  known ends split the rows UNLESS the venues agree — same venue + same start
+ *  means a differing end is scrape noise), AND at least one identity signal:
  *   - near-identical titles, or
  *   - overlapping artists, or
  *   - near-identical descriptions, or
@@ -264,10 +299,9 @@ export function isGenericTitle(name: string): boolean {
 export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   if (a.date && b.date && a.date !== b.date) return false;
   if (a.town && b.town && normalizeTown(a.town) !== normalizeTown(b.town)) return false;
-  if (!timesAnchor(a, b)) return false;
 
-  const va = normalizeVenue(a.venue_name);
-  const vb = normalizeVenue(b.venue_name);
+  const va = venueForMatch(a);
+  const vb = venueForMatch(b);
 
   // Venue veto (2026-07-02 security/correctness review, P3). Two events at
   // DIFFERENT *known* venues are never the same show — even with an identical
@@ -286,6 +320,8 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   // Parking Lot", both at 961 Highway 4) must not trip the veto below.
   const venuesAgree = venueMatch(va, vb) || sameStreetNumber(a.address, b.address);
   if (bothVenuesKnown && !venuesAgree) return false;
+
+  if (!timesAnchor(a, b, venuesAgree)) return false;
 
   if (a.name && b.name && textSimilarity(a.name, b.name) >= 0.85) return true;
   if (artistsOverlap(a.artists, b.artists)) return true;

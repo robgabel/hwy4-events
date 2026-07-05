@@ -177,10 +177,88 @@ const cases: { label: string; a: EventIdentity; b: EventIdentity; same: boolean 
     same: false,
   },
   {
-    // Guard: both end times known but disagree = treat as different slots.
-    label: "same act/venue/start, both ends known but differ — NOT same",
+    // FLIPPED 2026-07-05 (the Coffee & Cars triple). This case used to lock
+    // "both ends known but disagree = different slots", and that lock was wrong
+    // in production: three sources listed the same Meadowmont Lodge car show
+    // with three different extracted ends (11:00 / 17:00 / 12:00), and the veto
+    // blinded every dedup layer. Same venue + same date + same start = one
+    // physical slot; a conflicting end is scrape noise when the venues agree.
+    label: "same act/venue/start, both ends known but differ — same (venue agrees)",
     a: ev({ name: "The Star Dogs", venue_name: "Murphys Community Park", start_time: "19:00:00", end_time: "21:00:00", artists: ["The Star Dogs"] }),
     b: ev({ name: "The Star Dogs", venue_name: "Murphys Community Park", start_time: "19:00:00", end_time: "23:00:00", artists: ["The Star Dogs"] }),
+    same: true,
+  },
+  {
+    // Guard: end disagreement still splits rows when the venues DON'T provably
+    // agree — one side venue-unknown keeps the conservative default.
+    label: "same title, one venue unknown, ends differ — NOT same",
+    a: ev({ name: "The Star Dogs", venue_name: "Murphys Community Park", start_time: "19:00:00", end_time: "21:00:00" }),
+    b: ev({ name: "The Star Dogs", venue_name: null, start_time: "19:00:00", end_time: "23:00:00" }),
+    same: false,
+  },
+  {
+    // The 2026-07-05 Coffee & Cars triple, pair 1 (real prod rows): two FB/VM
+    // scrapes of the same car show, same venue, ends 11:00 vs 17:00. One row's
+    // act-ish name ("Coffee & Cars") appears verbatim in the other's blob.
+    label: "Coffee & Cars: same venue, ends 11:00 vs 17:00, act named in other — same",
+    a: ev({
+      name: "Free Coffee & Cars Car Show at the Lodge",
+      date: "2026-07-05",
+      town: "Arnold",
+      venue_name: "Meadowmont Lodge",
+      address: "2011 Highway 4, Arnold, CA 95223",
+      start_time: "08:00:00",
+      end_time: "11:00:00",
+      description: "Fuel your adrenaline with a FREE car show! Join the Arnold Meadowmont Lodge on July 5th from 8am to 11am, featuring Central Valley Corvettes.",
+    }),
+    b: ev({
+      name: "Coffee & Cars",
+      date: "2026-07-05",
+      town: "Arnold",
+      venue_name: "Meadowmont Lodge",
+      address: "2011 Highway 4, Arnold, CA 95223",
+      start_time: "08:00:00",
+      end_time: "17:00:00",
+      description: "Arnold Meadowmont Lodge is hosting the Central Valley Corvette Club over the 4th of July weekend.",
+    }),
+    same: true,
+  },
+  {
+    // The triple, pair 2: the FB discover scraper wrote the LOCALITY as the
+    // venue ("Meadowmont, California") with no address. The locality strip must
+    // let the core ("meadowmont") fuzzy-match the real venue instead of
+    // tripping the different-venues veto; the end mismatch (12:00 vs 17:00) is
+    // then forgiven because the venues agree.
+    label: "Coffee & Cars: locality-artifact venue 'Meadowmont, California' — same",
+    a: ev({
+      name: "Coffee & Cars Car Show ~ Arnold Meadowmont Lodge",
+      date: "2026-07-05",
+      town: "Arnold",
+      venue_name: "Meadowmont, California",
+      address: null,
+      start_time: "08:00:00",
+      end_time: "12:00:00",
+      description: "https://www.gocalaveras.com/events/coffee-cars-car-show/",
+    }),
+    b: ev({
+      name: "Coffee & Cars",
+      date: "2026-07-05",
+      town: "Arnold",
+      venue_name: "Meadowmont Lodge",
+      address: "2011 Highway 4, Arnold, CA 95223",
+      start_time: "08:00:00",
+      end_time: "17:00:00",
+      description: "Arnold Meadowmont Lodge is hosting the Central Valley Corvette Club over the 4th of July weekend.",
+    }),
+    same: true,
+  },
+  {
+    // Guard: a locality venue that is just the event's own TOWN ("Arnold,
+    // California") is venue-UNKNOWN, not a venue match — it must not unlock the
+    // venue-anchored signals (generic-title / act-named) against a real venue.
+    label: "town-as-venue 'Arnold, California' + generic title vs real venue — NOT same",
+    a: ev({ name: "Live Music", date: "2026-07-10", town: "Arnold", venue_name: "Arnold, California", start_time: "19:00:00" }),
+    b: ev({ name: "The Sky Kings", date: "2026-07-10", town: "Arnold", venue_name: "Arnold Library", start_time: "19:00:00", artists: ["The Sky Kings"] }),
     same: false,
   },
   {
