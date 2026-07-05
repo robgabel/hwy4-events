@@ -211,7 +211,12 @@ export default function PatrioticEventDetail({
 
       {/* Newsletter signup, right before the map */}
       <div className="mt-7">
-        <NewsletterSignup variant="inline" source="event_detail" />
+        <NewsletterSignup
+          variant="inline"
+          source="event_detail"
+          heading="Never miss another one"
+          description="One email every Thursday morning with all the events in the coming week, from Angels Camp to Bear Valley. No spam, no ads."
+        />
       </div>
 
       {/* Map */}

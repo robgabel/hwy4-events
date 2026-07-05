@@ -62,8 +62,11 @@ export default function NewsletterSignup({
           <div className="sm:flex sm:items-center sm:gap-4">
             <div className="mb-3 sm:mb-0 sm:flex-1">
               <p className="text-sm font-semibold text-earth">
-                Like what you see? Get this in your inbox every Thursday.
+                {heading ?? "Like what you see? Get this in your inbox every Thursday."}
               </p>
+              {description && (
+                <p className="mt-1 text-xs leading-relaxed text-stone">{description}</p>
+              )}
             </div>
             <form onSubmit={handleSubmit} className="flex gap-2 sm:flex-shrink-0">
               <input
