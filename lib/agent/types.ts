@@ -22,6 +22,9 @@ export type Vitals = {
   pending_submissions: number;
   merges_24h: number;
   seo_rows: number;
+  // Days until the homepage Rob's Picks section goes empty (null = empty now).
+  // Optional because agent_runs rows persisted before 2026-07-05 lack it.
+  picks_runway_days?: number | null;
 };
 
 // Exactly what the reasoner is handed, and what we persist as context_in.
@@ -51,6 +54,9 @@ export type DigestContext = {
     captured_at: string | null;
     top: { query: string; clicks: number; impressions: number; position: number }[];
   };
+  // Rob's Picks runway (lib/agent/picks-runway.ts). robs_pick is hand-curated,
+  // so the digest warns before the homepage picks module quietly goes empty.
+  picks?: import("./picks-runway").PicksRunway;
 };
 
 export function emptyDigest(summary: string): Digest {

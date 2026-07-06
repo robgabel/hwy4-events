@@ -131,12 +131,19 @@ export async function TodayBriefing() {
 }
 
 function VitalsStrip({ vitals }: { vitals: Vitals }) {
-  const stats: { label: string; value: number }[] = [
+  const stats: { label: string; value: number | string }[] = [
     { label: "Upcoming (14d)", value: vitals.upcoming_events_14d },
     { label: "Needs verification", value: vitals.needs_verification },
     { label: "Pending submissions", value: vitals.pending_submissions },
     { label: "Auto-merges (24h)", value: vitals.merges_24h },
   ];
+  // Runs persisted before 2026-07-05 lack the field; skip the tile for those.
+  if (vitals.picks_runway_days !== undefined) {
+    stats.push({
+      label: "Picks runway",
+      value: vitals.picks_runway_days === null ? "empty" : `${vitals.picks_runway_days}d`,
+    });
+  }
   return (
     <div
       style={{

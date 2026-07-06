@@ -11,6 +11,12 @@ import {
   type Vitals,
 } from "@/lib/agent/types";
 import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
+import {
+  computePicksRunway,
+  ensurePicksRunwayItem,
+  type PicksRunway,
+} from "@/lib/agent/picks-runway";
+import { FESTIVAL_GUIDES } from "@/lib/event-guides";
 
 // Agent Cockpit Stage 0 reasoner. Reads the day's signals (verification queue,
 // pending submissions, recent auto-merges, latest SEO capture), asks Sonnet to
@@ -32,6 +38,8 @@ Triage into three buckets:
 - fyi: ran-fine confirmations and minor notes that need no action.
 - watching: search/SEO movement worth tracking, not acting on.
 
+Rob's Picks runway: the picks signal describes the homepage's hand-curated highlight module. upcoming_picks is how many flagged picks are scheduled from today on; runway_days is how many days until the section goes empty (a live festival guide counts as content); null means it is empty right now. Nothing automated ever creates a pick, only Rob can. If runway_days is null or 7 or fewer, put one item in needs_you telling Rob to flag a new robs_pick. A healthy runway needs no mention.
+
 Do not manufacture urgency. A quiet day is a fine outcome: say so in the summary and keep needs_you short or empty.
 
 Voice: plain, direct, a little dry. Like a sharp operator briefing a peer, not a chatbot. Short sentences. No corporate filler, no hype, no emojis, and NO EM DASHES (use commas, periods, or parentheses). If a line would sound like a marketing intern wrote it, cut it.
@@ -46,7 +54,7 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
   const in14 = new Date(Date.now() + 14 * 86_400_000).toISOString().split("T")[0];
   const since24h = new Date(Date.now() - 24 * 3_600_000).toISOString();
 
-  const [upcoming, needsVerif, pendingSubs, merges, seoLatest] = await Promise.all([
+  const [upcoming, needsVerif, pendingSubs, merges, seoLatest, picksRows] = await Promise.all([
     supabase
       .from("hwy4_events")
       .select("id", { count: "exact", head: true })
@@ -79,7 +87,25 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
       .eq("dimension", "query")
       .order("captured_at", { ascending: false })
       .limit(1),
+    // Rob's Picks runway: how much hand-curated highlight remains. Count + the
+    // furthest-out pick date in one query (rows arrive date-descending).
+    supabase
+      .from("hwy4_events")
+      .select("date", { count: "exact" })
+      .eq("robs_pick", true)
+      .eq("visibility", "public")
+      .neq("status", "cancelled")
+      .gte("date", today)
+      .order("date", { ascending: false })
+      .limit(1),
   ]);
+
+  const picks: PicksRunway = computePicksRunway(
+    today,
+    picksRows.count ?? 0,
+    (picksRows.data?.[0] as { date?: string } | undefined)?.date ?? null,
+    FESTIVAL_GUIDES
+  );
 
   let seoCaptured: string | null = null;
   let seoTop: DigestContext["seo"]["top"] = [];
@@ -107,6 +133,7 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
     pending_submissions: pendingSubs.count ?? 0,
     merges_24h: merges.count ?? 0,
     seo_rows: seoTop.length,
+    picks_runway_days: picks.runway_days,
   };
 
   return {
@@ -130,6 +157,7 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
       headline: (s.ai_headline as string | null) ?? null,
     })),
     seo: { captured_at: seoCaptured, top: seoTop },
+    picks,
   };
 }
 
@@ -234,6 +262,11 @@ export async function GET(request: Request) {
         }
       }
     }
+
+    // Guard: the picks-runway nudge must not depend on the model choosing to
+    // mention it. If the runway is short/empty and no bucket covers it, append
+    // the deterministic item (lib/agent/picks-runway.ts).
+    if (context.picks) ensurePicksRunwayItem(digest, context.picks);
 
     const { data: runRow, error } = await supabase
       .from("agent_runs")
