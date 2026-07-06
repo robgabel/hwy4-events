@@ -53,10 +53,14 @@ export function hasEventEnded(
   }
   const startMinutes = toAbsoluteMinutes(eventDate, startTime);
   if (startMinutes === null) return false;
-  const endMinutes = endTime
+  let endMinutes = endTime
     ? toAbsoluteMinutes(eventDate, endTime)
     : startMinutes + 240;
   if (endMinutes === null) return false;
+  // An end before the start means the event crosses midnight (a 9 PM – 1 AM
+  // show): the end belongs to the next calendar day, not to a moment eleven
+  // hours before doors.
+  if (endMinutes < startMinutes) endMinutes += 1440;
   return endMinutes <= nowMinutes;
 }
 
@@ -103,11 +107,13 @@ export function getEventLiveStatus(
   const startMinutes = toAbsoluteMinutes(eventDate, startTime);
   if (startMinutes === null) return null;
 
-  const endMinutes = endTime
+  let endMinutes = endTime
     ? toAbsoluteMinutes(eventDate, endTime)
     : startMinutes + 240; // default 4 hours
 
   if (endMinutes === null) return null;
+  // Cross-midnight end (see hasEventEnded): the end is on the next day.
+  if (endMinutes < startMinutes) endMinutes += 1440;
 
   const minutesUntilStart = startMinutes - nowMinutes;
   const minutesUntilEnd = endMinutes - nowMinutes;

@@ -56,6 +56,15 @@ test("finished event is NOT Up Next eligible", () => {
   assert.equal(isUpNextEligible(DAY, "08:00", "09:00", at(DAY, "10:00")), false);
 });
 
+test("cross-midnight event (end before start) is not 'ended' while live", () => {
+  // A 9 PM – 1 AM show: the end belongs to the NEXT day. Before the guard,
+  // hasEventEnded compared against 1 AM of the event's own date and reported
+  // the show over the moment it started.
+  assert.equal(hasEventEnded(DAY, "21:00", "01:00", at(DAY, "23:00")), false);
+  assert.equal(hasEventEnded(DAY, "21:00", "01:00", at("2026-06-05", "00:30")), false);
+  assert.equal(hasEventEnded(DAY, "21:00", "01:00", at("2026-06-05", "01:30")), true);
+});
+
 test("timeless event today stays Up Next eligible until day's end", () => {
   // No clock start → never shows Happening Now, so no badge conflict; it should
   // still be able to hold Up Next during the day.

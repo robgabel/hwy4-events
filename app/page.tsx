@@ -8,10 +8,14 @@ import { getForecastsByTown } from "@/lib/weather";
 import WeeklyBriefing from "@/components/WeeklyBriefing";
 import RobsPicks from "@/components/RobsPicks";
 import { pacificToday } from "@/lib/date-windows";
+import { nowPacificMinutes } from "@/lib/event-time";
 import ShareSiteLink from "@/components/ShareSiteLink";
 import Link from "next/link";
 
-export const revalidate = 3600; // revalidate every hour
+// 30 min, matching the shared events-feed cache: the Rob's Picks module is
+// time-aware (an ended pick drops), so the rendered page shouldn't outlive the
+// clock it was rendered with by more than one feed window.
+export const revalidate = 1800;
 
 // Event fetching now lives in lib/events-data.ts (getUpcomingEvents), a shared
 // cache so this page, the temporal views, town pages, and the sitemap all read
@@ -133,9 +137,15 @@ export default async function Home() {
             />
           )}
           {/* Curation layer: the one-thing spotlight + up to 4 picks. Server-
-           * rendered from the same fetched rows; renders nothing when no
-           * upcoming robs_pick exists. */}
-          <RobsPicks events={events} todayIso={pacificToday().iso} />
+           * rendered from the same fetched rows plus the festival-guide
+           * registry; renders nothing when no upcoming pick or live guide
+           * exists. The Pacific clock is passed in so ended picks drop
+           * (accurate to this page's revalidate window). */}
+          <RobsPicks
+            events={events}
+            todayIso={pacificToday().iso}
+            nowMinutes={nowPacificMinutes()}
+          />
           {/* Project to the lightweight list shape (trimmed description, no
            * scrape-only columns): the page ships the whole upcoming set into the
            * client for filtering, so only what a card renders should cross the

@@ -6,18 +6,28 @@ import type { Hwy4Event } from "./types";
 // IN except the sitemap (crawler-only). Internal links are a real ranking + crawl
 // signal, so every guide must be reachable from a page users and crawlers already
 // hit. This registry is the one place those inbound links are defined; a guide is
-// surfaced from (a) the "Browse similar" chips on each matching event's detail page
-// and (b) its town page, gated by `hideAfter` so a past year's page stops being
+// surfaced from (a) the "Browse similar" chips on each matching event's detail page,
+// (b) its town page, and (c) the homepage Rob's Picks module (lib/picks.ts), which
+// highlights a live guide as a date-range card for the festival's WHOLE run
+// [startDate, hideAfter] and absorbs any robs_pick event row the guide matches
+// (umbrella or nightly), so the highlight is always the festival page, never one
+// night of it. All three are gated by `hideAfter` so a past year's page stops being
 // linked once its festival is over (the page itself lives on for direct/search hits).
+//
+// Next year's festival = one new entry here (path/title/dates); no robs_pick
+// juggling and no seed-script changes are needed for the homepage highlight.
 //
 // Relative (not "@/") imports so the scripts/ test runner can import this.
 
 export type FestivalGuide = {
   path: string;
+  title: string; // display name on curation surfaces (Rob's Picks card)
+  town: string; // display town for the pick card
   label: string; // chip text on an event detail page
   heading: string; // town-page callout heading
   blurb: string; // town-page callout sub-line
   townSlug: string; // the town page that features it
+  startDate: string; // YYYY-MM-DD (Pacific) — the festival's opening day
   hideAfter: string; // YYYY-MM-DD (Pacific) — stop surfacing internal links after this
   matchEvent: (e: Pick<Hwy4Event, "venue_key" | "name">) => boolean;
 };
@@ -25,10 +35,13 @@ export type FestivalGuide = {
 export const FESTIVAL_GUIDES: FestivalGuide[] = [
   {
     path: "/bear-valley-music-festival-2026",
+    title: "Bear Valley Music Festival 2026",
+    town: "Bear Valley",
     label: "Festival guide",
     heading: "Planning for the Bear Valley Music Festival?",
     blurb: "Dates, the full lineup, and getting there, all in one place.",
     townSlug: "bear-valley",
+    startDate: "2026-07-17", // opening day
     hideAfter: "2026-08-02", // the festival's closing day
     matchEvent: (e) =>
       e.venue_key === "big-white-tent" ||
