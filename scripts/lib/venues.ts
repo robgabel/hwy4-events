@@ -183,7 +183,11 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Bear Valley",
     address: "265 Bear Valley Rd, Bear Valley, CA 95223",
   },
-  "bear-valley-adventure-co": {
+  // Key matches the pre-existing hwy4_venues row (created 2026-06-29 via the
+  // create_venue_row flow, blurb human-approved 2026-07-04) — NOT the shorter
+  // "bear-valley-adventure-co", which briefly existed as a duplicate row and
+  // was deleted 2026-07-08 when this registry entry converged on the old key.
+  "bear-valley-adventure-company": {
     canonical: "Bear Valley Adventure Company",
     aliases: [
       "bear valley adventure company",
