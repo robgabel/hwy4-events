@@ -43,6 +43,13 @@ export interface FirecrawlSource {
    * whose pages are quiet off-season (Brice Station Hilltop Concert Series).
    */
   dumpOnEmpty?: boolean;
+  /**
+   * Optional source-specific instruction appended to the extraction prompt's
+   * Rules block. Use for per-source quirks the generic prompt can't know —
+   * e.g. BVAC mixes retail promos (season-pass sales) into its events page
+   * and hosts events at many venues besides its own store.
+   */
+  extractHint?: string;
 }
 
 export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
@@ -53,6 +60,33 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
     url: "https://www.bearvalley.com/events-activities",
     defaultVenue: "Bear Valley Mountain Resort",
     defaultTown: "Bear Valley",
+  },
+  {
+    // Bear Valley Adventure Co. — the village outfitter (XC ski center, boat/
+    // bike rentals, Reba's cafe). Squarespace events collection: each event
+    // block carries a real date, times, venue + map address, description, and
+    // a durable per-event permalink. The page lists PAST events too (the
+    // extractor prompt + runner both filter those) and mixes in retail promos
+    // (season-pass sales) that the extractHint tells the LLM to skip. Direct
+    // HTTP is blocked; Firecrawl reads it fine. The org row (hwy4_orgs 'bvac')
+    // deliberately has no canonical_url so the per-event Squarespace permalink
+    // surfaces as the durable link (same reasoning as red-cross).
+    slug: "bvac",
+    name: "Bear Valley Adventure Co.",
+    pageTitle: "Bear Valley Adventure Co. Events",
+    url: "https://www.bvadventures.com/events",
+    defaultVenue: "Bear Valley Adventure Company",
+    defaultTown: "Bear Valley",
+    defaultAddress: "1 Bear Valley Rd, Bear Valley, CA 95223",
+    dumpOnEmpty: true,
+    extractHint:
+      "Skip retail promotions and pass sales (e.g. Season Pass Sale, " +
+      "3rd Grader Season Pass, Trail Pass Tuesdays, store sales); they are " +
+      "commerce announcements, not events. Many events on this page are NOT " +
+      "at the store: lift each event's own venue name and street address " +
+      "from its location/map text (Lake Alpine, Bear Valley Meadow, the Big " +
+      "White Tent, etc.). Include each event's own bvadventures.com/events/ " +
+      "permalink as event_url.",
   },
   {
     slug: "branding-iron",

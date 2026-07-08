@@ -35,6 +35,9 @@ export const NON_CORRIDOR_CITIES = [
   "sonora",
   "columbia",
   "jamestown",
+  // Alpine County, over Ebbetts Pass — BVAC's events page lists the Death
+  // Ride (Turtle Rock Park, Markleeville), which is outside the corridor.
+  "markleeville",
 ];
 
 /**

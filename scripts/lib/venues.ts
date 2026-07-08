@@ -183,6 +183,22 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Bear Valley",
     address: "265 Bear Valley Rd, Bear Valley, CA 95223",
   },
+  "bear-valley-adventure-co": {
+    canonical: "Bear Valley Adventure Company",
+    aliases: [
+      "bear valley adventure company",
+      "bear valley adventure co",
+      "bear valley adventure co.",
+      "bear valley adventures",
+      "bvac",
+    ],
+    town: "Bear Valley",
+    // The village outfitter (XC ski center, boat/bike rentals, Reba's cafe) at
+    // the Hwy 4 / Bear Valley Rd corner; address per bvadventures.com/directions.
+    // Shares "1 Bear Valley Rd" with bear-valley-meadow next door — the matcher
+    // auto-excludes ambiguous addresses, so resolution rides the aliases.
+    address: "1 Bear Valley Rd, Bear Valley, CA 95223",
+  },
   "lake-alpine-lodge": {
     canonical: "Lake Alpine Lodge",
     aliases: [

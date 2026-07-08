@@ -99,6 +99,7 @@ export async function scrapeFirecrawlSource(source: FirecrawlSource): Promise<vo
       defaultVenue: source.defaultVenue,
       defaultTown: source.defaultTown,
       defaultAddress: source.defaultAddress,
+      extractHint: source.extractHint,
     }
   );
 
