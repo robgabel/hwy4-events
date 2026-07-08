@@ -60,8 +60,12 @@ const MANUAL_VENUE_PATTERNS: readonly string[] = [
   // nowhere"), so the scrapers can't read it. The lineup is transcribed by hand
   // (scripts/seed-lake-alpine-lodge-2026.ts). This keeps an aggregator from later
   // re-listing the shows with wrong/flattened dates over the curated rows. Matches
-  // the venue_name ("Lake Alpine Lodge") on every variant.
-  "lake alpine",
+  // the venue_name ("Lake Alpine Lodge") on every variant. Deliberately NOT the
+  // bare "lake alpine": BVAC's events page has real non-lodge events at the lake
+  // (e.g. "Lake Alpine Kid's Fishing Day") that a broader pattern would silently
+  // drop — the seeded rows all carry venue_name "Lake Alpine Lodge", so the
+  // narrower pattern still protects every one of them.
+  "lake alpine lodge",
 ];
 
 export interface MatchableEvent {

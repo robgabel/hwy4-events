@@ -1,6 +1,6 @@
 # PRD: Bear Valley Adventure Co. (bvadventures.com) Event Source
 
-> **Status (2026-07-07):** Plan — not yet built. Source analysis verified against a live Firecrawl scrape of the page. Predecessor context: `PRD-bear-valley-events.md` §"Future sources" flagged bvadventures.com as a Phase 4+ candidate.
+> **Status (2026-07-08):** Built. Steps 1–6 shipped (config entry with `extractHint`, `bvac` org row — migration `20260708_add_bvac_org.sql`, applied — extractor max_tokens/skip-past/hint changes, Markleeville corridor exclusion, `"lake alpine"` blocklist narrowed to `"lake alpine lodge"`, `bear-valley-adventure-co` registry entry + `hwy4_venues` row seeded). The DB-layer corridor backstop turned out to be a deliberately San-Andreas-only trigger (`hide_out_of_corridor_san_andreas`), not a mirrored city list, so it was left alone — the TS-side write filter is what drops Markleeville rows. All 288 scripts tests pass; venue-matcher/blocklist/corridor behavior for the BVAC cases verified by hand. Remaining: the step-8 manual first run (`cd scripts && npx tsx scrape.ts --source bvac`, needs prod env keys) + post-run dedup review.
 
 ## Overview
 

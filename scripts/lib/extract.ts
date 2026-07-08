@@ -82,6 +82,12 @@ export interface VenueContext {
   defaultVenue: string;
   defaultTown: string;
   defaultAddress?: string;
+  /**
+   * Optional source-specific instruction appended to the prompt's Rules
+   * block (see FirecrawlSource.extractHint). E.g. BVAC: skip season-pass
+   * sale promos, lift per-event venues/addresses.
+   */
+  extractHint?: string;
 }
 
 const DEFAULT_VENUE_CONTEXT: VenueContext = {
@@ -100,6 +106,7 @@ export async function extractEvents(
   venueContext?: VenueContext
 ): Promise<ExtractedEvent[]> {
   const ctx = venueContext ?? DEFAULT_VENUE_CONTEXT;
+  const today = new Date().toISOString().slice(0, 10);
   const prompt = `Extract all discrete events from this venue's events page.
 For each event, return JSON with these fields:
 
@@ -118,10 +125,11 @@ For each event, return JSON with these fields:
 
 Rules:
 - Only extract events with specific dates. Ignore vague mentions ("events coming soon").
+- Today is ${today}. Skip events whose date is already in the past — some pages list past events alongside upcoming ones.
 - If a post describes a date range (e.g., "July 17 – August 2"), create ONE entry with the start date and note the full date range in the description.
 - If no events are found, return an empty array.
 - Use ${year} for dates unless the post clearly states a different year.
-- Default venue_name to "${ctx.defaultVenue}" if no specific venue is mentioned.
+- Default venue_name to "${ctx.defaultVenue}" if no specific venue is mentioned.${ctx.extractHint ? `\n- ${ctx.extractHint}` : ""}
 
 Return a JSON array only, no other text.
 
@@ -136,7 +144,10 @@ ${content}`;
     // It's the highest-stakes call in the pipeline — a wrong venue/address here
     // ships straight to the map — so accuracy beats the per-call cost savings.
     model: "claude-sonnet-4-6",
-    max_tokens: 2048,
+    // 8192, not 2048: a busy source (BVAC lists ~50 events including past
+    // ones) overflows a 2048-token JSON array, and truncated JSON fails
+    // parse — the source then silently extracts 0 events.
+    max_tokens: 8192,
     // Accuracy first: extraction must never invent facts. The voice constitution
     // governs ONLY how the free-text `description` field is phrased.
     system: withVoice(
