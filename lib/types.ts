@@ -173,9 +173,15 @@ export type EventListItem = Pick<
 >;
 
 export interface CollapsedEvent extends EventListItem {
+  // Multi-day run collapsed to a date-range card (lib/collapse-events.ts).
   endDate?: string;
   dayCount?: number;
   isCollapsed?: boolean;
+  // Spaced recurring series collapsed to its next occurrence: how many
+  // upcoming instances this card stands for, and the data-derived cadence
+  // behind the card's "Weekly"/"Repeats" chip.
+  seriesCount?: number;
+  seriesCadence?: "weekly" | "recurring";
 }
 
 export { TOWNS } from "./towns";

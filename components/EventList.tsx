@@ -15,7 +15,6 @@ import EventCard from "./EventCard";
 import type { TownForecasts } from "@/lib/weather";
 import {
   parseDate,
-  differenceInCalendarDays,
   startOfDay,
   getNextFriday,
   formatFullDate,
@@ -23,6 +22,7 @@ import {
   formatLongMonthDay,
   formatISODate,
 } from "@/lib/date-utils";
+import { collapseEventList, isHighlightEvent } from "@/lib/collapse-events";
 import { pacificToday, pacificDateGroupKind } from "@/lib/date-windows";
 import { nowPacificMinutes, hasEventEnded, hasEventStarted } from "@/lib/event-time";
 
@@ -47,73 +47,6 @@ const ALL_CATEGORIES: EventCategory[] = [
 // Insert the inline newsletter signup right after the 5th event in the list
 // (0-based index 4), regardless of which day that event falls on.
 const NEWSLETTER_AFTER_EVENT_INDEX = 4;
-
-function getBaseName(name: string): string {
-  return name
-    .replace(/\s*-\s*Day\s*\d+$/i, "")
-    .replace(/\s*\(through[^)]*\)$/i, "")
-    .replace(/\s*\(Opening Day\)$/i, "")
-    .trim();
-}
-
-function collapseMultiDayEvents(events: EventListItem[]): CollapsedEvent[] {
-  const baseNameMap = new Map<string, EventListItem[]>();
-
-  for (const event of events) {
-    const baseName = getBaseName(event.name);
-    if (!baseNameMap.has(baseName)) {
-      baseNameMap.set(baseName, []);
-    }
-    baseNameMap.get(baseName)!.push(event);
-  }
-
-  const collapsedIds = new Set<string>();
-  const collapsedGroups = new Map<string, EventListItem[]>();
-
-  for (const [baseName, groupEvents] of baseNameMap) {
-    if (groupEvents.length > 1) {
-      const dates = groupEvents.map((e) => parseDate(e.date));
-      const minDate = dates.reduce((a, b) => (a < b ? a : b));
-      const maxDate = dates.reduce((a, b) => (a > b ? a : b));
-      const span = differenceInCalendarDays(maxDate, minDate);
-
-      if (span <= 7) {
-        collapsedGroups.set(baseName, groupEvents);
-        for (const e of groupEvents) {
-          collapsedIds.add(e.id);
-        }
-      }
-    }
-  }
-
-  const result: CollapsedEvent[] = [];
-  const addedBases = new Set<string>();
-
-  for (const event of events) {
-    if (collapsedIds.has(event.id)) {
-      const baseName = getBaseName(event.name);
-      if (!addedBases.has(baseName)) {
-        addedBases.add(baseName);
-        const groupEvents = collapsedGroups.get(baseName)!;
-        const allArtists = [
-          ...new Set(groupEvents.flatMap((e) => e.artists || [])),
-        ];
-        result.push({
-          ...groupEvents[0],
-          name: baseName,
-          endDate: groupEvents[groupEvents.length - 1].date,
-          dayCount: groupEvents.length,
-          isCollapsed: true,
-          artists: allArtists.length > 0 ? allArtists : groupEvents[0].artists,
-        });
-      }
-    } else {
-      result.push(event);
-    }
-  }
-
-  return result;
-}
 
 // A multi-day collapsed event is represented by its FIRST day, but it's only
 // "over" once the final day's slot has passed — so check ended against endDate.
@@ -222,11 +155,17 @@ function writeSavedListState(state: SavedListState): void {
   }
 }
 
+// "highlights" trims the feed to distinct happenings (one-offs, festivals,
+// picks, live music with a named act) by dropping the recurring weekly
+// regulars; "everything" keeps them (collapsed to one card per series).
+type ViewMode = "highlights" | "everything";
+
 type SavedFilterPrefs = {
   categories: EventCategory[];
   towns: string[];
   showWeekly: boolean;
   orgs: string[];
+  viewMode: ViewMode;
 };
 
 // The homepage filter selections (event types, towns, weekly, clubs), saved to
@@ -260,6 +199,7 @@ function readFilterPrefs(): SavedFilterPrefs | null {
       orgs: Array.isArray(parsed.orgs)
         ? parsed.orgs.filter((o): o is string => typeof o === "string")
         : [],
+      viewMode: parsed.viewMode === "highlights" ? "highlights" : "everything",
     };
   } catch {
     return null;
@@ -292,6 +232,10 @@ export default function EventList({
   );
   const [showWeekly, setShowWeekly] = useState(true);
   const [enabledOrgs, setEnabledOrgs] = useState<Set<string>>(new Set());
+  // Highlights | Everything view toggle. A standing preference (persisted with
+  // the filters, unlike the momentary quick chips); defaults to Everything so
+  // nothing is hidden until the reader chooses.
+  const [viewMode, setViewMode] = useState<ViewMode>("everything");
   const [weekendOnly, setWeekendOnly] = useState(false);
   const [freeOnly, setFreeOnly] = useState(false);
   // Category quick filter (Kids / Live Music). Mutually exclusive — an event
@@ -327,6 +271,7 @@ export default function EventList({
       setSelectedCategories(new Set(prefs.categories));
       setShowWeekly(prefs.showWeekly);
       setEnabledOrgs(new Set(prefs.orgs));
+      setViewMode(prefs.viewMode);
     }
     setPrefsHydrated(true);
   }, []);
@@ -347,8 +292,9 @@ export default function EventList({
       towns,
       showWeekly,
       orgs: [...enabledOrgs],
+      viewMode,
     });
-  }, [prefsHydrated, selectedCategories, selectedTowns, showWeekly, enabledOrgs]);
+  }, [prefsHydrated, selectedCategories, selectedTowns, showWeekly, enabledOrgs, viewMode]);
 
   useEffect(() => {
     const el = filterRef.current;
@@ -385,6 +331,7 @@ export default function EventList({
     setSelectedTowns(new Set(TOWNS));
     setShowWeekly(true);
     setEnabledOrgs(new Set());
+    setViewMode("everything");
     setWeekendOnly(false);
     setFreeOnly(false);
     setCategoryQuick(null);
@@ -392,6 +339,9 @@ export default function EventList({
 
   // Whether the persistent filters (not the momentary quick chips) sit at their
   // defaults — drives the "your filters are saved · show all" escape hatch.
+  // viewMode is deliberately excluded: the hatch guards against filters hidden
+  // in the collapsed panel, and the Highlights/Everything toggle is always
+  // visible with its own state (though resetFilters still clears it).
   const filtersAreDefault =
     selectedCategories.size === ALL_CATEGORIES.length &&
     selectedTowns.size === TOWNS.length &&
@@ -416,7 +366,7 @@ export default function EventList({
   }, []);
 
   const filtered = useMemo(() => {
-    const visible = initialEvents.filter((e) => {
+    return initialEvents.filter((e) => {
       if (e.visibility === "private") {
         // Members-only (e.g. Blue Lake Springs): shown only when the org is
         // explicitly enabled in the Clubs filter. The Event Type filter does
@@ -434,16 +384,25 @@ export default function EventList({
       if (categoryQuick && e.category !== categoryQuick) return false;
       return true;
     });
-    return collapseMultiDayEvents(visible);
   }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange, freeOnly, categoryQuick]);
+
+  // Collapse repetition into one card per happening: multi-day runs become a
+  // date-range card, weekly series become their next occurrence + a cadence
+  // chip (lib/collapse-events.ts). Clock-aware so a series card re-anchors to
+  // the next date once today's instance ends. The Highlights lens then drops
+  // the recurring regulars (picks, festivals, and named-act live music stay).
+  const collapsed = useMemo(() => {
+    const cards = collapseEventList(filtered, now);
+    return viewMode === "highlights" ? cards.filter(isHighlightEvent) : cards;
+  }, [filtered, now, viewMode]);
 
   // Drop events that have already ended (today's morning slots, mostly). Until
   // the clock is known (`now === null`, i.e. server + first paint) show the full
   // day so there's no hydration mismatch; after mount, finished events fall off.
   const visible = useMemo(() => {
-    if (now === null) return filtered;
-    return filtered.filter((e) => !eventHasEnded(e, now));
-  }, [filtered, now]);
+    if (now === null) return collapsed;
+    return collapsed.filter((e) => !eventHasEnded(e, now));
+  }, [collapsed, now]);
 
   const groups = useMemo(() => groupEventsByDate(visible), [visible]);
 
@@ -481,7 +440,7 @@ export default function EventList({
   const pendingScrollRef = useRef<number | null>(null);
 
   // Reset visible count when filters change (show initial batch of new results)
-  const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}-${freeOnly}-${categoryQuick ?? ""}`;
+  const filteredKey = `${selectedCategories.size}-${selectedTowns.size}-${showWeekly}-${enabledOrgs.size}-${weekendOnly}-${freeOnly}-${categoryQuick ?? ""}-${viewMode}`;
   useEffect(() => {
     setVisibleCount(INITIAL_EVENTS);
   }, [filteredKey]);
@@ -591,6 +550,39 @@ export default function EventList({
       >
         {/* Quick filters: This Weekend / Free */}
         <div className="mb-2 flex flex-wrap items-center gap-2">
+          {/* Highlights | Everything view toggle. Two honest stops, not a
+              slider: Highlights hides the recurring weekly regulars, Everything
+              shows them (one card per series). Persisted with the filters. */}
+          <div
+            role="group"
+            aria-label="Feed view"
+            className="inline-flex overflow-hidden rounded-full border border-stone-light/40 bg-white text-xs font-medium"
+          >
+            <button
+              onClick={() => setViewMode("highlights")}
+              aria-pressed={viewMode === "highlights"}
+              title="Just the standout stuff: one-offs, festivals, and shows with a named act"
+              className={`cursor-pointer px-3 py-1 transition-colors ${
+                viewMode === "highlights"
+                  ? "bg-pine text-white"
+                  : "text-stone hover:text-pine"
+              }`}
+            >
+              Highlights
+            </button>
+            <button
+              onClick={() => setViewMode("everything")}
+              aria-pressed={viewMode === "everything"}
+              title="The full calendar, weekly classes and regulars included"
+              className={`cursor-pointer border-l border-stone-light/40 px-3 py-1 transition-colors ${
+                viewMode === "everything"
+                  ? "bg-pine text-white"
+                  : "text-stone hover:text-pine"
+              }`}
+            >
+              Everything
+            </button>
+          </div>
           <button
             onClick={() => setWeekendOnly(!weekendOnly)}
             className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
