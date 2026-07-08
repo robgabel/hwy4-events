@@ -10,6 +10,7 @@ import {
   type GrowthDigest,
 } from "@/lib/agent/types";
 import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
+import { parseModelJson } from "@/lib/agent/model-json";
 import { captureLessonsFromConcludedExperiments } from "@/lib/agent/growth-lessons";
 
 // Growth memo (PRD-growth-agent.md, Phase 1). The weekly Head-of-Growth
@@ -57,24 +58,6 @@ experiments: you are given the team's LOGGED experiments in the "experiments" fi
 
 Your memory: the signal pack carries two durable memory fields so you compound instead of starting fresh each week. "lessons" is a list of distilled findings from past concluded experiments plus hand-added notes (what has already worked or flopped on this site). Treat them as accumulated ground truth: do not re-propose a move a lesson says failed, and lean toward a move a lesson says worked. "prior_moves" is your OWN move_of_the_week from recent weeks, dated. Before you name this week's move, glance at prior_moves against the live signals and, when the numbers actually show it, say in one line (in watching, or in the move's why) whether a recent move landed (e.g. a page you pushed now appears in seo.top or its query climbed in seo.striking). When "lessons" or "prior_moves" is non-empty, ground the memo at least once in a specific prior lesson or a read on a prior move, so the reader sees the agent building on itself; when both are empty (early days), just write the memo, do not force it. Never fabricate an outcome the numbers do not show, and never invent a prior move that is not in prior_moves; if you cannot tell whether a prior move worked yet, say it is too early.`;
 
-function safeJson(text: string): unknown {
-  const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    if (start !== -1 && end > start) {
-      try {
-        return JSON.parse(cleaned.slice(start, end + 1));
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  }
-}
-
 async function generateMemo(context: GrowthContext): Promise<{
   digest: GrowthDigest | null;
   status: "ok" | "degraded";
@@ -105,7 +88,7 @@ async function generateMemo(context: GrowthContext): Promise<{
   const truncated = message.stop_reason === "max_tokens";
   const block = message.content[0];
   const text = block && block.type === "text" ? block.text : "";
-  const parsed = coerceGrowthDigest(safeJson(text));
+  const parsed = coerceGrowthDigest(parseModelJson(text));
   if (parsed) return { digest: parsed, status: "ok", failure: null, usage };
 
   // Parsing failed. Do NOT pour the raw model output into the summary card — it

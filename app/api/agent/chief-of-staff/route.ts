@@ -17,6 +17,7 @@ import {
   type PicksRunway,
 } from "@/lib/agent/picks-runway";
 import { FESTIVAL_GUIDES } from "@/lib/event-guides";
+import { parseModelJson } from "@/lib/agent/model-json";
 
 // Agent Cockpit Stage 0 reasoner. Reads the day's signals (verification queue,
 // pending submissions, recent auto-merges, latest SEO capture), asks Sonnet to
@@ -161,28 +162,6 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
   };
 }
 
-function safeJson(text: string): unknown {
-  const cleaned = text
-    .trim()
-    .replace(/^```(?:json)?/i, "")
-    .replace(/```$/, "")
-    .trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    if (start !== -1 && end > start) {
-      try {
-        return JSON.parse(cleaned.slice(start, end + 1));
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  }
-}
-
 async function generateDigest(
   context: DigestContext
 ): Promise<{ digest: Digest; status: string; usage: { input: number; output: number } }> {
@@ -209,7 +188,7 @@ async function generateDigest(
   };
   const block = message.content[0];
   const text = block && block.type === "text" ? block.text : "";
-  const parsed = coerceDigest(safeJson(text));
+  const parsed = coerceDigest(parseModelJson(text));
   if (parsed) return { digest: parsed, status: "ok", usage };
 
   // Fallback: keep the raw text as the summary so the cockpit still renders.
