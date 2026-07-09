@@ -9,6 +9,7 @@ import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
 import { FIRECRAWL_SOURCES } from "./scrapers/firecrawl-sources.js";
 import { validateEventUrls } from "./lib/validate-urls.js";
 import { runHealthCheck } from "./lib/health.js";
+import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape-run-log.js";
 
 /**
  * Sources whose scraping shape is unique enough to keep their own file:
@@ -56,6 +57,8 @@ async function main() {
     selectedSource ? `(source: ${selectedSource})` : "(all sources)"
   );
 
+  beginScrapeRun();
+
   for (const source of sources) {
     const scraper = SCRAPERS[source];
     if (!scraper) {
@@ -68,9 +71,15 @@ async function main() {
       await scraper();
     } catch (err) {
       console.error(`\nError scraping ${source}:`, err);
+      recordSourceError(source, err instanceof Error ? err.message : String(err));
       // Continue with other sources
     }
   }
+
+  // Write the per-source run summary now, before the slower steps below —
+  // so a runner timeout during URL validation can't erase scraper health
+  // visibility (see scripts/lib/scrape-run-log.ts).
+  await finishScrapeRun(sources);
 
   // Validate all event URLs after scraping
   const skipValidation = args.includes("--skip-url-check");

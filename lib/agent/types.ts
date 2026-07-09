@@ -272,6 +272,44 @@ export function coerceGrowthDigest(raw: unknown): GrowthDigest | null {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Scraper health memo (the operational-health cockpit tab). Weekly reasoner
+// over `scrape_runs` (written by scripts/lib/scrape-run-log.ts on every
+// scripts/scrape.ts run). Reuses the plain Digest/DigestItem shape above —
+// needs_you = sources broken right now, fyi = notable finds / clean weeks,
+// watching = flaky-but-not-broken sources worth eyeballing. Same agent_runs
+// table as the other two reasoners, tagged run_type='scraper_health'.
+// ─────────────────────────────────────────────────────────────────────────
+
+export type ScraperHealthVitals = {
+  windowDays: number;
+  runsInWindow: number;
+  cleanRuns: number;
+  runsWithErrors: number;
+  totalInserted: number;
+  totalUpdated: number;
+  currentlyErroringSources: number;
+};
+
+export type ScraperHealthContext = {
+  date: string;
+  vitals: ScraperHealthVitals;
+  recentRuns: {
+    date: string;
+    status: "clean" | "errors" | "no-data";
+    durationMs: number;
+    sourcesAttempted: number;
+    sourcesErrored: number;
+    totalInserted: number;
+    totalUpdated: number;
+  }[];
+  // Sources currently erroring (their most recent appearance was a failure).
+  brokenSources: { key: string; lastError: string | null; lastErrorAt: string | null; errorRunsInWindow: number }[];
+  // Sources that ran clean all window but never inserted/updated anything —
+  // possibly a site that changed shape, or a genuinely quiet source.
+  quietSources: { key: string; runsSeen: number }[];
+};
+
 // Defensive coercion of model JSON into a Digest. Never throws; returns null
 // if the shape is unusable so the caller can fall back to a degraded run.
 export function coerceDigest(raw: unknown): Digest | null {

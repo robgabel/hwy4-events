@@ -15,7 +15,7 @@ export async function PulseTabs({
   active,
   right,
 }: {
-  active: "today" | "growth" | "experiments" | "venues";
+  active: "today" | "growth" | "experiments" | "venues" | "scrapers";
   right?: ReactNode;
 }) {
   const venuesTodo = await countMissingEither("hwy4_venues", "blurb", "address", "venue_key");
@@ -34,6 +34,7 @@ export async function PulseTabs({
       <Tab href="/admin/briefings?view=growth" label="Growth memo" sub="weekly" active={active === "growth"} />
       <Tab href="/admin/experiments" label="Experiments" sub="growth memory" active={active === "experiments"} />
       <Tab href="/admin/venues" label="Venues" sub="blurbs" active={active === "venues"} badge={venuesTodo} />
+      <Tab href="/admin/scrapers" label="Scrapers" sub="pipeline health" active={active === "scrapers"} />
       {right && <div style={{ marginLeft: "auto", marginBottom: 6 }}>{right}</div>}
     </div>
   );

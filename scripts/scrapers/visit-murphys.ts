@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import FirecrawlApp from "@mendable/firecrawl-js";
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
@@ -13,6 +14,16 @@ import { classifyEventCategory } from "../../lib/categorize.js";
  * categories) — far more reliable than Firecrawl-markdown + LLM extraction.
  *
  * This scraper replaces the previous `visit-murphys` Firecrawl source.
+ *
+ * The site started bot-walling plain server-side fetches in late June 2026
+ * (a direct `fetch` to the wp-json endpoint now 403s, or 200s with an HTML
+ * challenge page instead of JSON, on every request — confirmed from multiple
+ * source IPs, so it's not a User-Agent fix). `fetchTribePage` tries the plain
+ * fetch first (free, fast, works if the wall ever lifts) and falls back to
+ * fetching the same URL through Firecrawl (`formats: ["rawHtml"]`, which
+ * returns the endpoint's raw JSON body unprocessed) when it's blocked —
+ * same escape hatch `red-cross.ts` and `sequoia-woods.ts` use for other
+ * bot-protected sources.
  */
 
 const API_URL = "https://visitmurphys.com/wp-json/tribe/events/v1/events";
@@ -159,6 +170,63 @@ function mapTribeEvent(ev: TribeEvent): ExtractedEvent | null {
 
 // ---------- Pagination ----------
 
+/**
+ * Fetches one Tribe API page, falling back to Firecrawl when the site's
+ * bot wall blocks a plain fetch (403, or a 200 whose body is an HTML
+ * challenge page instead of JSON). Returns null on the natural
+ * end-of-results 400.
+ */
+async function fetchTribePage(url: string, page: number): Promise<TribeResponse | null> {
+  const resp = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
+      Accept: "application/json",
+    },
+  });
+
+  if (resp.ok) {
+    const text = await resp.text();
+    try {
+      return JSON.parse(text) as TribeResponse;
+    } catch {
+      console.warn(`  page ${page}: 200 but not JSON (bot-wall challenge page) — retrying via Firecrawl`);
+      return fetchTribePageViaFirecrawl(url, page);
+    }
+  }
+
+  // Tribe returns 400 for pages past the last one — that's the natural stop.
+  if (resp.status === 400 && page > 1) {
+    return null;
+  }
+
+  console.warn(`  page ${page}: direct fetch failed (${resp.status}) — retrying via Firecrawl`);
+  return fetchTribePageViaFirecrawl(url, page);
+}
+
+async function fetchTribePageViaFirecrawl(url: string, page: number): Promise<TribeResponse | null> {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) {
+    throw new Error(`Tribe API request blocked on page ${page} and FIRECRAWL_API_KEY is unset — no fallback available`);
+  }
+
+  const firecrawl = new FirecrawlApp({ apiKey });
+  const result = await firecrawl.scrapeUrl(url, {
+    formats: ["rawHtml"],
+    onlyMainContent: false,
+    timeout: 30000,
+  });
+
+  if (!result.success || !result.rawHtml) {
+    throw new Error(`Tribe API request failed on page ${page}: Firecrawl fallback also failed`);
+  }
+
+  try {
+    return JSON.parse(result.rawHtml) as TribeResponse;
+  } catch {
+    throw new Error(`Tribe API request failed on page ${page}: Firecrawl fallback did not return valid JSON`);
+  }
+}
+
 async function fetchAllEvents(): Promise<TribeEvent[]> {
   const today = new Date().toISOString().slice(0, 10);
   const events: TribeEvent[] = [];
@@ -166,21 +234,11 @@ async function fetchAllEvents(): Promise<TribeEvent[]> {
   for (let page = 1; page <= MAX_PAGES; page++) {
     const url = `${API_URL}?per_page=${PER_PAGE}&start_date=${today}&page=${page}`;
     console.log(`  fetching page ${page} …`);
-    const resp = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
-        Accept: "application/json",
-      },
-    });
-    if (!resp.ok) {
-      // Tribe returns 400 for pages past the last one — that's the natural stop.
-      if (resp.status === 400 && page > 1) {
-        console.log(`  page ${page} returned 400 — end of results`);
-        break;
-      }
-      throw new Error(`Tribe API request failed: ${resp.status} on page ${page}`);
+    const data = await fetchTribePage(url, page);
+    if (!data) {
+      console.log(`  page ${page} returned 400 — end of results`);
+      break;
     }
-    const data = (await resp.json()) as TribeResponse;
     if (!data.events || data.events.length === 0) {
       console.log(`  page ${page} empty — stopping`);
       break;

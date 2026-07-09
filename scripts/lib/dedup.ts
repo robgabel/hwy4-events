@@ -14,6 +14,7 @@ import {
 import { sanitizeDescription } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
 import { isHttpUrl } from "../../lib/url.js";
+import { recordSourceResult } from "./scrape-run-log.js";
 
 /**
  * Strip HTML tag-like sequences from scraped free-text. Defense in depth for
@@ -676,6 +677,7 @@ async function upsertEventsBatched(
     }
   }
 
+  recordSourceResult(orgSlug, result);
   return result;
 }
 
@@ -903,5 +905,6 @@ export async function upsertEvents(
     }
   }
 
+  recordSourceResult(orgSlug, result);
   return result;
 }
