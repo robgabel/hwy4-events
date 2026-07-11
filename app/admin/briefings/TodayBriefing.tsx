@@ -144,6 +144,13 @@ function VitalsStrip({ vitals }: { vitals: Vitals }) {
       value: vitals.picks_runway_days === null ? "empty" : `${vitals.picks_runway_days}d`,
     });
   }
+  // Runs persisted before 2026-07-11 lack the field; null = no audit summary.
+  if (vitals.audit_backlog !== undefined) {
+    stats.push({
+      label: "Data backlog",
+      value: vitals.audit_backlog === null ? "no audit" : vitals.audit_backlog,
+    });
+  }
   return (
     <div
       style={{

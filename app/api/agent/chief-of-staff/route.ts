@@ -18,6 +18,11 @@ import {
 } from "@/lib/agent/picks-runway";
 import { FESTIVAL_GUIDES } from "@/lib/event-guides";
 import { parseModelJson } from "@/lib/agent/model-json";
+import {
+  AUDIT_SIGNAL_KEY,
+  ensureAuditItems,
+  parseAuditSignal,
+} from "@/lib/agent/audit-signal";
 
 // Agent Cockpit Stage 0 reasoner. Reads the day's signals (verification queue,
 // pending submissions, recent auto-merges, latest SEO capture), asks Sonnet to
@@ -39,6 +44,8 @@ Triage into three buckets:
 - fyi: ran-fine confirmations and minor notes that need no action.
 - watching: search/SEO movement worth tracking, not acting on.
 
+Data-quality audit: the audit signal is yesterday's /api/check-events run (issue counts, actionable link gaps, a few named examples). These are standing registry chores (add a venue to the registry, add an org row), not today decisions: when nonzero, put ONE line in watching with the total and the biggest classes, and never let the summary claim a fully clean state while the backlog is nonzero (say "quiet, N data-quality items on the standing backlog" instead). Escalate to needs_you only if analytics_stale is true (un-snapshotted analytics days are lost for good) or the audit signal itself is stale (the watchdog cron has stopped).
+
 Rob's Picks runway: the picks signal describes the homepage's hand-curated highlight module. upcoming_picks is how many flagged picks are scheduled from today on; runway_days is how many days until the section goes empty (a live festival guide counts as content); null means it is empty right now. Nothing automated ever creates a pick, only Rob can. If runway_days is null or 7 or fewer, put one item in needs_you telling Rob to flag a new robs_pick. A healthy runway needs no mention.
 
 Do not manufacture urgency. A quiet day is a fine outcome: say so in the summary and keep needs_you short or empty.
@@ -55,7 +62,7 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
   const in14 = new Date(Date.now() + 14 * 86_400_000).toISOString().split("T")[0];
   const since24h = new Date(Date.now() - 24 * 3_600_000).toISOString();
 
-  const [upcoming, needsVerif, pendingSubs, merges, seoLatest, picksRows] = await Promise.all([
+  const [upcoming, needsVerif, pendingSubs, merges, seoLatest, picksRows, auditRow] = await Promise.all([
     supabase
       .from("hwy4_events")
       .select("id", { count: "exact", head: true })
@@ -99,7 +106,20 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
       .gte("date", today)
       .order("date", { ascending: false })
       .limit(1),
+    // Yesterday's data-quality audit summary, stashed by /api/check-events
+    // (18:00 UTC, an hour before this digest). Without it the digest is blind
+    // to the audit and "all quiet" can contradict the audit's own Slack post.
+    supabase
+      .from("site_config")
+      .select("value")
+      .eq("key", AUDIT_SIGNAL_KEY)
+      .maybeSingle(),
   ]);
+
+  const audit = parseAuditSignal(
+    (auditRow.data as { value?: string } | null)?.value ?? null,
+    Date.now()
+  );
 
   const picks: PicksRunway = computePicksRunway(
     today,
@@ -135,6 +155,7 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
     merges_24h: merges.count ?? 0,
     seo_rows: seoTop.length,
     picks_runway_days: picks.runway_days,
+    audit_backlog: audit ? audit.open_issues + audit.actionable_link_gaps : null,
   };
 
   return {
@@ -159,6 +180,7 @@ async function gatherContext(supabase: SupabaseClient): Promise<DigestContext> {
     })),
     seo: { captured_at: seoCaptured, top: seoTop },
     picks,
+    audit,
   };
 }
 
@@ -199,11 +221,19 @@ async function generateDigest(
   };
 }
 
-async function postSlack(digest: Digest): Promise<void> {
+async function postSlack(digest: Digest, auditBacklog: number | null): Promise<void> {
   const webhook = process.env.SLACK_WEBHOOK_URL;
   if (!webhook) return;
   const n = digest.needs_you.length;
-  const header = n > 0 ? `${n} thing(s) need you` : "all quiet";
+  // "all quiet" only when the standing backlog really is zero. The audit posts
+  // its open items to this same channel an hour earlier, so a bare "all quiet"
+  // next to a 26-item audit reads as the agents contradicting each other.
+  const header =
+    n > 0
+      ? `${n} thing(s) need you`
+      : auditBacklog && auditBacklog > 0
+        ? `nothing urgent, ${auditBacklog} backlog item(s)`
+        : "all quiet";
   const lines = [`*Hwy4 chief of staff — ${header}*`, digest.summary, `→ ${SITE_URL}/admin/briefings`];
   try {
     await fetch(webhook, {
@@ -247,6 +277,11 @@ export async function GET(request: Request) {
     // the deterministic item (lib/agent/picks-runway.ts).
     if (context.picks) ensurePicksRunwayItem(digest, context.picks);
 
+    // Guard: same contract for the data-quality audit. If yesterday's audit
+    // has open items (watching) or an alarm (needs_you) and no bucket covers
+    // it, append the deterministic item (lib/agent/audit-signal.ts).
+    ensureAuditItems(digest, context.audit ?? null);
+
     const { data: runRow, error } = await supabase
       .from("agent_runs")
       .insert({
@@ -261,7 +296,7 @@ export async function GET(request: Request) {
       .single();
     if (error) throw error;
 
-    await postSlack(digest);
+    await postSlack(digest, context.vitals.audit_backlog ?? null);
 
     // Phase 2 (PRD-roadmap-board.md): file `proposed` roadmap tickets for any
     // concrete dev work the digest implies. Best-effort — never fails the digest.
