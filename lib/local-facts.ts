@@ -28,6 +28,23 @@ export function computeWasEdited(
   return priorDraft.trim() !== finalBlurb.trim();
 }
 
+export type BlurbBackfillVenue = { venue_key: string; blurb: string | null };
+
+// Which venues need a backfilled blurb fact? A published blurb exists but no
+// active blurb fact was ever captured — the ~60 blurbs saved before the capture
+// loop shipped (2026-07-01) fall here. Pure so the one-time backfill script's
+// selection is testable (scripts/backfill-local-facts.ts).
+export function selectBlurbBackfill(
+  venues: BlurbBackfillVenue[],
+  activeBlurbFactKeys: Set<string>
+): { venue_key: string; blurb: string }[] {
+  return venues.flatMap((v) => {
+    const blurb = v.blurb?.trim();
+    if (!blurb || activeBlurbFactKeys.has(v.venue_key)) return [];
+    return [{ venue_key: v.venue_key, blurb }];
+  });
+}
+
 // Record a human-approved venue blurb as a durable local_facts row (Tier B,
 // human confidence). When an AI draft was pending, store it as prior_value and
 // flag whether the human edited it. Supersedes any earlier active blurb fact for
