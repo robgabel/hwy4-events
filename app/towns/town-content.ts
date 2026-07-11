@@ -106,6 +106,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "The Murphys Farmers Market runs Saturdays 9am to 1pm at Murphys Park, May through Thanksgiving. If somebody tells you Sundays, they're working from old info.",
       "Murphys Irish Day in March is the town's biggest street event. Get there early because Main Street fills up. Book Murphy's Taxi (209.795.7777) ahead if you need a ride back.",
       "Sierra Hills Market on E Highway 4 has the deli sandwiches locals actually pack for picnics. Better than the wine-bar charcuterie boards.",
+      "Sierra Nevada Adventure Company at 448 Main Street is the outdoor-gear stop on Main, locally owned since 1994 with a second store up in Arnold. Useful when half your group came for wine and the other half came for the trail.",
       "Bear Valley is another 45 minutes east and roughly 5,000 feet higher. If somebody tells you Murphys is in the snow, they're confused about which town.",
     ],
     faqs: [
@@ -244,12 +245,13 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "The nearest hospital is Mark Twain Medical Center in San Andreas, about 40 minutes down the 4. For urgent care, Adventist Health Rapid Care in Angels Camp is closer, around 25–30 minutes.",
       "Calaveras Big Trees State Park is four miles northeast of Arnold on Highway 4. North Grove Loop is the easy walk, South Grove is the longer one. About 129 campsites.",
       "Arnold has three bike shops. Mountain biking and OHV are a real subculture here, not a marketing line. The Arnold Rim Trail Association maintains the rim trail.",
+      "Sierra Nevada Adventure Company (SNAC, 2293 Hwy 4) has been the corridor's outdoor outfitter since 1994: gear, clothing, and summer kayak, canoe, and paddleboard rentals. White Pines Lake is five minutes from the shop, which is not a coincidence. There's a second SNAC on Main Street in Murphys.",
       "The Labor Day Arts & Crafts Festival in Arnold has been running 45+ years. 50+ vendors, 10am–5pm. It's the town's biggest weekend."
     ],
     "faqs": [
       {
         "question": "What is there to do in Arnold, CA?",
-        "answer": "Calaveras Big Trees State Park (4 miles east), White Pines Lake with a playground and disc golf, Hinterhaus Distilling and Posterity Ciderworks tasting rooms, the Arnold Rim Trail, and Sequoia Woods Country Club golf. In winter, Bear Valley ski resort is 30 minutes east. Most visits anchor on Big Trees or Bear Valley."
+        "answer": "Calaveras Big Trees State Park (4 miles east), White Pines Lake with a playground and disc golf, Hinterhaus Distilling and Posterity Ciderworks tasting rooms, the Arnold Rim Trail, and Sequoia Woods Country Club golf. Sierra Nevada Adventure Company (SNAC) on Hwy 4 rents kayaks, canoes, and paddleboards in summer, and White Pines Lake is five minutes from the shop. In winter, Bear Valley ski resort is 30 minutes east. Most visits anchor on Big Trees or Bear Valley."
       },
       {
         "question": "Where should I eat in Arnold?",
@@ -344,21 +346,23 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     "slug": "bear-valley",
     "townName": "Bear Valley",
     "metaTitle": "Bear Valley Events on Hwy 4 | Hwy 4 Events",
-    "metaDescription": "What's happening at Bear Valley Mountain Resort and the Village Lodge. Ski season, summer concerts, and the Music Festival. Updated daily by a neighbor.",
-    "h1": "Bear Valley events: skiing, the Music Festival, and the Village Lodge",
-    "subhead": "The top of the 4. 6,600 to 8,500 feet, snow half the year, music in the summer.",
-    "introTeaser": "Bear Valley Mountain Resort sits at the summit of Hwy 4 with 1,680 skiable acres, 75 trails, 9 lifts, and a base elevation of 8,495 ft. Season runs late November through mid-April, and the Bear Valley Music Festival anchors the summer (2026 dates: July 17 to August 2).",
+    "metaDescription": "What's on at Bear Valley: the ski resort, the Music Festival, and Bear Valley Adventure Company's guided hikes, paddle rentals, and trail days. Updated daily by a neighbor.",
+    "h1": "Bear Valley events: skiing, the Music Festival, and a real summer calendar",
+    "subhead": "The top of the 4. 6,600 to 8,500 feet, snow half the year, music and mountain events in the summer.",
+    "introTeaser": "Bear Valley Mountain Resort sits at the summit of Hwy 4 with 1,680 skiable acres, 75 trails, 9 lifts, and a base elevation of 8,495 ft. Season runs late November through mid-April, the Bear Valley Music Festival anchors the summer (2026 dates: July 17 to August 2), and Bear Valley Adventure Company, the village outfitter at the Hwy 4 turnoff, fills the rest of the calendar with guided hikes, trail days, and boat and bike rentals.",
     "intro": [
       "Bear Valley is the last stop on the 4 before the road closes for winter. About 30 minutes up from Arnold, a different climate, a different feel. Less Tahoe, more Sierra retro.",
       "Heads up for the 25/26 ski season: the resort consolidated most food and beverage to the Village Lodge. Sky High Pizza is open Thursday through Sunday evenings during the season, the General Store runs 9am to 5pm year-round, and Kofi Haus does mornings in winter. Monte Wolfe Saloon, Ebbetts Grill, and Basecamp Pizza are flagged for re-opening in the 26/27 season. Creekside Bistro was closed as of May 2026. Check bearvalley.com before you promise anyone a specific spot.",
-      "Summer is the underrated season. The Music Festival brings classical, jazz, and world music for about two and a half weeks in mid-July through early August. Hiking, mountain biking, fishing, and the scenic chairlift fill in the rest. Ebbetts Pass typically opens late spring to mid-summer (the date moves around with the snowpack), and when it does, the drive over the top to Markleeville is one of the best in California."
+      "Summer is the underrated season, and Bear Valley Adventure Company is most of the reason. BVAC is the outfitter at the corner of Hwy 4 and Bear Valley Road, the building you pass coming into the village, with Reba's Cafe attached. In summer they rent mountain bikes, kayaks, canoes, and paddleboards (Lake Alpine is just up the road), and their events calendar is the busiest in town: guided ranger hikes, trail work days, a kids' fishing day at Lake Alpine, pickleball, and the July 4th pancake breakfast. We pull their calendar into the listings below.",
+      "The Music Festival brings classical, jazz, and world music for about two and a half weeks in mid-July through early August. Hiking, mountain biking, fishing, and the scenic chairlift fill in the rest. Ebbetts Pass typically opens late spring to mid-summer (the date moves around with the snowpack), and when it does, the drive over the top to Markleeville is one of the best in California."
     ],
     "personaNotes": [
       "If you're skiing for the weekend from the Bay Area: it's less crowded than Tahoe, the drive from Arnold is 30 minutes, and on-mountain F&B is reduced this season. Eat at the Village Lodge or come down to Arnold for dinner.",
       "If you're a renter or Airbnb guest heading up: bring chains November through April, and don't assume every restaurant on the resort site is open. The 25/26 lineup is Sky High Pizza, Kofi Haus, and the General Store. The rest comes back 26/27.",
       "If you're planning a summer trip and don't care about snow: aim for mid-July through early August and build the weekend around a Music Festival concert. Days are for hiking, evenings are for the festival tent.",
+      "If you're bringing kids up in summer: BVAC rents kayaks, canoes, and paddleboards for Lake Alpine, and their calendar runs to kids' fishing days and guided ranger hikes. Reba's Cafe at the store covers lunch.",
       "If you live in Arnold or BLS and want a low-key date night in winter: Sky High Pizza on a Thursday is a 30-minute drive, deck views, and you'll get a table.",
-      "If you're a cross-country skier: 3,000 acres of XC terrain with four trailside huts. Way quieter than the downhill side, and the Meadow Café route is the easy intro."
+      "If you're a cross-country skier: Bear Valley Adventure Company runs the cross-country side, 3,000 acres of XC terrain with four trailside huts. Way quieter than the downhill resort, and the Meadow Café route is the easy intro."
     ],
     "worthKnowing": [
       "Resort stats: 1,680 skiable acres, 75 trails, 9 lifts, 1,900 ft of vertical, base elevation 8,495 ft.",
@@ -367,6 +371,8 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "Ebbetts Pass (Hwy 4 east of the resort) closes roughly mid-November to late spring. 'The pass is open' is a real local milestone, not a slogan.",
       "Chain control is normal on Hwy 4 in winter. R-1 lets most cars through with snow tires on a drive axle; R-2 requires chains unless you're 4WD/AWD with snow tires on all four. Speed under control is 25 mph.",
       "Snowmobiling: 70 miles of groomed trails. Some Bear Valley streets are snowmobile-only in winter.",
+      "Bear Valley Adventure Company (bvadventures.com) is the village outfitter at the Hwy 4 / Bear Valley Road corner: mountain bike, kayak, canoe, and paddleboard rentals in summer, the cross-country ski center in winter, and Reba's Cafe in the same building.",
+      "BVAC also runs a real events calendar: guided ranger hikes, trail work days, a kids' fishing day at Lake Alpine, pickleball, and the Bjornloppet cross-country race. We list those events here as they're announced.",
       "Bear Valley Music Festival: 2026 runs July 17 to August 2. Tickets via bearvalleymusicfestival.org.",
       "The General Store at the Village Lodge carries Joma's ice cream (the Murphys outfit) and Gold Country Roasters coffee at Kofi Haus (the Murphys roaster). Local supply chain even at 8,000 ft.",
       "The closest full grocery is Big Trees Market in Arnold, 30 minutes back down the hill. Stock up before you head up.",
@@ -391,10 +397,18 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       },
       {
         "question": "Is there anything to do at Bear Valley in summer?",
-        "answer": "Yes. The Music Festival in mid-July to early August is the anchor. Otherwise: hiking, mountain biking, fishing, swimming, and a scenic chairlift. Once Ebbetts Pass opens, the drive east to Markleeville is one of the best two-lane routes in California."
+        "answer": "Yes, more than most people expect. The Music Festival in mid-July to early August is the anchor. Bear Valley Adventure Company rents mountain bikes, kayaks, canoes, and paddleboards, and runs a summer events calendar of guided ranger hikes, trail work days, pickleball, and a kids' fishing day at Lake Alpine. Otherwise: hiking, fishing, swimming, and a scenic chairlift. Once Ebbetts Pass opens, the drive east to Markleeville is one of the best two-lane routes in California."
+      },
+      {
+        "question": "Who runs the cross-country skiing at Bear Valley?",
+        "answer": "Bear Valley Adventure Company (BVAC), the outfitter at the corner of Hwy 4 and Bear Valley Road, operates the cross-country ski area: about 3,000 acres of XC terrain with four trailside huts, with gear from the same shop. It's separate from the downhill resort at 2280 State Route 207. In summer the shop switches over to bike and boat rentals. Details at bvadventures.com."
+      },
+      {
+        "question": "Where can I rent kayaks, paddleboards, or bikes at Bear Valley?",
+        "answer": "Bear Valley Adventure Company at 1 Bear Valley Road, the building at the village entrance where Bear Valley Road leaves Hwy 4. Kayaks, canoes, paddleboards, and mountain bikes in summer, with Lake Alpine a few minutes up the road, plus Reba's Cafe attached for before or after. Check bvadventures.com for current hours and rates."
       }
     ],
-    "lastVerified": "2026-05-27",
+    "lastVerified": "2026-07-11",
     "draft": false
   },
 

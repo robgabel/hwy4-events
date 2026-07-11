@@ -528,6 +528,33 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Arnold",
     address: "2704 Highway 4, Suite 2-D, Arnold, CA 95223",
   },
+  // Sierra Nevada Adventure Company (SNAC) — the corridor outdoor outfitter,
+  // stores in Arnold and Murphys (plus Sonora, out of corridor). Two stores
+  // share the company name, and the matcher overwrites an event's town on an
+  // alias hit, so the bare "snac" / "sierra nevada adventure company" aliases
+  // are deliberately NOT listed on either entry (they can't disambiguate the
+  // store). Each entry carries only town-qualified aliases; a bare-name event
+  // still links via the unique street address (address index).
+  "snac-arnold": {
+    canonical: "Sierra Nevada Adventure Company (Arnold)",
+    aliases: [
+      "sierra nevada adventure company arnold",
+      "sierra nevada adventure co arnold",
+      "snac arnold",
+    ],
+    town: "Arnold",
+    address: "2293 Highway 4, Arnold, CA 95223",
+  },
+  "snac-murphys": {
+    canonical: "Sierra Nevada Adventure Company (Murphys)",
+    aliases: [
+      "sierra nevada adventure company murphys",
+      "sierra nevada adventure co murphys",
+      "snac murphys",
+    ],
+    town: "Murphys",
+    address: "448 Main Street, Murphys, CA 95247",
+  },
   "my-bar": {
     canonical: "My Bar",
     aliases: [
