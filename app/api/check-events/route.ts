@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
 import { findDuplicateClusters } from "@/lib/dedupe-events";
 import { computeActionableLinkGaps, GAP_VENUE_THRESHOLD } from "@/lib/link-gaps";
+import { AUDIT_SIGNAL_KEY } from "@/lib/agent/audit-signal";
 
 export const maxDuration = 60;
 
@@ -17,7 +18,12 @@ export const maxDuration = 60;
  *  - Stale scrapes: future events whose last_scraped_at is > 14 days old.
  *
  * Posts a summary to SLACK_WEBHOOK_URL if set; always returns JSON.
- * Runs daily via vercel.json cron — keep this READ-ONLY (no mutations).
+ * Runs daily via vercel.json cron — keep this READ-ONLY against event data
+ * (no hwy4_events mutations). The one write is a monitoring artifact: the
+ * compact summary is upserted to site_config (AUDIT_SIGNAL_KEY) so the
+ * chief-of-staff digest an hour later can see what this audit saw — without
+ * it the digest headlined "all quiet" while this route posted a backlog to
+ * the same Slack channel (2026-07-10).
  */
 
 const VALID_CATEGORIES = [
@@ -353,6 +359,42 @@ export async function GET(request: Request) {
 
   const totalIssues = Object.values(summary.issues).reduce((a, b) => a + b, 0);
   console.log("[check-events] Audit complete:", summary);
+
+  // Persist the compact summary for the chief-of-staff digest (19:00 UTC, an
+  // hour after this audit). Shape consumed by lib/agent/audit-signal.ts
+  // (parseAuditSignal). Best-effort: a failed stash never breaks the audit.
+  try {
+    const auditSignal = {
+      audited_at: summary.audited_at,
+      total_future_events: summary.total_future_events,
+      issues: summary.issues,
+      actionable_link_gaps: actionableLinkGaps.length,
+      analytics_stale: analyticsStale,
+      analytics_stale_reason: analyticsStaleReason,
+      samples: {
+        unresolved_venue: unresolvedVenue
+          .slice(0, 3)
+          .map((u) => `"${u.name}" (${u.date}, venue="${u.venue_name}")`),
+        unresolved_address: unresolvedAddress
+          .slice(0, 3)
+          .map((u) => `"${u.name}" @ ${u.venue_name ?? "?"} (${u.date})`),
+        actionable_link_gaps: actionableLinkGaps
+          .slice(0, 3)
+          .map((g) => `${g.venue} (${g.count} events)`),
+      },
+    };
+    const { error: stashErr } = await supabase.from("site_config").upsert(
+      {
+        key: AUDIT_SIGNAL_KEY,
+        value: JSON.stringify(auditSignal),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" }
+    );
+    if (stashErr) console.error("[check-events] audit-signal stash failed:", stashErr.message);
+  } catch (err) {
+    console.error("[check-events] audit-signal stash failed:", err);
+  }
 
   // Post to Slack if there are issues, a high-frequency link gap to nudge, or the
   // analytics snapshot has gone stale (a data-loss risk — see the freshness check).

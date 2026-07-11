@@ -25,6 +25,10 @@ export type Vitals = {
   // Days until the homepage Rob's Picks section goes empty (null = empty now).
   // Optional because agent_runs rows persisted before 2026-07-05 lack it.
   picks_runway_days?: number | null;
+  // Standing data-quality backlog from the daily /api/check-events audit
+  // (issue counts + actionable link gaps; null = no audit summary found).
+  // Optional because agent_runs rows persisted before 2026-07-11 lack it.
+  audit_backlog?: number | null;
 };
 
 // Exactly what the reasoner is handed, and what we persist as context_in.
@@ -57,6 +61,10 @@ export type DigestContext = {
   // Rob's Picks runway (lib/agent/picks-runway.ts). robs_pick is hand-curated,
   // so the digest warns before the homepage picks module quietly goes empty.
   picks?: import("./picks-runway").PicksRunway;
+  // Yesterday's data-quality audit (lib/agent/audit-signal.ts), read back from
+  // site_config so the digest can never say "all quiet" while the audit's own
+  // Slack post lists open items. null = no summary persisted yet.
+  audit?: import("./audit-signal").AuditSignal | null;
 };
 
 export function emptyDigest(summary: string): Digest {
