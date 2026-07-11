@@ -304,6 +304,12 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "murphys community park",
       "murphys park",
       "community park murphys",
+      // The park club's public bocce courts (murphyspark.com/bocce-ball-courts,
+      // physically across Algiers St behind the Murphys Historic Hotel). The
+      // Visit Murphys "Bocce fun!" listing carries only the generic venue
+      // "Downtown Murphys" and says "the Murphys public courts" in its
+      // description, so this alias lets the Layer-2 text scan resolve it.
+      "murphys public courts",
     ],
     town: "Murphys",
     address: "505 Algiers Street, Murphys, CA 95247",
