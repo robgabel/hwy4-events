@@ -4,6 +4,7 @@ import { isDateNightEvent, isFreeEvent } from "@/lib/intent-pages";
 import { townSlug } from "@/lib/slugs";
 import { getTownContent } from "@/app/towns/town-content";
 import { festivalGuideForEvent } from "@/lib/event-guides";
+import { holidayGuideForEvent } from "@/lib/holiday-pages";
 import { pacificToday } from "@/lib/date-windows";
 
 /**
@@ -21,6 +22,10 @@ export default function BrowseSimilar({ event }: { event: Hwy4Event }) {
   // the internal link that keeps that landing page from being an orphan.
   const guide = festivalGuideForEvent(event, pacificToday().iso);
   if (guide) chips.unshift({ href: guide.path, label: guide.label });
+  // Events in the July holiday window link to their town's evergreen 4th of
+  // July guide (the inbound link that keeps /arnold-4th-of-july etc. crawled).
+  const holiday = holidayGuideForEvent(event);
+  if (holiday) chips.unshift({ href: holiday.path, label: holiday.label });
   if (isFreeEvent(event)) chips.push({ href: "/free", label: "Free events" });
   if (isDateNightEvent(event)) {
     chips.push({ href: "/date-night", label: "Date night" });

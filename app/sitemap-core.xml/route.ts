@@ -6,6 +6,7 @@ import { SITE_URL } from "@/lib/constants";
 import { getPublishedTownSlugs } from "@/app/towns/town-content";
 import { TEMPORAL_CONFIG } from "@/lib/date-windows";
 import { INTENT_CONFIG } from "@/lib/intent-pages";
+import { HOLIDAY_GUIDES } from "@/lib/holiday-pages";
 import { renderUrlset, type SitemapUrl } from "@/lib/sitemap";
 
 export const revalidate = 3600;
@@ -35,6 +36,14 @@ export async function GET() {
       loc: `${SITE_URL}${cfg.path}`,
       lastmod: todayISO,
       changefreq: "daily" as const,
+      priority: 0.8,
+    })),
+    // Evergreen holiday guides (HWY-6): year-less URLs that inherit each
+    // year's expired July-4th event pages via lib/seasonal-redirects.ts.
+    ...HOLIDAY_GUIDES.map((g) => ({
+      loc: `${SITE_URL}${g.path}`,
+      lastmod: todayISO,
+      changefreq: "weekly" as const,
       priority: 0.8,
     })),
     // Seasonal festival landing page (HWY-3): live lineup data, daily lastmod.

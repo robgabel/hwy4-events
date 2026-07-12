@@ -12,6 +12,8 @@ import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
 import { buildEventOffer } from "@/lib/schema";
 import { findEventBySlug, findEventFallback, canonicalEventPath } from "@/lib/events";
+import { seasonalRedirectFor } from "@/lib/seasonal-redirects";
+import { pacificToday } from "@/lib/date-windows";
 import { truncateMeta } from "@/lib/description-quality";
 import { posterKind, posterImageUrl, generatedPosterPath, withSrc, humanizeHost } from "@/lib/poster";
 import { format, parseISO } from "date-fns";
@@ -191,6 +193,12 @@ function EventJsonLd({
 
 export default async function EventPage({ params }: PageProps) {
   const { slug } = await params;
+  // Expired seasonal URLs (e.g. last year's July 4th pages) 301 into their
+  // evergreen guide BEFORE the slug lookup: the rows still exist and would
+  // otherwise keep rendering a stale page (PRD-july4-evergreen.md). Exact-match
+  // + past-date-gated, so it can't intercept a live event.
+  const seasonal = seasonalRedirectFor(slug, pacificToday().iso);
+  if (seasonal) permanentRedirect(seasonal);
   const event = await findEventBySlug(slug);
   if (!event) {
     // Stale/non-canonical slug (renamed event, dedup-merged title, or a bare
