@@ -1,8 +1,14 @@
 # PRD: Evergreen Fourth of July pages (convert this year's July 4th search equity into a durable annual asset)
 
-> **Status (2026-07-12):** Plan only, nothing built. Fleshes out roadmap ticket **HWY-6**
-> ("Convert past Arnold 4th of July page to next-year placeholder", filed by the
-> chief-of-staff 2026-07-08). Current truth lives in CLAUDE.md once anything ships.
+> **Status (2026-07-12):** Built, same day as planned. Fleshes out roadmap ticket
+> **HWY-6** ("Convert past Arnold 4th of July page to next-year placeholder", filed
+> by the chief-of-staff 2026-07-08). Shipped: `lib/holiday-pages.ts` +
+> `components/HolidayPageView.tsx` + the `/arnold-4th-of-july` and
+> `/murphys-4th-of-july` routes, `lib/seasonal-redirects.ts` + the detail-page 301
+> hook, sitemap-core entries, town-page callouts, BrowseSimilar chips, and the two
+> pure-test locks (`scripts/test/holiday-pages.test.ts`,
+> `scripts/test/seasonal-redirects.test.ts`). Post-deploy manual step: request
+> indexing for both guide URLs in GSC. Current truth lives in CLAUDE.md.
 
 ## 1. The problem
 

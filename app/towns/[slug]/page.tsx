@@ -26,6 +26,7 @@ import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecast, type TownForecasts } from "@/lib/weather";
 import { linkifyPhones } from "@/lib/linkify";
 import { festivalGuidesForTown } from "@/lib/event-guides";
+import { holidayGuideForTown } from "@/lib/holiday-pages";
 import { pacificToday } from "@/lib/date-windows";
 
 export const revalidate = 3600;
@@ -107,10 +108,15 @@ export default async function TownPage({ params }: PageProps) {
   const forecastsByTown: TownForecasts = { [town.name]: townForecast };
 
   const nearby = pickNearbyTowns(town, 3);
-  // Seasonal festival guide(s) this town hosts (e.g. Bear Valley Music Festival).
-  // These are the town-page inbound link that keeps the guide page from being an
-  // orphan; empty for every town without a live guide.
-  const guides = festivalGuidesForTown(slug, pacificToday().iso);
+  // Guide callouts this town hosts: seasonal festival guide(s) (hideAfter-gated,
+  // e.g. Bear Valley Music Festival) plus the year-round evergreen holiday guide
+  // (e.g. /arnold-4th-of-july). These are the town-page inbound links that keep
+  // those landing pages from being orphans; empty for towns without one.
+  const holidayGuide = holidayGuideForTown(slug);
+  const guides: { path: string; heading: string; blurb: string }[] = [
+    ...festivalGuidesForTown(slug, pacificToday().iso),
+    ...(holidayGuide ? [holidayGuide] : []),
+  ];
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
