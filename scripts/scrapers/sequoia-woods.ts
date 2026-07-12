@@ -1,7 +1,11 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
-import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
+import { decodeEventFields } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
-import { classifyEventCategory } from "../../lib/categorize.js";
+import {
+  mapRawEvent,
+  type MappedEvent,
+  type RawDayEvent,
+} from "../lib/sequoia-woods-map.js";
 
 /**
  * Sequoia Woods Country Club calendar scraper.
@@ -39,9 +43,6 @@ import { classifyEventCategory } from "../../lib/categorize.js";
 const SOURCE_NAME = "Sequoia Woods Country Club";
 const ORG_SLUG = "sequoia-woods";
 const PAGE_URL = "https://www.sequoiawoods.com/calendar";
-const VENUE_NAME = "Sequoia Woods Country Club";
-const TOWN = "Arnold";
-const ADDRESS = "1000 Cypress Point Drive, Arnold, CA 95223";
 
 // Current month + the next 2 (covers e.g. "July and August" from whatever
 // month is showing when the daily cron runs — self-adjusting, not hardcoded).
@@ -89,14 +90,6 @@ const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-
-interface RawDayEvent {
-  date: string; // YYYY-MM-DD
-  summary: string;
-  start: string;
-  end: string;
-  isAllDayEvent: boolean;
-}
 
 interface ParsedMonth {
   monthLabel: string | null;
@@ -200,79 +193,15 @@ async function fetchMonth(firecrawl: FirecrawlApp, offset: number): Promise<Pars
   }
 }
 
-// ─── Classification (Rob's rule, verified against live tagging) ─────────
+// ─── Mapping (pure core in scripts/lib/sequoia-woods-map.ts) ────────────
+//
+// The classification rules AND the Eastern→Pacific time correction live in
+// the pure module (locked by scripts/test/sequoia-woods-time.test.ts); this
+// wrapper just adds the HTML-entity decode, which needs lib/extract.js.
 
-// Third-party private rentals (e.g. "Private Event - Wedding (...)") — never
-// recorded, regardless of anything else in the title.
-const PRIVATE_EVENT_TAG = /private event/i;
-// Members-only competitions/gatherings — gated behind the Clubs filter.
-const MEMBER_EVENT_TAG = /member event/i;
-// Strips a trailing "- Member Event" or "(Member Event)" tag for a clean title.
-const MEMBER_EVENT_STRIP = /\s*[-(]?\s*member event\)?\s*$/i;
-
-/** Accepts "9pm", "10:30pm", "12am", "7:30am" -> 24h "HH:MM" (or null). */
-function parseClockTime(raw: string | undefined): string | null {
-  const s = raw?.trim();
-  if (!s) return null;
-  const m = s.match(/^(\d{1,2}):?(\d{2})?\s*([ap]m)$/i);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const min = m[2] ?? "00";
-  const ap = m[3].toLowerCase();
-  if (ap === "pm" && h < 12) h += 12;
-  if (ap === "am" && h === 12) h = 0;
-  return `${String(h).padStart(2, "0")}:${min}`;
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .substring(0, 60);
-}
-
-interface MappedEvent {
-  event: ExtractedEvent;
-  visibility: "public" | "private";
-}
-
-function mapRawEvent(raw: RawDayEvent): MappedEvent | null {
-  const rawSummary = raw.summary.trim();
-  if (!rawSummary || !raw.date) return null;
-
-  // Third-party private rentals — don't record at all.
-  if (PRIVATE_EVENT_TAG.test(rawSummary)) return null;
-
-  const isMember = MEMBER_EVENT_TAG.test(rawSummary);
-  const name = rawSummary.replace(MEMBER_EVENT_STRIP, "").replace(/\s+/g, " ").trim();
-  if (!name) return null;
-
-  const event: ExtractedEvent = {
-    name,
-    description: null,
-    date: raw.date,
-    start_time: raw.isAllDayEvent ? null : parseClockTime(raw.start),
-    end_time: raw.isAllDayEvent ? null : parseClockTime(raw.end),
-    venue_name: VENUE_NAME,
-    town: TOWN,
-    address: ADDRESS,
-    // Deterministic category floor, same pattern the other scrapers use, so
-    // e.g. "Karaoke" / "Live Music …" land in live_music.
-    category: classifyEventCategory(name),
-    price: null,
-    artists: null,
-    event_url: null,
-    image_url: null,
-    // Stable id so a re-scrape updates the same row in place. Keyed on
-    // date + slug(name) — matches the scheme the prior extraction used, so
-    // already-recorded public rows update in place rather than duplicating.
-    source_event_id: `sequoia-woods|${raw.date}|${slugify(name)}`,
-  };
-
-  return { event: decodeEventFields(event), visibility: isMember ? "private" : "public" };
+function mapDecoded(raw: RawDayEvent): MappedEvent | null {
+  const m = mapRawEvent(raw);
+  return m ? { ...m, event: decodeEventFields(m.event) } : m;
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────
@@ -308,7 +237,7 @@ export async function scrapeSequoiaWoods(): Promise<void> {
   // 3. Classify: Private Event -> skip, Member Event -> private, else public.
   const mapped: MappedEvent[] = [];
   for (const raw of dedupedRaw) {
-    const m = mapRawEvent(raw);
+    const m = mapDecoded(raw);
     if (m) mapped.push(m);
   }
 
