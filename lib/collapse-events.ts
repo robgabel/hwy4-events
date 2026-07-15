@@ -60,25 +60,46 @@ type GroupPlan = {
   card: CollapsedEvent;
 };
 
-function rangeCard(baseName: string, sorted: EventListItem[]): CollapsedEvent {
+function rangeCard(
+  baseName: string,
+  sorted: EventListItem[],
+  anchorIdx: number
+): CollapsedEvent {
   const allArtists = [...new Set(sorted.flatMap((e) => e.artists || []))];
+  const anchor = sorted[anchorIdx];
   return {
-    ...sorted[0],
+    ...anchor,
     name: baseName,
     endDate: sorted[sorted.length - 1].date,
-    dayCount: sorted.length,
+    dayCount: sorted.length - anchorIdx,
     isCollapsed: true,
-    artists: allArtists.length > 0 ? allArtists : sorted[0].artists,
+    artists: allArtists.length > 0 ? allArtists : anchor.artists,
   };
+}
+
+// First instance that hasn't ended yet — 0 when the clock isn't known (server /
+// first paint) or when every instance has ended (the caller's ended-events
+// filter drops the card in that case). Shared by runs and spaced series so a
+// card never squats in "Today" hours after today's session is over.
+function nextNotEndedIdx(
+  sorted: EventListItem[],
+  nowMinutes: number | null
+): number {
+  if (nowMinutes === null) return 0;
+  const idx = sorted.findIndex(
+    (e) => !hasEventEnded(e.date, e.start_time, e.end_time, nowMinutes)
+  );
+  return idx > 0 ? idx : 0;
 }
 
 /**
  * Collapse a date-sorted upcoming-event list into feed cards. `nowMinutes` is
  * the Pacific clock from `nowPacificMinutes()` (null on the server / first
- * paint): a series card anchors to its first instance that hasn't ended, so at
- * 4 PM a 10:30 AM class shows next week's date, not a stale "today".
- * Supersedes EventList's old collapseMultiDayEvents (multi-day behavior kept:
- * runs of ≤7 days anchor to their first day and carry endDate/dayCount).
+ * paint): every card anchors to its first instance that hasn't ended, so at
+ * 4 PM a 10:30 AM class shows next week's date, and at 11 PM a mid-run summer
+ * camp sits under tomorrow ("Jul 15 – Aug 7") instead of a stale "today".
+ * Supersedes EventList's old collapseMultiDayEvents (runs still carry
+ * endDate/dayCount; dayCount counts the remaining instances from the anchor).
  */
 export function collapseEventList(
   events: EventListItem[],
@@ -110,7 +131,11 @@ export function collapseEventList(
     );
 
     if (span <= MULTI_DAY_MAX_SPAN) {
-      plans.set(key, { anchorId: sorted[0].id, card: rangeCard(baseName, sorted) });
+      const idx = nextNotEndedIdx(sorted, nowMinutes);
+      plans.set(key, {
+        anchorId: sorted[idx].id,
+        card: rangeCard(baseName, sorted, idx),
+      });
       collapsedKeys.add(key);
       continue;
     }
@@ -121,7 +146,11 @@ export function collapseEventList(
     if (gap <= DAILY_RUN_MAX_GAP) {
       // A weeks-long near-daily run (festival nightly rows, a weekday summer
       // camp) is one happening with a date range, same as the short runs.
-      plans.set(key, { anchorId: sorted[0].id, card: rangeCard(baseName, sorted) });
+      const idx = nextNotEndedIdx(sorted, nowMinutes);
+      plans.set(key, {
+        anchorId: sorted[idx].id,
+        card: rangeCard(baseName, sorted, idx),
+      });
       collapsedKeys.add(key);
       continue;
     }
@@ -129,13 +158,7 @@ export function collapseEventList(
     // Spaced series: show the next occurrence that hasn't ended. If every
     // instance has ended (or the clock isn't known yet), anchor to the first —
     // the caller's ended-events filter handles the rest.
-    let anchorIdx = 0;
-    if (nowMinutes !== null) {
-      const idx = sorted.findIndex(
-        (e) => !hasEventEnded(e.date, e.start_time, e.end_time, nowMinutes)
-      );
-      if (idx > 0) anchorIdx = idx;
-    }
+    const anchorIdx = nextNotEndedIdx(sorted, nowMinutes);
     const anchor = sorted[anchorIdx];
     plans.set(key, {
       anchorId: anchor.id,

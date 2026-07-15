@@ -97,6 +97,46 @@ test("a weeks-long near-daily run (weekday camp) also collapses to a range card"
   assert.equal(out[0].dayCount, 15);
 });
 
+test("mid-run range card re-anchors to tomorrow once today's session has ended", () => {
+  // A weekday camp starting today: at 11 PM, today's 9:00-14:45 session is long
+  // over. The card must move to tomorrow's slot ("Jul 15 - Aug 7"), not squat
+  // in Today looking like an ended event (the 2026-07-14 11:14 PM screenshot).
+  const dates = [
+    "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17",
+    "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24",
+  ];
+  const events = sortByDate(
+    dates.map((d) =>
+      ev(d, "Bear Valley Summer Day Camp", {
+        start_time: "9:00",
+        end_time: "14:45",
+      })
+    )
+  );
+  const out = collapseEventList(events, clock("2026-07-14", "23:14"));
+  assert.equal(out.length, 1);
+  assert.equal(out[0].date, "2026-07-15");
+  assert.equal(out[0].endDate, "2026-07-24");
+  assert.equal(out[0].dayCount, 8);
+  assert.equal(out[0].isCollapsed, true);
+  // Mid-session (or before), the card keeps today's anchor.
+  const during = collapseEventList(events, clock("2026-07-14", "10:00"));
+  assert.equal(during[0].date, "2026-07-14");
+  assert.equal(during[0].dayCount, 9);
+});
+
+test("run whose final day has ended keeps its first-day anchor (caller's filter drops it)", () => {
+  const events = sortByDate([
+    ev("2026-07-10", "Frog Jump - Day 1"),
+    ev("2026-07-11", "Frog Jump - Day 2"),
+    ev("2026-07-12", "Frog Jump - Day 3"),
+  ]);
+  const out = collapseEventList(events, clock("2026-07-12", "23:00"));
+  assert.equal(out.length, 1);
+  assert.equal(out[0].date, "2026-07-10");
+  assert.equal(out[0].dayCount, 3);
+});
+
 test("weekly series collapses to next occurrence with a weekly cadence chip", () => {
   const dates = ["2026-07-08", "2026-07-15", "2026-07-22", "2026-07-29", "2026-08-05"];
   const events = sortByDate([
