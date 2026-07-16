@@ -178,6 +178,44 @@ test("non-daily, non-weekly cadence gets the generic Repeats chip", () => {
   assert.equal(out[0].seriesCadence, "recurring");
 });
 
+test("non-contiguous short-span pair does NOT become a range card (Fri + Sun act)", () => {
+  // Neil Buettner plays Fri Jul 17 and Sun Jul 19 (someone else has Saturday).
+  // "Jul 17 — 19" would promise all three nights; show two honest cards.
+  const events = sortByDate([
+    ev("2026-07-17", "Live Music - Neil Buettner", { category: "live_music" }),
+    ev("2026-07-19", "Live Music - Neil Buettner", { category: "live_music" }),
+  ]);
+  const out = collapseEventList(events, null);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].isCollapsed, undefined);
+  assert.equal(out[1].isCollapsed, undefined);
+});
+
+test("two weekly instances clipped to a one-week span by the feed horizon stay separate", () => {
+  // A Saturday series whose later instances fall outside the 60-day window:
+  // only Sep 5 + Sep 12 remain (span exactly 7). Not a run.
+  const events = sortByDate([
+    ev("2026-09-05", "Saturday Night Music", { town: "Copperopolis" }),
+    ev("2026-09-12", "Saturday Night Music", { town: "Copperopolis" }),
+  ]);
+  const out = collapseEventList(events, null);
+  assert.equal(out.length, 2);
+});
+
+test("short-span spaced trio becomes a series card, not a range card", () => {
+  // Tue/Thu/Sat in one week: median gap 2 used to qualify as a "run".
+  const events = sortByDate([
+    ev("2026-07-14", "Summer Workshop"),
+    ev("2026-07-16", "Summer Workshop"),
+    ev("2026-07-18", "Summer Workshop"),
+  ]);
+  const out = collapseEventList(events, null);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].isCollapsed, undefined);
+  assert.equal(out[0].seriesCadence, "recurring");
+  assert.equal(out[0].seriesCount, 3);
+});
+
 test("two instances far apart are left alone (not a series)", () => {
   const events = sortByDate([
     ev("2026-07-08", "Blood Drive"),

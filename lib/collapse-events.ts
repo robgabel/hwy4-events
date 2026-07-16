@@ -28,8 +28,11 @@ export function getBaseName(name: string): string {
     .trim();
 }
 
-// A group whose whole span fits in a week is a single happening (weekend
-// festival, 3-day fair) regardless of cadence.
+// A group whose whole span fits in a week AND covers every day of it is a
+// single happening (weekend festival, 3-day fair). Contiguity matters: a
+// Friday + Sunday act, or two Saturdays clipped to a week by the feed horizon,
+// must NOT render as "Jul 17 — 19" — a range card promises every day in the
+// span.
 const MULTI_DAY_MAX_SPAN = 7;
 // Longer-span groups need at least this many instances before we'll call them
 // a series — two dates a month apart are just two events.
@@ -130,7 +133,8 @@ export function collapseEventList(
       parseDate(sorted[0].date)
     );
 
-    if (span <= MULTI_DAY_MAX_SPAN) {
+    const uniqueDateCount = new Set(sorted.map((e) => e.date)).size;
+    if (span <= MULTI_DAY_MAX_SPAN && uniqueDateCount === span + 1) {
       const idx = nextNotEndedIdx(sorted, nowMinutes);
       plans.set(key, {
         anchorId: sorted[idx].id,
@@ -143,7 +147,7 @@ export function collapseEventList(
     if (sorted.length < SERIES_MIN_INSTANCES) continue;
 
     const gap = medianGapDays(sorted.map((e) => e.date));
-    if (gap <= DAILY_RUN_MAX_GAP) {
+    if (gap <= DAILY_RUN_MAX_GAP && span > MULTI_DAY_MAX_SPAN) {
       // A weeks-long near-daily run (festival nightly rows, a weekday summer
       // camp) is one happening with a date range, same as the short runs.
       const idx = nextNotEndedIdx(sorted, nowMinutes);
