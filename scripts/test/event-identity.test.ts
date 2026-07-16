@@ -341,6 +341,86 @@ const cases: { label: string; a: EventIdentity; b: EventIdentity; same: boolean 
     b: ev({ name: "Trivia Night", date: "2026-07-10", town: "Murphys", venue_name: "V Restaurant & Bar", address: "Murphys, CA", start_time: "19:00:00" }),
     same: false,
   },
+  {
+    // The 2026-07-16 Murphys Wine & Beer Garden trivia dupe (real prod rows).
+    // Two sources listed the same weekly trivia night under different titles
+    // ("Thirsty Thursday Trivia" / "Trivia Thursday @ …") at the same venue,
+    // date, and 5:00 PM start. Both failed the old signals: title sim ~0.4,
+    // and each source edited the shared blurb (Doug Conrad "crafted and
+    // presented" vs "crafted … presented by Phil Gomez", plus Visit Murphys
+    // appended a recurrence tail) so whole-string description sim landed ~0.6,
+    // under 0.92. Recovered by the shared-description-core signal (the opening
+    // sentence is byte-identical) — and independently by the title-token
+    // signal once the "@ venue" tail is stripped.
+    label: "trivia re-title + edited blurb, same venue/slot — same",
+    a: ev({
+      name: "Thirsty Thursday Trivia",
+      date: "2026-07-16",
+      town: "Murphys",
+      venue_name: "Murphys Wine & Beer Garden",
+      start_time: "17:00:00",
+      end_time: "19:00:00",
+      description:
+        "Our Trivia is 3 rounds, all Multiple Choice. Crafted by and presented by our own Doug Conrad. Come out for a night of learning and laughter! Every 1st and 3rd Thursday. Starts at 5:00 Three rounds, 10 questions each. Play 1 or 2 or all 3 rounds!",
+    }),
+    b: ev({
+      name: "Trivia Thursday @ Murphys Wine Bar and Beer Garden",
+      date: "2026-07-16",
+      town: "Murphys",
+      venue_name: "Murphys Wine & Beer Garden",
+      start_time: "17:00:00",
+      end_time: null,
+      description:
+        "Our Trivia is 3 rounds, all Multiple Choice. Crafted by our own Doug Conrad and presented by Phil Gomez. Come out for a night of learning and laughter!",
+    }),
+    same: true,
+  },
+  {
+    // Real prod rows (2026-08-15): a community submission and a Visit Murphys
+    // scrape of the same event, titles differing only by a mid-string "Annual"
+    // (which the leading-only ordinal strip can't remove) — title sim ~0.82,
+    // under 0.85. Recovered by the title-token signal (Jaccard 0.83).
+    label: "'Rotary's Annual Shrimp Feed' vs 'Rotary's Shrimp Feed', same venue/slot — same",
+    a: ev({ name: "Rotary’s Annual Shrimp Feed & Auction", date: "2026-08-15", town: "Murphys", venue_name: "Murphys Community Park", start_time: "16:00:00" }),
+    b: ev({ name: "Rotary's Shrimp Feed & Auction", date: "2026-08-15", town: "Murphys", venue_name: "Murphys Community Park", start_time: "16:00:00" }),
+    same: true,
+  },
+  {
+    // Guard for the new signals: two genuinely different Big Trees programs run
+    // at the same venue + same 10:00 start with distinct titles AND distinct
+    // program descriptions. Neither the title-token nor the description-core
+    // signal may collapse them (this is the case the conservative design
+    // protects — merging would silently hide one program).
+    label: "Big Trees Junior Rangers vs South Grove Guided Hike, same venue/slot — NOT same",
+    a: ev({
+      name: "Junior Rangers @ Big Trees State Park",
+      date: "2026-07-18",
+      town: "Arnold",
+      venue_name: "Calaveras Big Trees State Park",
+      start_time: "10:00:00",
+      description: "Kids ages 7 to 12 earn a Junior Ranger badge through hands-on activities and a short discovery walk with a park interpreter.",
+    }),
+    b: ev({
+      name: "South Grove Guided Hike @ Big Trees State Park",
+      date: "2026-07-18",
+      town: "Arnold",
+      venue_name: "Calaveras Big Trees State Park",
+      start_time: "10:00:00",
+      description: "Join a docent for a five mile round trip hike into the South Grove to see the largest giant sequoias in the park.",
+    }),
+    same: false,
+  },
+  {
+    // Guard for the title-token signal: two different acts sharing a venue +
+    // series prefix in the title ("Cameo Plaza Summer Concert: <act>") must
+    // stay split — the distinguishing act name is what differs, and Jaccard on
+    // the shared prefix lands ~0.4 (under 0.6). Mirrors the existing artists
+    // case but exercises the token path with null artists/descriptions.
+    label: "two 'Summer Concert: <act>' titles, same venue/slot, no desc — NOT same",
+    a: ev({ name: "Cameo Plaza Summer Concert: Leilani & The Distractions", date: "2026-06-13", town: "Arnold", venue_name: "Cameo Plaza", start_time: "18:00:00" }),
+    b: ev({ name: "Cameo Plaza Summer Concert: Snarky Cats", date: "2026-06-13", town: "Arnold", venue_name: "Cameo Plaza", start_time: "18:00:00" }),
+    same: false,
+  },
 ];
 
 for (const c of cases) {

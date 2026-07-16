@@ -246,6 +246,91 @@ function actNamedInOther(a: EventIdentity, b: EventIdentity): boolean {
   return hit(actStrings(a), bBlob) || hit(actStrings(b), aBlob);
 }
 
+/** Word-level token set of a string, normalized via `normalizeForMatch` (so
+ *  "&"/"and", case, whitespace, and typographic punctuation are folded). Empty
+ *  tokens are dropped; punctuation stays attached to its word, which is fine for
+ *  set overlap because it lands identically on both sides. */
+function tokenSet(s: string | null | undefined): Set<string> {
+  return new Set(
+    normalizeForMatch(s ?? "")
+      .split(" ")
+      .filter((t) => t.length > 0)
+  );
+}
+
+/** Overlap coefficient |A∩B| / min(|A|,|B|). Robust to one side appending extra
+ *  text: a tail inflates the union but not the min. That is exactly how two
+ *  sources of the SAME event diverge — one copies the venue's blurb verbatim,
+ *  the other edits a clause or appends a recurrence line ("Every 1st and 3rd
+ *  Thursday. Starts at 5:00…"), so a whole-string ratio drops below the 0.92
+ *  bar while the shared core stays obvious. */
+function tokenOverlap(a: Set<string>, b: Set<string>): number {
+  const small = a.size <= b.size ? a : b;
+  const big = a.size <= b.size ? b : a;
+  if (small.size === 0) return 0;
+  let hit = 0;
+  for (const t of small) if (big.has(t)) hit++;
+  return hit / small.size;
+}
+
+/** Jaccard |A∩B| / |A∪B| of two token sets. */
+function tokenJaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let hit = 0;
+  for (const t of a) if (b.has(t)) hit++;
+  return hit / (a.size + b.size - hit);
+}
+
+/** Two rows share a substantive description core (2026-07-16, the Murphys Wine
+ *  & Beer Garden trivia dupe). Two sources listed the same weekly trivia night
+ *  under different titles ("Thirsty Thursday Trivia" / "Trivia Thursday @ …")
+ *  with the SAME opening blurb, but each source edited a middle clause and one
+ *  appended a recurrence tail, so the whole-string description similarity landed
+ *  ~0.6 — under the strict 0.92 bar — and every dedup layer stayed blind for
+ *  weeks. The overlap coefficient sees through the edit: both descriptions are
+ *  substantive (≥8 tokens each) and one's token set is ≥70% contained in the
+ *  other. Caller gates this on venue agreement + same date + same exact start,
+ *  so genuinely-different same-venue programs (Big Trees' Junior Rangers vs
+ *  South Grove Guided Hike, both 10:00) — which carry distinct program text —
+ *  stay split. */
+function descriptionsShareCore(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const sa = tokenSet(a);
+  const sb = tokenSet(b);
+  if (sa.size < 8 || sb.size < 8) return false;
+  return tokenOverlap(sa, sb) >= 0.7;
+}
+
+/** The title minus a scraper-appended "@ venue" / "~ venue" tail, so the
+ *  comparable core is the event name itself. "Trivia Thursday @ Murphys Wine
+ *  Bar and Beer Garden" → "trivia thursday"; "Junior Rangers @ Big Trees State
+ *  Park" → "junior rangers". Only punctuation-delimited tails are stripped (the
+ *  word "at" is left alone, so "Concert at Sunset" is untouched). */
+function titleCore(name: string | null | undefined): string {
+  return normalizeForMatch((name ?? "").replace(/\s+[@~]\s*.*$/, ""));
+}
+
+/** Two titles share most of their tokens once the "@ venue" tail is removed
+ *  (2026-07-16). Catches reordered / prefixed re-titles of the same event —
+ *  "Thirsty Thursday Trivia" vs "Trivia Thursday" (Jaccard 0.67), "Rotary's
+ *  Annual Shrimp Feed & Auction" vs "Rotary's Shrimp Feed & Auction" (0.83) —
+ *  that the 0.85 whole-string `textSimilarity` bar misses on a single inserted
+ *  word or a reordering. Kept at 0.6 so two *different* acts sharing a venue +
+ *  series prefix stay split: "Cameo Plaza Summer Concert: Leilani …" vs "… :
+ *  Snarky Cats" scores 0.4, "Junior Rangers" vs "South Grove Guided Hike"
+ *  scores 0. Caller gates on venue agreement + same date + same exact start. */
+function titlesShareTokens(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const ta = titleCore(a);
+  const tb = titleCore(b);
+  if (!ta || !tb) return false;
+  return tokenJaccard(tokenSet(ta), tokenSet(tb)) >= 0.6;
+}
+
 /** The venue string to use for matching. Facebook-style place fields often
  *  carry a locality instead of a venue — "Meadowmont, California" for an event
  *  at Meadowmont Lodge (2026-07-05, the Coffee & Cars triple). Strip a trailing
@@ -294,8 +379,11 @@ export function isGenericTitle(name: string): boolean {
  *   - overlapping artists, or
  *   - near-identical descriptions, or
  *   - same venue AND one title is a generic placeholder, or
- *   - same venue AND one row's act name appears in the other's text.
- *  Two *different specific* titles never merge on venue/time alone. */
+ *   - same venue AND one row's act name appears in the other's text, or
+ *   - same venue AND a shared substantive description core, or
+ *   - same venue AND heavily-overlapping title tokens (minus the "@ venue" tail).
+ *  Two *different specific* titles with distinct descriptions never merge on
+ *  venue/time alone. */
 export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   if (a.date && b.date && a.date !== b.date) return false;
   if (a.town && b.town && normalizeTown(a.town) !== normalizeTown(b.town)) return false;
@@ -336,6 +424,21 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
     return true;
   }
   if (venuesAgree && actNamedInOther(a, b)) {
+    return true;
+  }
+  // Same venue + same slot, but the two sources gave the event different
+  // specific titles and edited the shared blurb between listings, so neither
+  // the 0.85 title bar nor the 0.92 whole-string description bar tripped
+  // (2026-07-16, the Murphys Wine & Beer Garden trivia dupe). Two token-level
+  // signals recover these without loosening the cross-venue guards: a shared
+  // substantive description core, or heavily-overlapping title tokens once the
+  // "@ venue" tail is stripped. Both are gated on venue agreement, so a park
+  // hosting different back-to-back programs (distinct titles AND distinct
+  // description text) still stays split.
+  if (venuesAgree && descriptionsShareCore(a.description, b.description)) {
+    return true;
+  }
+  if (venuesAgree && titlesShareTokens(a.name, b.name)) {
     return true;
   }
   return false;
