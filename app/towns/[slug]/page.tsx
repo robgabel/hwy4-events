@@ -62,7 +62,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!content) return { title: "Town not found" };
 
   return {
-    title: content.metaTitle,
+    // metaTitle strings already carry the "| Hwy 4 Events" brand suffix, so
+    // opt out of the root layout's `%s | Hwy 4 Events` template — otherwise
+    // every town page renders "… | Hwy 4 Events | Hwy 4 Events".
+    title: { absolute: content.metaTitle },
     description: content.metaDescription,
     alternates: { canonical: `/towns/${slug}` },
     // Drafts: tell crawlers not to index or follow.
