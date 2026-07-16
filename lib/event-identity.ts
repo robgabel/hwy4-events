@@ -364,7 +364,13 @@ export function isGenericTitle(name: string): boolean {
     // so a title that names the act after the series ("... Summer Concert:
     // Leilani & The Distractions") stays specific.
     /\b(?:concerts?|music) series$/.test(n) ||
-    /\bsummer concerts?$/.test(n)
+    /\bsummer concerts?$/.test(n) ||
+    // Act-slot placeholder: "Patio Party #4 featuring live music (TBD)",
+    // "Live Music at the Beer Garden (Act TBA)". When the venue later names
+    // the act and re-lists, the placeholder row must merge into the named row
+    // (2026-07-16 QA: the Sequoia Woods Patio Party #4 dupe). End-anchored
+    // (normalizeName keeps punctuation, so allow a trailing ")").
+    /\b(?:tbd|tba)\W*$/.test(n)
   );
 }
 

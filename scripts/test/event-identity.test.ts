@@ -447,3 +447,35 @@ test("isGenericTitle keeps titles that name a specific act", () => {
     false
   );
 });
+
+test("isGenericTitle flags trailing TBD/TBA act placeholders", () => {
+  // The Sequoia Woods Patio Party dupe (2026-07-16 QA): the venue re-lists
+  // the same night once the act is named, and the placeholder row must merge.
+  assert.equal(isGenericTitle("Patio Party #4 featuring live music (TBD)"), true);
+  assert.equal(isGenericTitle("Live Music at the Beer Garden (Act TBA)"), true);
+  assert.equal(
+    isGenericTitle("Patio Party #4 featuring live music - The Hit Men"),
+    false
+  );
+  // TBD mid-title is not a placeholder marker.
+  assert.equal(isGenericTitle("TBD Brewing Anniversary Party"), false);
+});
+
+test("TBD placeholder merges with the named-act re-listing (same venue+slot)", () => {
+  const placeholder = {
+    name: "Patio Party #4 featuring live music (TBD)",
+    date: "2026-08-08",
+    town: "Arnold",
+    venue_name: "Sequoia Woods Country Club",
+    start_time: "19:00",
+    end_time: "22:00",
+    description: null,
+    artists: null,
+  };
+  const named = {
+    ...placeholder,
+    name: "Patio Party #4 featuring live music - The Hit Men",
+  };
+  assert.equal(isSameEvent(placeholder, named), true);
+  assert.equal(isSameEvent(named, placeholder), true);
+});
