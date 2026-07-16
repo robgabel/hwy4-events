@@ -203,6 +203,10 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
   // original if stripping empties it. And null a non-http(s) `event_url` so a
   // `javascript:`/`data:` link can never be stored and later rendered as an href.
   event.name = stripTagLike(event.name) ?? event.name;
+  // Strip the Squarespace/EventON page-duplication artifact ("… (Copy)") some
+  // sources leak into titles. Before dedup_key generation, so the key is
+  // computed from the clean title. Real event names never end in "(Copy)".
+  event.name = event.name.replace(/\s*\((?:copy|copy\s*\d+)\)\s*$/i, "").trim() || event.name;
   event.venue_name = stripTagLike(event.venue_name) ?? event.venue_name;
   if (event.description) {
     event.description = stripTagLike(event.description);
