@@ -53,3 +53,14 @@ test("checkKey is stable and namespaced", () => {
   assert.equal(checkKey("jsonld", "event-detail"), "qa:jsonld:event-detail");
   assert.equal(checkKey("status", "/free"), "qa:status:/free");
 });
+
+test("checkPage flags a doubled brand suffix in the title", () => {
+  // The 2026-07-16 town-page bug: metaTitle carried "| Hwy 4 Events" AND the
+  // root layout template appended it again.
+  const doubled = `<html><head><title>Arnold CA Events This Week | Hwy 4 Events | Hwy 4 Events</title></head><body></body></html>`;
+  const findings = checkPage("page", 200, doubled);
+  assert.deepEqual(findings.map((f) => f.check), ["title_doubled_brand"]);
+
+  const clean = `<html><head><title>Arnold CA Events This Week | Hwy 4 Events</title></head><body></body></html>`;
+  assert.deepEqual(checkPage("page", 200, clean), []);
+});

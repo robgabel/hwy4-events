@@ -4,6 +4,11 @@ import { requireCronAuth } from "@/lib/cron-auth";
 import { findDuplicateClusters } from "@/lib/dedupe-events";
 import { computeActionableLinkGaps, GAP_VENUE_THRESHOLD } from "@/lib/link-gaps";
 import { AUDIT_SIGNAL_KEY } from "@/lib/agent/audit-signal";
+import {
+  findImpossibleTimes,
+  findCategoryInconsistencies,
+  findTimelessNearDupes,
+} from "@/lib/audit-checks";
 
 export const maxDuration = 60;
 
@@ -253,6 +258,17 @@ export async function GET(request: Request) {
       org_slug: r.org_slug,
     }));
 
+  // 5. Data-plausibility checks (lib/audit-checks.ts, added after the
+  // 2026-07-16 persona QA passes — every bug found that day was visible in
+  // data the audit already fetched, it just only checked completeness):
+  // impossible times (backstops the raw-insert writers that bypass
+  // normalizeEventTimes), one-production-many-categories, and same-day
+  // same-venue near-dupes involving a timeless row (invisible to every dedup
+  // layer because NULL-start rows never share a bucket — by design).
+  const impossibleTimes = findImpossibleTimes(rows);
+  const categoryInconsistencies = findCategoryInconsistencies(rows);
+  const timelessNearDupes = findTimelessNearDupes(rows);
+
   // Recent self-healing merges (lib/reconcile.ts via /api/reconcile-dupes).
   // Informational, NOT an issue — a merge means the dedup is working. Reported
   // separately so it never inflates totalIssues / triggers a false alarm. Stays
@@ -354,6 +370,9 @@ export async function GET(request: Request) {
       invalid_category: invalidCategory.length,
       missing_image_bls: missingImageBls.length,
       stale_scrapes: stale.length,
+      impossible_times: impossibleTimes.length,
+      category_inconsistencies: categoryInconsistencies.length,
+      timeless_near_dupes: timelessNearDupes.length,
     },
   };
 
@@ -381,6 +400,15 @@ export async function GET(request: Request) {
         actionable_link_gaps: actionableLinkGaps
           .slice(0, 3)
           .map((g) => `${g.venue} (${g.count} events)`),
+        impossible_times: impossibleTimes
+          .slice(0, 3)
+          .map((t) => `"${t.name}" (${t.date}, ${t.start_time ?? "?"}–${t.end_time ?? "?"}, ${t.reason})`),
+        category_inconsistencies: categoryInconsistencies
+          .slice(0, 3)
+          .map((c) => `"${c.normalized_name}" @ ${c.venue_name ?? "?"} — ${c.categories.join("/")}`),
+        timeless_near_dupes: timelessNearDupes
+          .slice(0, 3)
+          .map((d) => `${d.date} @ ${d.venue_name} — ${d.names.map((n) => `"${n}"`).join(" / ")}`),
       },
     };
     const { error: stashErr } = await supabase.from("site_config").upsert(
@@ -464,6 +492,27 @@ export async function GET(request: Request) {
     if (stale.length > 0) {
       lines.push(`\n*${stale.length} future event(s) not re-scraped in 14+ days*`);
     }
+    if (impossibleTimes.length > 0) {
+      lines.push(`\n*${impossibleTimes.length} event(s) with an impossible/suspicious time:*`);
+      for (const t of impossibleTimes.slice(0, 5)) {
+        lines.push(`• \`${t.date}\` ${t.name} — ${t.start_time ?? "?"}–${t.end_time ?? "?"} (${t.reason})`);
+      }
+      if (impossibleTimes.length > 5) lines.push(`  …and ${impossibleTimes.length - 5} more`);
+    }
+    if (categoryInconsistencies.length > 0) {
+      lines.push(`\n*${categoryInconsistencies.length} series with inconsistent categories:*`);
+      for (const c of categoryInconsistencies.slice(0, 5)) {
+        lines.push(`• "${c.normalized_name}" @ ${c.venue_name ?? "?"} — ${c.categories.join(" / ")} (${c.count} rows)`);
+      }
+      if (categoryInconsistencies.length > 5) lines.push(`  …and ${categoryInconsistencies.length - 5} more`);
+    }
+    if (timelessNearDupes.length > 0) {
+      lines.push(`\n*${timelessNearDupes.length} timeless same-venue near-dupe cluster(s) (invisible to auto-dedup — needs a human):*`);
+      for (const d of timelessNearDupes.slice(0, 5)) {
+        lines.push(`• \`${d.date}\` ${d.venue_name} — ${d.names.map((n) => `"${n}"`).join(" / ")}`);
+      }
+      if (timelessNearDupes.length > 5) lines.push(`  …and ${timelessNearDupes.length - 5} more`);
+    }
     if (mergesLast24h && mergesLast24h > 0) {
       lines.push(`\n_${mergesLast24h} duplicate merge(s) auto-healed in the last 24h (reversible via event_merge_log)._`);
     }
@@ -500,6 +549,9 @@ export async function GET(request: Request) {
       invalid_category: invalidCategory,
       missing_image_bls: missingImageBls,
       stale_scrapes: stale,
+      impossible_times: impossibleTimes,
+      category_inconsistencies: categoryInconsistencies,
+      timeless_near_dupes: timelessNearDupes,
     },
   });
 }
