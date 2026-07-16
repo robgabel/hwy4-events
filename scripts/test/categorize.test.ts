@@ -77,3 +77,17 @@ test("classify: venue boilerplate doesn't poison the category", () => {
   // A real concert is untouched (no venue-noun follows "concert").
   assert.equal(classifyEventCategory("Summer Concert in the Park"), "live_music");
 });
+
+test("classify: 'family' as a band-name suffix is not a kids signal", () => {
+  // "Willie Nelson & Family" was classified kids off the band name
+  // (2026-07-16 persona QA). The act-shaped usages are stripped…
+  assert.equal(classifyEventCategory("Willie Nelson & Family – Murphys concert"), "live_music");
+  assert.equal(classifyEventCategory("The Cowboy Family Band plays the saloon"), "live_music");
+  assert.equal(
+    classifyEventCategory("An evening of country, his Family lineup adding heart, live under the stars concert"),
+    "live_music",
+  );
+  // …while genuine family/kids phrasing still routes to kids.
+  assert.equal(classifyEventCategory("A Fun-Filled Family Day at the park"), "kids");
+  assert.equal(classifyEventCategory("Fun for the whole family"), "kids");
+});

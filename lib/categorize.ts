@@ -113,8 +113,17 @@ const RULES: CategoryRule[] = [
 const VENUE_BOILERPLATE =
   /\b(?:premier |beautiful |historic |intimate |stunning |iconic )?(?:live[- ]music|concert|event|performance|performing[- ]arts)[- ](?:venue|hall|center|centre|space)\b/gi;
 
+// Act-name noise: "family" as part of a band's NAME or lineup phrasing is not a
+// kids signal — "Willie Nelson & Family" was classified kids off exactly this
+// (2026-07-16 QA). Strip only the band-shaped usages ("& Family", "and Family",
+// "Family Band", "Family lineup"); a genuine "family day" / "fun for the whole
+// family" keeps its bare "family" token and still routes to kids.
+// ("Family Band" drops only the "family" via lookahead — "band" itself is a
+// legitimate live_music token and must survive the strip).
+const ACT_NAME_NOISE = /\b(?:(?:&|and)\s+family\b|family(?=\s+(?:band|lineup)\b))/gi;
+
 function stripVenueBoilerplate(text: string): string {
-  return text.replace(VENUE_BOILERPLATE, " ");
+  return text.replace(VENUE_BOILERPLATE, " ").replace(ACT_NAME_NOISE, " ");
 }
 
 /**

@@ -26,6 +26,7 @@ const SEV_LABEL: Record<string, { title: string; severity: TaskPriority }> = {
   malformed: { title: "is malformed", severity: "p1" },
   jsonld: { title: "is missing JSON-LD structured data", severity: "p2" },
   title: { title: "is missing a <title>", severity: "p2" },
+  title_doubled_brand: { title: "has a doubled brand suffix in its <title>", severity: "p2" },
 };
 
 // PURE: given a fetched page, what's wrong with it. Locked by scripts/test/qa-audit.test.ts.
@@ -47,6 +48,16 @@ export function checkPage(kind: QaKind, status: number, body: string): QaFinding
   const titleMatch = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (!titleMatch || titleMatch[1].trim().length === 0) {
     findings.push({ check: "title", severity: "p2", detail: "no non-empty <title> element in the HTML" });
+  } else if (/\|\s*Hwy 4 Events\s*\|\s*Hwy 4 Events/i.test(titleMatch[1])) {
+    // A page baked the brand suffix into its own title AND inherited the root
+    // layout's `%s | Hwy 4 Events` template (2026-07-16 QA: every town page
+    // rendered "… | Hwy 4 Events | Hwy 4 Events"). Standing check so the next
+    // page class that does this gets a ticket instead of shipping doubled.
+    findings.push({
+      check: "title_doubled_brand",
+      severity: "p2",
+      detail: `title renders the brand suffix twice: "${titleMatch[1].trim().slice(0, 120)}"`,
+    });
   }
   // event detail pages must carry JSON-LD (the AEO/structured-data spine).
   if (kind === "event" && !body.includes("application/ld+json")) {

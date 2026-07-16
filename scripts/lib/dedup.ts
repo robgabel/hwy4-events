@@ -173,6 +173,23 @@ export function normalizeEventTimes(event: ExtractedEvent): void {
   ) {
     event.end_time = minutesToTime(endMin + 12 * 60);
   }
+
+  // Impossible-time guards (2026-07-16 QA: "1:00 AM – 1:00 AM" Jazz Cellars,
+  // "7:00 PM – 2:00 PM" Bear Valley Music Festival). Per the never-guess
+  // policy we DROP a provably-wrong time rather than invent one.
+  const s = timeToMinutes(event.start_time);
+  const e = timeToMinutes(event.end_time);
+  // Zero-length window: a widget copied start into end. Keep the start unless
+  // it's small-hours (00:00–05:59) — then the start itself is garbage too.
+  if (s !== null && e !== null && s === e) {
+    event.end_time = null;
+    if (s < 6 * 60) event.start_time = null;
+  } else if (s !== null && e !== null && e < s && e > 3 * 60) {
+    // End before start that survived the dropped-PM recovery above. A genuine
+    // overnight event ends by ~3 AM; anything later-yet-before-start (e.g. a
+    // festival's closing-day 2 PM squashed into opening night) is scrape noise.
+    event.end_time = null;
+  }
 }
 
 export function normalizeEventLocation(event: ExtractedEvent): void {
