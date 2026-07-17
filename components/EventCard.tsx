@@ -432,7 +432,7 @@ export default function EventCard({
         {/* Meta row: time leads (the feed is ordered chronologically), then place.
             Time is a fixed-width, tabular column so start times align down the feed. */}
         <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-600">
-          {timeRange && (
+          {(timeRange || event.timesVary) && (
             <span className="flex shrink-0 items-center gap-1 tabular-nums sm:min-w-[8.5rem]">
               <svg
                 className="h-3.5 w-3.5 shrink-0"
@@ -447,7 +447,7 @@ export default function EventCard({
                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              {timeRange}
+              {timeRange ?? "Times vary"}
             </span>
           )}
 

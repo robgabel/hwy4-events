@@ -120,7 +120,11 @@ const VENUE_BOILERPLATE =
 // family" keeps its bare "family" token and still routes to kids.
 // ("Family Band" drops only the "family" via lookahead — "band" itself is a
 // legitimate live_music token and must survive the strip).
-const ACT_NAME_NOISE = /\b(?:(?:&|and)\s+family\b|family(?=\s+(?:band|lineup)\b))/gi;
+// NOTE: no leading \b before "&" — there is no word boundary between a space
+// and "&", so "\b&" can never match and "Willie Nelson & Family" sailed
+// straight through to kids (2026-07-17 QA, the regex's second miss).
+const ACT_NAME_NOISE =
+  /(?:(?:&|\band)\s+family\b|\bfamily(?=\s+(?:band|lineup)\b))/gi;
 
 function stripVenueBoilerplate(text: string): string {
   return text.replace(VENUE_BOILERPLATE, " ").replace(ACT_NAME_NOISE, " ");

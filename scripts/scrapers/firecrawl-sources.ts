@@ -86,7 +86,11 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
       "at the store: lift each event's own venue name and street address " +
       "from its location/map text (Lake Alpine, Bear Valley Meadow, the Big " +
       "White Tent, etc.). Include each event's own bvadventures.com/events/ " +
-      "permalink as event_url.",
+      "permalink as event_url. The Bear Valley Music Festival is held in the " +
+      "Big White Tent at 39 No Name Rd; use venue name 'Big White Tent' for " +
+      "festival rows, never the store. When a listing names its session dates " +
+      "in the body (e.g. lesson series 'Dates: July 15 & 16, 22 & 23'), emit " +
+      "rows only for those stated dates.",
   },
   {
     slug: "branding-iron",

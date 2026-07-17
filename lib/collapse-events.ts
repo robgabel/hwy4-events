@@ -70,8 +70,20 @@ function rangeCard(
 ): CollapsedEvent {
   const allArtists = [...new Set(sorted.flatMap((e) => e.artists || []))];
   const anchor = sorted[anchorIdx];
+  // A range card asserts one time for every day in the span, but the days can
+  // genuinely differ (Murphys Homecoming: Friday 7–9 PM kickoff, Saturday
+  // 11 AM–5 PM main day). Showing the anchor's hours for the whole run is a
+  // lie about the other days, so a mixed-time run drops the time and carries
+  // `timesVary` for the card to say so. Computed over the remaining (not-yet-
+  // ended) instances: once only same-time days are left, the real time returns.
+  const timesVary = sorted
+    .slice(anchorIdx)
+    .some(
+      (e) => e.start_time !== anchor.start_time || e.end_time !== anchor.end_time
+    );
   return {
     ...anchor,
+    ...(timesVary ? { start_time: null, end_time: null, timesVary: true } : {}),
     name: baseName,
     endDate: sorted[sorted.length - 1].date,
     dayCount: sorted.length - anchorIdx,

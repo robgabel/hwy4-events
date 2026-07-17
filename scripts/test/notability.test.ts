@@ -83,3 +83,11 @@ test("reconcile: soft floor defers to the LLM", () => {
   // LLM absent => soft floor stands.
   assert.equal(reconcileNotability(soft, null), true);
 });
+
+test("routine: a private party / hall rental is not a public event", () => {
+  assert.equal(classifyNotabilityDetailed("Private Dinner Party").isRoutine, true);
+  assert.equal(classifyNotabilityDetailed("Private Dinner Party").authoritative, true);
+  assert.equal(classifyNotabilityDetailed("Private Event").isRoutine, true);
+  // ...but "private" mid-title or with a hook stays notable
+  assert.equal(classifyNotabilityDetailed("Karaoke Private Room Night").isRoutine, false);
+});

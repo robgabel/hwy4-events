@@ -272,3 +272,45 @@ test("Highlights lens: recurring regulars drop; picks, festivals, one-offs, name
     false
   );
 });
+
+test("range card with differing per-day times drops the time and flags timesVary", () => {
+  // Murphys Homecoming shape: Friday 7-9 PM kickoff, Saturday 11 AM-5 PM main
+  // day. One range card must not assert Friday's hours for Saturday.
+  const events = sortByDate([
+    ev("2026-07-17", "Homecoming", { start_time: "19:00", end_time: "21:00" }),
+    ev("2026-07-18", "Homecoming", { start_time: "11:00", end_time: "17:00" }),
+  ]);
+  const out = collapseEventList(events, null);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].isCollapsed, true);
+  assert.equal(out[0].timesVary, true);
+  assert.equal(out[0].start_time, null);
+  assert.equal(out[0].end_time, null);
+});
+
+test("range card with uniform times keeps the time (no timesVary)", () => {
+  const events = sortByDate([
+    ev("2026-07-17", "Nightly Show", { start_time: "19:00", end_time: null }),
+    ev("2026-07-18", "Nightly Show", { start_time: "19:00", end_time: null }),
+  ]);
+  const out = collapseEventList(events, null);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].timesVary, undefined);
+  assert.equal(out[0].start_time, "19:00");
+});
+
+test("mixed-time run recovers its time once only same-time days remain", () => {
+  // After Friday's 7-9 PM kickoff ends, the card re-anchors to Saturday and
+  // the real 11 AM-5 PM returns.
+  const events = sortByDate([
+    ev("2026-07-17", "Homecoming2", { start_time: "19:00", end_time: "21:00" }),
+    ev("2026-07-18", "Homecoming2", { start_time: "11:00", end_time: "17:00" }),
+  ]);
+  // 11 PM Friday Pacific: Friday's instance has ended.
+  const out = collapseEventList(events, clock("2026-07-17", "23:00")).filter(
+    (e) => e.name === "Homecoming2"
+  );
+  assert.equal(out.length, 1);
+  assert.equal(out[0].timesVary, undefined);
+  assert.equal(out[0].start_time, "11:00");
+});
