@@ -3,6 +3,12 @@ import type { GrowthContext, GrowthVitals } from "./types";
 import { getNewsletterStats } from "@/lib/newsletter-stats";
 import { getSeoOverview } from "@/lib/seo-data";
 import { getActiveLessons, getPriorMoves } from "@/lib/agent/growth-lessons";
+import { getUpcomingEvents } from "@/lib/events-data";
+import {
+  VENUE_SITEMAP_MIN_UPCOMING,
+  sitemapVenueKeys,
+  venueGateCounts,
+} from "@/lib/venue-pages";
 
 // Gathers the growth signal pack handed to the Head-of-Growth reasoner
 // (PRD-growth-agent.md). Every number here is real and queried; the model may
@@ -157,6 +163,13 @@ export async function gatherGrowthContext(
   // ── network virality (see growth_share_stats) ─────────────────────────────
   const shareBySrc = numMap(shareAgg.data);
 
+  // ── venue hub pages (HWY-9): the crawl-exposure dial ──────────────────────
+  // Same feed + same gate logic the sitemap uses (lib/venue-pages.ts), so the
+  // memo reasons about exactly what crawlers are shown. GSC read: venue-page
+  // rows from the latest by-page snapshot. All best-effort; a read failure
+  // degrades to zeros/null rather than killing the memo.
+  const venuePages = await gatherVenuePagesSignal(supabase);
+
   const vitals: GrowthVitals = {
     newsletter_active: nlStats.total_active,
     newsletter_net_7d: nlStats.net_7d,
@@ -261,6 +274,7 @@ export async function gatherGrowthContext(
         potential: q.potential,
       })),
     },
+    venue_pages: venuePages,
     network: {
       durable_orgs: durableOrgs.count ?? 0,
       share_hits_7d: shareBySrc,
@@ -271,4 +285,77 @@ export async function gatherGrowthContext(
       needs_verification: needsVerif.count ?? 0,
     },
   };
+}
+
+/** The venue_pages signal (see GrowthContext.venue_pages). Best-effort: any
+ *  read failure returns honest zeros / null instead of throwing. */
+async function gatherVenuePagesSignal(
+  supabase: SupabaseClient
+): Promise<GrowthContext["venue_pages"]> {
+  const empty: GrowthContext["venue_pages"] = {
+    sitemap_min_upcoming: VENUE_SITEMAP_MIN_UPCOMING,
+    advertised_count: 0,
+    advertised_at_gate: {},
+    gsc: null,
+  };
+
+  try {
+    const [{ data: venueRows }, events] = await Promise.all([
+      supabase.from("hwy4_venues").select("venue_key"),
+      getUpcomingEvents(),
+    ]);
+    const keys = ((venueRows ?? []) as { venue_key: string }[]).map(
+      (v) => v.venue_key
+    );
+
+    // GSC: venue-page rows from the newest by-page snapshot (same pinned-
+    // captured_at pattern as lib/seo-data). Null until the collector has page
+    // data that includes any /venues/ URL.
+    let gsc: GrowthContext["venue_pages"]["gsc"] = null;
+    const { data: latest } = await supabase
+      .from("seo_snapshots")
+      .select("captured_at")
+      .eq("dimension", "page")
+      .order("captured_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const capturedAt = (latest as { captured_at?: string } | null)?.captured_at;
+    if (capturedAt) {
+      const { data: pageRows } = await supabase
+        .from("seo_snapshots")
+        .select("page, clicks, impressions, position")
+        .eq("dimension", "page")
+        .eq("captured_at", capturedAt)
+        .like("page", "%/venues/%")
+        .limit(200);
+      const vRows = ((pageRows ?? []) as {
+        page: string | null;
+        clicks: unknown;
+        impressions: unknown;
+        position: unknown;
+      }[]).map((r) => ({
+        page: String(r.page ?? ""),
+        clicks: num(r.clicks),
+        impressions: num(r.impressions),
+        position: num(r.position),
+      }));
+      gsc = {
+        clicks: vRows.reduce((s, r) => s + r.clicks, 0),
+        impressions: vRows.reduce((s, r) => s + r.impressions, 0),
+        pages_with_impressions: vRows.filter((r) => r.impressions > 0).length,
+        top: vRows
+          .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)
+          .slice(0, 5),
+      };
+    }
+
+    return {
+      sitemap_min_upcoming: VENUE_SITEMAP_MIN_UPCOMING,
+      advertised_count: sitemapVenueKeys(keys, events).length,
+      advertised_at_gate: venueGateCounts(keys, events),
+      gsc,
+    };
+  } catch {
+    return empty;
+  }
 }

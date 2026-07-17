@@ -185,6 +185,23 @@ export type GrowthContext = {
     // analytics_daily (NOT a single day — see gatherGrowthContext / HWY-4).
     ai_referrals: Record<string, number>;
   };
+  // The /venues/[slug] hub rollout (HWY-9) and its crawl-exposure dial
+  // (VENUE_SITEMAP_MIN_UPCOMING in lib/venue-pages.ts). The memo evaluates
+  // this weekly: are the hubs earning search traffic, or diluting crawl on a
+  // young domain. Advisory only — a human edits the constant.
+  venue_pages: {
+    sitemap_min_upcoming: number; // the current gate
+    advertised_count: number; // venue pages in sitemap-core at the current gate
+    advertised_at_gate: Record<string, number>; // candidate gate -> would-be count
+    // Venue-page rows from the latest GSC by-page snapshot; null while the
+    // collector has no page data yet.
+    gsc: {
+      clicks: number;
+      impressions: number;
+      pages_with_impressions: number;
+      top: { page: string; clicks: number; impressions: number; position: number }[];
+    } | null;
+  };
   seo: {
     captured_at: string | null;
     window: { start: string; end: string } | null; // GSC date range of the trend spine

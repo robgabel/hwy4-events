@@ -56,12 +56,40 @@ export function sitemapVenueKeys(
   events: Pick<Hwy4Event, "venue_key" | "visibility">[],
   minUpcoming: number = VENUE_SITEMAP_MIN_UPCOMING
 ): string[] {
+  const counts = upcomingCountsByVenue(events);
+  return venueKeys.filter((k) => (counts.get(k) ?? 0) >= minUpcoming);
+}
+
+function upcomingCountsByVenue(
+  events: Pick<Hwy4Event, "venue_key" | "visibility">[]
+): Map<string, number> {
   const counts = new Map<string, number>();
   for (const e of events) {
     if (e.visibility !== "public" || !e.venue_key) continue;
     counts.set(e.venue_key, (counts.get(e.venue_key) ?? 0) + 1);
   }
-  return venueKeys.filter((k) => (counts.get(k) ?? 0) >= minUpcoming);
+  return counts;
+}
+
+/** Candidate settings for the sitemap gate, evaluated weekly by the growth
+ *  memo so the recommendation can name exact numbers ("raising to 5 would
+ *  advertise 19 pages instead of 33"). */
+export const VENUE_GATE_CANDIDATES = [1, 3, 5, 10];
+
+/** How many venue pages the sitemap would advertise at each candidate gate.
+ *  Keys are the gate values as strings (JSON-friendly for the signal pack). */
+export function venueGateCounts(
+  venueKeys: string[],
+  events: Pick<Hwy4Event, "venue_key" | "visibility">[],
+  gates: number[] = VENUE_GATE_CANDIDATES
+): Record<string, number> {
+  const counts = upcomingCountsByVenue(events);
+  const perVenue = venueKeys.map((k) => counts.get(k) ?? 0);
+  const out: Record<string, number> = {};
+  for (const gate of gates) {
+    out[String(gate)] = perVenue.filter((n) => n >= gate).length;
+  }
+  return out;
 }
 
 // A scraped artist name sometimes arrives fully shouted ("GENE SIMMONS BAND");
