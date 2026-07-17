@@ -181,6 +181,8 @@ export type GrowthContext = {
     pageviews_7d: number;
     pageviews_prev_7d: number;
     top_pages: { key: string; pageviews: number }[];
+    // Answer-engine referral visits summed over the last 14 days of
+    // analytics_daily (NOT a single day — see gatherGrowthContext / HWY-4).
     ai_referrals: Record<string, number>;
   };
   seo: {

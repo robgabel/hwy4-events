@@ -128,9 +128,19 @@ export async function gatherGrowthContext(
   const topPages = Array.isArray(latestA?.top_pages)
     ? (latestA!.top_pages as Row[]).slice(0, 8).map((p) => ({ key: String(p.key ?? ""), pageviews: num(p.pageviews) }))
     : [];
-  const aiReferrals = (latestA?.ai_referrals && typeof latestA.ai_referrals === "object"
-    ? (latestA.ai_referrals as Record<string, number>)
-    : {});
+  // Sum ai_referrals across the whole fetched window (14d), not just the
+  // latest day. Answer-engine referrals arrive ~1 visit every few days, so any
+  // single day's row is almost always all zeros — which made this block read 0
+  // while channels.sessions_by_src_7d showed real ref:chatgpt.com sessions
+  // (HWY-4). Summing keeps the two views in directional agreement.
+  const aiReferrals: Record<string, number> = {};
+  for (const r of aRows) {
+    if (r.ai_referrals && typeof r.ai_referrals === "object") {
+      for (const [k, v] of Object.entries(r.ai_referrals as Record<string, unknown>)) {
+        aiReferrals[k] = (aiReferrals[k] ?? 0) + num(v);
+      }
+    }
+  }
 
   // ── seo (Search Console overview: totals, MoM, top queries, striking) ─────
   // The full analysis (trend spine + latest query snapshot) lives in lib/seo-data;
