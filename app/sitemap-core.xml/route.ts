@@ -8,10 +8,31 @@ import { TEMPORAL_CONFIG } from "@/lib/date-windows";
 import { INTENT_CONFIG } from "@/lib/intent-pages";
 import { HOLIDAY_GUIDES } from "@/lib/holiday-pages";
 import { renderUrlset, type SitemapUrl } from "@/lib/sitemap";
+import { getUpcomingEvents } from "@/lib/events-data";
+import { getSupabase } from "@/lib/supabase";
+import { sitemapVenueKeys } from "@/lib/venue-pages";
 
 export const revalidate = 3600;
 
+// Venue hub pages (/venues/[key], HWY-9): advertise only venues with enough
+// upcoming public events (lib/venue-pages.ts) so we never point crawlers at a
+// thin page. Reads the shared cached event feed + the small hwy4_venues key
+// list; degrades to an empty list on any read error.
+async function getSitemapVenueSlugs(): Promise<string[]> {
+  try {
+    const [{ data }, events] = await Promise.all([
+      getSupabase().from("hwy4_venues").select("venue_key"),
+      getUpcomingEvents(),
+    ]);
+    const keys = ((data ?? []) as { venue_key: string }[]).map((v) => v.venue_key);
+    return sitemapVenueKeys(keys, events);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET() {
+  const venueSlugs = await getSitemapVenueSlugs();
   // Home / temporal / town pages re-render with live event data daily, so a
   // today <lastmod> is honest. Truly static pages omit it (no real signal).
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -53,6 +74,13 @@ export async function GET() {
       changefreq: "daily",
       priority: 0.8,
     },
+    // Venue hub pages (HWY-9): live event data, daily lastmod.
+    ...venueSlugs.map((slug) => ({
+      loc: `${SITE_URL}/venues/${slug}`,
+      lastmod: todayISO,
+      changefreq: "daily" as const,
+      priority: 0.7,
+    })),
     { loc: `${SITE_URL}/about`, changefreq: "monthly", priority: 0.7 },
     { loc: `${SITE_URL}/about/rob-gabel`, changefreq: "yearly", priority: 0.5 },
     { loc: `${SITE_URL}/faq`, changefreq: "monthly", priority: 0.6 },

@@ -28,9 +28,13 @@ import NewsletterSignup from "@/components/NewsletterSignup";
 // wrap-up note pointing at the live calendar.
 
 const PATH = "/bear-valley-music-festival-2026";
-const H1 = "Bear Valley Music Festival 2026: Dates, Lineup, and What to Do";
+// H1 is the exact-match target query (HWY-8); the tagline under it carries the
+// descriptive tail. TITLE adds the highest-intent tokens searchers scan for in
+// a SERP (the root layout template appends "| Hwy 4 Events").
+const H1 = "Bear Valley Music Festival 2026";
+const TITLE = "Bear Valley Music Festival 2026 | Dates, Lineup & Tickets";
 const META_DESCRIPTION =
-  "Bear Valley Music Festival 2026 runs July 17 to August 2 under the Big White Tent in Bear Valley, CA. Dates, nightly lineup, getting there on Highway 4, and what else is on nearby.";
+  "Bear Valley Music Festival 2026 runs July 17 to August 2 under the Big White Tent in Bear Valley, CA. Dates, the nightly lineup, how to get tickets, and getting there on Highway 4.";
 
 // The run, per the festival's published 2026 schedule (mirrored in our events
 // table from the organizer + GoCalaveras). Static fallback so the dates section
@@ -42,18 +46,18 @@ const OFFICIAL_URL = "https://www.bearvalleymusicfestival.org/2026-festival";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: H1,
+  title: TITLE,
   description: META_DESCRIPTION,
   alternates: { canonical: PATH },
   openGraph: {
-    title: H1,
+    title: TITLE,
     description: META_DESCRIPTION,
     type: "website",
     url: `${SITE_URL}${PATH}`,
   },
   twitter: {
     card: "summary_large_image",
-    title: H1,
+    title: TITLE,
     description: META_DESCRIPTION,
   },
 };
@@ -71,6 +75,10 @@ const QA: { q: string; a: string }[] = [
   {
     q: "Where is the festival held?",
     a: "Under the Big White Tent in Bear Valley village, just off Highway 4 at about 7,000 feet, roughly 40 minutes above Arnold. It is an open-sided mountain venue, so bring a warm layer: even July evenings cool off fast at that elevation.",
+  },
+  {
+    q: "How do I get tickets for the Bear Valley Music Festival?",
+    a: "Directly from the festival at bearvalleymusicfestival.org, which sells single-show tickets and multi-show passes. Popular nights can sell out ahead of time, so buy before you make the drive up. We keep the schedule here, but we do not sell tickets; the festival's own site is the only place we would point you.",
   },
   {
     q: "Where should we stay for the festival?",

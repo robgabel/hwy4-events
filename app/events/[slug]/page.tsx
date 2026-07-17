@@ -38,6 +38,7 @@ import AdoptAPetBanner from "@/components/AdoptAPetBanner";
 import ClassicRockBanner from "@/components/ClassicRockBanner";
 import { isParadeEvent, isFourthFeatureEvent, isTwoFiftyEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
 import { resolveEventLinkFromOrgs, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
+import { nameWithArtists } from "@/lib/venue-pages";
 
 export const revalidate = 3600;
 
@@ -102,7 +103,10 @@ export async function generateMetadata({
   if (!event) return { title: "Event Not Found" };
 
   const dateStr = format(parseISO(event.date), "MMMM d, yyyy");
-  const title = `${event.name} — ${dateStr} in ${event.town}`;
+  // Fold the headline act(s) into the title tag when a series row's name
+  // doesn't carry them ("Ironstone Summer Concert Series" + artists) — the
+  // generic series title is what searchers skip in a SERP (HWY-7).
+  const title = `${nameWithArtists(event.name, event.artists)} — ${dateStr} in ${event.town}`;
   // event.description is already gated (sanitized clean text or null) by
   // findEventBySlug. truncateMeta guarantees we never cut mid-word in the SERP.
   const description = event.description
@@ -595,7 +599,7 @@ export default async function EventPage({ params }: PageProps) {
           />
         </section>
 
-        {venue && <VenueInfo venue={venue} />}
+        {venue && <VenueInfo venue={venue} linkToVenuePage />}
 
         <BrowseSimilar event={event} />
       </article>

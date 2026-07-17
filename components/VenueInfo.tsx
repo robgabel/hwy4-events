@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Hwy4Venue } from "@/lib/types";
 import { isHttpUrl } from "@/lib/url";
 
@@ -52,7 +53,15 @@ function practicalBadges(attrs: Record<string, unknown> | null): string[] {
   return out;
 }
 
-export default function VenueInfo({ venue }: { venue: Hwy4Venue }) {
+export default function VenueInfo({
+  venue,
+  linkToVenuePage = false,
+}: {
+  venue: Hwy4Venue;
+  /** Link the venue name to its /venues/[key] hub page (used on the event
+   *  detail page; the hub page itself renders the plain heading). */
+  linkToVenuePage?: boolean;
+}) {
   const hours = todaysHours(venue.hours);
   const badges = practicalBadges(venue.places_attributes);
   const hasFacts =
@@ -66,7 +75,17 @@ export default function VenueInfo({ venue }: { venue: Hwy4Venue }) {
   return (
     <section className="mb-6">
       <h2 className="font-display mb-2 text-lg font-semibold text-forest">
-        About {venue.canonical}
+        About{" "}
+        {linkToVenuePage ? (
+          <Link
+            href={`/venues/${venue.venue_key}`}
+            className="text-forest underline decoration-pine/40 underline-offset-2 hover:decoration-pine"
+          >
+            {venue.canonical}
+          </Link>
+        ) : (
+          venue.canonical
+        )}
       </h2>
 
       {venue.blurb && (
