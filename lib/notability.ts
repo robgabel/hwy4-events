@@ -59,6 +59,9 @@ const ROUTINE_STRONG: RegExp[] = [
   /\b(?:open|now open|serving|dining|dinner|brunch|breakfast|buffet)\s+(?:for|on)\s+(?:father'?s|mother'?s|easter|thanksgiving|christmas|new year|valentine'?s?|memorial day|labor day|independence day|4th of july)\b/,
   // "<Holiday> <meal>" with no hook — a holiday menu, not an event
   /\b(?:father'?s day|mother'?s day|easter|thanksgiving|christmas|valentine'?s day|memorial day|labor day)\s+(?:brunch|breakfast|dinner|buffet|lunch|meal|service|special)\b/,
+  // A rented-out hall is not a public event: the Moose calendar lists
+  // "Private Dinner Party" / "Private Event" blocks for hall rentals.
+  /^private\s+(?:\w+\s+)?(?:party|event|rental|dinner|luncheon|reception)\b/,
 ];
 
 // Tier-2 SOFT routine: a weak meal-service signal an LLM may confirm or clear.

@@ -177,6 +177,9 @@ export interface CollapsedEvent extends EventListItem {
   endDate?: string;
   dayCount?: number;
   isCollapsed?: boolean;
+  // Range card whose remaining days run at different hours (kickoff evening +
+  // all-day main day): times are nulled and the card says "Times vary".
+  timesVary?: boolean;
   // Spaced recurring series collapsed to its next occurrence: how many
   // upcoming instances this card stands for, and the data-derived cadence
   // behind the card's "Weekly"/"Repeats" chip.

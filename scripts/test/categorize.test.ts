@@ -91,3 +91,15 @@ test("classify: 'family' as a band-name suffix is not a kids signal", () => {
   assert.equal(classifyEventCategory("A Fun-Filled Family Day at the park"), "kids");
   assert.equal(classifyEventCategory("Fun for the whole family"), "kids");
 });
+
+test("classify: '& Family' strips even with no live-music token in the text", () => {
+  // The real 2026-07-19 row: title + description carry no "concert"/"live"
+  // token, so the broken "\b&" strip left "family" and kids fired. The fix
+  // must land it anywhere but kids ("other" is fine; the scraper never writes
+  // "other" over a specific stored category).
+  const got = classifyEventCategory(
+    "Willie Nelson & Family – Murphys",
+    "Willie Nelson & Family play the Ironstone Amphitheatre in Murphys, an open-air evening of country and folk classics under the stars."
+  );
+  assert.notEqual(got, "kids");
+});
