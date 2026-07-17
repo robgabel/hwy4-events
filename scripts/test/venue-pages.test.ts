@@ -4,6 +4,7 @@ import {
   venueMetaTitle,
   venueMetaDescription,
   sitemapVenueKeys,
+  venueGateCounts,
   nameWithArtists,
 } from "../../lib/venue-pages";
 
@@ -46,6 +47,21 @@ test("sitemapVenueKeys: gates on >=3 upcoming public events", () => {
     sitemapVenueKeys(["brice-station", "moose-lodge", "my-bar", "unknown"], events),
     ["brice-station"]
   );
+});
+
+test("venueGateCounts: counts advertised venues at each candidate gate", () => {
+  const events = [
+    ...Array.from({ length: 10 }, () => ({ venue_key: "big", visibility: "public" })),
+    ...Array.from({ length: 4 }, () => ({ venue_key: "mid", visibility: "public" })),
+    { venue_key: "small", visibility: "public" },
+    ...Array.from({ length: 6 }, () => ({ venue_key: "club", visibility: "private" })),
+  ] as never[];
+  assert.deepEqual(venueGateCounts(["big", "mid", "small", "club", "empty"], events), {
+    "1": 3,
+    "3": 2,
+    "5": 1,
+    "10": 1,
+  });
 });
 
 test("nameWithArtists: appends missing acts, capped, with & more", () => {
