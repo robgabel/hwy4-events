@@ -8,6 +8,8 @@
 // city name) and treat anything else with a known country as "visitor". No geo
 // at all (e.g. local dev) -> "unknown". Good for the trend; never quoted as exact.
 
+import { REGION } from "./region";
+
 export type VisitorClass = "local" | "visitor" | "unknown";
 
 export interface RequestGeo {
@@ -18,28 +20,12 @@ export interface RequestGeo {
   longitude: number | null;
 }
 
-// Corridor + immediate Calaveras towns (lowercased), matched against the IP city
-// when present.
-const CORRIDOR_CITIES = new Set([
-  "arnold",
-  "murphys",
-  "angels camp",
-  "angels",
-  "avery",
-  "copperopolis",
-  "dorrington",
-  "white pines",
-  "camp connell",
-  "vallecito",
-  "douglas flat",
-  "hathaway pines",
-  "bear valley",
-  "mountain ranch",
-  "san andreas",
-]);
+// The region's towns + immediate neighbors (lowercased), matched against the
+// IP city when present. Data lives in regions/<slug>/core.ts.
+const CORRIDOR_CITIES = new Set(REGION.geo.localIpCities);
 
-// Generous bounding box around the Hwy 4 / Calaveras corridor.
-const BOX = { latMin: 37.9, latMax: 38.6, lngMin: -120.75, lngMax: -119.95 };
+// Generous bounding box around the region. Data lives in regions/<slug>/core.ts.
+const BOX = REGION.geo.visitorBox;
 
 export function classifyVisitor(geo: RequestGeo): VisitorClass {
   const { country, region, city, latitude, longitude } = geo;
@@ -55,9 +41,9 @@ export function classifyVisitor(geo: RequestGeo): VisitorClass {
 
   if (
     country &&
-    country.toUpperCase() === "US" &&
+    country.toUpperCase() === REGION.countryCode &&
     region &&
-    region.toUpperCase() === "CA"
+    region.toUpperCase() === REGION.stateCode
   ) {
     const c = (city ?? "").toLowerCase().trim();
     if (c && CORRIDOR_CITIES.has(c)) return "local";
