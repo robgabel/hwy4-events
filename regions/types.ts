@@ -121,6 +121,8 @@ export interface RegionCore {
   // ----- geography / time -----
   /** ISO 3166-2 region code for schema.org + IP classification: "CA". */
   stateCode: string;
+  /** Full state name for prose/schema place names: "California". */
+  stateName: string;
   /** ISO country code: "US". */
   countryCode: string;
   /** IANA timezone the region's "today" is computed in. */

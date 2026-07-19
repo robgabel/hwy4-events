@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Hwy4Event } from "@/lib/types";
+import { REGION } from "@/lib/region";
 import { generateEventSlug } from "@/lib/slugs";
 import { selectPicks, PickEntry } from "@/lib/picks";
 import { FESTIVAL_GUIDES, FestivalGuide, festivalGuideForEvent } from "@/lib/event-guides";
@@ -136,7 +137,7 @@ function Spotlight({ entry, todayIso }: { entry: Entry; todayIso: string }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <PawBadge label="Rob's Pick" />
+          <PawBadge label={REGION.picksLabel} />
         </div>
         <h3 className="font-display mt-1 text-lg font-bold text-forest transition-colors group-hover:text-pine sm:text-xl">
           {title}
@@ -206,7 +207,7 @@ export default function RobsPicks({
   if (!spotlight && picks.length === 0) return null;
 
   return (
-    <section aria-label="Rob's Picks" className="mb-8">
+    <section aria-label={REGION.picksLabelPlural} className="mb-8">
       {spotlight && (
         <>
           <h2 className="font-display mb-2 text-sm font-semibold uppercase tracking-wider text-earth">
@@ -225,7 +226,9 @@ export default function RobsPicks({
               <ellipse cx="14" cy="6.5" rx="2" ry="2.8" transform="rotate(5 14 6.5)" />
               <ellipse cx="17.5" cy="9" rx="2.2" ry="2.8" transform="rotate(15 17.5 9)" />
             </svg>
-            {spotlight ? "More of Rob's Picks" : "Rob's Picks"}
+            {spotlight
+              ? `More of ${REGION.picksLabelPlural}`
+              : REGION.picksLabelPlural}
           </h2>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {picks.map((e) => (

@@ -6,12 +6,16 @@
  * Each builder returns a plain object; render with <JsonLd data={...} />.
  */
 
-import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/lib/constants";
-import { Hwy4Event } from "@/lib/types";
-import { generateEventSlug } from "@/lib/slugs";
-import { resolveDisplayAddress } from "@/lib/address";
-import { TownInfo } from "@/lib/towns";
-import { serializeJsonLd } from "@/lib/json-ld";
+// Relative (not "@/") imports so the scripts/ test runner, which doesn't load
+// the app's tsconfig path alias, can import this module directly.
+import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "./constants";
+import { Hwy4Event } from "./types";
+import { generateEventSlug } from "./slugs";
+import { resolveDisplayAddress } from "./address";
+import { TownInfo } from "./towns";
+import { serializeJsonLd } from "./json-ld";
+import { REGION } from "./region";
+import { REGION_OPS } from "./region-ops";
 
 // ----- shared component -----
 
@@ -47,20 +51,19 @@ export function buildOrganization() {
     "@type": "Organization",
     name: SITE_NAME,
     url: SITE_URL,
-    description:
-      "Daily event briefing and listings for the Highway 4 corridor, from Angels Camp to Bear Valley in the California Sierra Nevada.",
+    description: REGION_OPS.schemaOrg.orgDescription,
     logo: {
       "@type": "ImageObject",
-      url: `${SITE_URL}/millie-happy.svg`,
+      url: `${SITE_URL}${REGION_OPS.schemaOrg.logoPath}`,
     },
     areaServed: {
       "@type": "Place",
-      name: "Highway 4 Corridor, Calaveras County, California",
+      name: REGION_OPS.schemaOrg.areaServed,
     },
     founder: {
       "@type": "Person",
-      name: "Rob Gabel",
-      url: `${SITE_URL}/about/rob-gabel`,
+      name: REGION_OPS.schemaOrg.founderName,
+      url: `${SITE_URL}${REGION_OPS.schemaOrg.founderPath}`,
     },
   };
 }
@@ -133,7 +136,7 @@ export function buildArticle(opts: {
       url: SITE_URL,
       logo: {
         "@type": "ImageObject",
-        url: `${SITE_URL}/millie-happy.svg`,
+        url: `${SITE_URL}${REGION_OPS.schemaOrg.logoPath}`,
       },
     },
   };
@@ -243,8 +246,8 @@ export function buildEvent(event: Hwy4Event, slug?: string) {
         "@type": "PostalAddress",
         ...(displayAddress && { streetAddress: displayAddress }),
         addressLocality: event.town,
-        addressRegion: "CA",
-        addressCountry: "US",
+        addressRegion: REGION.stateCode,
+        addressCountry: REGION.countryCode,
       },
     },
     ...(offer && { offers: offer }),
@@ -279,10 +282,8 @@ export function buildItemList(events: Hwy4Event[], opts?: {
   return {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: opts?.name ?? "Upcoming Events Along Highway 4",
-    description:
-      opts?.description ??
-      "Today's events and this week's lineup along the Highway 4 corridor in the Sierra Nevada foothills.",
+    name: opts?.name ?? REGION_OPS.schemaOrg.itemListName,
+    description: opts?.description ?? REGION_OPS.schemaOrg.itemListDescription,
     numberOfItems: publicEvents.length,
     itemListElement: publicEvents.slice(0, limit).map((event, index) => ({
       "@type": "ListItem",
@@ -307,14 +308,14 @@ export function buildTouristAttraction(town: TownInfo, slug: string) {
   return {
     "@context": "https://schema.org",
     "@type": "TouristAttraction",
-    name: `${town.name}, California`,
+    name: `${town.name}, ${REGION.stateName}`,
     description: town.tagline,
     url: `${SITE_URL}/towns/${slug}`,
     address: {
       "@type": "PostalAddress",
       addressLocality: town.name,
-      addressRegion: "CA",
-      addressCountry: "US",
+      addressRegion: REGION.stateCode,
+      addressCountry: REGION.countryCode,
     },
     geo: {
       "@type": "GeoCoordinates",
@@ -324,7 +325,7 @@ export function buildTouristAttraction(town: TownInfo, slug: string) {
     },
     isPartOf: {
       "@type": "Place",
-      name: "Highway 4 Corridor, Calaveras County, California",
+      name: REGION_OPS.schemaOrg.areaServed,
     },
   };
 }

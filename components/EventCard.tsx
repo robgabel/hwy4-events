@@ -1,4 +1,5 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
+import { REGION } from "@/lib/region";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
 import { isPatrioticCard, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
 import PatrioticEventCard from "@/components/PatrioticEventCard";
@@ -53,15 +54,8 @@ function costBadgeLabel(event: CollapsedEvent): string | null {
   }
 }
 
-const ORG_LABELS: Record<string, string> = {
-  "moose-lodge": "Moose Lodge",
-  "sequoia-woods": "Sequoia Woods",
-  "bear-valley": "Bear Valley",
-  "blue-lake-springs": "Blue Lake Springs",
-  "watering-hole": "The Watering Hole",
-  "gocalaveras": "GoCalaveras",
-  "visit-murphys": "Visit Murphys",
-};
+// org_slug → friendly source label; region data (regions/<slug>/core.ts).
+const ORG_LABELS: Readonly<Record<string, string>> = REGION.sourceSlugLabels;
 
 const CATEGORY_IMAGES: Record<EventCategory, string> = {
   live_music: "/images/live_music.svg",
@@ -254,7 +248,7 @@ export default function EventCard({
                 <ellipse cx="14" cy="6.5" rx="2" ry="2.8" transform="rotate(5 14 6.5)"/>
                 <ellipse cx="17.5" cy="9" rx="2.2" ry="2.8" transform="rotate(15 17.5 9)"/>
               </svg>
-              Rob&apos;s Pick
+              {REGION.picksLabel}
             </span>
           )}
           <h3

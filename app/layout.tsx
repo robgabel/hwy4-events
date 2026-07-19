@@ -5,6 +5,7 @@ import {
   SITE_DESCRIPTION,
   SITE_OG_DESCRIPTION,
 } from "@/lib/constants";
+import { REGION } from "@/lib/region";
 import { JsonLd, buildWebSite, buildOrganization } from "@/lib/schema";
 import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content";
 import { TOWN_INFO } from "@/lib/towns";
@@ -33,7 +34,7 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} | Sierra Nevada Foothills`,
+    default: `${SITE_NAME} | ${REGION.titleSuffix}`,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
@@ -41,7 +42,7 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: `${SITE_NAME} | Sierra Nevada Foothills`,
+    title: `${SITE_NAME} | ${REGION.titleSuffix}`,
     description: SITE_OG_DESCRIPTION,
     type: "website",
     url: SITE_URL,
@@ -52,13 +53,13 @@ export const metadata: Metadata = {
         url: "/og",
         width: 1200,
         height: 630,
-        alt: "Hwy 4 Events — Today's events and this week along the Highway 4 corridor",
+        alt: REGION.ogImageAlt,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} | Sierra Nevada Foothills`,
+    title: `${SITE_NAME} | ${REGION.titleSuffix}`,
     description: SITE_OG_DESCRIPTION,
     images: ["/og"],
   },
@@ -122,9 +123,9 @@ export default function RootLayout({
         <footer className="border-t border-stone-light/50 bg-warm-white py-10 text-center">
           <div className="mx-auto max-w-5xl px-4">
             <p className="text-sm text-stone">
-              Events along the Highway 4 corridor
+              {REGION.footerLede[0]}
               <br />
-              from Angels Camp to Bear Valley.
+              {REGION.footerLede[1]}
             </p>
 
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-stone-light/40 bg-white px-4 py-2 text-sm shadow-sm">
@@ -202,7 +203,7 @@ export default function RootLayout({
 
             <nav className="mt-4 flex flex-wrap justify-center gap-4 text-sm text-stone">
               <a href="/about" className="hover:text-pine hover:underline">
-                About Hwy 4 Events
+                About {SITE_NAME}
               </a>
               <a href="/faq" className="hover:text-pine hover:underline">
                 FAQ

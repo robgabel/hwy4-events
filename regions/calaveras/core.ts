@@ -143,6 +143,7 @@ export const CALAVERAS_CORE: RegionCore = {
 
   // ----- geography / time -----
   stateCode: "CA",
+  stateName: "California",
   countryCode: "US",
   timezone: "America/Los_Angeles",
   geo: {
