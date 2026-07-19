@@ -8,6 +8,12 @@
     "skipLibCheck": true,
     "outDir": "dist"
   },
-  "include": ["**/*.ts", "../lib/towns.ts"],
+  "include": [
+    "**/*.ts",
+    "../lib/towns.ts",
+    "../lib/region.ts",
+    "../lib/region-ops.ts",
+    "../regions/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }
