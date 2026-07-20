@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { REGION } from "./region";
 
 // Single source of truth for newsletter signup trends (PRD-growth-agent.md R1a).
 // Derives the daily series + running total + composition straight from
@@ -35,7 +36,7 @@ type SubRow = {
   signup_source: string | null;
 };
 
-const DEFAULT_TZ = "America/Los_Angeles";
+const DEFAULT_TZ = REGION.timezone;
 
 /** Civil date (YYYY-MM-DD) for an ISO timestamp in the given IANA tz. Signups are
  *  bucketed by the local day they happened. Default Pacific (matches the rest of

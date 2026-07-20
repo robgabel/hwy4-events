@@ -10,13 +10,11 @@
 // a host listed here but NOT there would crash; a host there but not here merely
 // skips optimization. scripts/test/image-hosts.test.ts enforces the subset
 // against next.config.ts so the two can't drift into a crash.
-export const OPTIMIZED_IMAGE_HOSTS: ReadonlySet<string> = new Set([
-  "hwy4events.com",
-  "blsha.com",
-  "www.gocalaveras.com",
-  "www.thebistroespresso.com",
-  "visitmurphys.com",
-]);
+import { REGION } from "./region";
+
+export const OPTIMIZED_IMAGE_HOSTS: ReadonlySet<string> = new Set(
+  REGION.imageHosts
+);
 
 /**
  * Can next/image safely render this src, or must it fall back to a plain <img>?

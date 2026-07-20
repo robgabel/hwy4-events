@@ -2,6 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { SITE_URL } from "@/lib/constants";
+import { REGION } from "@/lib/region";
+import { REGION_OPS } from "@/lib/region-ops";
 import { matchOrgForEvent } from "@/lib/event-link";
 
 export const maxDuration = 120;
@@ -66,7 +69,7 @@ function plusDaysISO(days: number): string {
 async function fetchCanonicalText(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Hwy4Events-Verifier/1.0 (+https://hwy4events.com)" },
+      headers: { "User-Agent": `${REGION_OPS.userAgents.verifierName}/1.0 (+${REGION.defaultSiteUrl})` },
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) {
@@ -240,7 +243,7 @@ export async function GET(request: Request) {
     });
     const more = flagged.length > 10 ? `\n…and ${flagged.length - 10} more.` : "";
     await postToSlack(
-      `🔎 Date verification flagged ${flagged.length} event(s) against the organizer's page (not shown publicly):\n${lines.join("\n")}${more}\nReview: https://hwy4events.com/admin/verification`
+      `🔎 Date verification flagged ${flagged.length} event(s) against the organizer's page (not shown publicly):\n${lines.join("\n")}${more}\nReview: ${SITE_URL}/admin/verification`
     );
   }
 

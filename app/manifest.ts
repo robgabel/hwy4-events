@@ -1,15 +1,16 @@
 import type { MetadataRoute } from "next";
+import { SITE_NAME } from "@/lib/constants";
+import { REGION } from "@/lib/region";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Hwy 4 Events — Sierra Nevada Foothills",
-    short_name: "Hwy 4 Events",
-    description:
-      "Live music, festivals, and community events along the Highway 4 corridor in Calaveras County.",
+    name: `${SITE_NAME} — ${REGION.titleSuffix}`,
+    short_name: SITE_NAME,
+    description: REGION.manifestDescription,
     start_url: "/",
     display: "standalone",
-    background_color: "#faf8f5",
-    theme_color: "#1a3a2a",
+    background_color: REGION.theme.backgroundColor,
+    theme_color: REGION.theme.themeColor,
     icons: [
       {
         src: "/icon-192.png",

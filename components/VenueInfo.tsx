@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Hwy4Venue } from "@/lib/types";
+import { REGION } from "@/lib/region";
 import { isHttpUrl } from "@/lib/url";
 
 /**
@@ -17,7 +18,7 @@ function todaysHours(weekdayDescriptions: string[] | null): string | null {
   if (!weekdayDescriptions || weekdayDescriptions.length === 0) return null;
   const today = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
-    timeZone: "America/Los_Angeles",
+    timeZone: REGION.timezone,
   }).format(new Date());
   const line = weekdayDescriptions.find((d) =>
     d.toLowerCase().startsWith(today.toLowerCase())

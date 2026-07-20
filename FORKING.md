@@ -7,6 +7,14 @@ need to change is **data and copy**, not engine code. Plan on roughly a
 weekend to get a skeleton site live, then an ongoing trickle of work building
 your local source list, which is the actual product.
 
+> **The engine/instance boundary is [docs/REGIONS.md](docs/REGIONS.md).** A
+> region-parameterization program is migrating the region-specific values into
+> an explicit `regions/<slug>/` config layer (brand/domain/email/UA/timezone
+> done; prompts/voice, content packs, and scraper data to follow). As it
+> lands, "edit these hardcoded files" below becomes "fill in your region
+> config" — check REGIONS.md for what has moved. Until then this guide's
+> file-by-file list stays accurate for the parts not yet migrated.
+
 What you are getting: a Next.js 16 events site with automated scraping,
 LLM-written daily briefings, a weekly newsletter with a human veto gate,
 four-layer event deduplication, venue pages fed by Google Places, poster

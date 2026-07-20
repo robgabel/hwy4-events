@@ -26,15 +26,17 @@
 // Locked by scripts/test/event-link.test.ts.
 
 import { isHttpUrl } from "./url";
+import { REGION } from "./region";
 
 /** Aggregator hosts we render as a best-effort CTA but never *trust*: their
  *  per-event permalinks 403 server-side validators and can churn slugs, so we
  *  keep them out of JSON-LD and out of validateEventUrls, and mark the resolved
  *  link non-durable. Rendered only when AGGREGATOR_FALLBACK is on (it is).
- *  Compared case-insensitively with and without a leading "www.". */
-export const UNSTABLE_SOURCE_HOSTS: ReadonlySet<string> = new Set([
-  "gocalaveras.com",
-]);
+ *  Compared case-insensitively with and without a leading "www.". Data lives
+ *  in regions/<slug>/core.ts. */
+export const UNSTABLE_SOURCE_HOSTS: ReadonlySet<string> = new Set(
+  REGION.unstableSourceHosts
+);
 
 /** When true: an event whose only link is an unstable-host `event_url`
  *  (GoCalaveras) renders that link as a non-durable source CTA instead of no
@@ -118,7 +120,8 @@ export function isUnstableHost(url: string): boolean {
 export function aggregatorHostLabel(href: string): string {
   const h = hostOf(href);
   if (!h) return "the source";
-  if (h === "gocalaveras.com") return "GoCalaveras";
+  const label = REGION.sourceHostLabels[h];
+  if (label) return label;
   return h;
 }
 

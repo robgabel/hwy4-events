@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { REGION } from "@/lib/region";
 
 export const runtime = "edge";
 
@@ -35,7 +36,7 @@ export async function GET() {
               color: "rgba(200, 215, 200, 0.8)",
             }}
           >
-            Highway 4 Corridor
+            {REGION.og.kicker}
           </span>
           <span style={{ fontSize: "48px" }}>🌲</span>
         </div>
@@ -48,7 +49,7 @@ export async function GET() {
             letterSpacing: "-0.02em",
           }}
         >
-          Hwy 4 Events
+          {REGION.siteName}
         </div>
 
         <div
@@ -59,7 +60,7 @@ export async function GET() {
             textAlign: "center",
           }}
         >
-          Angels Camp · Murphys · Arnold · Bear Valley
+          {REGION.og.townsLine}
         </div>
 
         <div
@@ -69,7 +70,7 @@ export async function GET() {
             marginTop: "8px",
           }}
         >
-          Live music, festivals & community events in the Sierra foothills
+          {REGION.og.subline}
         </div>
       </div>
     ),

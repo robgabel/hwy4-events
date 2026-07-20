@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { requireCronAuth } from "@/lib/cron-auth";
+import { requireCronAuth, requireRegion } from "@/lib/cron-auth";
+import { REGION } from "@/lib/region";
 import { createHash } from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export const maxDuration = 30;
 
 const EVENTS_PAGE = "https://www.theluberoom.com/pages/events";
 const CONFIG_KEY = "lube_schedule_fingerprint";
-const UA = "Mozilla/5.0 (compatible; Hwy4EventsBot/1.0; +https://hwy4events.com)";
+const UA = `Mozilla/5.0 (compatible; ${REGION.botName}/1.0; +${REGION.defaultSiteUrl})`;
 
 /**
  * Stable fingerprint of the Shopify CDN images on the page: each image reduced
@@ -63,6 +64,9 @@ async function postToSlack(text: string): Promise<void> {
 export async function GET(request: Request) {
   const cronDenied = requireCronAuth(request);
   if (cronDenied) return cronDenied;
+  // Calaveras-only source watcher; no-op on other regions (vercel.json is shared).
+  const skip = requireRegion("calaveras");
+  if (skip) return skip;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

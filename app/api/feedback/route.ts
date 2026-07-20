@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { REGION } from "@/lib/region";
+import { REGION_OPS } from "@/lib/region-ops";
+import { newsletterFromHeader } from "@/lib/newsletter";
 
 export async function POST(request: Request) {
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -36,10 +39,10 @@ export async function POST(request: Request) {
   try {
     const resend = new Resend(resendApiKey);
     await resend.emails.send({
-      from: "Hwy 4 Events <newsletter@hwy4events.com>",
-      to: "robgabel@gmail.com",
+      from: newsletterFromHeader(),
+      to: REGION_OPS.emails.owner,
       subject: "New Hwy4Events feedback",
-      text: `Anonymous feedback from hwy4events.com/about:\n\n${message}\n\n---\nSent at ${new Date().toISOString()}`,
+      text: `Anonymous feedback from ${REGION.domain}/about:\n\n${message}\n\n---\nSent at ${new Date().toISOString()}`,
     });
 
     return NextResponse.json({ ok: true });

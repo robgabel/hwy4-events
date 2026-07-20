@@ -11,7 +11,9 @@
  * `.gte("date", start)` / `.lte("date", end)`.
  */
 
-const TZ = "America/Los_Angeles";
+import { REGION } from "./region";
+
+const TZ = REGION.timezone;
 
 const DOW: Record<string, number> = {
   Sun: 0,

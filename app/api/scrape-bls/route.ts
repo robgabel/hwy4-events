@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { requireCronAuth } from "@/lib/cron-auth";
+import { requireCronAuth, requireRegion } from "@/lib/cron-auth";
 
 export const maxDuration = 120; // Vision API calls can be slow
 
@@ -223,6 +223,9 @@ export async function GET(request: Request) {
 
   const cronDenied = requireCronAuth(request);
   if (cronDenied) return cronDenied;
+  // Calaveras-only scraper (Blue Lake Springs); no-op on other regions.
+  const skip = requireRegion("calaveras");
+  if (skip) return skip;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

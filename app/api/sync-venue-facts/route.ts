@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { REGION } from "@/lib/region";
 import { isUnstableHost } from "@/lib/event-link";
 import { isHttpUrl } from "@/lib/url";
 
@@ -15,12 +16,15 @@ export const maxDuration = 120;
 
 const PLACES_BASE = "https://places.googleapis.com/v1";
 
-// Corridor center (Arnold-ish) + radius to bias Text Search so a venue name
-// doesn't match a same-named place in another state.
+// Region center + radius to bias Text Search so a venue name doesn't match a
+// same-named place in another state. Data lives in regions/<slug>/core.ts.
 const CORRIDOR_BIAS = {
   circle: {
-    center: { latitude: 38.1846, longitude: -120.3517 },
-    radius: 45000.0,
+    center: {
+      latitude: REGION.geo.placesBias.lat,
+      longitude: REGION.geo.placesBias.lng,
+    },
+    radius: REGION.geo.placesBias.radiusMeters,
   },
 };
 

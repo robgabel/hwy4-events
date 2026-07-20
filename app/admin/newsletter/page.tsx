@@ -1,4 +1,5 @@
 import { getAdminClientOrNull } from "@/lib/admin/db";
+import { SITE_URL } from "@/lib/constants";
 import { readFlash } from "@/lib/admin/flash";
 import { saveDraft, vetoDraft, unvetoDraft, regenerateDraft } from "./actions";
 import { addNote, updateNote, deleteNote } from "./note-actions";
@@ -147,8 +148,8 @@ export default async function NewsletterDraftAdminPage({
             one, or trigger it now:
             <br />
             <code style={{ fontSize: 14 }}>
-              curl -H &quot;Authorization: Bearer $CRON_SECRET&quot;
-              https://hwy4events.com/api/newsletter/prepare
+              curl -H &quot;Authorization: Bearer $CRON_SECRET&quot;{" "}
+              {`${SITE_URL}/api/newsletter/prepare`}
             </code>
           </p>
         </section>

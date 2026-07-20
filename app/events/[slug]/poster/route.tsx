@@ -2,6 +2,7 @@ import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
 import { format, parseISO } from "date-fns";
 import { findEventBySlug } from "@/lib/events";
+import { REGION } from "@/lib/region";
 import { posterKind, humanizeHost } from "@/lib/poster";
 import { resolveDisplayAddress } from "@/lib/address";
 import type { EventCategory, Hwy4Event } from "@/lib/types";
@@ -409,7 +410,7 @@ export async function GET(
               </div>
               <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15, paddingBottom: 4 }}>
                 <div style={{ fontFamily: "DMSans", fontWeight: 700, fontSize: 19, letterSpacing: 2, textTransform: "uppercase", color: C.inkMuted }}>Poster by</div>
-                <div style={{ fontFamily: "DMSans", fontWeight: 600, fontSize: 26, color: C.ink }}>hwy4events.com</div>
+                <div style={{ fontFamily: "DMSans", fontWeight: 600, fontSize: 26, color: C.ink }}>{REGION.domain}</div>
               </div>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}

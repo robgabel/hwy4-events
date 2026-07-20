@@ -11,7 +11,9 @@ import Anthropic from "@anthropic-ai/sdk";
 // Relative (not "@/") imports so the scripts/ test runner, which doesn't load
 // the app's tsconfig path alias, can import this module directly.
 import { generateEventSlug } from "./slugs";
-import { SITE_URL } from "./constants";
+import { SITE_URL, SITE_NAME } from "./constants";
+import { REGION } from "./region";
+import { REGION_OPS } from "./region-ops";
 import { isHttpUrl } from "./url";
 import {
   renderParagraphs as renderParagraphsSafe,
@@ -20,6 +22,26 @@ import {
 import { withVoice } from "./voice";
 
 export const NEWSLETTER_MODEL = "claude-opus-4-7";
+
+// Sender identity for every newsletter-adjacent send (weekly issue, welcome,
+// confirm, feedback). Env wins over region config so a deployment can override
+// without a code change; the composed header is byte-identical to the old
+// hardcoded literal for Calaveras. Defined once here so the send/subscribe/
+// confirm/feedback routes can't drift.
+export function newsletterFromHeader(): string {
+  const addr = process.env.NEWSLETTER_FROM || REGION_OPS.emails.newsletterFrom;
+  return `${SITE_NAME} <${addr}>`;
+}
+
+export function newsletterReplyTo(): string {
+  return process.env.NEWSLETTER_REPLY_TO || REGION_OPS.emails.replyTo;
+}
+
+// First-party host test for UTM tagging + click-tracking rewrites. Built from
+// the region domain; matches the domain and any subdomain, case-insensitive
+// (identical semantics to the old inline /(^|\.)hwy4events\.com$/i).
+const escapedDomain = REGION.domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const INTERNAL_HOST_RE = new RegExp(`(^|\\.)${escapedDomain}$`, "i");
 
 export const DEFAULT_ROB_NOTE = `Hey, Rob here. I built Hwy4Events because I kept missing things happening five miles from my house. Every week Millie (my sheepadoodle, our actual editor) rounds up what's on. Hope you find something worth driving to.`;
 
@@ -67,7 +89,7 @@ export function todayISO(): string {
 
 export function buildSubject(targetSendDate: string): string {
   const d = new Date(targetSendDate + "T12:00:00Z");
-  return `What's happening on the 4 — ${d.toLocaleDateString("en-US", {
+  return `${REGION_OPS.newsletter.subjectPrefix} — ${d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     timeZone: "UTC",
@@ -266,7 +288,7 @@ function unwrapAccidentalJson(raw: string): string {
 function withUtm(url: string, content: string): string {
   try {
     const u = new URL(url);
-    if (!/(^|\.)hwy4events\.com$/i.test(u.hostname)) return url;
+    if (!INTERNAL_HOST_RE.test(u.hostname)) return url;
     if (u.searchParams.has("utm_source")) return u.toString();
     u.searchParams.set("utm_source", "newsletter");
     u.searchParams.set("utm_medium", "email");
@@ -304,7 +326,7 @@ export function buildSlugToEventId(
 function eventSlugFromUrl(url: string): string | null {
   try {
     const u = new URL(url);
-    if (!/(^|\.)hwy4events\.com$/i.test(u.hostname)) return null;
+    if (!INTERNAL_HOST_RE.test(u.hostname)) return null;
     const parts = u.pathname.split("/").filter(Boolean);
     return parts.length === 2 && parts[0] === "events" ? parts[1] : null;
   } catch {
@@ -373,12 +395,12 @@ export function buildEmailHtml(
 
   const forwardSubject = encodeURIComponent("Thought you'd like this");
   const forwardBody = encodeURIComponent(
-    `Found this — it's the Hwy 4 events roundup (Angels Camp to Bear Valley). Worth a look:\n\n${SITE_URL}`
+    `${REGION_OPS.newsletter.forwardBodyLede}\n\n${SITE_URL}`
   );
   const forwardHref = `mailto:?subject=${forwardSubject}&body=${forwardBody}`;
 
   const smsBody = encodeURIComponent(
-    `Found this — it's the Hwy 4 events roundup. ${SITE_URL}`
+    `${REGION_OPS.newsletter.smsBodyLede} ${SITE_URL}`
   );
   const smsHref = `sms:?&body=${smsBody}`;
 
@@ -398,15 +420,15 @@ export function buildEmailHtml(
     <div style="background: #1B3A2D; border-radius: 12px; padding: 26px 20px 22px; text-align: center;">
       <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
         <tr>
-          <td valign="middle" style="padding: 0 12px 0 0;"><img src="${SITE_URL}/email/tree.png" width="25" height="36" alt="" style="display: block; border: 0;"></td>
-          <td valign="middle"><h1 style="color: #ffffff; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; line-height: 1; margin: 0;">Hwy 4 Events</h1></td>
-          <td valign="middle" style="padding: 0 0 0 12px;"><img src="${SITE_URL}/email/tree.png" width="25" height="36" alt="" style="display: block; border: 0;"></td>
+          <td valign="middle" style="padding: 0 12px 0 0;"><img src="${SITE_URL}${REGION_OPS.newsletter.assets.tree}" width="25" height="36" alt="" style="display: block; border: 0;"></td>
+          <td valign="middle"><h1 style="color: #ffffff; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; line-height: 1; margin: 0;">${SITE_NAME}</h1></td>
+          <td valign="middle" style="padding: 0 0 0 12px;"><img src="${SITE_URL}${REGION_OPS.newsletter.assets.tree}" width="25" height="36" alt="" style="display: block; border: 0;"></td>
         </tr>
       </table>
-      <p style="color: #B5C4A8; font-size: 14px; margin: 11px 0 0;">Weekly roundup · Angels Camp to Bear Valley</p>
+      <p style="color: #B5C4A8; font-size: 14px; margin: 11px 0 0;">${REGION_OPS.newsletter.heroSubline}</p>
     </div>
     <div style="text-align: center; line-height: 0; margin: 0 0 14px;">
-      <img src="${SITE_URL}/email/millie-happy.png" width="88" height="99" alt="Millie the sheepadoodle" style="display: inline-block; border: 0; margin-top: -2px;">
+      <img src="${SITE_URL}${REGION_OPS.newsletter.assets.mascot}" width="88" height="99" alt="${REGION_OPS.newsletter.assets.mascotAlt}" style="display: inline-block; border: 0; margin-top: -2px;">
     </div>
     <div style="background: #f4efe6; border-radius: 12px; padding: 18px 20px; border: 1px solid #e0d9cb; margin-bottom: 14px;">
       <p style="color: #2d5016; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px;">From Rob —</p>
@@ -430,11 +452,11 @@ export function buildEmailHtml(
       Got this forwarded? <a href="${subscribeHref}" style="color: #2d5016; font-weight: 500;">Subscribe yourself →</a>
     </p>
     <p style="color: #666; font-size: 13px; line-height: 1.5; text-align: center; margin: 10px 0 0;">
-      Got a tip or an event we missed? Email Rob directly at <a href="mailto:robgabel@gmail.com" style="color: #2d5016; font-weight: 500;">robgabel@gmail.com</a>
+      Got a tip or an event we missed? Email Rob directly at <a href="mailto:${REGION_OPS.emails.owner}" style="color: #2d5016; font-weight: 500;">${REGION_OPS.emails.owner}</a>
     </p>
     <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8e4de;">
       <p style="color: #888; font-size: 12px; margin: 0 0 8px;">
-        <a href="${withUtm(SITE_URL, "footer")}" style="color: #2d5016;">hwy4events.com</a> · Angels Camp to Bear Valley, CA
+        <a href="${withUtm(SITE_URL, "footer")}" style="color: #2d5016;">${REGION.domain}</a> · ${REGION_OPS.newsletter.footerSpan}
       </p>
       <p style="color: #aaa; font-size: 11px; margin: 0;">
         <a href="${unsubscribeUrl}" style="color: #aaa;">Unsubscribe</a>

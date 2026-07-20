@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { REGION } from "@/lib/region";
 
 export const maxDuration = 60;
 
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
 
   try {
     const baseUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ?? "https://hwy4events.com";
+      process.env.NEXT_PUBLIC_SITE_URL ?? REGION.defaultSiteUrl;
     const res = await fetch(`${baseUrl}/api/generate-briefing`, {
       headers: cronSecret ? { Authorization: `Bearer ${cronSecret}` } : {},
     });

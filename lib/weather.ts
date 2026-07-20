@@ -1,9 +1,10 @@
 import { WEATHER_USER_AGENT } from "./constants";
+import { REGION } from "./region";
 import { CORRIDOR_TOWNS } from "./towns";
 import { addDays, pacificToday } from "./date-windows";
 import { mapShortForecast, type ConditionKey } from "./weather-conditions";
 
-const PACIFIC_TZ = "America/Los_Angeles";
+const PACIFIC_TZ = REGION.timezone;
 const POINTS_REVALIDATE_SECONDS = 86_400;
 const FORECAST_REVALIDATE_SECONDS = 3_600;
 const WEATHER_TIMEOUT_MS = 5_000;

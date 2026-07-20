@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { SITE_URL, SITE_NAME } from "@/lib/constants";
+import { REGION } from "@/lib/region";
 
 // Scanner-safe unsubscribe. Email security scanners prefetch every GET in a
 // message, and the old GET-with-side-effect silently unsubscribed real
@@ -72,7 +74,7 @@ export async function POST(request: Request) {
   }
 
   return new NextResponse(
-    unsubscribePage("You've been unsubscribed from the Hwy 4 Events newsletter. We'll miss you on the 4."),
+    unsubscribePage(`You've been unsubscribed from the ${SITE_NAME} newsletter. We'll miss you on the 4.`),
     { headers: { "Content-Type": "text/html" } }
   );
 }
@@ -82,10 +84,10 @@ function unsubscribeConfirmPage(token: string): string {
   // it is safe to embed.
   return `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Unsubscribe — Hwy 4 Events</title></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Unsubscribe — ${SITE_NAME}</title></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #faf9f6;">
   <div style="text-align: center; max-width: 400px; padding: 32px;">
-    <h1 style="color: #2d5016; font-size: 20px;">Hwy 4 Events</h1>
+    <h1 style="color: #2d5016; font-size: 20px;">${SITE_NAME}</h1>
     <p style="color: #444; line-height: 1.6;">Stop getting the Thursday roundup?</p>
     <form method="POST" action="/api/newsletter/unsubscribe">
       <input type="hidden" name="token" value="${token}">
@@ -94,7 +96,7 @@ function unsubscribeConfirmPage(token: string): string {
       </button>
     </form>
     <p style="color: #888; font-size: 13px; margin-top: 24px;">
-      Changed your mind? <a href="https://hwy4events.com" style="color: #2d5016; text-decoration: underline;">Back to Hwy4Events.com</a>
+      Changed your mind? <a href="${SITE_URL}" style="color: #2d5016; text-decoration: underline;">Back to ${REGION.siteRef}</a>
     </p>
   </div>
 </body>
@@ -104,12 +106,12 @@ function unsubscribeConfirmPage(token: string): string {
 function unsubscribePage(message: string): string {
   return `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Unsubscribe — Hwy 4 Events</title></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Unsubscribe — ${SITE_NAME}</title></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #faf9f6;">
   <div style="text-align: center; max-width: 400px; padding: 32px;">
-    <h1 style="color: #2d5016; font-size: 20px;">Hwy 4 Events</h1>
+    <h1 style="color: #2d5016; font-size: 20px;">${SITE_NAME}</h1>
     <p style="color: #444; line-height: 1.6;">${message}</p>
-    <a href="https://hwy4events.com" style="color: #2d5016; text-decoration: underline;">Back to Hwy4Events.com</a>
+    <a href="${SITE_URL}" style="color: #2d5016; text-decoration: underline;">Back to ${REGION.siteRef}</a>
   </div>
 </body>
 </html>`;

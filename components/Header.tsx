@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { CORRIDOR_TOWNS } from "@/lib/towns";
 import { townSlug } from "@/lib/slugs";
+import { SITE_NAME } from "@/lib/constants";
+import { REGION } from "@/lib/region";
 
 /** A Calaveras Big Trees sequoia — layered crown over a tall trunk. */
 function BigTree({ className }: { className?: string }) {
@@ -30,12 +32,12 @@ export default function Header({ greeting }: { greeting?: string | null }) {
       <div className="relative z-10 mx-auto max-w-5xl px-4 pb-20 pt-10 text-center sm:pb-24 sm:pt-12">
         <h1 className="inline-flex items-center justify-center gap-3 font-display text-4xl font-bold tracking-tight text-white sm:gap-4 sm:text-5xl">
           <BigTree className="h-10 w-7 shrink-0 text-sage-light/60 sm:h-12 sm:w-9" />
-          Hwy 4 Events
+          {SITE_NAME}
           <BigTree className="h-10 w-7 shrink-0 text-sage-light/60 sm:h-12 sm:w-9" />
         </h1>
 
         <p className="mt-3 font-display text-lg text-white/90 drop-shadow-sm">
-          From the Frog Jump to the Grizzly Chair
+          {REGION.headerTagline}
         </p>
 
         {/* All nine towns, honestly — quiet and secondary */}
@@ -64,8 +66,8 @@ export default function Header({ greeting }: { greeting?: string | null }) {
       {/* Millie peeking over the wave divider */}
       <div className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2 translate-y-[35%]">
         <Image
-          src="/millie-happy.svg"
-          alt="Millie the sheepadoodle"
+          src={REGION.mascot.headerAsset}
+          alt={REGION.mascot.imgAlt}
           width={80}
           height={80}
           className="opacity-95 drop-shadow-sm sm:h-[88px] sm:w-[88px]"

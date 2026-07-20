@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isCronAuthorized } from "../../lib/cron-auth";
+import { isCronAuthorized, requireRegion } from "../../lib/cron-auth";
 
 const req = (auth?: string) =>
   new Request("https://hwy4events.com/api/whatever", {
@@ -54,4 +54,18 @@ test("wrong / missing token denies when secret is set", () => {
     assert.equal(isCronAuthorized(req("s3cret")), false); // missing "Bearer "
     assert.equal(isCronAuthorized(req()), false);
   });
+});
+
+// requireRegion gates region-specific crons that share one vercel.json.
+// The test environment resolves to "calaveras" (region-config default).
+test("requireRegion(active slug) is a no-op (null → proceed)", () => {
+  assert.equal(requireRegion("calaveras"), null);
+});
+
+test("requireRegion(other slug) returns a 200 skipped response, not a 4xx", async () => {
+  const res = requireRegion("eugene");
+  assert.ok(res, "expected a skip response");
+  assert.equal(res!.status, 200); // Vercel cron must see success; Slack stays quiet
+  const body = await res!.json();
+  assert.equal(body.skipped, true);
 });

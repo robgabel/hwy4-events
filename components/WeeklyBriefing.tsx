@@ -1,6 +1,8 @@
 import React from "react";
 import Image from "next/image";
 import { SITE_URL } from "@/lib/constants";
+import { REGION } from "@/lib/region";
+import { REGION_OPS } from "@/lib/region-ops";
 import { JsonLd, buildArticle } from "@/lib/schema";
 import { truncateMeta } from "@/lib/description-quality";
 import WeeklyBriefingTabs from "./WeeklyBriefingTabs";
@@ -96,7 +98,7 @@ export default function WeeklyBriefing({
   // weekendLabel comes from the API (e.g. "Fri, Apr 3 – Sun, Apr 5")
   const weekendDateLabel = weekendLabel ?? null;
 
-  const title = "Today on the 4";
+  const title = REGION.briefingTitle;
 
   // Article schema: makes the briefing a discrete editorial entity that
   // search/AI engines can cite as news with a named author and timestamp.
@@ -109,8 +111,8 @@ export default function WeeklyBriefing({
         url: `${SITE_URL}/#briefing`,
         datePublished: generatedAt,
         dateModified: generatedAt,
-        authorName: "Rob Gabel",
-        authorUrl: `${SITE_URL}/about/rob-gabel`,
+        authorName: REGION_OPS.schemaOrg.founderName,
+        authorUrl: `${SITE_URL}${REGION_OPS.schemaOrg.founderPath}`,
       })
     : null;
 
@@ -119,7 +121,7 @@ export default function WeeklyBriefing({
       {articleSchema && <JsonLd data={articleSchema} />}
       <div className="mb-2 flex items-center gap-2">
         <Image
-          src="/millie-happy.svg"
+          src={REGION.mascot.headerAsset}
           alt=""
           width={24}
           height={24}
