@@ -59,6 +59,23 @@ export async function countMissing(
   return count ?? 0;
 }
 
+// Nav-badge count for artist rows with a pending AI draft awaiting review: a
+// staged blurb draft not yet published. An approximation of the page's "reviewable"
+// set (it doesn't catch link-only finds), which is fine for a badge. Same
+// never-throw contract as countMissing.
+export async function countArtistDraftsPending(): Promise<number> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return 0;
+  const supabase = createClient(url, key);
+  const { count } = await supabase
+    .from("hwy4_artists")
+    .select("artist_key", { count: "exact", head: true })
+    .is("blurb", null)
+    .not("blurb_draft", "is", null);
+  return count ?? 0;
+}
+
 // Nav-badge count for rows missing EITHER of two columns (e.g. venues missing a
 // blurb or a street address). A row missing both still counts once. Same
 // never-throw contract as countMissing.

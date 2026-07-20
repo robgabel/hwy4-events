@@ -9,6 +9,10 @@
       "schedule": "0 10 * * *"
     },
     {
+      "path": "/api/agent/draft-artist-blurbs",
+      "schedule": "30 10 * * *"
+    },
+    {
       "path": "/api/sync-venue-facts?only=new",
       "schedule": "30 11 * * *"
     },

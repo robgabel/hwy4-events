@@ -1,6 +1,6 @@
 # PRD — Artist / Band Descriptions
 
-> **Status (2026-07-20):** Proposed. Feasibility-validated (see §2), not yet built. Extends `PRD-live-music-experience.md` Phase 3 ("Artist link layer") and **revises its stance** — see §3. When built, this stamp records what shipped and where truth lives (CLAUDE.md).
+> **Status (2026-07-20):** **Phase 1 built** (data + drafter + review, no public render). Shipped: migration `20260720_artists.sql` (`hwy4_artists`), `lib/agent/research-artist.ts` + `lib/agent/draft-artist-blurbs.ts` (conservative — errs on nothing, always links out), daily cron `/api/agent/draft-artist-blurbs`, the `/admin/artists` review tab (Pulse). **Manual step to activate:** apply the migration (Supabase MCP was disconnected at build time). Phases 2 (public render) + 3 (`/artists/[slug]` hubs) remain. Extends `PRD-live-music-experience.md` Phase 3 and **revises its stance** — see §3.
 
 ## 1. Thesis
 
