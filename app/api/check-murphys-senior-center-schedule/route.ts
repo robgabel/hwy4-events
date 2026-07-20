@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { requireCronAuth } from "@/lib/cron-auth";
+import { requireCronAuth, requireRegion } from "@/lib/cron-auth";
 import { REGION } from "@/lib/region";
 import { createHash } from "node:crypto";
 
@@ -71,6 +71,9 @@ async function postToSlack(text: string): Promise<void> {
 export async function GET(request: Request) {
   const cronDenied = requireCronAuth(request);
   if (cronDenied) return cronDenied;
+  // Calaveras-only source watcher; no-op on other regions (vercel.json is shared).
+  const skip = requireRegion("calaveras");
+  if (skip) return skip;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

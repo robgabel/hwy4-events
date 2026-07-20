@@ -7,6 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { canOptimizeImage, OPTIMIZED_IMAGE_HOSTS } from "../../lib/image-hosts.js";
 import nextConfig from "../../next.config.js";
+import { REGIONS } from "../../regions/index.js";
 
 test("local asset paths optimize", () => {
   assert.equal(canOptimizeImage("/images/live_music.svg"), true);
@@ -45,4 +46,25 @@ test("OPTIMIZED_IMAGE_HOSTS ⊆ next.config remotePatterns", () => {
       `"${host}" is optimizable but missing from next.config.ts remotePatterns — would 500`
     );
   }
+});
+
+// Region-parameterization pin: next.config.ts is an instance file with the
+// image hosts hardcoded (a plain object Next can load without importing our TS
+// region module — see docs/REGIONS.md §2). It MUST equal the union of every
+// region's core.imageHosts. Any region adding an image host but not updating
+// next.config (or vice versa) fails here — the substitute for making
+// next.config import the region config, which we deliberately don't do in PR1.
+test("next.config remotePatterns == union of all regions' imageHosts", () => {
+  const configured = new Set(
+    (nextConfig.images?.remotePatterns ?? []).map((p) => p.hostname)
+  );
+  const union = new Set<string>();
+  for (const core of Object.values(REGIONS)) {
+    for (const h of core.imageHosts) union.add(h);
+  }
+  assert.deepEqual(
+    [...configured].sort(),
+    [...union].sort(),
+    "next.config.ts remotePatterns must equal the union of every region's core.imageHosts"
+  );
 });

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { REGION } from "./region";
 
 // Fail-CLOSED auth for cron / internal API routes.
 //
@@ -30,4 +31,26 @@ export function requireCronAuth(request: Request): NextResponse | null {
   return isCronAuthorized(request)
     ? null
     : NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+/** Region gate for crons that are specific to one region's data sources.
+ *
+ * vercel.json is shared across every deployment, so a Calaveras-only cron
+ * (the venue-schedule watchers, the BLS/Moose scrapes) would otherwise fire on
+ * every region's project. This returns a 200 "skipped" response (NOT a 4xx —
+ * Vercel cron must see success and Slack must stay quiet) when the active
+ * region isn't in `slugs`, or null (proceed) when it is. On the Calaveras
+ * deployment `requireRegion("calaveras")` is a pure no-op, so there is zero
+ * behavior change for the live site.
+ *
+ *    const skip = requireRegion("calaveras");
+ *    if (skip) return skip;
+ */
+export function requireRegion(...slugs: string[]): NextResponse | null {
+  if (slugs.includes(REGION.slug)) return null;
+  return NextResponse.json({
+    ok: true,
+    skipped: true,
+    reason: `job not enabled for region "${REGION.slug}"`,
+  });
 }
