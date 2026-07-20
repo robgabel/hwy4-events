@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { REGION_OPS } from "../region-ops";
 
 // Minimal, zero-dependency Google Search Console client. Signs a service-account
 // JWT with Node's built-in crypto (no googleapis / google-auth-library), exchanges
@@ -86,7 +87,10 @@ async function getAccessToken(sa: ServiceAccount): Promise<string> {
 }
 
 function siteUrl(): string {
-  return process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL || "sc-domain:hwy4events.com";
+  return (
+    process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL ||
+    REGION_OPS.seo.gscPropertyDefault
+  );
 }
 
 type RawRow = {

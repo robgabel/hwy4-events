@@ -67,6 +67,9 @@ export interface RegionCore {
 
   // ----- identity / brand -----
   siteName: string;
+  /** The site referred to AS a site ("Hwy4Events.com") — used in prose like
+   *  "Back to Hwy4Events.com". Distinct from siteName and domain. */
+  siteRef: string;
   /** Bare production hostname, e.g. "hwy4events.com". */
   domain: string;
   /** Production origin fallback when NEXT_PUBLIC_SITE_URL is unset. */

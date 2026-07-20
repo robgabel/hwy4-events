@@ -14,6 +14,8 @@ import {
   buildSlugToEventId,
   buildSubject,
   todayISO,
+  newsletterFromHeader,
+  newsletterReplyTo,
 } from "@/lib/newsletter";
 import { sendCampaign } from "@/lib/newsletter-send";
 
@@ -98,8 +100,8 @@ export async function GET(request: Request) {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=test-token`;
       const testTracking = { campaignId, slugToEventId };
       await resend.emails.send({
-        from: `${SITE_NAME} <newsletter@hwy4events.com>`,
-        replyTo: "robgabel@gmail.com",
+        from: newsletterFromHeader(),
+        replyTo: newsletterReplyTo(),
         to: testEmail,
         subject: `[TEST] ${subject}`,
         html: buildEmailHtml(robNoteResult.body, content, unsubscribeUrl, testTracking),
@@ -179,9 +181,9 @@ export async function GET(request: Request) {
     const buildMessage = (sub: { email: string; unsubscribe_token: string }) => {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
       return {
-        from: `${SITE_NAME} <newsletter@hwy4events.com>`,
+        from: newsletterFromHeader(),
         // Replies go to Gmail until ImprovMX forwarding for the domain is live.
-        replyTo: "robgabel@gmail.com",
+        replyTo: newsletterReplyTo(),
         to: sub.email,
         subject,
         html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
@@ -366,8 +368,8 @@ export async function POST(request: Request) {
     const buildMessage = (sub: { email: string; unsubscribe_token: string }) => {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
       return {
-        from: `${SITE_NAME} <newsletter@hwy4events.com>`,
-        replyTo: "robgabel@gmail.com",
+        from: newsletterFromHeader(),
+        replyTo: newsletterReplyTo(),
         to: sub.email,
         subject: draft.subject as string,
         html: buildEmailHtml(

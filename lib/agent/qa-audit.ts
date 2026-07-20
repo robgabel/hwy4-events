@@ -1,6 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TaskPriority } from "../tasks";
 import { generateEventSlug } from "../slugs";
+import { SITE_NAME } from "../constants";
+import { REGION_OPS } from "../region-ops";
+
+// "… | Hwy 4 Events | Hwy 4 Events" — a page baked the brand suffix into its
+// own title AND inherited the root layout template. Built from SITE_NAME so
+// the check follows the region brand (identical pattern for Calaveras).
+const escapedSiteName = SITE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const DOUBLED_BRAND_RE = new RegExp(
+  `\\|\\s*${escapedSiteName}\\s*\\|\\s*${escapedSiteName}`,
+  "i"
+);
 
 // QA agent (PRD-roadmap-board.md Phase 3). A sibling to /api/check-events, but where
 // that audit reports DATA issues to Slack, this one HTTP-checks the live SITE for
@@ -48,7 +59,7 @@ export function checkPage(kind: QaKind, status: number, body: string): QaFinding
   const titleMatch = body.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (!titleMatch || titleMatch[1].trim().length === 0) {
     findings.push({ check: "title", severity: "p2", detail: "no non-empty <title> element in the HTML" });
-  } else if (/\|\s*Hwy 4 Events\s*\|\s*Hwy 4 Events/i.test(titleMatch[1])) {
+  } else if (DOUBLED_BRAND_RE.test(titleMatch[1])) {
     // A page baked the brand suffix into its own title AND inherited the root
     // layout's `%s | Hwy 4 Events` template (2026-07-16 QA: every town page
     // rendered "… | Hwy 4 Events | Hwy 4 Events"). Standing check so the next
@@ -81,7 +92,7 @@ async function fetchTarget(base: string, path: string): Promise<{ status: number
   try {
     const res = await fetch(`${base}${path}`, {
       signal: controller.signal,
-      headers: { "User-Agent": "Hwy4EventsQA/1.0" },
+      headers: { "User-Agent": `${REGION_OPS.userAgents.qaName}/1.0` },
       cache: "no-store",
     });
     const body = await res.text();
@@ -146,7 +157,7 @@ async function dynamicTargets(supabase: SupabaseClient): Promise<QaTarget[]> {
   }
 
   // A small, stable set of town pages (town slugs don't rotate like event slugs).
-  for (const slug of ["arnold", "murphys", "angels-camp"]) {
+  for (const slug of REGION_OPS.qaAudit.townSlugSample) {
     targets.push({ path: `/towns/${slug}`, kind: "page", keyScope: "town-page", label: "Town pages" });
   }
   return targets;

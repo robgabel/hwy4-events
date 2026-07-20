@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { REGION } from "@/lib/region";
 
 /**
  * Monthly AEO prompt-audit reminder.
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
   const month = new Date().toLocaleString("en-US", {
     month: "long",
     year: "numeric",
-    timeZone: "America/Los_Angeles",
+    timeZone: REGION.timezone,
   });
 
   const lines: string[] = [

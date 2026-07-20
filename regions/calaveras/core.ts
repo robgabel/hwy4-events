@@ -87,6 +87,7 @@ export const CALAVERAS_CORE: RegionCore = {
   // components/Header.tsx + app/manifest.ts + components/WeeklyBriefing.tsx +
   // components/RobsPicks.tsx) -----
   siteName: "Hwy 4 Events",
+  siteRef: "Hwy4Events.com",
   domain: "hwy4events.com",
   defaultSiteUrl: "https://hwy4events.com",
   botName: "Hwy4EventsBot",

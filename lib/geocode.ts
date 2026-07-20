@@ -11,6 +11,9 @@
  * don't want to leak the contact User-Agent to clients).
  */
 
+import { REGION } from "./region";
+import { REGION_OPS } from "./region-ops";
+
 export interface LatLng {
   lat: number;
   lng: number;
@@ -32,7 +35,7 @@ export async function geocodeAddress(query: string): Promise<LatLng | null> {
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "hwy4events.com (events map; contact: hello@hwy4events.com)",
+        "User-Agent": `${REGION.domain} (events map; contact: ${REGION_OPS.emails.hello})`,
         "Accept-Language": "en",
       },
       // Cache the geocode result for a week across renders/requests. Tagged so

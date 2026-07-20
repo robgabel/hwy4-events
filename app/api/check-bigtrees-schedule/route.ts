@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { REGION } from "@/lib/region";
 import { createHash } from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export const maxDuration = 30;
 
 const SOURCE_PAGE = "https://www.parks.ca.gov/?page_id=25994";
 const CONFIG_KEY = "bigtrees_schedule_fingerprint";
-const UA = "Mozilla/5.0 (compatible; Hwy4EventsBot/1.0; +https://hwy4events.com)";
+const UA = `Mozilla/5.0 (compatible; ${REGION.botName}/1.0; +${REGION.defaultSiteUrl})`;
 
 // The program content lives between the intro line and the footer nav. Slicing to
 // this block keeps the fingerprint sensitive to schedule edits but blind to

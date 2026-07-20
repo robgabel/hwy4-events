@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { SITE_URL, SITE_NAME } from "@/lib/constants";
-import { buildWelcomeEmailHtml } from "@/lib/newsletter";
+import { buildWelcomeEmailHtml, newsletterFromHeader } from "@/lib/newsletter";
 
 // Scanner-safe double opt-in. Email security scanners (Outlook SafeLinks,
 // Mimecast, Gmail) prefetch every GET in a message, so a GET that flips
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${token}`;
       const welcome = buildWelcomeEmailHtml(unsubscribeUrl);
       await new Resend(resendApiKey).emails.send({
-        from: `${SITE_NAME} <newsletter@hwy4events.com>`,
+        from: newsletterFromHeader(),
         to: data.email,
         subject: welcome.subject,
         html: welcome.html,
@@ -104,10 +104,10 @@ function confirmPage(token: string): string {
   // it is safe to embed.
   return `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Confirm subscription — Hwy 4 Events</title></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Confirm subscription — ${SITE_NAME}</title></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #faf9f6;">
   <div style="text-align: center; max-width: 400px; padding: 32px;">
-    <h1 style="color: #2d5016; font-size: 20px;">Hwy 4 Events</h1>
+    <h1 style="color: #2d5016; font-size: 20px;">${SITE_NAME}</h1>
     <p style="color: #444; line-height: 1.6;">One more click and you're on the Thursday list.</p>
     <form method="POST" action="/api/newsletter/confirm">
       <input type="hidden" name="token" value="${token}">

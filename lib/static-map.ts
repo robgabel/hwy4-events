@@ -1,5 +1,7 @@
 import "server-only";
 import sharp from "sharp";
+import { REGION } from "./region";
+import { REGION_OPS } from "./region-ops";
 
 /**
  * Stitch a static map image centered on a coordinate, from CARTO Voyager raster
@@ -29,7 +31,7 @@ async function fetchTile(z: number, x: number, y: number): Promise<Buffer | null
   const url = `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`;
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "hwy4events.com (events map; contact: hello@hwy4events.com)" },
+      headers: { "User-Agent": `${REGION.domain} (events map; contact: ${REGION_OPS.emails.hello})` },
       // CARTO tiles are static; let Next cache them across renders.
       next: { revalidate: 60 * 60 * 24 * 30 },
       signal: AbortSignal.timeout(4000),

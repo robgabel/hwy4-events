@@ -13,6 +13,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { TriageAnalysis } from "@/lib/agent/submission-triage";
+import { SITE_URL } from "../constants";
 
 const REPLY_MODEL = "claude-sonnet-4-6";
 
@@ -124,7 +125,7 @@ export async function generateReply(
   let task: string;
   if (outcome === "approved") {
     task = `Outcome: APPROVED and published. Thank them for sending it in, tell them the event is now listed on Hwy4Events, and include this link on its own line: ${
-      ctx.eventUrl ?? "https://hwy4events.com"
+      ctx.eventUrl ?? SITE_URL
     }. Keep it warm and short.`;
   } else if (outcome === "questions") {
     const gaps = computeGaps(sub, analysis);
