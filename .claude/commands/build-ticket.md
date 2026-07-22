@@ -21,6 +21,7 @@ from hwy4_tasks where ref = '$ARGUMENTS';
 - If `status = 'proposed'`: it hasn't been approved — tell the user to Promote it in `/admin/roadmap` first, and stop.
 - If `status = 'in_review'` and it already has a `pr_number`: it's already built — surface the PR and ask before redoing.
 - The `body` is the spec. If it's thin/ambiguous, ask the user 1–2 clarifying questions **before** writing code.
+- Bodies follow the owner-readable template (CLAUDE.md "Roadmap tickets"). Two sections are **binding**: **Done when** is your acceptance checklist (verify every item before opening the PR), and **Not doing** is a hard scope fence (do not build past it — file a follow-up ticket instead). **Notes for the builder** is where the technical pointers live; the rest of the body is written for the owner.
 
 ## 2. Branch from a fresh base (the stale-base lesson)
 - `git fetch origin` and confirm you branch from `origin/main`, NOT whatever is checked out (worktrees/sessions drift; branches can sit behind main).
@@ -46,4 +47,4 @@ where ref = '$ARGUMENTS';
 ```
 
 ## 5. Report back
-Tell the user: what you built, the draft PR link, what you verified, and that the card is now **In review** in `/admin/roadmap` awaiting their review + merge. Do not merge — the merge is always the human's click.
+Tell the user: what you built, the draft PR link, what you verified (walk the ticket's **Done when** items one by one if it has them), and that the card is now **In review** in `/admin/roadmap` awaiting their review + merge. Do not merge — the merge is always the human's click.

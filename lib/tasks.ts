@@ -11,7 +11,16 @@ export type TaskStatus =
   | "done"
   | "wont_do";
 
-export type TaskType = "feature" | "bug" | "qa" | "growth" | "chore";
+// Owner buckets, not developer taxonomy (2026-07-22, migration
+// 20260722_ticket_type_buckets.sql — feature/qa/growth collapsed into
+// improvement). Rob is the approval gate, so type answers his question:
+//   bug         = something is broken or wrong right now
+//   improvement = the site works; this makes it better
+//   chore       = internal/maintenance work a visitor never sees
+// `source` carries who filed it; `priority` how soon. The DB constraint still
+// tolerates legacy values during the deploy window, so renderers should fall
+// back (`TYPE_LABEL[t] ?? t`) rather than assume the union is exhaustive.
+export type TaskType = "bug" | "improvement" | "chore";
 export type TaskPriority = "p0" | "p1" | "p2" | "p3";
 export type TaskSource =
   | "chief_of_staff"
@@ -68,10 +77,8 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
 };
 
 export const TYPE_LABEL: Record<TaskType, string> = {
-  feature: "Feature",
   bug: "Bug",
-  qa: "QA",
-  growth: "Growth",
+  improvement: "Improvement",
   chore: "Chore",
 };
 
@@ -82,7 +89,7 @@ export const PRIORITY_LABEL: Record<TaskPriority, string> = {
   p3: "P3 · someday",
 };
 
-export const TASK_TYPES: TaskType[] = ["feature", "bug", "qa", "growth", "chore"];
+export const TASK_TYPES: TaskType[] = ["bug", "improvement", "chore"];
 export const TASK_PRIORITIES: TaskPriority[] = ["p0", "p1", "p2", "p3"];
 // Statuses a human can move a card into from the board (a real move, not agent-only).
 export const MOVABLE_STATUSES: TaskStatus[] = [

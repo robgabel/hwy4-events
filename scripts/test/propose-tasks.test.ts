@@ -13,25 +13,27 @@ import { parseExtractedTasks, titlesCollide } from "../../lib/agent/propose-task
 test("parseExtractedTasks parses a fenced JSON array and keeps valid enums", () => {
   const text = "```json\n" +
     JSON.stringify([
-      { title: "Add a /free filter to town pages", body: "spec", type: "feature", priority: "p1", rationale: "why" },
+      { title: "Add a /free filter to town pages", body: "spec", type: "improvement", priority: "p1", rationale: "why" },
     ]) +
     "\n```";
   const out = parseExtractedTasks(text);
   assert.equal(out.length, 1);
   assert.equal(out[0].title, "Add a /free filter to town pages");
-  assert.equal(out[0].type, "feature");
+  assert.equal(out[0].type, "improvement");
   assert.equal(out[0].priority, "p1");
 });
 
-test("parseExtractedTasks defaults invalid type/priority (chore/p3) and drops title-less rows", () => {
+test("parseExtractedTasks defaults invalid type/priority (improvement/p3) and drops title-less rows", () => {
+  // "feature" is a LEGACY type (pre-2026-07-22 buckets): it must coerce to the
+  // default, not pass through — this pins the collapse to bug|improvement|chore.
   const out = parseExtractedTasks(
     JSON.stringify([
-      { title: "Fix stale price on Ironstone Sundays", type: "nonsense", priority: "urgent" },
+      { title: "Fix stale price on Ironstone Sundays", type: "feature", priority: "urgent" },
       { body: "no title here", type: "bug", priority: "p0" },
     ])
   );
   assert.equal(out.length, 1);
-  assert.equal(out[0].type, "chore");
+  assert.equal(out[0].type, "improvement");
   assert.equal(out[0].priority, "p3");
   assert.equal(out[0].body, ""); // missing body coerces to empty string
 });

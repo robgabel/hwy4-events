@@ -23,7 +23,7 @@ function oneOf<T extends string>(value: string, allowed: readonly T[], fallback:
 export async function createTask(formData: FormData) {
   const title = requireField(formData, "title", ADMIN_PATH, "title");
   const supabase = getAdminClient();
-  const type = oneOf<TaskType>(field(formData, "type"), TASK_TYPES, "feature");
+  const type = oneOf<TaskType>(field(formData, "type"), TASK_TYPES, "improvement");
   const priority = oneOf<TaskPriority>(field(formData, "priority"), TASK_PRIORITIES, "p2");
   const body = field(formData, "body") || null;
 

@@ -38,6 +38,19 @@ The operator surface, gated whole by Basic Auth ([middleware.ts](middleware.ts),
   - **Newsletter** (`/admin/newsletter`) — the Wed-draft / Thu-send veto surface.
 - **The five former queue routes still exist** — `/admin/submissions`, `/admin/posters`, `/admin/verification`, `/admin/feedback`, `/admin/actions` — and hold all the real disposition logic (publish / merge / dismiss / approve / revert, in each page's `actions.ts`). The Inbox links into them; they're just no longer top-level nav, so drilling into one keeps the **Inbox** tab lit.
 
+## Roadmap tickets (`hwy4_tasks`) — owner-readable format
+
+Every ticket has two readers with opposite needs: **Rob** (the approval gate — scans title + first sentence on `/admin/roadmap` to promote/dismiss) and **Claude Code** (the builder — reads the whole body, gathers technical context from the codebase itself). The format is layered for both, and **any agent or Claude session filing a ticket MUST follow it** (shipped 2026-07-22; the two prompt-side filers already comply: `lib/agent/propose-tasks.ts`, `lib/agent/qa-audit.ts`).
+
+- **Types are owner buckets** (migration `20260722_ticket_type_buckets.sql` collapsed the old five; feature/qa/growth → improvement): `bug` = something is broken or wrong right now · `improvement` = the site works, this makes it better · `chore` = internal upkeep a visitor never sees. `source` carries who filed it, `priority` how soon. The DB constraint temporarily tolerates legacy values (deploy-window compat) — new writes use only the three; renderers fall back `TYPE_LABEL[t] ?? t`.
+- **Title:** plain English, the outcome a person sees or gets. No jargon, file paths, function/column names, or metric shorthand. Test: it makes sense read aloud to a neighbor ("Stop duplicate festival listings slipping through", not "let NULL-time rows join dedup buckets").
+- **Body, line 1:** one plain sentence on why it matters and who is affected — the board card previews exactly this.
+- **Bug body:** `**What's happening:**` (what you see, with the URL) → `**What should happen:**` → `**How to see it:**` (repro steps/link) → `**Notes for the builder:**` (optional; the *only* technical section).
+- **Improvement/chore body:** `**Problem:**` (evidence translated into plain meaning; raw numbers in parentheses) → `**What we'll build:**` → `**Done when:**` (2–4 checkable statements about visible behavior — the builder verifies each before opening the PR, and Rob checks the preview deploy against them instead of reading the diff) → `**Not doing:**` (optional, only when adjacent scope tempts; binding on the builder) → `**Notes for the builder:**` (optional).
+- **Big work stays a PRD:** anything needing phases/open questions gets a `PRD-*.md` plus a pointer ticket (the HWY-6 pattern) — the ticket template must not grow to swallow PRDs.
+- **Board rendering:** cards clamp the body to a 3-line preview and expand in place ("Open full ticket", a no-JS `<details>`) with the sections formatted; type renders as a red (bug) / pine (improvement) / gray (chore) chip.
+- **Proposer dedup covers done work:** `propose-tasks` dedups against open + recently-dismissed **+ recently-done** (30d) tickets, so a lagging signal (GSC revises over ~2 weeks) can't re-file finished work (the HWY-12-duplicated-done-HWY-8 lesson).
+
 ## Deduplication (defense in depth)
 
 The same real-world event can appear twice: one source re-lists it under a changed title, or two sources describe it independently (e.g. the GoCalaveras aggregator lists "Live Music @ The Lube Room" while the venue feed lists "Live at The Lube: Poison Oakies" — same night). The title-based `dedup_key` only catches byte-identical re-scrapes of the *same* title, so it cannot see these. Four layers guard against dupes:

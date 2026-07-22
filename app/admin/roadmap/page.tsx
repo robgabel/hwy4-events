@@ -64,6 +64,15 @@ function ago(iso: string | null): string {
 
 const PRIORITY_COLOR: Record<string, string> = { p0: "#922b21", p1: "#b45309", p2: "#4b5563", p3: "#8A7B66" };
 
+// Owner-bucket chips: red = broken right now, pine = makes the site better,
+// gray = internal upkeep. Keyed loosely (string) because rows written before the
+// 2026-07-22 type migration deploy may still carry legacy values.
+const TYPE_CHIP: Record<string, { color: string; bg: string }> = {
+  bug: { color: "#922b21", bg: "#fdecea" },
+  improvement: { color: "#1B3A2D", bg: "#eef2e9" },
+  chore: { color: "#4b5563", bg: "#f3f4f6" },
+};
+
 export default async function RoadmapPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const { error, flash } = readFlash(await searchParams);
   const tasks = await loadTasks();
@@ -82,6 +91,17 @@ export default async function RoadmapPage({ searchParams }: { searchParams: Prom
       error={error}
       flash={flash}
     >
+      {/* Expand/collapse for ticket cards, no client JS: the <summary> shows the
+          clamped preview when closed and hides it when open (the full formatted
+          body renders instead). Scoped by the .tkb class. */}
+      <style>{`
+        details.tkb summary { list-style: none; }
+        details.tkb summary::-webkit-details-marker { display: none; }
+        details.tkb .tkb-close { display: none; }
+        details.tkb[open] .tkb-close { display: inline; }
+        details.tkb[open] .tkb-open { display: none; }
+        details.tkb[open] .tkb-preview { display: none; }
+      `}</style>
       <NewTicket />
 
       {tasks.length === 0 ? (
@@ -128,17 +148,26 @@ function NewTicket() {
           gap: 10,
         }}
       >
-        <input name="title" placeholder="Title (required)" required style={adminInput} />
+        <input
+          name="title"
+          placeholder="Title — plain English, the outcome a person sees (no jargon or file paths)"
+          required
+          style={adminInput}
+        />
         <textarea
           name="body"
-          placeholder="Spec / details (markdown) — this is what Claude Code reads when it builds the ticket."
-          rows={4}
+          placeholder={
+            "First line: one plain sentence on why this matters (it's the card preview).\n" +
+            "Bug: **What's happening:** / **What should happen:** / **How to see it:** / **Notes for the builder:**\n" +
+            "Improvement or chore: **Problem:** / **What we'll build:** / **Done when:** / **Not doing:** / **Notes for the builder:**"
+          }
+          rows={6}
           style={{ ...adminInput, resize: "vertical", fontFamily: "inherit" }}
         />
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ fontSize: 13, color: MUTED, display: "flex", alignItems: "center", gap: 6 }}>
             Type
-            <select name="type" defaultValue="feature" style={{ ...adminInput, width: "auto" }}>
+            <select name="type" defaultValue="improvement" style={{ ...adminInput, width: "auto" }}>
               {TASK_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {TYPE_LABEL[t]}
@@ -217,6 +246,7 @@ function Chip({ children, color = "#4b5563", bg = "#f3f4f6" }: { children: React
 
 function Card({ task }: { task: TaskRow }) {
   const isProposed = task.status === "proposed";
+  const typeChip = TYPE_CHIP[task.type] ?? TYPE_CHIP.chore;
   return (
     <article
       style={{
@@ -232,27 +262,12 @@ function Card({ task }: { task: TaskRow }) {
           {task.ref}
         </span>
         <Chip color={PRIORITY_COLOR[task.priority] ?? "#4b5563"}>{task.priority}</Chip>
-        <Chip color="#1B3A2D" bg="#eef2e9">{TYPE_LABEL[task.type]}</Chip>
+        <Chip color={typeChip.color} bg={typeChip.bg}>{TYPE_LABEL[task.type] ?? task.type}</Chip>
       </div>
 
       <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: INK, lineHeight: 1.35 }}>{task.title}</p>
 
-      {task.body && (
-        <p
-          style={{
-            margin: "0 0 8px",
-            fontSize: 13,
-            lineHeight: 1.4,
-            color: MUTED,
-            overflow: "hidden",
-            display: "-webkit-box",
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: "vertical",
-          }}
-        >
-          {task.body}
-        </p>
-      )}
+      {task.body && <ExpandableBody body={task.body} />}
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: SUBTLE, marginBottom: 8, flexWrap: "wrap" }}>
         {task.source !== "manual" && <span>via {task.source.replace(/_/g, " ")}</span>}
@@ -334,4 +349,112 @@ function Card({ task }: { task: TaskRow }) {
       )}
     </article>
   );
+}
+
+// --- Ticket body: clamped preview that expands to the full formatted spec ----
+
+// The whole preview is the click target (<details>, zero client JS). Closed: the
+// first ~3 lines, markdown marks stripped, plus an "Open full ticket" hint.
+// Open: the preview hides (the .tkb style block in RoadmapPage) and the complete
+// body renders with its template sections formatted.
+function ExpandableBody({ body }: { body: string }) {
+  const plain = body.replace(/\*\*/g, "").replace(/^#+\s+/gm, "");
+  return (
+    <details className="tkb" style={{ marginBottom: 8 }}>
+      <summary style={{ cursor: "pointer" }}>
+        <p
+          className="tkb-preview"
+          style={{
+            margin: "0 0 2px",
+            fontSize: 13,
+            lineHeight: 1.4,
+            color: MUTED,
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+          }}
+        >
+          {plain}
+        </p>
+        <span className="tkb-open" style={{ fontSize: 12, fontWeight: 600, color: ACCENT }}>
+          Open full ticket ▾
+        </span>
+        <span className="tkb-close" style={{ fontSize: 12, fontWeight: 600, color: SUBTLE }}>
+          Close ▴
+        </span>
+      </summary>
+      <div style={{ marginTop: 6, overflowWrap: "anywhere" }}>
+        <TicketBody body={body} />
+      </div>
+    </details>
+  );
+}
+
+// Markdown-lite renderer for ticket bodies (CLAUDE.md "Roadmap tickets"): inline
+// **bold** (the template's section labels), "- " bullets, "## " headings (legacy
+// bodies), blank lines as separators. Each text line is its own paragraph, which
+// preserves the template's one-section-per-line shape. No markdown dependency.
+function boldSpans(text: string, keyBase: string): React.ReactNode[] {
+  return text
+    .split(/\*\*([^*]+)\*\*/g)
+    .map((part, i) =>
+      i % 2 === 1 ? (
+        <strong key={`${keyBase}-${i}`} style={{ color: INK }}>
+          {part}
+        </strong>
+      ) : (
+        part
+      )
+    );
+}
+
+function TicketBody({ body }: { body: string }) {
+  const lines = body.replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let bullets: string[] = [];
+
+  const flushBullets = () => {
+    if (bullets.length === 0) return;
+    const key = `ul-${blocks.length}`;
+    blocks.push(
+      <ul key={key} style={{ margin: "0 0 6px", paddingLeft: 18 }}>
+        {bullets.map((b, i) => (
+          <li key={i} style={{ fontSize: 13, lineHeight: 1.5, color: MUTED, marginBottom: 2 }}>
+            {boldSpans(b, `${key}-${i}`)}
+          </li>
+        ))}
+      </ul>
+    );
+    bullets = [];
+  };
+
+  lines.forEach((raw, idx) => {
+    const line = raw.trim();
+    if (line === "") {
+      flushBullets();
+      return;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      bullets.push(line.replace(/^[-*]\s+/, ""));
+      return;
+    }
+    flushBullets();
+    if (/^#+\s/.test(line)) {
+      blocks.push(
+        <p key={`h-${idx}`} style={{ margin: "6px 0 4px", fontSize: 13, lineHeight: 1.5, color: INK, fontWeight: 700 }}>
+          {line.replace(/^#+\s+/, "")}
+        </p>
+      );
+    } else {
+      blocks.push(
+        <p key={`t-${idx}`} style={{ margin: "0 0 6px", fontSize: 13, lineHeight: 1.5, color: MUTED }}>
+          {boldSpans(line, `t-${idx}`)}
+        </p>
+      );
+    }
+  });
+  flushBullets();
+
+  return <div>{blocks}</div>;
 }

@@ -14,8 +14,10 @@ import { TASK_PRIORITIES, TASK_TYPES, type TaskPriority, type TaskType } from ".
 // in /admin/roadmap (the approval gate), same as every other cockpit proposal.
 //
 // Best-effort + idempotent: it never throws into the reasoner (a proposal failure
-// must not fail the digest), and it dedups against open + recently-dismissed
-// tickets by normalized title so a daily reasoner can't refile the same idea.
+// must not fail the digest), and it dedups against open + recently-closed
+// (dismissed or done) tickets by normalized title so a daily reasoner can't refile
+// the same idea — including work that already shipped but whose lagging signal
+// (GSC) still looks unaddressed.
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_PER_RUN = 2; // a reasoner proposes at most 2 tickets/run — precision over volume
@@ -29,16 +31,28 @@ const SYSTEM_PROMPT = `You triage a daily/weekly ops digest for Hwy4Events.com (
 A ticket is warranted ONLY for a concrete change to the CODEBASE or the SITE that a developer (Claude Code) would implement: a new feature or page, a bug fix, a data-quality or SEO fix, a UX change, a script.
 
 Do NOT file a ticket for:
-- routine ops that already have a queue (reviewing a community submission, verifying an event date, approving a poster, sending an outreach email) — those are human clicks, not code changes.
+- routine ops that already have a queue (reviewing a community submission, verifying an event date, approving a poster, sending an outreach email), those are human clicks, not code changes.
 - vague aspirations ("grow the newsletter") with no concrete change behind them.
 - anything the digest only mentions as fine / informational.
 
 Most digests warrant ZERO tickets. That is the correct and common answer. Only propose when the digest clearly implies a specific build. Never invent work the digest does not support.
 
+Every ticket has TWO readers. The OWNER is a non-technical business owner who scans the title and the first sentence to decide promote or dismiss. The BUILDER is Claude Code, which reads the whole body and gathers technical context from the codebase itself. Write the top of the ticket for the owner; quarantine anything technical in a "Notes for the builder" section at the bottom.
+
 For each real dev ticket, write:
-- title: a short imperative (e.g. "Add a /free filter to town pages").
-- body: 2-4 sentences of spec — what to change and why, grounded in the digest signal that prompted it. This is what the developer reads.
-- type: one of feature | bug | qa | growth | chore.
+- title: plain English, the outcome a person sees or gets. No jargon, no file paths, no function or column names, no metric shorthand. It should make sense read aloud to a neighbor. ("Stop duplicate festival listings slipping through", not "let NULL-time rows join dedup buckets".)
+- body: markdown. The FIRST LINE is one plain sentence on why this matters and who is affected (it is the preview the owner sees on the board). Then, for type "bug":
+    **What's happening:** what you actually see, with the URL.
+    **What should happen:** the correct behavior.
+    **How to see it:** steps or a link that reproduces it.
+    **Notes for the builder:** (optional) suspected cause, technical pointers.
+  For type "improvement" or "chore":
+    **Problem:** what is missing or underperforming today, with the evidence translated into plain meaning ("586 people saw us in Google last month and none clicked"; raw numbers in parentheses are fine).
+    **What we'll build:** the change, in plain English.
+    **Done when:** 2 to 4 checkable statements about visible behavior, so the owner can verify without reading code.
+    **Not doing:** (only when there is tempting adjacent scope) 1 to 3 bullets fencing it out.
+    **Notes for the builder:** (optional) technical pointers.
+- type: "bug" (something is broken or wrong right now), "improvement" (the site works, this makes it better), or "chore" (internal or maintenance work a visitor never sees).
 - priority: one of p0 | p1 | p2 | p3 (p0 = urgent/breaking, p2 = normal, p3 = someday). Reserve p0/p1 for genuine breakage.
 - rationale: one line on why it is worth doing now.
 
@@ -78,7 +92,7 @@ function coerce(raw: unknown): ExtractedTask | null {
   const r = raw as Record<string, unknown>;
   const title = typeof r.title === "string" ? r.title.trim() : "";
   if (!title) return null;
-  const type = (TASK_TYPES as string[]).includes(String(r.type)) ? (r.type as TaskType) : "chore";
+  const type = (TASK_TYPES as string[]).includes(String(r.type)) ? (r.type as TaskType) : "improvement";
   const priority = (TASK_PRIORITIES as string[]).includes(String(r.priority)) ? (r.priority as TaskPriority) : "p3";
   return {
     title: title.slice(0, 200),
@@ -126,7 +140,7 @@ export async function proposeTasksFromDigest(
     const anthropic = new Anthropic();
     const message = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 1200,
+      max_tokens: 2000, // templated bodies (Problem / Done when / Not doing) run longer than the old 2-4 sentence spec
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -148,18 +162,21 @@ export async function proposeTasksFromDigest(
   }
   if (extracted.length === 0) return { proposed: 0, skipped: 0 };
 
-  // 2. Dedup against open tickets + tickets dismissed in the last 30 days (so a
-  //    rejected idea doesn't get re-nagged every run). Two simple selects, merged —
-  //    clearer than one nested PostgREST .or() with a timestamp.
+  // 2. Dedup against open tickets + tickets closed (dismissed OR done) in the last
+  //    30 days. wont_do: a rejected idea doesn't get re-nagged every run. done: the
+  //    HWY-12 lesson — GSC lags a week or more, so a signal can outlive its fix and
+  //    the memo re-filed already-finished work (HWY-12 duplicated the done HWY-8).
+  //    Two simple selects, merged — clearer than one nested PostgREST .or() with a
+  //    timestamp.
   const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const [openRows, dismissedRows] = await Promise.all([
+  const [openRows, closedRows] = await Promise.all([
     supabase
       .from("hwy4_tasks")
       .select("title")
       .in("status", ["proposed", "backlog", "ready", "in_progress", "in_review"]),
-    supabase.from("hwy4_tasks").select("title").eq("status", "wont_do").gte("updated_at", cutoff),
+    supabase.from("hwy4_tasks").select("title").in("status", ["wont_do", "done"]).gte("updated_at", cutoff),
   ]);
-  const seen = [...((openRows.data ?? []) as { title: string }[]), ...((dismissedRows.data ?? []) as { title: string }[])].map(
+  const seen = [...((openRows.data ?? []) as { title: string }[]), ...((closedRows.data ?? []) as { title: string }[])].map(
     (t) => words(t.title)
   );
 

@@ -40,6 +40,17 @@ const SEV_LABEL: Record<string, { title: string; severity: TaskPriority }> = {
   title_doubled_brand: { title: "has a doubled brand suffix in its <title>", severity: "p2" },
 };
 
+// Owner-readable "what should happen" per check, for the ticket body's bug
+// template (CLAUDE.md "Roadmap tickets"). Plain language: the ticket's top half
+// is read by the owner deciding promote/dismiss, not by the builder.
+const EXPECTED: Record<string, string> = {
+  status: "The page loads normally.",
+  malformed: "The URL returns a valid sitemap document that Google can read.",
+  jsonld: "The page carries the structured data (JSON-LD) that search engines and AI assistants read events from.",
+  title: "Every page shows a browser-tab title.",
+  title_doubled_brand: "The site name appears once in the browser-tab title, not twice.",
+};
+
 // PURE: given a fetched page, what's wrong with it. Locked by scripts/test/qa-audit.test.ts.
 export function checkPage(kind: QaKind, status: number, body: string): QaFinding[] {
   // A non-200 is the whole story — don't also flag missing content on an error page.
@@ -81,9 +92,12 @@ export function checkKey(check: string, keyScope: string): string {
   return `qa:${check}:${keyScope}`;
 }
 
+// Plain-English title, no "QA:" prefix — the card's "via qa agent" line already
+// carries provenance, and the title's job is to read like a neighbor sentence
+// ("The homepage returns an error").
 function ticketTitle(check: string, label: string): string {
   const t = SEV_LABEL[check]?.title ?? `has a ${check} issue`;
-  return `QA: ${label} ${t}`;
+  return `${label} ${t}`;
 }
 
 async function fetchTarget(base: string, path: string): Promise<{ status: number; body: string }> {
@@ -230,9 +244,22 @@ export async function runQaAudit(supabase: SupabaseClient, baseUrl: string): Pro
       continue;
     }
     const examples = a.examples.slice(0, 5).join(", ");
+    // Bug-template body (CLAUDE.md "Roadmap tickets"): first line is the plain
+    // one-sentence preview the owner scans; sections follow for the builder.
+    const body = [
+      `A weekly automated check of the live site caught this; a visitor loading the page sees it right now.`,
+      ``,
+      `**What's happening:** ${a.detail}. Affected: ${examples}.`,
+      ``,
+      `**What should happen:** ${EXPECTED[a.check] ?? "The page passes the automated check."}`,
+      ``,
+      `**How to see it:** open ${a.examples[0]} on the live site and look.`,
+      ``,
+      `**Notes for the builder:** filed automatically by the QA agent (check key ${a.key}). If this is a false alarm or already fixed, Dismiss it.`,
+    ].join("\n");
     rows.push({
       title: a.title,
-      body: `The QA audit found a problem on the live site: ${a.detail}.\n\nAffected: ${examples}.\n\nReproduce by loading the URL(s) above and confirming, then fix the underlying page/route. (Filed automatically by the QA agent; if it is a false alarm or already fixed, Dismiss it.)`,
+      body,
       type: "bug",
       priority: a.severity,
       status: "proposed",
