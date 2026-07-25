@@ -6,10 +6,15 @@ import { SITE_URL } from "@/lib/constants";
 import { REGION } from "@/lib/region";
 import { REGION_OPS } from "@/lib/region-ops";
 import { matchOrgForEvent } from "@/lib/event-link";
+import {
+  compareEventTime,
+  describeTimeMismatch,
+  parseStatedTime,
+} from "@/lib/verify-times";
 
 export const maxDuration = 120;
 
-const VERIFICATION_PROMPT = `You are verifying whether a scraped event actually exists on the organizing org's official events page.
+const VERIFICATION_PROMPT = `You are verifying whether a scraped event actually exists on the organizing org's official events page, and whether we are showing the right time for it.
 
 Event we're checking:
 - Name: {NAME}
@@ -32,10 +37,22 @@ Decide one of:
 
 Be conservative: if you can't clearly find a matching entry on the canonical page, return needs_verification. If the canonical page seems to be a generic landing page with no event list, also return needs_verification with reason "Canonical page has no parseable event list".
 
+SEPARATELY, report the times the page states for THIS event.
+- Copy them VERBATIM from the page ("6:15 PM", "11:00 am - 5:00 pm", "6-8pm").
+- Use null when the page does not state a time for this event. NEVER infer,
+  estimate, or carry a time over from a different event. A missing time is
+  normal and reporting null is always the correct answer when unsure — we
+  would rather show no correction than a wrong one.
+- These are independent of "match": report the page's times even when the date
+  matches, and use null for both when you returned needs_verification because
+  the event is absent.
+
 Return ONLY a JSON object, no markdown fences:
 {
   "match": "verified" | "needs_verification",
-  "reason": "1-2 sentences. If date conflict, state BOTH dates explicitly. If absent, say so."
+  "reason": "1-2 sentences. If date conflict, state BOTH dates explicitly. If absent, say so.",
+  "page_start_time": "verbatim start time from the page, or null",
+  "page_end_time": "verbatim end time from the page, or null"
 }`;
 
 interface OrgRow {
@@ -50,10 +67,12 @@ interface EventRow {
   description: string | null;
   date: string;
   start_time: string | null;
+  end_time: string | null;
   venue_name: string;
   town: string;
   source_name: string | null;
   org_slug: string | null;
+  times_locked?: boolean | null;
 }
 
 function todayISO(): string {
@@ -144,14 +163,48 @@ export async function GET(request: Request) {
 
   const today = todayISO();
   const horizon = plusDaysISO(14);
-  const { data: eventsRaw, error: evErr } = await supabase
-    .from("hwy4_events")
-    .select("id, name, description, date, start_time, venue_name, town, source_name, org_slug")
-    .eq("verification_status", "unchecked")
-    .gte("date", today)
-    .lte("date", horizon)
-    .limit(50);
+
+  // Two cohorts, because a one-shot check cannot catch time drift.
+  //
+  //  (a) never-checked events in the next 14 days — the original behavior.
+  //  (b) already-`verified` events inside RECHECK_WINDOW_DAYS whose last check
+  //      has gone stale. This is the cohort that would have caught the Arnold
+  //      Rim Trail hike: it verified fine in April, then the organizer moved the
+  //      start five days before the event and nothing ever looked again.
+  //
+  // `needs_verification` and `dismissed` rows are deliberately excluded — those
+  // are awaiting a human, and re-checking them would just re-flag them.
+  const RECHECK_WINDOW_DAYS = 10;
+  const RECHECK_STALE_DAYS = 3;
+  const recheckHorizon = plusDaysISO(RECHECK_WINDOW_DAYS);
+  const staleBefore = new Date(
+    Date.now() - RECHECK_STALE_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const SELECT_COLS =
+    "id, name, description, date, start_time, end_time, venue_name, town, source_name, org_slug, times_locked";
+
+  const [uncheckedRes, recheckRes] = await Promise.all([
+    supabase
+      .from("hwy4_events")
+      .select(SELECT_COLS)
+      .eq("verification_status", "unchecked")
+      .gte("date", today)
+      .lte("date", horizon)
+      .limit(50),
+    supabase
+      .from("hwy4_events")
+      .select(SELECT_COLS)
+      .eq("verification_status", "verified")
+      .gte("date", today)
+      .lte("date", recheckHorizon)
+      .or(`verification_checked_at.is.null,verification_checked_at.lt.${staleBefore}`)
+      .limit(25),
+  ]);
+  const evErr = uncheckedRes.error ?? recheckRes.error;
   if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 });
+
+  const eventsRaw = [...(uncheckedRes.data ?? []), ...(recheckRes.data ?? [])];
 
   const events = (eventsRaw ?? []) as EventRow[];
   const pairs = events
@@ -169,7 +222,12 @@ export async function GET(request: Request) {
     if (!cache.has(o.slug)) cache.set(o.slug, await fetchCanonicalText(o.canonical_url));
   }
 
-  const results: Array<{ id: string; status: string; reason: string }> = [];
+  const results: Array<{
+    id: string;
+    status: string;
+    reason: string;
+    time_verdict?: string;
+  }> = [];
   for (const { ev, org } of pairs) {
     const canonicalText = cache.get(org.slug) ?? null;
     const checkedAt = new Date().toISOString();
@@ -212,20 +270,56 @@ export async function GET(request: Request) {
       if (json.startsWith("```")) {
         json = json.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
       }
-      const parsed = JSON.parse(json) as { match: "verified" | "needs_verification"; reason: string };
-      const newStatus = parsed.match === "verified" ? "verified" : "needs_verification";
+      const parsed = JSON.parse(json) as {
+        match: "verified" | "needs_verification";
+        reason: string;
+        page_start_time?: string | null;
+        page_end_time?: string | null;
+      };
+      let newStatus = parsed.match === "verified" ? "verified" : "needs_verification";
+      let reason = parsed.reason ?? "";
+
+      // Time drift. Only a STATED, differing time is evidence — `compareEventTime`
+      // returns "unknown" when either side is absent or unparseable, and unknown
+      // never flags (lib/verify-times.ts). A row whose times a human already
+      // pinned is skipped outright: it's authoritative, so a page that disagrees
+      // is the page being stale, not us.
+      const pageStart = parseStatedTime(parsed.page_start_time);
+      const pageEnd = parseStatedTime(parsed.page_end_time);
+      const timeVerdict = ev.times_locked
+        ? "unknown"
+        : compareEventTime(ev.start_time, parsed.page_start_time);
+
+      if (timeVerdict === "mismatch") {
+        // Keep a date problem in the reason if there already was one; otherwise
+        // the time IS the finding.
+        reason =
+          newStatus === "needs_verification"
+            ? `${reason} ${describeTimeMismatch(ev.start_time, parsed.page_start_time)}`.trim()
+            : describeTimeMismatch(ev.start_time, parsed.page_start_time);
+        newStatus = "needs_verification";
+      }
 
       await supabase
         .from("hwy4_events")
         .update({
           verification_status: newStatus,
-          verification_reason: parsed.reason ?? null,
+          verification_reason: reason || null,
           verification_checked_at: checkedAt,
           verification_snapshot: canonicalText.slice(0, 4000),
+          // Advisory only — a human applies it at /admin/verification. Stored
+          // even on a match so the queue can show what the organizer states.
+          verification_suggested_start: pageStart,
+          verification_suggested_end: pageEnd,
         })
         .eq("id", ev.id);
 
-      results.push({ id: ev.id, status: newStatus, reason: parsed.reason ?? "" });
+      results.push({
+        id: ev.id,
+        status: newStatus,
+        reason,
+        time_verdict: timeVerdict,
+      });
     } catch (err) {
       console.error(`[verify-events] LLM/parse error for event ${ev.id}:`, err);
       // Leave row as unchecked so the next run retries.
@@ -242,8 +336,13 @@ export async function GET(request: Request) {
         : `• ${r.id}: ${r.reason}`;
     });
     const more = flagged.length > 10 ? `\n…and ${flagged.length - 10} more.` : "";
+    const timeDrift = flagged.filter((r) => r.time_verdict === "mismatch").length;
+    const headline =
+      timeDrift > 0
+        ? `🔎 Verification flagged ${flagged.length} event(s) against the organizer's page — ${timeDrift} with a WRONG TIME (not shown publicly):`
+        : `🔎 Verification flagged ${flagged.length} event(s) against the organizer's page (not shown publicly):`;
     await postToSlack(
-      `🔎 Date verification flagged ${flagged.length} event(s) against the organizer's page (not shown publicly):\n${lines.join("\n")}${more}\nReview: ${SITE_URL}/admin/verification`
+      `${headline}\n${lines.join("\n")}${more}\nReview: ${SITE_URL}/admin/verification`
     );
   }
 
@@ -251,6 +350,8 @@ export async function GET(request: Request) {
     checked: results.length,
     verified: results.filter((r) => r.status === "verified").length,
     flagged: flagged.length,
+    time_mismatches: results.filter((r) => r.time_verdict === "mismatch").length,
+    rechecked: recheckRes.data?.length ?? 0,
     orgs_enabled: orgs.length,
     events_scanned: events.length,
     results,

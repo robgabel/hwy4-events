@@ -81,3 +81,42 @@ export async function deleteEvent(formData: FormData) {
   revalidatePath("/");
   flashRedirect(ADMIN_PATH, "Event deleted.");
 }
+
+// Use organizer's time: /api/verify-events found the organizer's canonical page
+// stating a different start than we show, and staged it on the row. This writes
+// it AND sets times_locked, so the aggregator that gave us the stale value can't
+// restore it on the next nightly scrape (see migration 20260725_add_times_locked).
+//
+// The times come from the row's verification_suggested_* columns rather than the
+// form, so an operator can only ever apply what the verifier actually read off
+// the page — the same "machine proposes, human applies" contract as the venue
+// blurb/address draft queues.
+export async function applyOrganizerTime(formData: FormData) {
+  const id = requireField(formData, "id", ADMIN_PATH, "event id");
+  const returnTo = safeReturnTo(formData, ADMIN_PATH);
+  const supabase = getAdminClient();
+
+  const { data: row, error: readErr } = await supabase
+    .from("hwy4_events")
+    .select("verification_suggested_start, verification_suggested_end")
+    .eq("id", id)
+    .maybeSingle();
+  if (readErr) failRedirect(returnTo, readErr.message);
+  if (!row?.verification_suggested_start) {
+    failRedirect(returnTo, "No organizer time was recorded for this event.");
+  }
+
+  await applyAction(
+    id,
+    {
+      start_time: row!.verification_suggested_start,
+      end_time: row!.verification_suggested_end ?? null,
+      times_locked: true,
+      verification_status: "verified",
+      verification_reason: "Time applied from the organizer's page and locked.",
+      verification_checked_at: new Date().toISOString(),
+    },
+    "Organizer's time applied and locked.",
+    returnTo
+  );
+}
