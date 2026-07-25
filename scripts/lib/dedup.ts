@@ -3,6 +3,7 @@ import type { ExtractedEvent } from "./extract.js";
 import { KNOWN_VENUES } from "./venues.js";
 import { isGenericVenue, resolveVenueKey } from "./venue-matcher.js";
 import { isOutOfCorridor } from "./corridor.js";
+import { capSeriesHorizon } from "./ingest-horizon.js";
 // The "same event" rule + its string helpers live in ONE place, shared with the
 // read-time collapse in lib/dedupe-events.ts. Do not re-implement them here.
 import {
@@ -319,6 +320,7 @@ type MergeableRow = MatchableRow & {
   description_locked?: boolean | null;
   poster_locked?: boolean | null;
   notability_locked?: boolean | null;
+  times_locked?: boolean | null;
 };
 
 const isArtifactVenue = (v: string | null | undefined): boolean =>
@@ -328,7 +330,7 @@ const isArtifactVenue = (v: string | null | undefined): boolean =>
  *  at least as rich as both: prefer the incoming (freshest) value per field,
  *  but never overwrite a populated field with an empty one, never replace a
  *  clean venue with a scraper-artifact venue, and union the artist lists. */
-function buildStrongMatchUpdate(
+export function buildStrongMatchUpdate(
   existing: MergeableRow,
   event: ExtractedEvent,
   dedupKey: string,
@@ -357,8 +359,13 @@ function buildStrongMatchUpdate(
     ...(existing.description_locked
       ? {}
       : { description: pick(event.description, existing.description) }),
-    start_time: pick(event.start_time, existing.start_time),
-    end_time: pick(event.end_time, existing.end_time),
+    // Times are human-set when locked — leave them out entirely.
+    ...(existing.times_locked
+      ? {}
+      : {
+          start_time: pick(event.start_time, existing.start_time),
+          end_time: pick(event.end_time, existing.end_time),
+        }),
     ...(existing.price_locked ? {} : { price: pick(event.price, existing.price) }),
     event_url: pick(event.event_url, existing.event_url),
     address: pick(event.address, existing.address),
@@ -379,7 +386,7 @@ function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked";
+  "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked";
 
 type ExistingRow = {
   id: string;
@@ -406,6 +413,7 @@ type ExistingRow = {
   poster_locked?: boolean | null;
   is_routine?: boolean | null;
   notability_locked?: boolean | null;
+  times_locked?: boolean | null;
 };
 
 export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
@@ -418,8 +426,9 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
     existing.venue_name !== event.venue_name ||
     // A locked field can't be written, so a diff there is not a change.
     (!existing.description_locked && existing.description !== event.description) ||
-    existing.start_time !== event.start_time ||
-    existing.end_time !== event.end_time ||
+    (!existing.times_locked &&
+      (existing.start_time !== event.start_time ||
+        existing.end_time !== event.end_time)) ||
     (!existing.price_locked && existing.price !== event.price) ||
     existing.event_url !== event.event_url ||
     existing.address !== event.address ||
@@ -433,6 +442,30 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
     // human locked it). Keeps a re-scrape self-healing.
     (!existing.notability_locked && !!existing.is_routine !== !!(event.is_routine ?? false))
   );
+}
+
+/**
+ * Drop the far-future tail of a recurring series before it is written.
+ * See scripts/lib/ingest-horizon.ts for why. Logs what it dropped — a silent
+ * cap would read as "we covered everything" when we deliberately didn't.
+ */
+function dropFarFutureSeries(
+  events: ExtractedEvent[],
+  sourceName: string
+): ExtractedEvent[] {
+  const { kept, dropped } = capSeriesHorizon(events);
+  if (dropped.length > 0) {
+    const bySeries = new Map<string, number>();
+    for (const e of dropped) {
+      const k = `${e.name} @ ${e.venue_name}`;
+      bySeries.set(k, (bySeries.get(k) ?? 0) + 1);
+    }
+    console.log(
+      `  [${sourceName}] horizon cap: dropped ${dropped.length} far-future recurring instance(s)`
+    );
+    for (const [k, n] of bySeries) console.log(`    - ${n}x ${k}`);
+  }
+  return kept;
 }
 
 /**
@@ -456,6 +489,7 @@ async function upsertEventsBatched(
   const now = new Date().toISOString();
 
   events = dropOutOfCorridor(events, orgSlug);
+  events = dropFarFutureSeries(events, sourceName);
 
   // Pre-pass: normalize + emit quality signals + compute dedup keys
   const prepared = events.map((event) => {
@@ -526,7 +560,7 @@ async function upsertEventsBatched(
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
       .select(
-        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked, notability_locked"
+        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked, notability_locked, times_locked"
       )
       .in("date", unmatchedDates);
 
@@ -602,8 +636,9 @@ async function upsertEventsBatched(
               venue_key: resolveVenueKey(event),
               // Locked fields are human-set — never overwrite them.
               ...(existing.description_locked ? {} : { description: event.description }),
-              start_time: event.start_time,
-              end_time: event.end_time,
+              ...(existing.times_locked
+                ? {}
+                : { start_time: event.start_time, end_time: event.end_time }),
               ...(existing.price_locked ? {} : { price: event.price }),
               event_url: event.event_url,
               address: event.address,
@@ -721,6 +756,7 @@ export async function upsertEvents(
   const result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
 
   events = dropOutOfCorridor(events, orgSlug);
+  events = dropFarFutureSeries(events, sourceName);
 
   for (const event of events) {
     // Normalize location fields before keying / writing — recovers from
@@ -758,13 +794,14 @@ export async function upsertEvents(
       poster_locked?: boolean | null;
       is_routine?: boolean | null;
       notability_locked?: boolean | null;
+      times_locked?: boolean | null;
     } | null = null;
 
     if (event.source_event_id) {
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked"
+          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -775,7 +812,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked"
+          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -794,8 +831,9 @@ export async function upsertEvents(
         existing.date !== event.date ||
         existing.venue_name !== event.venue_name ||
         (!existing.description_locked && existing.description !== event.description) ||
-        existing.start_time !== event.start_time ||
-        existing.end_time !== event.end_time ||
+        (!existing.times_locked &&
+          (existing.start_time !== event.start_time ||
+            existing.end_time !== event.end_time)) ||
         (!existing.price_locked && existing.price !== event.price) ||
         existing.event_url !== event.event_url ||
         existing.address !== event.address ||
@@ -815,8 +853,9 @@ export async function upsertEvents(
             venue_key: resolveVenueKey(event),
             // Locked fields are human-set — never overwrite them.
             ...(existing.description_locked ? {} : { description: event.description }),
-            start_time: event.start_time,
-            end_time: event.end_time,
+            ...(existing.times_locked
+              ? {}
+              : { start_time: event.start_time, end_time: event.end_time }),
             ...(existing.price_locked ? {} : { price: event.price }),
             event_url: event.event_url,
             address: event.address,
@@ -867,7 +906,7 @@ export async function upsertEvents(
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked, notability_locked"
+          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked, notability_locked, times_locked"
         )
         .eq("date", event.date);
 

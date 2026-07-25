@@ -464,20 +464,23 @@ export async function GET(request: Request) {
       // Upsert: existing dedup_key → update; otherwise insert
       const { data: existing } = await supabase
         .from("hwy4_events")
-        .select("id, notability_locked")
+        .select("id, notability_locked, times_locked")
         .eq("dedup_key", dedupKey)
         .maybeSingle();
 
       if (existing) {
-        // A human-locked notability must survive the re-scrape.
-        const updateRow = existing.notability_locked
-          ? (() => {
-              const { is_routine, routine_reason, ...rest } = row;
-              void is_routine;
-              void routine_reason;
-              return rest;
-            })()
-          : row;
+        // This route writes its own UPDATE rather than going through
+        // scripts/lib/dedup.ts `upsertEvents`, so it has to honor the human
+        // locks itself. Drop each locked field from the payload.
+        const updateRow: Partial<typeof row> = { ...row };
+        if (existing.notability_locked) {
+          delete updateRow.is_routine;
+          delete updateRow.routine_reason;
+        }
+        if (existing.times_locked) {
+          delete updateRow.start_time;
+          delete updateRow.end_time;
+        }
         const { error } = await supabase
           .from("hwy4_events")
           .update(updateRow)
