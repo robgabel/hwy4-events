@@ -177,14 +177,18 @@ The shared client holds the transport + field mappers (`fetchAllTribeEvents`,
 `splitDateTime`, `joinAddress`, `normalizeCost`, `htmlToText`,
 `stripTitleDateSuffix`), locked by `scripts/test/tribe.test.ts`.
 
-**Bot walls:** both current Tribe sites 403 a plain server-side fetch (or 200
-with an HTML challenge page instead of JSON) — visitmurphys.com since late June
-2026, arnoldrimtrail.org as of July 2026; confirmed from multiple source IPs, so
-it's not a User-Agent fix. `fetchTribePage` tries the plain fetch first (free,
-works if the wall ever lifts) and falls back to the same URL through
-**Firecrawl** (`formats: ["rawHtml"]`, which returns the endpoint's raw JSON
-body unprocessed) — the escape hatch `red-cross.ts` and `sequoia-woods.ts` use.
-So `FIRECRAWL_API_KEY` is effectively required for these sources.
+**Bot walls:** visitmurphys.com 403s a plain server-side fetch (or 200s with an
+HTML challenge page instead of JSON) since late June 2026 — confirmed from
+multiple source IPs, so it's not a User-Agent fix. `fetchTribePage` tries the
+plain fetch first (free, works if the wall ever lifts) and falls back to the
+same URL through **Firecrawl** (`formats: ["rawHtml"]`, which returns the
+endpoint's raw JSON body unprocessed) — the escape hatch `red-cross.ts` and
+`sequoia-woods.ts` use. So `FIRECRAWL_API_KEY` is required for **visit-murphys**.
+**arnoldrimtrail.org has not been observed walling anything** — the 403 seen
+while building that scraper came from the dev container's own egress allowlist,
+not the site — so its plain fetch should succeed in CI, with the fallback kept
+as insurance. (Don't repeat that diagnosis mistake: check
+`curl -sS "$HTTPS_PROXY/__agentproxy/status"` before concluding a site blocks us.)
 
 Adding another Tribe organizer is ~40 lines: clone
 `scripts/scrapers/arnold-rim-trail.ts`, point `API_URL` at their wp-json

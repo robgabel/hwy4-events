@@ -10,13 +10,18 @@
  * Extracted from `scripts/scrapers/visit-murphys.ts` when a second Tribe source
  * (arnold-rim-trail) landed, so the transport + parsing live in one place.
  *
- * Bot walls: several of these sites 403 a plain server-side fetch, or return a
- * 200 whose body is an HTML challenge page instead of JSON (visitmurphys.com
- * since late June 2026; arnoldrimtrail.org as of July 2026). `fetchTribePage`
+ * Bot walls: visitmurphys.com 403s a plain server-side fetch, or returns a 200
+ * whose body is an HTML challenge page instead of JSON, since late June 2026
+ * (confirmed from multiple source IPs — not a User-Agent fix). `fetchTribePage`
  * tries the plain fetch first (free, fast, works if the wall ever lifts) and
  * falls back to fetching the same URL through Firecrawl (`formats: ["rawHtml"]`,
  * which returns the endpoint's raw JSON body unprocessed) — the same escape
  * hatch `red-cross.ts` and `sequoia-woods.ts` use.
+ *
+ * arnoldrimtrail.org has NOT been observed walling anything: the 403 seen while
+ * building that scraper came from the dev container's own egress allowlist, not
+ * from the site. Its plain fetch is expected to succeed in CI; the fallback is
+ * kept as insurance, since these sites turn protection on without notice.
  */
 
 import FirecrawlApp from "@mendable/firecrawl-js";
