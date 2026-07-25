@@ -66,7 +66,7 @@ export async function scrapeHwy4FbDiscover(): Promise<void> {
       continue;
     }
 
-    const manualSkipped = events.filter(isManuallyManagedEvent);
+    const manualSkipped = events.filter((e) => isManuallyManagedEvent(e));
     const scrapable = events.filter((e) => !isManuallyManagedEvent(e));
     if (manualSkipped.length > 0) {
       console.log(

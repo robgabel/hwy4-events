@@ -1,5 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import FirecrawlApp from "@mendable/firecrawl-js";
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
@@ -7,6 +6,14 @@ import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
 import { TOWNS } from "../../lib/towns.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
+import {
+  fetchAllTribeEvents,
+  htmlToText,
+  joinAddress,
+  normalizeCost,
+  splitDateTime,
+  type TribeEvent,
+} from "../lib/tribe.js";
 
 /**
  * Visit Murphys runs The Events Calendar (Tribe) WordPress plugin. Its REST
@@ -15,15 +22,11 @@ import { classifyEventCategory } from "../../lib/categorize.js";
  *
  * This scraper replaces the previous `visit-murphys` Firecrawl source.
  *
- * The site started bot-walling plain server-side fetches in late June 2026
- * (a direct `fetch` to the wp-json endpoint now 403s, or 200s with an HTML
- * challenge page instead of JSON, on every request — confirmed from multiple
- * source IPs, so it's not a User-Agent fix). `fetchTribePage` tries the plain
- * fetch first (free, fast, works if the wall ever lifts) and falls back to
- * fetching the same URL through Firecrawl (`formats: ["rawHtml"]`, which
- * returns the endpoint's raw JSON body unprocessed) when it's blocked —
- * same escape hatch `red-cross.ts` and `sequoia-woods.ts` use for other
- * bot-protected sources.
+ * The transport + field mappers live in `scripts/lib/tribe.ts`, shared with the
+ * `arnold-rim-trail` source (the other corridor site on the same plugin). That
+ * module also carries the bot-wall workaround this site needs: since late June
+ * 2026 a direct `fetch` to the wp-json endpoint 403s, or 200s with an HTML
+ * challenge page instead of JSON, so the client falls back to Firecrawl.
  */
 
 const API_URL = "https://visitmurphys.com/wp-json/tribe/events/v1/events";
@@ -42,67 +45,6 @@ const VIRTUAL_VENUES = new Set(["zoom", "online", "virtual", "google meet", "tea
 
 const anthropic = new Anthropic();
 
-// ---------- Tribe REST API response shape (only the fields we read) ----------
-
-interface TribeEvent {
-  id: number;
-  title: string;
-  description: string | null;
-  url: string;
-  start_date: string; // "YYYY-MM-DD HH:MM:SS" in event timezone
-  end_date: string;
-  all_day: boolean;
-  status: string;
-  cost: string | null;
-  venue?: {
-    venue?: string;
-    address?: string;
-    city?: string;
-    state?: string | null;
-    zip?: string;
-  };
-  categories?: Array<{ name: string; slug: string }>;
-  image?: { url?: string } | null;
-}
-
-interface TribeResponse {
-  events: TribeEvent[];
-  total: number;
-  total_pages: number;
-  next_rest_url?: string;
-}
-
-// ---------- HTML → plain text ----------
-
-const ENTITIES: Record<string, string> = {
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&quot;": '"',
-  "&apos;": "'",
-  "&nbsp;": " ",
-  "&hellip;": "…",
-  "&ndash;": "–",
-  "&mdash;": "—",
-  "&lsquo;": "‘",
-  "&rsquo;": "’",
-  "&ldquo;": "“",
-  "&rdquo;": "”",
-};
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-    .replace(/&\w+;/g, (e) => ENTITIES[e.toLowerCase()] ?? e)
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 // ---------- Mapper ----------
 
 function pickCategory(tribeCats: Array<{ name: string; slug: string }> | undefined, title: string): string {
@@ -110,24 +52,6 @@ function pickCategory(tribeCats: Array<{ name: string; slug: string }> | undefin
   // reused by the /admin/submissions publish default. Feed it the title + the
   // source's own category names.
   return classifyEventCategory(`${title} ${(tribeCats ?? []).map((c) => c.name).join(" ")}`);
-}
-
-function splitDateTime(tribeDateTime: string, allDay: boolean): { date: string; time: string | null } {
-  // Tribe format: "YYYY-MM-DD HH:MM:SS"
-  const [d, t] = tribeDateTime.split(" ");
-  if (!t || allDay || t.startsWith("00:00")) return { date: d, time: null };
-  return { date: d, time: t.slice(0, 5) };
-}
-
-function joinAddress(v: TribeEvent["venue"]): string | null {
-  if (!v) return null;
-  const street = v.address?.trim();
-  const city = v.city?.trim();
-  const state = v.state?.trim() || "CA";
-  const zip = v.zip?.trim();
-  if (!street && !city) return null;
-  const cityPart = city ? `${city}, ${state}${zip ? ` ${zip}` : ""}` : `${state}${zip ? ` ${zip}` : ""}`;
-  return street ? `${street}, ${cityPart}` : cityPart;
 }
 
 function pickTown(v: TribeEvent["venue"]): string {
@@ -146,8 +70,6 @@ function mapTribeEvent(ev: TribeEvent): ExtractedEvent | null {
   const town = pickTown(ev.venue);
   const venueName = ev.venue?.venue?.trim() || DEFAULT_VENUE;
   const description = ev.description ? htmlToText(ev.description) || null : null;
-  const cost = ev.cost?.trim();
-  const price = cost ? (/^\d/.test(cost) ? `$${cost}` : cost) : null;
 
   return {
     name: ev.title,
@@ -159,97 +81,13 @@ function mapTribeEvent(ev: TribeEvent): ExtractedEvent | null {
     town,
     address: joinAddress(ev.venue),
     category: pickCategory(ev.categories, ev.title),
-    price,
+    price: normalizeCost(ev.cost),
     artists: null,
     event_url: ev.url,
     image_url: ev.image?.url || null,
     // Tribe `id` is stable per event occurrence — survives title/venue edits.
     source_event_id: String(ev.id),
   };
-}
-
-// ---------- Pagination ----------
-
-/**
- * Fetches one Tribe API page, falling back to Firecrawl when the site's
- * bot wall blocks a plain fetch (403, or a 200 whose body is an HTML
- * challenge page instead of JSON). Returns null on the natural
- * end-of-results 400.
- */
-async function fetchTribePage(url: string, page: number): Promise<TribeResponse | null> {
-  const resp = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
-      Accept: "application/json",
-    },
-  });
-
-  if (resp.ok) {
-    const text = await resp.text();
-    try {
-      return JSON.parse(text) as TribeResponse;
-    } catch {
-      console.warn(`  page ${page}: 200 but not JSON (bot-wall challenge page) — retrying via Firecrawl`);
-      return fetchTribePageViaFirecrawl(url, page);
-    }
-  }
-
-  // Tribe returns 400 for pages past the last one — that's the natural stop.
-  if (resp.status === 400 && page > 1) {
-    return null;
-  }
-
-  console.warn(`  page ${page}: direct fetch failed (${resp.status}) — retrying via Firecrawl`);
-  return fetchTribePageViaFirecrawl(url, page);
-}
-
-async function fetchTribePageViaFirecrawl(url: string, page: number): Promise<TribeResponse | null> {
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) {
-    throw new Error(`Tribe API request blocked on page ${page} and FIRECRAWL_API_KEY is unset — no fallback available`);
-  }
-
-  const firecrawl = new FirecrawlApp({ apiKey });
-  const result = await firecrawl.scrapeUrl(url, {
-    formats: ["rawHtml"],
-    onlyMainContent: false,
-    timeout: 30000,
-  });
-
-  if (!result.success || !result.rawHtml) {
-    throw new Error(`Tribe API request failed on page ${page}: Firecrawl fallback also failed`);
-  }
-
-  try {
-    return JSON.parse(result.rawHtml) as TribeResponse;
-  } catch {
-    throw new Error(`Tribe API request failed on page ${page}: Firecrawl fallback did not return valid JSON`);
-  }
-}
-
-async function fetchAllEvents(): Promise<TribeEvent[]> {
-  const today = new Date().toISOString().slice(0, 10);
-  const events: TribeEvent[] = [];
-
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const url = `${API_URL}?per_page=${PER_PAGE}&start_date=${today}&page=${page}`;
-    console.log(`  fetching page ${page} …`);
-    const data = await fetchTribePage(url, page);
-    if (!data) {
-      console.log(`  page ${page} returned 400 — end of results`);
-      break;
-    }
-    if (!data.events || data.events.length === 0) {
-      console.log(`  page ${page} empty — stopping`);
-      break;
-    }
-    events.push(...data.events);
-    console.log(`    +${data.events.length} (running total ${events.length})`);
-    if (data.events.length < PER_PAGE) break;
-    if (!data.next_rest_url) break;
-  }
-
-  return events;
 }
 
 // ---------- Cross-source dedup (mirrors gocalaveras) ----------
@@ -358,7 +196,11 @@ export async function scrapeVisitMurphys(): Promise<void> {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const tribeEvents = await fetchAllEvents();
+  const tribeEvents = await fetchAllTribeEvents(API_URL, {
+    startDate: today,
+    perPage: PER_PAGE,
+    maxPages: MAX_PAGES,
+  });
   console.log(`\nFetched ${tribeEvents.length} events from Tribe API`);
 
   const mapped: ExtractedEvent[] = [];
@@ -408,7 +250,7 @@ export async function scrapeVisitMurphys(): Promise<void> {
   }
 
   // Skip manually-managed events (e.g. Rob's curated picks shouldn't be overwritten)
-  const manualSkipped = corridor.filter(isManuallyManagedEvent);
+  const manualSkipped = corridor.filter((e) => isManuallyManagedEvent(e));
   const scrapable = corridor.filter((e) => !isManuallyManagedEvent(e));
   if (manualSkipped.length > 0) {
     console.log(

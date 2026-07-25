@@ -132,7 +132,7 @@ export async function scrapeGoCalaveras(): Promise<void> {
   const corridorEvents = allEvents.filter((e) =>
     HWY4_TOWNS.has(e.town.toLowerCase().trim())
   );
-  const manualSkipped = corridorEvents.filter(isManuallyManagedEvent);
+  const manualSkipped = corridorEvents.filter((e) => isManuallyManagedEvent(e));
   const scrapableEvents = corridorEvents.filter((e) => !isManuallyManagedEvent(e));
   if (manualSkipped.length > 0) {
     console.log(

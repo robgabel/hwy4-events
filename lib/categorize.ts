@@ -71,8 +71,13 @@ const RULES: CategoryRule[] = [
   { category: "wine", rule: "wine", authoritative: false,
     pattern: /\b(tasting|sip & |sip and )\b/ },
 
+  // "trail workday" / "identification walk" sit alongside "trail stewardship":
+  // trail-work and docent-led interpretive walks are the same outdoors-on-foot
+  // bucket a reader browsing Hike & Walk is looking for. Added 2026-07-25 with
+  // the Arnold Rim Trail source, whose whole calendar is guided hikes, tree-ID
+  // walks, and volunteer trail workdays.
   { category: "hike_walk", rule: "hike_walk", authoritative: false,
-    pattern: /\b(hike|guided walk|nature walk|bird walk|trail run|fun run|5k|trail stewardship)\b/ },
+    pattern: /\b(hike|(?:guided|nature|bird|wildflower|interpretive|identifier|identification|docent) walks?|trail run|fun run|5k|trail stewardship|trail work ?days?)\b/ },
 
   // Strong performing-arts signals run BEFORE "kids": a play's blurb often
   // mentions "family"/"children", which would otherwise misroute it into "kids".

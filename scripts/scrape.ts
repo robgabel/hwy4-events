@@ -3,6 +3,7 @@ import { scrapeGoCalaveras } from "./scrapers/gocalaveras.js";
 import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
+import { scrapeArnoldRimTrail } from "./scrapers/arnold-rim-trail.js";
 import { scrapeRedCross } from "./scrapers/red-cross.js";
 import { scrapeSequoiaWoods } from "./scrapers/sequoia-woods.js";
 import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
@@ -18,6 +19,9 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  *   - mystic-saloon: Facebook primary + multi-URL website fallback
  *   - hwy4-fb-discover: Apify Facebook events scraper
  *   - visit-murphys: Tribe (The Events Calendar) WordPress REST API
+ *   - arnold-rim-trail: same Tribe REST API, read from the organizer's own site
+ *     because its sunset-hike times move with sunset (and get edited days out),
+ *     so an aggregator snapshot is reliably stale
  *   - red-cross: Firecrawl JSON extraction of the Red Cross drive-results SPA,
  *     many hosts per search across multiple corridor ZIP anchors
  *   - sequoia-woods: Firecrawl JSON extraction of the country club's month-grid
@@ -26,6 +30,10 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  * Everything else goes through the config-driven generic Firecrawl runner.
  */
 const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
+  // Organizer-owned sources run BEFORE the aggregators, so a same-night
+  // aggregator pass can never be the last writer on a row they own. (The
+  // manual-sources blocklist is the real guard; ordering is belt-and-braces.)
+  "arnold-rim-trail": scrapeArnoldRimTrail,
   "bistro-espresso": scrapeBistroEspresso,
   "gocalaveras": scrapeGoCalaveras,
   "mystic-saloon": scrapeMysticSaloon,
