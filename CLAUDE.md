@@ -61,6 +61,7 @@ Some venues publish their schedule in a form the scrapers can't read — e.g. Th
 
 - **A seed script owns the rows** (e.g. `scripts/seed-lube-room-summer-2026.ts`; `scripts/seed-camp-connell-beer-garden-2026.ts`; `scripts/seed-arnold-library-storytime-2026.ts` (weekly Wednesdays, expanded via `recurrence.ts`); or `scripts/seed-bigtrees-programs-2026.ts`, whose schedule rules live in `scripts/lib/bigtrees-schedule.ts` and expand to dated rows via the tested `scripts/lib/recurrence.ts`). Edit the data there and re-run to change a venue's events.
 - **`scripts/lib/manual-sources.ts`** (`isManuallyManagedEvent`) lists venue/name substrings; every auto-scraper skips matches before upserting, so a re-scrape can't overwrite the hand-entered rows. Cameo Plaza, The Lube Room, Calaveras Big Trees State Park, the Camp Connell General Store (incl. its "Beer Garden"), the Arnold Library, the Murphys Senior Center, and Lake Alpine Lodge are blocklisted today. The Lake Alpine pattern is deliberately `"lake alpine lodge"`, not the bare `"lake alpine"`: BVAC's events page has real non-lodge events at the lake (e.g. "Lake Alpine Kid's Fishing Day") that the broader substring would silently drop, and every seeded lodge row carries venue_name "Lake Alpine Lodge" so the narrow pattern still protects them all. Also blocklisted by **event name** (not venue): the **Hot Copper Car Show** (Copperopolis Town Square) — a hand-curated Rob's Pick / America's-250th feature whose GoCalaveras listing carries a doubled title ("Hot Copper Car Show Show", slug `hot-copper-car-show-show`) and a 23:50 placeholder end time; freezing the row keeps the hand-corrected name + 8 AM–3 PM time from reverting on the daily scrape, while the other event at the same square (July 4 "Stars & Stripes") still scrapes normally.
+- **The blocklist is ownership-aware (2026-07-25).** Each entry is `{ pattern, owner? }`, and `isManuallyManagedEvent(event, askingOrgSlug?)` blocks a match only when `owner !== askingOrgSlug`. An entry with **no** `owner` is owned by a seed script / human, so *every* scraper is blocked (the original behavior, unchanged for all existing entries). An entry **with** an `owner` is owned by a scraper that reads that organizer's own calendar: the aggregators (which call the predicate with no slug) stay blocked, while the owning source passes its slug and writes freely. First user: `arnold-rim-trail` owns `arnold rim trail` / `aronld rim trail` (the source's real typo) / `cougar rock` / `volunteer trail workday` / `art trailhead`, so GoCalaveras can't overwrite the organizer's sunset-hike times with its stale snapshot on a later pass of the same nightly run. **Gotcha:** call it as `.filter((e) => isManuallyManagedEvent(e))`, never `.filter(isManuallyManagedEvent)` — the bare reference passes the array index as `askingOrgSlug`. Locked by `scripts/test/manual-sources.test.ts`.
 
 For schedules the scrapers can't read, a watcher cron fingerprints the source and pings Slack on change without auto-writing: `/api/check-lube-schedule` (the Lube Room's image), `/api/check-bigtrees-schedule` (Big Trees' program text on parks.ca.gov), `/api/check-camp-connell-schedule` (the Camp Connell General Store's Squarespace poster), and `/api/check-murphys-senior-center-schedule` (the Murphys Senior Center's monthly calendar images on murphyscenter.com).
 
@@ -146,7 +147,11 @@ cross-source merge). Two source shapes:
   date filter stays as the backstop) and runs at `max_tokens: 8192` — a ~50-event
   page overflows 2048 and truncated JSON silently extracts 0.
 - **Special scrapers** — hand-written files for non-generic shapes (GoCalaveras
-  EventON AJAX, visit-murphys WP REST, **red-cross**, …), registered in `SPECIAL_SCRAPERS`.
+  EventON AJAX, visit-murphys + arnold-rim-trail WP REST, **red-cross**, …),
+  registered in `SPECIAL_SCRAPERS`. **Organizer-owned sources are listed first**
+  in that object so a same-night aggregator pass is never the last writer on a
+  row they own (the `manual-sources.ts` blocklist is the real guard; ordering is
+  belt-and-braces).
 
 **Runner timeout + health logging (2026-07-09).** The GitHub Action job runs at
 `timeout-minutes: 20` (raised from 10 — the job was landing right at the old
@@ -161,18 +166,44 @@ the slower URL-validation pass, so a future timeout kill during validation
 can't erase scraper health visibility again. Read at **`/admin/scrapers`**
 (the Pulse "Scrapers" tab) — see the Admin cockpit section above.
 
-### Visit Murphys (`scripts/scrapers/visit-murphys.ts`)
+### Tribe / The Events Calendar sources (`scripts/lib/tribe.ts`)
 
-Hits the Tribe (The Events Calendar) WordPress REST API directly for clean
-structured JSON — until late June 2026, when the site started bot-walling
-plain server-side fetches (a direct `fetch` to the wp-json endpoint now
-403s, or 200s with an HTML challenge page instead of JSON, confirmed from
-multiple source IPs — not a User-Agent fix). `fetchTribePage` tries the
-plain fetch first (free, works if the wall ever lifts) and falls back to
-fetching the same URL through **Firecrawl** (`formats: ["rawHtml"]`, which
-returns the endpoint's raw JSON body unprocessed) when blocked — the same
-escape hatch `red-cross.ts` and `sequoia-woods.ts` use for other
-bot-protected sources.
+Several corridor sites run the same WordPress plugin ("The Events Calendar",
+a.k.a. Tribe), which exposes clean structured JSON at
+`/wp-json/tribe/events/v1/events` — venue, address, exact start/end datetimes,
+categories, cost, image. Far more reliable than Firecrawl-markdown + LLM
+extraction, and for an **organizer's own** site it is the authoritative record.
+The shared client holds the transport + field mappers (`fetchAllTribeEvents`,
+`splitDateTime`, `joinAddress`, `normalizeCost`, `htmlToText`,
+`stripTitleDateSuffix`), locked by `scripts/test/tribe.test.ts`.
+
+**Bot walls:** both current Tribe sites 403 a plain server-side fetch (or 200
+with an HTML challenge page instead of JSON) — visitmurphys.com since late June
+2026, arnoldrimtrail.org as of July 2026; confirmed from multiple source IPs, so
+it's not a User-Agent fix. `fetchTribePage` tries the plain fetch first (free,
+works if the wall ever lifts) and falls back to the same URL through
+**Firecrawl** (`formats: ["rawHtml"]`, which returns the endpoint's raw JSON
+body unprocessed) — the escape hatch `red-cross.ts` and `sequoia-woods.ts` use.
+So `FIRECRAWL_API_KEY` is effectively required for these sources.
+
+Adding another Tribe organizer is ~40 lines: clone
+`scripts/scrapers/arnold-rim-trail.ts`, point `API_URL` at their wp-json
+endpoint, map their venue cities to corridor towns, and register it in
+`SPECIAL_SCRAPERS`.
+
+- **visit-murphys** (`scripts/scrapers/visit-murphys.ts`) — the Murphys
+  aggregator. Keeps its own LLM cross-source dedup + virtual-event filtering.
+- **arnold-rim-trail** (`scripts/scrapers/arnold-rim-trail.ts`) — the
+  **organizer's own** calendar. Added 2026-07-25 after the site showed a hike
+  time 30 minutes wrong on the day of the hike. ART's guided hikes start at
+  sunset, so the start shifts ~40 min month to month, **and ART edits an
+  occurrence as the date nears** (the Jul 25 2026 hike moved 5:45 → 6:15 PM on
+  Jul 20, five days out). We were carrying these only via GoCalaveras, which
+  snapshots a listing once and never revisits it, so our copy was frozen at the
+  April scrape. Reading the organizer directly means the times self-heal on
+  every daily scrape; it also picked up the Volunteer Trail Workday series the
+  aggregator never listed. ART titles each occurrence with its own date
+  ("… – July 25, 2026"), stripped by `stripTitleDateSuffix`.
 
 ### American Red Cross blood drives (`scripts/scrapers/red-cross.ts`)
 
