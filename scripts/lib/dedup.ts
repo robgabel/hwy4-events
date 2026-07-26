@@ -4,6 +4,7 @@ import { KNOWN_VENUES } from "./venues.js";
 import { isGenericVenue, resolveVenueKey } from "./venue-matcher.js";
 import { isOutOfCorridor } from "./corridor.js";
 import { capSeriesHorizon } from "./ingest-horizon.js";
+import { applyUrlDate } from "./url-date.js";
 // The "same event" rule + its string helpers live in ONE place, shared with the
 // read-time collapse in lib/dedupe-events.ts. Do not re-implement them here.
 import {
@@ -149,6 +150,33 @@ function minutesToTime(mins: number): string {
   const h = Math.floor(mins / 60) % 24;
   const m = mins % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
+ * Trust the organizer's own permalink over the extractor's reading of the page.
+ *
+ * The Wolf Jett bug (2026-07-26): a scraper produced date 2026-07-26 for an
+ * event whose product URL says `…/wolf-jett-july-25-2026-7pm`, creating a
+ * duplicate that advertised a show which had already happened. Slugs like that
+ * are authored by the venue, so they outrank a model's guess. Runs in the shared
+ * pre-pass BEFORE the dedup_key is computed, so the corrected date is the one
+ * that keys the row. Logged, never silent — this firing means an extractor is
+ * getting dates wrong and we want to see it.
+ */
+function correctFromUrl(event: ExtractedEvent, sourceName: string): void {
+  const r = applyUrlDate(event);
+  if (r.correctedDate) {
+    console.warn(
+      `  URL_DATE_CORRECTION source=${sourceName} "${event.name}" ` +
+      `${r.fromDate} -> ${r.toDate} (per ${event.event_url})`
+    );
+  }
+  if (r.correctedTime) {
+    console.warn(
+      `  URL_TIME_CORRECTION source=${sourceName} "${event.name}" ` +
+      `${r.fromTime ?? "none"} -> ${r.toTime} (per ${event.event_url})`
+    );
+  }
 }
 
 export function normalizeEventTimes(event: ExtractedEvent): void {
@@ -493,6 +521,7 @@ async function upsertEventsBatched(
 
   // Pre-pass: normalize + emit quality signals + compute dedup keys
   const prepared = events.map((event) => {
+    correctFromUrl(event, sourceName);
     normalizeEventTimes(event);
     normalizeEventLocation(event);
     resolveNotability(event, orgSlug);
@@ -762,6 +791,7 @@ export async function upsertEvents(
     // Normalize location fields before keying / writing — recovers from
     // scrapers that crossed venue_name with address, and back-fills address
     // from the venue registry where possible.
+    correctFromUrl(event, sourceName);
     normalizeEventTimes(event);
     normalizeEventLocation(event);
     resolveNotability(event, orgSlug);
