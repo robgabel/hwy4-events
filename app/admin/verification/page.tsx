@@ -11,7 +11,14 @@ import {
   adminBtn,
 } from "@/components/admin/ui";
 import { ConfirmSubmit } from "@/components/admin/ConfirmSubmit";
-import { confirmEvent, dismissEvent, hideEvent, deleteEvent } from "./actions";
+import {
+  confirmEvent,
+  dismissEvent,
+  hideEvent,
+  deleteEvent,
+  applyOrganizerTime,
+} from "./actions";
+import { formatTimeForHuman } from "@/lib/verify-times";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +35,8 @@ type FlaggedEvent = {
   event_url: string | null;
   org_slug: string | null;
   verification_reason: string | null;
+  verification_suggested_start: string | null;
+  verification_suggested_end: string | null;
   verification_snapshot: string | null;
   verification_checked_at: string | null;
 };
@@ -45,7 +54,7 @@ async function loadData(): Promise<{ events: FlaggedEvent[]; orgs: Map<string, O
   const { data: events } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, start_time, venue_name, town, description, source_url, source_name, event_url, org_slug, verification_reason, verification_snapshot, verification_checked_at"
+      "id, name, date, start_time, venue_name, town, description, source_url, source_name, event_url, org_slug, verification_reason, verification_snapshot, verification_checked_at, verification_suggested_start, verification_suggested_end"
     )
     .eq("verification_status", "needs_verification")
     .order("date", { ascending: true });
@@ -173,6 +182,37 @@ function FlaggedEventRow({ event, orgs }: { event: FlaggedEvent; orgs: Map<strin
         </p>
       </div>
 
+      {event.verification_suggested_start && (
+        <div
+          style={{
+            background: "#FFF8E6",
+            border: "1px solid #E8D9A8",
+            borderRadius: 8,
+            padding: "12px 14px",
+            margin: "0 0 14px",
+          }}
+        >
+          <p
+            style={{
+              color: "#7A5C00",
+              fontSize: 12,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              margin: "0 0 6px",
+            }}
+          >
+            Time on the organizer&rsquo;s page
+          </p>
+          <p style={{ color: "#3a3a3a", fontSize: 15, margin: 0 }}>
+            We show <strong>{formatTimeForHuman(event.start_time)}</strong>
+            {" · "}
+            their page states{" "}
+            <strong>{formatTimeForHuman(event.verification_suggested_start)}</strong>
+          </p>
+        </div>
+      )}
+
       <div
         style={{
           display: "grid",
@@ -223,6 +263,15 @@ function FlaggedEventRow({ event, orgs }: { event: FlaggedEvent; orgs: Map<strin
       )}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {event.verification_suggested_start &&
+          event.verification_suggested_start !== event.start_time && (
+            <form action={applyOrganizerTime} style={{ display: "inline" }}>
+              <input type="hidden" name="id" value={event.id} />
+              <button type="submit" style={adminBtn.primary}>
+                Use {formatTimeForHuman(event.verification_suggested_start)} (locks it)
+              </button>
+            </form>
+          )}
         <form action={confirmEvent} style={{ display: "inline" }}>
           <input type="hidden" name="id" value={event.id} />
           <button type="submit" style={adminBtn.primary}>
