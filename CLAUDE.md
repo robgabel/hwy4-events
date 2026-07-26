@@ -170,6 +170,35 @@ the slower URL-validation pass, so a future timeout kill during validation
 can't erase scraper health visibility again. Read at **`/admin/scrapers`**
 (the Pulse "Scrapers" tab) — see the Admin cockpit section above.
 
+### Shopify ticket-store sources (`scripts/lib/shopify-events.ts`)
+
+Some corridor venues have no calendar at all — they sell each concert as a
+Shopify **ticket product**, so the product list *is* the schedule. Shopify
+exposes every storefront collection as clean JSON at
+`/collections/<handle>/products.json`: title, permalink handle, description,
+price, images, and a stable numeric id. Pure parsing lives in
+`scripts/lib/shopify-events.ts` (locked by `scripts/test/shopify-events.test.ts`),
+transport is a plain fetch with the usual Firecrawl fallback.
+
+- **brice-station** (`scripts/scrapers/brice-station.ts`) — moved off the generic
+  Firecrawl + LLM runner 2026-07-26 after it produced two defects in two days: a
+  row dated 2026-07-26 for the **July 25** Wolf Jett show (a duplicate
+  advertising a concert that had already happened) and a mis-set start time. The
+  date and time were in structured fields all along. The venue hand-types the
+  titles, so the shape wobbles four ways — hyphen vs **en dash** separator, `@`
+  vs `-` before the time, doubled whitespace, and a trailing note
+  (`… @ 6pm ~ Earlier Time!`) — which is exactly what the model tripped on; every
+  live variant is a test case. The JSON is also **more complete than the rendered
+  page** (7 products vs 4 in the HTML grid), and it yields ticket prices we
+  previously had no source for.
+  **Deliberately NOT blocklisted** in `manual-sources.ts`: unlike Arnold Rim
+  Trail, this store only lists shows it is actively selling, so GoCalaveras
+  legitimately covers Brice events with no ticket product yet and blocklisting
+  would lose them. Ordering is the guard instead — it is registered **last** in
+  `SPECIAL_SCRAPERS` so the organizer is the final writer on the rows it covers,
+  and `correctFromUrl` cross-checks every row against the date/time in its own
+  product permalink.
+
 ### Tribe / The Events Calendar sources (`scripts/lib/tribe.ts`)
 
 Several corridor sites run the same WordPress plugin ("The Events Calendar",
