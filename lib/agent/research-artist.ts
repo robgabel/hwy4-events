@@ -45,6 +45,14 @@ You are given the act's name (exactly as a venue listed it) and the town of the 
 THE MOST IMPORTANT RULE — err on the side of nothing:
 - Many of these names are generic and match several unrelated bands. If you cannot tie the name to ONE specific act with a corroborating signal (their own site, or a listing showing THIS act playing this region/venue), return blurb=null, genre=null, links={}, and confidence "low". A wrong band's bio is worse than a blank.
 - Never invent a genre, a hometown, band members, a formation year, or a sound. If you didn't find it, leave it out.
+
+EVERY CLAUSE MUST TRACE TO A SOURCE:
+The rule above governs WHETHER to write a blurb. This one governs what goes INSIDE it. Deciding an act is identifiable does not license filling the sentences out with plausible detail.
+- Every individual claim must trace to something you actually read: solo act vs full band, originals vs covers, hometown, influences, venues, festivals, awards. A detail that merely sounds right for the genre is an invention.
+- Two real failures to avoid, both of which read as confident fact and both of which were wrong: describing a solo project as "his full band", and calling an act "all original" when their own page also advertised a cover repertoire.
+- Many corridor acts are cover bands, and that is not a knock. If they play covers, say so plainly; do not upgrade them to original artists.
+- If a detail would make the sentence better but you did not find it, write the shorter sentence.
+- Prefer the act's OWN self-description (their site's wording for their genre and home region) over a third-party listing's paraphrase.
 - Only include a link you are confident belongs to THIS act (the one playing a Calaveras/Sierra show). When in doubt, omit the link.
 - Prefer acts that are clearly local or regional (Calaveras County, the Sierra foothills, the greater Sacramento/Bay Area/Tahoe orbit that tours here). If the only match you find is a famous unrelated national band with the same name, that's almost certainly NOT this act — return nothing.
 
