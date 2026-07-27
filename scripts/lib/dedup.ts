@@ -334,6 +334,10 @@ interface MatchableRow {
   venue_name: string | null;
   description: string | null;
   artists?: string[] | null;
+  /** Curated festival umbrella card. Selected on every candidate so an incoming
+   *  scrape can never be merged INTO an umbrella (HWY-10); scraped events never
+   *  set it themselves, so the incoming side is always false. */
+  series_umbrella?: boolean | null;
 }
 
 /** Decide if an incoming event and an existing same-date/same-town candidate
@@ -601,7 +605,7 @@ async function upsertEventsBatched(
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
       .select(
-        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked, notability_locked, times_locked"
+        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked"
       )
       .in("date", unmatchedDates);
 
@@ -948,7 +952,7 @@ export async function upsertEvents(
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, price_locked, description_locked, poster_locked, notability_locked, times_locked"
+          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked"
         )
         .eq("date", event.date);
 

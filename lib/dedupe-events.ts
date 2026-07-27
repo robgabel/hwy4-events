@@ -16,7 +16,6 @@ import {
   isSameEvent,
   isGenericTitle,
   normalizeTown,
-  normalizeTime,
   normalizeVenue,
   GENERIC_VENUES,
   type EventIdentity,
@@ -51,6 +50,10 @@ function richness(e: DedupableEvent): number {
   // featuring The Star Dogs") so a clean venue wins the display slot.
   const rawVenue = (e.venue_name ?? "").trim();
   if (rawVenue.startsWith("@") || /\bfeaturing\b/i.test(rawVenue)) s -= 4;
+  // A listing that states when it starts beats one that doesn't. Only matters
+  // since timeless rows became mergeable (HWY-10): the survivor decides which
+  // clock the card shows, and "7:00 PM" is strictly more useful than silence.
+  if (e.start_time) s += 4;
   s += Math.min((e.description?.length ?? 0) / 50, 6);
   if (e.source_event_id) s += 2;
   if (e.image_url) s += 1;
@@ -63,17 +66,20 @@ function richness(e: DedupableEvent): number {
 }
 
 /** Groups rows that *could* be the same event so clustering stays near-linear.
- *  Keyed on town + date + normalized start + visibility — NOT end time: a
- *  source that omits the end ("7:00 PM") must share a bucket with the same
- *  source's fuller listing ("7:00 PM – 10:00 PM"). The end-time rule lives in
- *  `isSameEvent` (`timesAnchor`), so this is purely a performance pre-filter. */
+ *  Keyed on town + date + visibility only — every time field is left to
+ *  `isSameEvent` (`timesAnchor`), which is the single owner of the "same slot"
+ *  rule.
+ *
+ *  Start time used to be part of this key, which made the bucket a second,
+ *  silent copy of the time rule: a row with NO start hashed to a bucket of its
+ *  own, so it was never even compared against its timed twin, and no loosening
+ *  inside `isSameEvent` could reach it (HWY-10 — the Kane Brown double and the
+ *  Moose "Rib Feed" pair). Dropping it makes the pre-filter purely a
+ *  performance device again, which is all it was ever meant to be. Buckets stay
+ *  small: nine corridor towns times one date, so a busy Murphys Saturday is a
+ *  few dozen rows and the in-bucket pairwise pass is trivial. */
 function bucketKey(e: DedupableEvent): string {
-  return [
-    normalizeTown(e.town),
-    e.date,
-    normalizeTime(e.start_time),
-    e.visibility ?? "",
-  ].join("|");
+  return [normalizeTown(e.town), e.date, e.visibility ?? ""].join("|");
 }
 
 /**
@@ -133,6 +139,15 @@ export function mergeCluster<T extends DedupableEvent>(cluster: T[]): T {
   // blurb. Take the longest in the cluster so the card isn't empty.
   for (const e of cluster) {
     if (len(e.description) > len(merged.description)) merged.description = e.description;
+  }
+  // Clock: a timeless survivor inherits the sibling's time rather than showing
+  // a card with no hour (HWY-10). Mirrors buildFill in lib/reconcile.ts.
+  if (!merged.start_time) {
+    const donor = cluster.find((e) => e.start_time);
+    if (donor) {
+      merged.start_time = donor.start_time;
+      if (!merged.end_time) merged.end_time = donor.end_time;
+    }
   }
   // Image / link: keep the winner's (the band photo), else borrow from a sibling.
   if (!merged.image_url) {

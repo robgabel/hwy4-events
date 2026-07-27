@@ -23,11 +23,17 @@ import { extractUrls, isTicketResaleHost } from "./description-quality";
  *                              not on the list yet surfaces for a human
  *                              instead of quietly overcharging a reader.
  *  - findTimelessNearDupes:    same-day same-venue rows where at least one has
- *                              no start time. NULL-start rows can never share a
- *                              dedup bucket (by design — the festival umbrella
- *                              pattern relies on it), so this class of dupe
- *                              (Kane Brown / the Moose "District 8" triple) is
- *                              invisible to every merge layer and needs a human.
+ *                              no start time (Kane Brown / the Moose "District
+ *                              8" triple). These were once invisible to every
+ *                              merge layer, because a NULL-start row could not
+ *                              share a dedup bucket — separation the festival
+ *                              umbrella pattern depended on. HWY-10 replaced
+ *                              that with an explicit `series_umbrella` marker,
+ *                              so the merge layers now handle this class and
+ *                              zero is the expected steady state. The check
+ *                              remains as the backstop for pairs the matcher
+ *                              deliberately declines (one venue unknown, or no
+ *                              identity signal), which still need a human.
  *
  * Locked by scripts/test/audit-checks.test.ts.
  */
@@ -42,6 +48,8 @@ export interface AuditRow {
   category: string | null;
   description: string | null;
   status: string | null;
+  /** Curated festival umbrella card — duplicative on purpose, so never a finding. */
+  series_umbrella?: boolean | null;
 }
 
 export interface ImpossibleTime {
@@ -245,10 +253,19 @@ function nameTokensInText(name: string, text: string | null): boolean {
 /** Same date + same venue, at least one row timeless, and an identity hint
  *  between some pair (≥2 shared significant title tokens, or one row's title
  *  appearing inside the other's description — the Kane Brown shape, where the
- *  umbrella row's description names the act). Advisory: a human disposes. */
+ *  umbrella row's description names the act). Advisory: a human disposes.
+ *
+ *  Since HWY-10 the merge layers handle this class themselves, so a steady
+ *  state of zero is the expectation rather than a permanent backlog. The check
+ *  stays as the backstop for the pairs the matcher deliberately declines — one
+ *  side's venue unknown, or no identity signal firing — which still need a
+ *  human. Marked `series_umbrella` rows are excluded outright: they are
+ *  duplicative by design, and reporting them trained the reader to ignore this
+ *  finding. */
 export function findTimelessNearDupes(rows: AuditRow[]): TimelessNearDupe[] {
   const groups = new Map<string, AuditRow[]>();
   for (const r of active(rows)) {
+    if (r.series_umbrella === true) continue;
     const venue = (r.venue_name ?? "").toLowerCase().trim();
     if (!venue) continue;
     const key = `${r.date}|${venue}`;

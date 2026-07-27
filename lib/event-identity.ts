@@ -36,6 +36,14 @@ export interface EventIdentity {
   end_time?: string | null;
   description?: string | null;
   artists?: string[] | null;
+  /** Curated festival "umbrella" card — the one row that says "this festival
+   *  runs Jul 17 to Aug 2", sitting alongside the real nightly shows. Set only
+   *  by the seed scripts (see CLAUDE.md "Festival umbrella rows"); every
+   *  scraper writes false. It is what keeps an umbrella card OUT of a merge:
+   *  before this flag existed, umbrellas stayed separate purely because their
+   *  NULL start time could never share a dedup bucket, which also made a
+   *  genuine timeless duplicate invisible to every layer (HWY-10). */
+  series_umbrella?: boolean | null;
 }
 
 const TOWN_ALIASES: Record<string, string> = {
@@ -181,10 +189,31 @@ function artistsOverlap(
   return b.some((x) => setA.has(x.toLowerCase().trim()));
 }
 
+/** True when a row is a curated festival umbrella card. Umbrella cards are the
+ *  ONE listing shape that is duplicative on purpose, so they are excluded from
+ *  the timeless-merge path below. */
+function isUmbrella(e: EventIdentity): boolean {
+  return e.series_umbrella === true;
+}
+
 /** Two rows describe the same time slot: starts must be known and equal, and
  *  end times must agree *only when both are known*. A source that omits the end
  *  time ("7:00 PM") must still anchor to the same source's fuller listing
  *  ("7:00 PM – 10:00 PM") — keying on an exact end would split them apart.
+ *
+ *  A row that states NO start time (2026-07-27, HWY-10) anchors as a wildcard
+ *  against any slot at the same venue on the same date, provided NEITHER row is
+ *  a marked festival umbrella. A listing that omits the clock is still the same
+ *  show as its timed twin: the Kane Brown Ironstone double and the Moose Lodge
+ *  "Rib Feed & Live Band" pair both sat on the site because a NULL start could
+ *  never equal a known start, so they were invisible to the read-time collapse,
+ *  the write-time merge, and the nightly reconcile alike. Umbrellas used to
+ *  stay separate by relying on that same blindness; now they stay separate
+ *  because they are MARKED, which is what makes the rest of the timeless
+ *  population safe to merge. The wildcard requires `venuesAgree` — with no
+ *  clock to anchor on, the physical room is the only thing standing between
+ *  "the same show listed twice" and "two different events the same day", and
+ *  the caller still demands an identity signal on top.
  *
  *  `venuesAgree` softens the end-time rule (2026-07-05, the Coffee & Cars
  *  triple): three sources listed the SAME Meadowmont Lodge car show with three
@@ -203,7 +232,13 @@ function timesAnchor(
 ): boolean {
   const sa = normalizeTime(a.start_time);
   const sb = normalizeTime(b.start_time);
-  if (!sa || !sb || sa !== sb) return false;
+  if (!sa || !sb) {
+    // At least one side states no start. A marked umbrella never merges; every
+    // other timeless row anchors on the venue instead of the clock.
+    if (isUmbrella(a) || isUmbrella(b)) return false;
+    return venuesAgree;
+  }
+  if (sa !== sb) return false;
   const ea = normalizeTime(a.end_time);
   const eb = normalizeTime(b.end_time);
   if (ea && eb && ea !== eb && !venuesAgree) return false;
@@ -380,7 +415,9 @@ export function isGenericTitle(name: string): boolean {
  *  Requires: same date + town when both are known (defensive — callers already
  *  guarantee it), the same time slot (`timesAnchor`: equal start; conflicting
  *  known ends split the rows UNLESS the venues agree — same venue + same start
- *  means a differing end is scrape noise), AND at least one identity signal:
+ *  means a differing end is scrape noise; a row with NO start anchors on the
+ *  venue instead, unless either row is a marked `series_umbrella`), AND at
+ *  least one identity signal:
  *   - near-identical titles, or
  *   - overlapping artists, or
  *   - near-identical descriptions, or

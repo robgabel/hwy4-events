@@ -122,6 +122,10 @@ function buildFill(survivor: ReconcileRow, losers: ReconcileRow[]): Partial<Reco
       if (t) artistSet.add(t);
     }
     if (!survivor.description && l.description && !fill.description) fill.description = l.description;
+    // A cluster's rows could not disagree on start until timeless rows became
+    // mergeable (HWY-10), so a survivor that states no clock now inherits one
+    // from the sibling that does. Never overwrites a known start.
+    if (!survivor.start_time && l.start_time && !fill.start_time) fill.start_time = l.start_time;
     if (!survivor.end_time && l.end_time && !fill.end_time) fill.end_time = l.end_time;
     if (!survivor.image_url && l.image_url && !fill.image_url) fill.image_url = l.image_url;
     if (!survivor.event_url && l.event_url && !fill.event_url) fill.event_url = l.event_url;

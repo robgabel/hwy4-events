@@ -36,7 +36,9 @@ const EVENT_COLUMNS =
   "address, category, artists, status, price, cost_tier, event_url, " +
   "source_event_id, source_name, source_url, image_url, visibility, org_slug, " +
   "robs_pick, is_weekly, verification_status, community_sourced, venue_key, " +
-  "last_scraped_at, updated_at";
+  // series_umbrella feeds dedupeEvents below — without it the read-time collapse
+  // would merge a festival umbrella card into one of its own nightly shows.
+  "series_umbrella, last_scraped_at, updated_at";
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
   // "Today" in the corridor's Pacific civil date, NOT UTC. Computing it in UTC

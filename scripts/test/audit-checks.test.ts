@@ -142,6 +142,42 @@ test("timeless near-dupes: unrelated events sharing a venue+day stay quiet", () 
   assert.equal(findTimelessNearDupes(rows).length, 0);
 });
 
+test("findTimelessNearDupes ignores marked festival umbrellas (HWY-10)", () => {
+  // The umbrella + its opening-night show share a date and venue and one has no
+  // start time — the exact shape this check reports. It is intentional, so the
+  // marked row is excluded rather than nagging the operator every day.
+  const rows = [
+    {
+      id: "u",
+      name: "Bear Valley Music Festival 2026",
+      date: "2026-07-17",
+      start_time: null,
+      end_time: null,
+      venue_name: "Big White Tent",
+      category: "festival",
+      description: "Three weeks of music under the Big White Tent.",
+      status: "confirmed",
+      series_umbrella: true,
+    },
+    {
+      id: "n",
+      name: "Bear Valley Music Festival",
+      date: "2026-07-17",
+      start_time: "19:00",
+      end_time: null,
+      venue_name: "Big White Tent",
+      category: "live_music",
+      description: "Opening night of the Bear Valley Music Festival.",
+      status: "confirmed",
+    },
+  ];
+  assert.equal(findTimelessNearDupes(rows).length, 0);
+  // Unmarked, the same pair is still a finding — the exclusion is the flag,
+  // not the shape.
+  const unmarked = rows.map((r) => ({ ...r, series_umbrella: false }));
+  assert.equal(findTimelessNearDupes(unmarked).length, 1);
+});
+
 // ---------- findSuspectTicketLinks (HWY-11) ----------
 
 const linkRow = (id: string, description: string) => ({

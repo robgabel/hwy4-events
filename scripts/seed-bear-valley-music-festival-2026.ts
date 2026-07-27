@@ -9,10 +9,12 @@
 //
 // THE FIX (two parts, both idempotent):
 //   1. One curated UMBRELLA row — "Bear Valley Music Festival 2026", dated the
-//      opening day (July 17) with a NULL start_time. The null start parks it in
-//      its own read-time dedup bucket (bucketKey = town|date|start|visibility in
-//      lib/dedupe-events.ts), so it can never collapse into the 7pm opening-night
-//      show. Its title also differs from the nightly "Bear Valley Music Festival"
+//      opening day (July 17) with a NULL start_time and `series_umbrella: true`.
+//      That marker is what keeps it out of every merge layer (the timeless path
+//      in lib/event-identity.ts skips marked rows), so it can never collapse
+//      into the 7pm opening-night show. Until HWY-10 the separation came from
+//      the NULL start alone, which also hid real duplicates that merely omitted
+//      a time. Its title also differs from the nightly "Bear Valley Music Festival"
 //      rows, so the write-time matcher won't merge it either (title similarity
 //      alone is never a merge trigger — scripts/lib/dedup.ts). This is the
 //      "purposefully duplicative" attention-drawer: it rides the upcoming feed
@@ -51,7 +53,9 @@ const FESTIVAL_URL = "https://www.bearvalleymusicfestival.org/2026-festival";
 
 // The umbrella row. Title intentionally carries the year so it never collides
 // (dedup_key) or text-matches (>=0.85) the nightly "Bear Valley Music Festival"
-// rows. NULL start_time keeps it in its own dedup bucket.
+// rows. `series_umbrella: true` is what keeps it out of a merge with its own
+// nightly shows; the NULL start_time is now just an honest "no single hour",
+// not the separation mechanism (HWY-10).
 const UMBRELLA_NAME = "Bear Valley Music Festival 2026";
 const UMBRELLA_DATE = "2026-07-17";
 const UMBRELLA_DESCRIPTION =
@@ -119,6 +123,10 @@ function umbrellaRow() {
     robs_pick: true,
     is_weekly: false,
     community_sourced: false,
+    // The explicit "this is an umbrella card" marker (HWY-10). It is what keeps
+    // this row out of a merge with its own nightly shows now that a NULL start
+    // time no longer buys separation on its own. Never set by a scraper.
+    series_umbrella: true,
     dedup_key: dedupKey(UMBRELLA_NAME, UMBRELLA_DATE, TOWN),
     last_scraped_at: new Date().toISOString(),
   };
