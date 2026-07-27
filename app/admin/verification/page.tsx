@@ -17,6 +17,7 @@ import {
   hideEvent,
   deleteEvent,
   applyOrganizerTime,
+  dismissEventSeries,
 } from "./actions";
 import { formatTimeForHuman } from "@/lib/verify-times";
 
@@ -282,6 +283,16 @@ function FlaggedEventRow({ event, orgs }: { event: FlaggedEvent; orgs: Map<strin
           <input type="hidden" name="id" value={event.id} />
           <button type="submit" style={adminBtn.secondary}>
             Dismiss flag
+          </button>
+        </form>
+        <form action={dismissEventSeries} style={{ display: "inline" }}>
+          <input type="hidden" name="id" value={event.id} />
+          <button
+            type="submit"
+            style={adminBtn.secondary}
+            title="Dismiss every upcoming occurrence of this recurring event. Use when the organizer's page simply doesn't list the program."
+          >
+            Dismiss whole series
           </button>
         </form>
         <form action={hideEvent} style={{ display: "inline" }}>
