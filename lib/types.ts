@@ -78,6 +78,9 @@ export interface Hwy4Event {
   verification_status?: EventVerificationStatus;
   community_sourced?: boolean;
   venue_key?: string | null;
+  /** Curated festival umbrella card — see CLAUDE.md "Festival umbrella rows"
+   *  and `series_umbrella` in lib/event-identity.ts. Seed-script owned. */
+  series_umbrella?: boolean;
 }
 
 /**

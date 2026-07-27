@@ -144,7 +144,7 @@ export async function GET(request: Request) {
   const { data: events, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, town, venue_name, venue_key, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, event_url, last_scraped_at, status"
+      "id, name, date, town, venue_name, venue_key, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, event_url, last_scraped_at, status, series_umbrella"
     )
     .gte("date", today)
     .order("date", { ascending: true });
