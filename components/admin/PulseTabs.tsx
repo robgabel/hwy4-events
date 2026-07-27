@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { countMissingEither } from "@/lib/admin/db";
+import { countMissingEither, countArtistDraftsPending } from "@/lib/admin/db";
 import { INK, BORDER, MUTED, SUBTLE, ACCENT } from "@/components/admin/ui";
 
 // The "Pulse" sub-nav: the agent / growth surfaces grouped under one nav tab.
@@ -15,10 +15,11 @@ export async function PulseTabs({
   active,
   right,
 }: {
-  active: "today" | "growth" | "experiments" | "venues" | "scrapers";
+  active: "today" | "growth" | "experiments" | "venues" | "artists" | "scrapers";
   right?: ReactNode;
 }) {
   const venuesTodo = await countMissingEither("hwy4_venues", "blurb", "address", "venue_key");
+  const artistsTodo = await countArtistDraftsPending();
   return (
     <div
       style={{
@@ -34,6 +35,7 @@ export async function PulseTabs({
       <Tab href="/admin/briefings?view=growth" label="Growth memo" sub="weekly" active={active === "growth"} />
       <Tab href="/admin/experiments" label="Experiments" sub="growth memory" active={active === "experiments"} />
       <Tab href="/admin/venues" label="Venues" sub="blurbs" active={active === "venues"} badge={venuesTodo} />
+      <Tab href="/admin/artists" label="Artists" sub="bands" active={active === "artists"} badge={artistsTodo} />
       <Tab href="/admin/scrapers" label="Scrapers" sub="pipeline health" active={active === "scrapers"} />
       {right && <div style={{ marginLeft: "auto", marginBottom: 6 }}>{right}</div>}
     </div>
