@@ -479,3 +479,173 @@ test("TBD placeholder merges with the named-act re-listing (same venue+slot)", (
   assert.equal(isSameEvent(placeholder, named), true);
   assert.equal(isSameEvent(named, placeholder), true);
 });
+
+// ---------------------------------------------------------------------------
+// HWY-10: timeless rows are mergeable; marked festival umbrellas are not.
+//
+// A listing that omits the start time used to be invisible to every merge
+// layer, because `timesAnchor` required two known, equal starts. That was load-
+// bearing for exactly one shape — the curated festival umbrella card — and
+// accidentally protected every real duplicate that happened to omit a clock.
+// `series_umbrella` makes the umbrella's separation explicit so the rest of the
+// timeless population can merge normally.
+// ---------------------------------------------------------------------------
+
+const kaneBrownTimed = {
+  name: "Kane Brown",
+  date: "2026-08-16",
+  town: "Murphys",
+  venue_name: "Ironstone Amphitheatre at Ironstone Vineyards",
+  start_time: "19:00",
+  end_time: null as string | null,
+  description: "Kane Brown plays the Ironstone Amphitheatre.",
+  artists: ["Kane Brown"],
+};
+
+const kaneBrownTimeless = {
+  name: "Kane Brown - Murphys",
+  date: "2026-08-16",
+  town: "Murphys",
+  venue_name: "Ironstone Vineyards",
+  start_time: null as string | null,
+  end_time: null as string | null,
+  description: "An unforgettable night with Kane Brown at Ironstone Vineyards.",
+  artists: ["Kane Brown"],
+};
+
+test("a timeless listing merges with its timed twin at the same venue", () => {
+  assert.equal(isSameEvent(kaneBrownTimed, kaneBrownTimeless), true);
+  assert.equal(isSameEvent(kaneBrownTimeless, kaneBrownTimed), true);
+});
+
+test("two timeless listings of the same show merge", () => {
+  // The live Moose Lodge pair (2026-09-19): both rows carry no start time, so
+  // even a same-venue same-title duplicate could never match before HWY-10.
+  const a = {
+    name: 'Rib Feed & Live Band "Blue Monday"',
+    date: "2026-09-19",
+    town: "Arnold",
+    venue_name: "Ebbetts Pass Moose Lodge",
+    start_time: null as string | null,
+    end_time: null as string | null,
+    description: "A rib feed dinner with live music from Blue Monday on September 19.",
+    artists: null,
+  };
+  const b = {
+    ...a,
+    name: "Rib Feed & Live Band",
+    description: "Rib feed dinner with live music by Blue Monday.",
+  };
+  assert.equal(isSameEvent(a, b), true);
+});
+
+test("a marked festival umbrella NEVER merges into one of its nightly shows", () => {
+  // The whole point of the flag. The umbrella is dated opening day with no
+  // start time and must survive alongside the 7pm opening-night concert.
+  const umbrella = {
+    name: "Bear Valley Music Festival 2026",
+    date: "2026-07-17",
+    town: "Bear Valley",
+    venue_name: "Big White Tent",
+    start_time: null as string | null,
+    end_time: null as string | null,
+    description:
+      "July 17 through August 2, 2026. Three weeks of music under the Big White Tent.",
+    artists: null,
+    series_umbrella: true,
+  };
+  const openingNight = {
+    name: "Bear Valley Music Festival",
+    date: "2026-07-17",
+    town: "Bear Valley",
+    venue_name: "Big White Tent",
+    start_time: "19:00",
+    end_time: null as string | null,
+    description: "Opening night of the Bear Valley Music Festival under the tent.",
+    artists: ["Bear Valley Festival Orchestra"],
+  };
+  assert.equal(isSameEvent(umbrella, openingNight), false);
+  assert.equal(isSameEvent(openingNight, umbrella), false);
+  // And it is the MARK doing the work, not the missing clock: drop the flag and
+  // the same two rows become mergeable.
+  const { series_umbrella: _drop, ...unmarked } = umbrella;
+  assert.equal(isSameEvent(unmarked, openingNight), true);
+});
+
+test("an umbrella is also protected from a timeless sibling", () => {
+  const umbrella = {
+    name: "Bear Valley Music Festival 2026",
+    date: "2026-07-17",
+    town: "Bear Valley",
+    venue_name: "Big White Tent",
+    start_time: null as string | null,
+    end_time: null as string | null,
+    description: "Three weeks of music under the Big White Tent.",
+    artists: null,
+    series_umbrella: true,
+  };
+  const timelessSibling = {
+    ...umbrella,
+    name: "Bear Valley Music Festival",
+    series_umbrella: false,
+  };
+  assert.equal(isSameEvent(umbrella, timelessSibling), false);
+});
+
+test("a timeless row does NOT merge across different venues", () => {
+  // With no clock, the venue is the only anchor left, so it is required.
+  const a = {
+    name: "Trivia Night",
+    date: "2026-08-16",
+    town: "Murphys",
+    venue_name: "Murphys Irish Pub",
+    start_time: null as string | null,
+    end_time: null as string | null,
+    description: "Weekly trivia night with prizes for the top three teams.",
+    artists: null,
+  };
+  const b = { ...a, venue_name: "The Pour House" };
+  assert.equal(isSameEvent(a, b), false);
+});
+
+test("a timeless row does NOT merge when the other side's venue is unknown", () => {
+  const known = {
+    name: "Summer Concert",
+    date: "2026-08-16",
+    town: "Murphys",
+    venue_name: "Ironstone Vineyards",
+    start_time: null as string | null,
+    end_time: null as string | null,
+    description: "An outdoor summer concert with food trucks and a full bar.",
+    artists: null,
+  };
+  const unknownVenue = { ...known, venue_name: "TBA" };
+  assert.equal(isSameEvent(known, unknownVenue), false);
+});
+
+test("a timeless row still needs an identity signal, not just a shared venue", () => {
+  // Two genuinely different programs the same day at one venue must stay split.
+  const juniorRangers = {
+    name: "Junior Rangers",
+    date: "2026-08-16",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    start_time: null as string | null,
+    end_time: null as string | null,
+    description:
+      "A hands-on program for kids ages 7 to 12 earning their Junior Ranger badge.",
+    artists: null,
+  };
+  const campfire = {
+    name: "Campfire: Laugh then Learn",
+    date: "2026-08-16",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    start_time: null as string | null,
+    end_time: null as string | null,
+    description:
+      "A weekend-evening campfire program in the amphitheater. Topics vary by week.",
+    artists: null,
+  };
+  assert.equal(isSameEvent(juniorRangers, campfire), false);
+});
