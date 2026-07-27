@@ -102,20 +102,6 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
     defaultAddress: "75 Big Trees Rd, Murphys, CA 95247",
   },
   {
-    slug: "brice-station",
-    name: "Brice Station",
-    pageTitle: "Brice Station Events",
-    // Shopify site works; Square ticketing as fallback.
-    urls: [
-      "https://www.bricestation.com/collections/events",
-      "https://bricestation-582296.square.site/",
-    ],
-    defaultVenue: "Brice Station Vineyards",
-    defaultTown: "Murphys",
-    firecrawl: { waitFor: 8000, onlyMainContent: false },
-    dumpOnEmpty: true,
-  },
-  {
     slug: "camp-connell-general-store",
     name: "Camp Connell General Store",
     pageTitle: "Camp Connell General Store Events",

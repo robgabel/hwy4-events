@@ -4,6 +4,7 @@ import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeArnoldRimTrail } from "./scrapers/arnold-rim-trail.js";
+import { scrapeBriceStation } from "./scrapers/brice-station.js";
 import { scrapeRedCross } from "./scrapers/red-cross.js";
 import { scrapeSequoiaWoods } from "./scrapers/sequoia-woods.js";
 import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
@@ -19,6 +20,8 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  *   - mystic-saloon: Facebook primary + multi-URL website fallback
  *   - hwy4-fb-discover: Apify Facebook events scraper
  *   - visit-murphys: Tribe (The Events Calendar) WordPress REST API
+ *   - brice-station: the venue's own Shopify ticket store, read as structured
+ *     product JSON rather than LLM-extracted from the rendered grid
  *   - arnold-rim-trail: same Tribe REST API, read from the organizer's own site
  *     because its sunset-hike times move with sunset (and get edited days out),
  *     so an aggregator snapshot is reliably stale
@@ -30,9 +33,8 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  * Everything else goes through the config-driven generic Firecrawl runner.
  */
 const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
-  // Organizer-owned sources run BEFORE the aggregators, so a same-night
-  // aggregator pass can never be the last writer on a row they own. (The
-  // manual-sources blocklist is the real guard; ordering is belt-and-braces.)
+  // arnold-rim-trail is blocklisted in manual-sources.ts, so no aggregator can
+  // touch its rows and its position here is irrelevant.
   "arnold-rim-trail": scrapeArnoldRimTrail,
   "bistro-espresso": scrapeBistroEspresso,
   "gocalaveras": scrapeGoCalaveras,
@@ -41,6 +43,12 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   "visit-murphys": scrapeVisitMurphys,
   "red-cross": scrapeRedCross,
   "sequoia-woods": scrapeSequoiaWoods,
+  // brice-station reads the venue's own Shopify ticket store but is NOT
+  // blocklisted: the store only lists shows it is actively selling, so
+  // GoCalaveras legitimately covers Brice events with no ticket product yet and
+  // blocklisting it would lose them. Ordering is the guard instead — this runs
+  // LAST so the organizer is the final writer on the rows it does cover.
+  "brice-station": scrapeBriceStation,
 };
 
 const SCRAPERS: Record<string, () => Promise<void>> = {
