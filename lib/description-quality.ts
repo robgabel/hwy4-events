@@ -88,6 +88,148 @@ function stripHtml(input: string): string {
     .replace(/<\/?[a-zA-Z][^>]*>/g, ""); // remaining tags
 }
 
+// ---------------------------------------------------------------------------
+// Reseller-copy scrub (HWY-11)
+//
+// Concert listings that reach us via ticket-reseller pages arrive carrying junk
+// that a calendar-widget stripper was never built to see. Three shapes, all
+// observed live on Ironstone shows and all hand-cleaned once already (July 16),
+// which is the tell that the fix belongs in the write path rather than in a
+// curator's afternoon:
+//
+//   1. Markdown emphasis the extractor never rendered, usually wrapped around a
+//      keyword-stuffed phrase: "This is **Gene Simmons - Murphys Murphys**".
+//   2. A doubled town name inside that phrase ("Murphys Murphys").
+//   3. Copy written in a fake-local voice by a party with no local standing:
+//      "in Murphys, a local favorite for live entertainment", "at Ironstone
+//      Vineyards-one of the area's go-to spots for live entertainment". This is
+//      a voice violation (content/VOICE.md: the neighbor voice is ours, and it
+//      is earned) as much as a quality one.
+//
+// Plus the reader-harm case: links to ticket-resale marketplaces, where a
+// neighbor can pay well over face value for a show whose venue sells tickets
+// directly (regtixs.com was the live instance).
+// ---------------------------------------------------------------------------
+
+/** Ticket-resale marketplaces. A link to one of these is stripped from
+ *  description text outright: the reader loses nothing (every event page
+ *  already carries the organizer/venue link) and can only be overcharged by
+ *  following it.
+ *
+ *  Deliberately a DENYLIST, not the allowlist the ticket sketched ("organizer,
+ *  venue, or a known legitimate ticket seller"). Checked against live data
+ *  first: all 22 URLs currently sitting in upcoming descriptions are legitimate
+ *  — organizer sites (murphyscreektheatre.org, angelsmurphysrotary.org) and
+ *  real sellers (ticketleap.com, onecau.se) — and an allowlist would have
+ *  silently deleted every one of them, since this is a pure function with no
+ *  view of the org/venue registry. Stripping good links to catch bad ones is
+ *  the worse trade. `findSuspectTicketLinks` in lib/audit-checks.ts covers the
+ *  whack-a-mole gap by FLAGGING unrecognized ticket-ish hosts for a human,
+ *  which is how a new reseller ends up on this list. */
+export const TICKET_RESALE_HOSTS = [
+  "regtixs.com",
+  "stubhub.com",
+  "vividseats.com",
+  "ticketnetwork.com",
+  "tickpick.com",
+  "ticketliquidator.com",
+  "ticketsmarter.com",
+  "ticketcity.com",
+  "razorgator.com",
+  "eventticketscenter.com",
+  "event-tickets-center.com",
+  "tickets-center.com",
+  "ticketsonsale.com",
+  "boxofficeticketsales.com",
+  "superseats.com",
+  "goldcoasttickets.com",
+] as const;
+
+/** True when `host` is a resale marketplace (exact match or a subdomain). */
+export function isTicketResaleHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^www\./, "");
+  return TICKET_RESALE_HOSTS.some((d) => h === d || h.endsWith(`.${d}`));
+}
+
+function hostOf(url: string): string {
+  const m = url.match(/^https?:\/\/([^/?#]+)/i);
+  return m ? m[1].toLowerCase() : "";
+}
+
+/** Bare URLs in free text. Trailing sentence punctuation is left out of the
+ *  match so "…at stubhub.com/x." keeps its period. */
+const URL_IN_TEXT = /https?:\/\/[^\s<>"')\]]+[^\s<>"')\].,;!?]/gi;
+
+/** Every http(s) URL in a block of text. */
+export function extractUrls(text: string | null | undefined): string[] {
+  return (text ?? "").match(URL_IN_TEXT) ?? [];
+}
+
+/** Drop links to ticket-resale marketplaces, plus the "book at"/"tickets at"
+ *  lead-in they hang off, so the sentence doesn't end mid-phrase. */
+function stripResaleLinks(text: string): { text: string; removed: string[] } {
+  const removed: string[] = [];
+  const out = text.replace(URL_IN_TEXT, (url) => {
+    if (!isTicketResaleHost(hostOf(url))) return url;
+    removed.push(url);
+    return "";
+  });
+  if (removed.length === 0) return { text, removed };
+  return {
+    // Tidy the hole the URL left: a dangling "Tickets at ." or double space.
+    text: out
+      .replace(/\b(?:tickets?|buy|book|get yours?|order)\s+(?:at|from|via|here)?\s*([.!?])/gi, "$1")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\s+([.!?,])/g, "$1"),
+    removed,
+  };
+}
+
+/** Strip markdown emphasis / heading markers the extractor left as literal
+ *  characters. Scraped prose never means them: "**Kane Brown California**" is
+ *  an artifact, not typography. Conservative — `**` must wrap actual content
+ *  on one line, so a stray asterisk (a footnote marker, "2 * 4") survives. */
+function stripMarkdownArtifacts(text: string): string {
+  return text
+    .replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, "$1")
+    .replace(/__(?!\s)([^_\n]+?)(?<!\s)__/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "");
+}
+
+/** Collapse a town name repeated back to back ("… Murphys Murphys" → "…
+ *  Murphys"), the signature of a reseller template that appends the city to a
+ *  title that already ends in it.
+ *
+ *  Scoped to the event's OWN town rather than any doubled word on purpose:
+ *  genuine reduplicated place names exist (Walla Walla is a wine region, and
+ *  this is wine country), so a blanket rule would eventually eat a real one. */
+function collapseDoubledTown(text: string, town: string | null | undefined): string {
+  const t = (town ?? "").trim();
+  if (t.length < 3) return text;
+  const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(`\\b(${esc})(?:\\s+\\1\\b)+`, "gi"), "$1");
+}
+
+/** Marketing appositives that claim local standing on our behalf. */
+const FAKE_LOCAL_APPOSITIVE =
+  /\s*[,—–-]\s*([^.!?]{0,120}?\b(?:local favorite|go-to spot|favorite local spot|beloved local spot|hometown favorite)s?\b[^.!?]*)(?=[.!?]|$)/gi;
+
+/** Remove a fake-local clause describing the venue.
+ *
+ *  Narrow by construction, because the phrase alone is not the problem — the
+ *  APPOSITIVE is. It must hang off a comma or dash and run to the end of its
+ *  sentence, which is the shape a reseller template produces ("at Ironstone
+ *  Vineyards in Murphys, a local favorite for live entertainment"). Checked
+ *  against every live row that trips a naive phrase match: the farmers market's
+ *  "shopping your favorite local vendors", the Rotary listing's "Live Music:
+ *  Local favorites The Fabulous Off Brothers", and the craft fair's "one of our
+ *  favorite events of the year" are all organizer copy about vendors, bands and
+ *  events rather than a claim about a venue, and none of them match. Note the
+ *  delimiter set excludes ":" for exactly that reason. */
+function stripFakeLocalAppositive(text: string): string {
+  return text.replace(FAKE_LOCAL_APPOSITIVE, "");
+}
+
 export interface SanitizeResult {
   /** Cleaned text (may be ""). */
   text: string;
@@ -95,6 +237,13 @@ export interface SanitizeResult {
   strippedRatio: number;
   /** True if any calendar-widget token was removed. */
   removedWidget: boolean;
+  /** Resale URLs removed from the text, for logging / audit. */
+  removedResaleLinks: string[];
+}
+
+export interface SanitizeOptions {
+  /** The event's town, enabling the doubled-town collapse. */
+  town?: string | null;
 }
 
 /**
@@ -103,14 +252,18 @@ export interface SanitizeResult {
  *  1. drop whole-line widget tokens (Add to calendar, Google Calendar, …)
  *  2. drop orphan single-character lines (@, ·, -)
  *  3. collapse 3+ blank lines to 2
- *  4. trim
+ *  4. scrub reseller junk: markdown artifacts, a doubled town name, a
+ *     fake-local venue appositive, and links to ticket-resale sites (HWY-11)
+ *  5. trim
  * Keeps the real prose intact (the Native Sons pancake breakfast survives; only
  * the iCal/Outlook chrome + page-builder markup is removed).
  */
 export function sanitizeDescriptionDetailed(
   input: string | null | undefined,
+  opts?: SanitizeOptions,
 ): SanitizeResult {
-  if (!input) return { text: "", strippedRatio: 0, removedWidget: false };
+  if (!input)
+    return { text: "", strippedRatio: 0, removedWidget: false, removedResaleLinks: [] };
 
   const lines = stripHtml(input).replace(/\r\n/g, "\n").split("\n");
   let meaningfulOriginal = 0;
@@ -132,20 +285,32 @@ export function sanitizeDescriptionDetailed(
     return true;
   });
 
-  const text = kept
+  const joined = kept
     .join("\n")
     .replace(/[ \t]+\n/g, "\n") // strip trailing spaces before newlines
     .replace(/\n{3,}/g, "\n\n") // collapse blank runs
-    .replace(/[ \t]{2,}/g, " ") // collapse runs of spaces
+    .replace(/[ \t]{2,}/g, " "); // collapse runs of spaces
+
+  // Reseller-copy scrub. Order matters: emphasis markers come off first so the
+  // doubled town inside "**… Murphys Murphys**" is visible to the collapse.
+  const resale = stripResaleLinks(joined);
+  const text = collapseDoubledTown(
+    stripFakeLocalAppositive(stripMarkdownArtifacts(resale.text)),
+    opts?.town,
+  )
+    .replace(/[ \t]{2,}/g, " ")
     .trim();
 
   const strippedRatio = meaningfulOriginal > 0 ? removed / meaningfulOriginal : 0;
-  return { text, strippedRatio, removedWidget };
+  return { text, strippedRatio, removedWidget, removedResaleLinks: resale.removed };
 }
 
 /** Convenience: just the cleaned string. */
-export function sanitizeDescription(input: string | null | undefined): string {
-  return sanitizeDescriptionDetailed(input).text;
+export function sanitizeDescription(
+  input: string | null | undefined,
+  opts?: SanitizeOptions,
+): string {
+  return sanitizeDescriptionDetailed(input, opts).text;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,7 +456,9 @@ interface DescribableEvent {
  * not a reader-facing hide.
  */
 export function displayDescription(event: DescribableEvent): string | null {
-  const { text, strippedRatio } = sanitizeDescriptionDetailed(event.description);
+  const { text, strippedRatio } = sanitizeDescriptionDetailed(event.description, {
+    town: event.town,
+  });
   if (text.length === 0) return null;
   const { verdict } = assessDescription(text, event.name, event.venue_name, {
     town: event.town,

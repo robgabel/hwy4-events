@@ -110,6 +110,7 @@ const ISSUE_LABELS: Record<string, string> = {
   invalid_category: "event(s) with a bad category",
   missing_image_bls: "BLS event(s) missing a flyer",
   stale_scrapes: "stale scrape(s)",
+  suspect_ticket_links: "unvetted ticket link(s) in descriptions",
 };
 
 function describeIssues(signal: AuditSignal): string {

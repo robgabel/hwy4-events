@@ -230,3 +230,116 @@ test("truncateMeta: never ends mid-word (kills the 'for purc' tell)", () => {
   assert.equal(input[stem.length], " ");
   assert.ok(!out.includes("purc "), "did not cut mid-word into 'purc'");
 });
+
+// ---------------------------------------------------------------------------
+// HWY-11: reseller-copy scrub.
+//
+// Fixtures are verbatim live rows. The two Ironstone descriptions were
+// hand-cleaned once already (July 16) and came straight back on the next
+// scrape, which is why the fix lives in the shared sanitizer.
+// ---------------------------------------------------------------------------
+
+const kaneBrown =
+  "Welcome to an unforgettable night with Kane Brown at Ironstone Amphitheatre " +
+  "At Ironstone Vineyards in Murphys, a local favorite for live entertainment " +
+  "and summer singalongs. **Kane Brown California** fans know this is the kind " +
+  "of show that turns a simple evening out into a full-on memory.";
+
+const geneSimmons =
+  "Welcome to a night of rock in Murphys as the Gene Simmons Band storms the " +
+  "stage at Ironstone Amphitheatre At Ironstone Vineyards-one of the area's " +
+  "go-to spots for live entertainment. This is **Gene Simmons - Murphys " +
+  "Murphys**, and locals know it's the kind of show you talk about.";
+
+test("strips markdown emphasis artifacts from scraped prose", () => {
+  const out = sanitizeDescription(kaneBrown, { town: "Murphys" });
+  assert.ok(!out.includes("**"), out);
+  assert.ok(out.includes("Kane Brown California fans know"), out);
+});
+
+test("removes the fake-local venue appositive", () => {
+  const out = sanitizeDescription(kaneBrown, { town: "Murphys" });
+  assert.ok(!/local favorite/i.test(out), out);
+  // The sentence still terminates cleanly at the venue.
+  assert.ok(out.includes("At Ironstone Vineyards in Murphys."), out);
+});
+
+test("removes a dash-delimited go-to-spot appositive too", () => {
+  const out = sanitizeDescription(geneSimmons, { town: "Murphys" });
+  assert.ok(!/go-to spot/i.test(out), out);
+  assert.ok(out.includes("At Ironstone Vineyards."), out);
+});
+
+test("collapses a doubled town name", () => {
+  const out = sanitizeDescription(geneSimmons, { town: "Murphys" });
+  assert.ok(!/Murphys Murphys/i.test(out), out);
+  assert.ok(out.includes("This is Gene Simmons - Murphys,"), out);
+});
+
+test("the doubled-name collapse is scoped to the event's own town", () => {
+  // Reduplicated place names are real, and this is wine country. Without a
+  // matching town, nothing is collapsed.
+  const text = "Pouring a flight of Walla Walla reds on the patio all afternoon.";
+  assert.equal(sanitizeDescription(text, { town: "Murphys" }), text);
+  assert.equal(sanitizeDescription(text), text);
+});
+
+// --- Ticket links ----------------------------------------------------------
+
+test("strips a link to a known ticket-resale site", () => {
+  const { text, removedResaleLinks } = sanitizeDescriptionDetailed(
+    "Doors at 6, show at 7 under the oaks. Tickets at https://regtixs.com/e/12345 " +
+      "or from the winery directly.",
+  );
+  assert.deepEqual(removedResaleLinks, ["https://regtixs.com/e/12345"]);
+  assert.ok(!text.includes("regtixs"), text);
+});
+
+test("legitimate organizer and ticket links survive untouched", () => {
+  // Every URL currently living in an upcoming description. An allowlist-shaped
+  // gate would have deleted all of these.
+  for (const url of [
+    "https://www.murphyscreektheatre.org/spirit-song",
+    "http://www.angelsmurphysrotary.org",
+    "https://events.ticketleap.com/tickets/cstarskids/oz",
+    "https://onecau.se/rotaryshrimpfeed",
+  ]) {
+    const text = `Full details and tickets are available at ${url} for this one.`;
+    const out = sanitizeDescriptionDetailed(text);
+    assert.equal(out.removedResaleLinks.length, 0, url);
+    assert.ok(out.text.includes(url), `${url} was stripped: ${out.text}`);
+  }
+});
+
+// --- What must NOT be touched ---------------------------------------------
+
+test("organizer copy that merely uses the word 'favorite' survives", () => {
+  // Three live rows that a naive phrase match would have mangled. None of them
+  // is an appositive claiming local standing for a venue.
+  const farmersMarket =
+    "Join us for another wonderful season of shopping your favorite local " +
+    "vendors, eating delicious food, and listening to live music by the creek " +
+    "at beautiful Murphys Community Park. 9:00am - 1:00pm.";
+  assert.equal(sanitizeDescription(farmersMarket, { town: "Murphys" }), farmersMarket);
+
+  const rotary =
+    "The Drinks: A full bar will feature local wines and specialty cocktails. " +
+    "Live Music: Local favorites The Fabulous Off Brothers will provide the " +
+    "live soundtrack for the evening.";
+  assert.equal(sanitizeDescription(rotary, { town: "Murphys" }), rotary);
+
+  const craftFair =
+    "It's one of our favorite events of the year, and we can't wait to welcome " +
+    "everyone back!";
+  assert.equal(sanitizeDescription(craftFair, { town: "Angels Camp" }), craftFair);
+});
+
+test("a lone asterisk is not treated as markdown", () => {
+  const text = "Adults $20, kids under 12 free* (*with a paying adult, all day).";
+  assert.equal(sanitizeDescription(text), text);
+});
+
+test("the scrub is idempotent", () => {
+  const once = sanitizeDescription(kaneBrown, { town: "Murphys" });
+  assert.equal(sanitizeDescription(once, { town: "Murphys" }), once);
+});

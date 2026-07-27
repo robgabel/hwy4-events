@@ -67,6 +67,7 @@ async function main() {
 
     const { text, strippedRatio, removedWidget } = sanitizeDescriptionDetailed(
       row.description,
+      { town: row.town },
     );
     const { verdict, reasons } = assessDescription(text, row.name, row.venue_name, {
       town: row.town,

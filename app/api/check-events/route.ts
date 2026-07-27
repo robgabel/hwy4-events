@@ -8,6 +8,7 @@ import {
   findImpossibleTimes,
   findCategoryInconsistencies,
   findTimelessNearDupes,
+  findSuspectTicketLinks,
 } from "@/lib/audit-checks";
 
 export const maxDuration = 60;
@@ -268,6 +269,10 @@ export async function GET(request: Request) {
   const impossibleTimes = findImpossibleTimes(rows);
   const categoryInconsistencies = findCategoryInconsistencies(rows);
   const timelessNearDupes = findTimelessNearDupes(rows);
+  // Ticket-selling links in description text pointing at an unvetted host.
+  // The sanitizer strips KNOWN resale marketplaces at write time (HWY-11);
+  // this surfaces the ones not on the list yet, before a reader overpays.
+  const suspectTicketLinks = findSuspectTicketLinks(rows);
 
   // Recent self-healing merges (lib/reconcile.ts via /api/reconcile-dupes).
   // Informational, NOT an issue — a merge means the dedup is working. Reported
@@ -373,6 +378,7 @@ export async function GET(request: Request) {
       impossible_times: impossibleTimes.length,
       category_inconsistencies: categoryInconsistencies.length,
       timeless_near_dupes: timelessNearDupes.length,
+      suspect_ticket_links: suspectTicketLinks.length,
     },
   };
 
@@ -409,6 +415,9 @@ export async function GET(request: Request) {
         timeless_near_dupes: timelessNearDupes
           .slice(0, 3)
           .map((d) => `${d.date} @ ${d.venue_name} — ${d.names.map((n) => `"${n}"`).join(" / ")}`),
+        suspect_ticket_links: suspectTicketLinks
+          .slice(0, 3)
+          .map((l) => `"${l.name}" (${l.date}) → ${l.host} [${l.reason}]`),
       },
     };
     const { error: stashErr } = await supabase.from("site_config").upsert(
@@ -552,6 +561,7 @@ export async function GET(request: Request) {
       impossible_times: impossibleTimes,
       category_inconsistencies: categoryInconsistencies,
       timeless_near_dupes: timelessNearDupes,
+      suspect_ticket_links: suspectTicketLinks,
     },
   });
 }
