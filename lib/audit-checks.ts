@@ -1,4 +1,5 @@
 import { normalizeName } from "./event-identity";
+import { extractUrls, isTicketResaleHost } from "./description-quality";
 
 /**
  * Pure data-plausibility checks for the daily /api/check-events audit.
@@ -15,6 +16,12 @@ import { normalizeName } from "./event-identity";
  *  - findCategoryInconsistencies: one production carrying several categories
  *                              across its rows ("What the Constitution Means
  *                              to Me" ran as kids + fine_arts + other).
+ *  - findSuspectTicketLinks:   a ticket-selling link in description text whose
+ *                              host we do not recognize. The sanitizer strips
+ *                              KNOWN resale marketplaces outright (HWY-11);
+ *                              this is the other half, so a reseller that is
+ *                              not on the list yet surfaces for a human
+ *                              instead of quietly overcharging a reader.
  *  - findTimelessNearDupes:    same-day same-venue rows where at least one has
  *                              no start time. NULL-start rows can never share a
  *                              dedup bucket (by design — the festival umbrella
@@ -54,11 +61,82 @@ export interface CategoryInconsistency {
   ids: string[];
 }
 
+export interface SuspectTicketLink {
+  id: string;
+  name: string;
+  date: string;
+  url: string;
+  host: string;
+  reason: "known_resale" | "unrecognized_ticket_host";
+}
+
 export interface TimelessNearDupe {
   date: string;
   venue_name: string;
   names: string[];
   ids: string[];
+}
+
+// Hosts we have verified as an organizer, venue, or primary ticket seller for
+// this corridor. A description link to any of these is expected and quiet.
+// Grow this list rather than the resale denylist when a new legitimate seller
+// shows up — the point of the check is that an UNKNOWN ticket host gets looked
+// at once by a person.
+const KNOWN_TICKET_HOSTS = [
+  "ticketmaster.com",
+  "livenation.com",
+  "eventbrite.com",
+  "ticketleap.com",
+  "onecau.se",
+  "onecause.com",
+  "brownpapertickets.com",
+  "tickettailor.com",
+  "squareup.com",
+  "shopify.com",
+  "ironstonevineyards.com",
+  "bricestation.com",
+  "bearvalleymusicfestival.org",
+];
+
+// A URL only counts as "ticket-selling" if it says so. Plain organizer links
+// (murphyscreektheatre.org/spirit-song) are not the target and stay quiet.
+const TICKETY_URL = /(ticket|seats?|boxoffice|box-office|admission|rsvp|register)/i;
+
+function urlHost(url: string): string {
+  const m = url.match(/^https?:\/\/([^/?#]+)/i);
+  return m ? m[1].toLowerCase().replace(/^www\./, "") : "";
+}
+
+function isKnownTicketHost(host: string): boolean {
+  return KNOWN_TICKET_HOSTS.some((d) => host === d || host.endsWith(`.${d}`));
+}
+
+/** Ticket-ish links in description text pointing at a host we have not vetted.
+ *  Advisory only: a human either adds the host to KNOWN_TICKET_HOSTS or, if it
+ *  is a reseller, to TICKET_RESALE_HOSTS so the sanitizer strips it from then
+ *  on. `known_resale` should never appear once the sanitizer has run over a
+ *  row; if it does, that row predates the scrub and needs a backfill. */
+export function findSuspectTicketLinks(rows: AuditRow[]): SuspectTicketLink[] {
+  const out: SuspectTicketLink[] = [];
+  for (const r of active(rows)) {
+    for (const url of extractUrls(r.description)) {
+      const host = urlHost(url);
+      if (!host) continue;
+      if (isTicketResaleHost(host)) {
+        out.push({ id: r.id, name: r.name, date: r.date, url, host, reason: "known_resale" });
+      } else if (TICKETY_URL.test(url) && !isKnownTicketHost(host)) {
+        out.push({
+          id: r.id,
+          name: r.name,
+          date: r.date,
+          url,
+          host,
+          reason: "unrecognized_ticket_host",
+        });
+      }
+    }
+  }
+  return out;
 }
 
 function timeToMinutes(t: string | null): number | null {

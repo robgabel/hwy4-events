@@ -10,6 +10,7 @@ import {
   findImpossibleTimes,
   findCategoryInconsistencies,
   findTimelessNearDupes,
+  findSuspectTicketLinks,
   type AuditRow,
 } from "../../lib/audit-checks.js";
 
@@ -139,4 +140,55 @@ test("timeless near-dupes: unrelated events sharing a venue+day stay quiet", () 
     row({ name: "Show A Extra", date: "2026-07-18", venue_name: "Big Venue", start_time: "21:00" }),
   ];
   assert.equal(findTimelessNearDupes(rows).length, 0);
+});
+
+// ---------- findSuspectTicketLinks (HWY-11) ----------
+
+const linkRow = (id: string, description: string) => ({
+  id,
+  name: `Show ${id}`,
+  date: "2026-08-16",
+  start_time: "19:00",
+  end_time: null,
+  venue_name: "Ironstone Vineyards",
+  category: "live_music",
+  description,
+  status: "confirmed",
+});
+
+test("findSuspectTicketLinks flags an unrecognized ticket host", () => {
+  const found = findSuspectTicketLinks([
+    linkRow("a", "Grab seats at https://cheap-seats-now.example/tickets/kane before they go."),
+  ]);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].reason, "unrecognized_ticket_host");
+  assert.equal(found[0].host, "cheap-seats-now.example");
+});
+
+test("findSuspectTicketLinks flags a known resale host that slipped through", () => {
+  // Should be impossible post-sanitizer; if it fires, the row predates the
+  // scrub and needs a backfill.
+  const found = findSuspectTicketLinks([
+    linkRow("b", "Tickets at https://www.stubhub.com/kane-brown-tickets for this one."),
+  ]);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].reason, "known_resale");
+});
+
+test("findSuspectTicketLinks stays quiet on organizer and vetted seller links", () => {
+  const rows = [
+    linkRow("c", "Full details at https://www.murphyscreektheatre.org/spirit-song tonight."),
+    linkRow("d", "Buy at https://events.ticketleap.com/tickets/cstarskids/oz today."),
+    linkRow("e", "Register at https://onecau.se/rotaryshrimpfeed for the feed."),
+    linkRow("f", "Read more at http://www.angelsmurphysrotary.org about the club."),
+  ];
+  assert.deepEqual(findSuspectTicketLinks(rows), []);
+});
+
+test("findSuspectTicketLinks ignores a non-ticket link to an unknown host", () => {
+  // A plain organizer page is not the target — only ticket-selling URLs are.
+  const found = findSuspectTicketLinks([
+    linkRow("g", "See the trail map at https://some-new-org.example/about for details."),
+  ]);
+  assert.deepEqual(found, []);
 });

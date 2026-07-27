@@ -13,7 +13,7 @@ import {
   normalizeTown,
   generateDedupKey,
 } from "../../lib/event-identity.js";
-import { sanitizeDescription } from "../../lib/description-quality.js";
+import { sanitizeDescriptionDetailed } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
 import { isHttpUrl } from "../../lib/url.js";
 import { recordSourceResult } from "./scrape-run-log.js";
@@ -235,12 +235,24 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
     const registered = findRegisteredAddress(event.venue_name);
     if (registered) event.address = registered;
   }
-  // Strip calendar-widget junk (Add to calendar / Google Calendar / iCal / …) at
-  // the write boundary so it's never stored. This is the per-event normalize hook
-  // both upsert paths call, so it covers every upsertEvents source. Empty after
-  // cleaning collapses to null. See lib/description-quality.ts.
+  // Strip calendar-widget junk (Add to calendar / Google Calendar / iCal / …)
+  // AND reseller junk (markdown artifacts, a doubled town name, a fake-local
+  // venue appositive, ticket-resale links — HWY-11) at the write boundary so
+  // none of it is ever stored. This is the per-event normalize hook both upsert
+  // paths call, so it covers every upsertEvents source. Empty after cleaning
+  // collapses to null. See lib/description-quality.ts.
   if (event.description) {
-    event.description = sanitizeDescription(event.description) || null;
+    const scrubbed = sanitizeDescriptionDetailed(event.description, {
+      town: event.town,
+    });
+    if (scrubbed.removedResaleLinks.length > 0) {
+      // Never silent: a resale link reaching ingest means a source changed, and
+      // that should be visible in the scrape log.
+      console.log(
+        `  RESALE_LINK_STRIPPED "${event.name}": ${scrubbed.removedResaleLinks.join(", ")}`
+      );
+    }
+    event.description = scrubbed.text || null;
   }
 
   // Security defense in depth (2026-07-02 review). Strip HTML tag-like text from
