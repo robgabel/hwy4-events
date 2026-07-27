@@ -184,6 +184,18 @@ export async function GET(request: Request) {
   const SELECT_COLS =
     "id, name, description, date, start_time, end_time, venue_name, town, source_name, org_slug, times_locked";
 
+  // Fetch WIDE, then match, then cap — not the other way round.
+  //
+  // Only a small minority of upcoming events belong to an org with
+  // canonical_check_enabled, and org ownership is decided in JS by
+  // matchOrgForEvent (match_patterns can't be expressed in PostgREST). Capping
+  // the QUERY meant the rows we pulled were mostly events no enabled org owns,
+  // so almost nothing got checked: on 2026-07-27 the run examined exactly ONE
+  // event out of ~55 eligible. Pull the whole candidate window ordered
+  // soonest-first, match in memory, and bound the LLM calls afterwards.
+  const FETCH_LIMIT = 1000;
+  const MAX_CHECKS_PER_RUN = 40;
+
   const [uncheckedRes, recheckRes] = await Promise.all([
     supabase
       .from("hwy4_events")
@@ -191,7 +203,8 @@ export async function GET(request: Request) {
       .eq("verification_status", "unchecked")
       .gte("date", today)
       .lte("date", horizon)
-      .limit(50),
+      .order("date", { ascending: true })
+      .limit(FETCH_LIMIT),
     supabase
       .from("hwy4_events")
       .select(SELECT_COLS)
@@ -199,17 +212,30 @@ export async function GET(request: Request) {
       .gte("date", today)
       .lte("date", recheckHorizon)
       .or(`verification_checked_at.is.null,verification_checked_at.lt.${staleBefore}`)
-      .limit(25),
+      .order("date", { ascending: true })
+      .limit(FETCH_LIMIT),
   ]);
   const evErr = uncheckedRes.error ?? recheckRes.error;
   if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 });
 
-  const eventsRaw = [...(uncheckedRes.data ?? []), ...(recheckRes.data ?? [])];
+  // Re-checks first: an event whose time may have moved under a reader is more
+  // urgent than one we've never looked at. Both cohorts are date-ordered, so
+  // the soonest events win the budget.
+  const eventsRaw = [...(recheckRes.data ?? []), ...(uncheckedRes.data ?? [])];
 
   const events = (eventsRaw ?? []) as EventRow[];
-  const pairs = events
+  const eligible = events
     .map((ev) => ({ ev, org: matchOrgForEvent(ev, orgs) }))
     .filter((p): p is { ev: EventRow; org: OrgRow } => p.org !== null);
+
+  // Bound the Haiku spend per run. Logged rather than silently truncated — a
+  // hidden cap reads as "we checked everything" when we deliberately didn't.
+  const pairs = eligible.slice(0, MAX_CHECKS_PER_RUN);
+  if (eligible.length > pairs.length) {
+    console.log(
+      `[verify-events] ${eligible.length} eligible, checking the ${pairs.length} soonest this run`
+    );
+  }
 
   if (pairs.length === 0) {
     return NextResponse.json({ checked: 0, message: "No unchecked events matched any enabled org", events_scanned: events.length });
@@ -354,6 +380,8 @@ export async function GET(request: Request) {
     rechecked: recheckRes.data?.length ?? 0,
     orgs_enabled: orgs.length,
     events_scanned: events.length,
+    eligible: eligible.length,
+    deferred_to_next_run: eligible.length - pairs.length,
     results,
   });
 }
