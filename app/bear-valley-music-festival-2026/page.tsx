@@ -67,21 +67,34 @@ const EDITORIAL: string[] = [
   "Most evening shows start at 7, with a couple of Sunday matinees at 2. The lineup below comes from our live corridor calendar, which updates daily; for tickets, seating, and the full program, the festival's own site is the source of truth.",
 ];
 
+// Q&A phrasing is search-shaped on purpose (HWY-14). Search Console, 28 days to
+// 2026-07-27: "bear valley music festival 2026" pulls 803 impressions at
+// position 6.4 but only 2 clicks (0.25%), while "bear valley music festival 2026
+// schedule" sits at position 4.1 and converts at 4.3%, seventeen times the CTR
+// two positions up. Position is the lever, so the questions carry the exact
+// query string. Two more intents had impressions with no answer phrased for
+// them: "…tickets" (pos 10.3) and "…lineup" (pos 7.8), which is why a lineup
+// question is new here and the tickets question now leads with the full string.
+// Copy stays fixed and human-written, never LLM-generated at runtime.
 const QA: { q: string; a: string }[] = [
   {
-    q: "When is the Bear Valley Music Festival in 2026?",
-    a: "July 17 through August 2, 2026. Most evening concerts start at 7 pm, with Sunday afternoon shows around 2 pm and a gala evening on the final Saturday. Check the festival site before you drive, since individual show times can shift.",
+    q: "When is the Bear Valley Music Festival 2026?",
+    a: "The Bear Valley Music Festival 2026 runs July 17 through August 2, 2026. Most evening concerts start at 7 pm, with Sunday afternoon shows around 2 pm and a gala evening on the final Saturday. Individual show times do shift, so check the festival site before you make the drive up.",
   },
   {
-    q: "Where is the festival held?",
+    q: "What is the Bear Valley Music Festival 2026 lineup?",
+    a: "The Bear Valley Music Festival 2026 lineup swings from full symphony programs to tribute nights: Tchaikovsky's Fourth and Respighi's Pines of Rome on the orchestral side, Bowie and ELO tributes on the other. The schedule above is our live listing and updates daily; the festival publishes the complete program, soloists and repertoire included, on its own site.",
+  },
+  {
+    q: "Where is the Bear Valley Music Festival 2026 held?",
     a: "Under the Big White Tent in Bear Valley village, just off Highway 4 at about 7,000 feet, roughly 40 minutes above Arnold. It is an open-sided mountain venue, so bring a warm layer: even July evenings cool off fast at that elevation.",
   },
   {
-    q: "How do I get tickets for the Bear Valley Music Festival?",
-    a: "Directly from the festival at bearvalleymusicfestival.org, which sells single-show tickets and multi-show passes. Popular nights can sell out ahead of time, so buy before you make the drive up. We keep the schedule here, but we do not sell tickets; the festival's own site is the only place we would point you.",
+    q: "How do I get Bear Valley Music Festival 2026 tickets?",
+    a: "Bear Valley Music Festival 2026 tickets come directly from the festival at bearvalleymusicfestival.org, which sells single-show tickets and multi-show passes. Popular nights can sell out ahead of time, so buy before you make the drive up. We keep the schedule here, but we do not sell tickets; the festival's own site is the only place we would point you.",
   },
   {
-    q: "Where should we stay for the festival?",
+    q: "Where should we stay for the Bear Valley Music Festival 2026?",
     a: "Lodging in Bear Valley village itself is limited, so book early if you want to walk to the tent. Most festival-goers stay down the hill in Arnold, Dorrington, or Camp Connell, about 30 to 40 minutes away, or in Murphys, about an hour, where dinner options before the drive up are strongest.",
   },
   {
@@ -291,6 +304,26 @@ export default async function BvmfPage() {
         )}
       </section>
 
+      {/* Q&A: written to resolve the searches that land here. Sits directly
+          under the schedule (HWY-14) so the highest-intent answers (dates,
+          lineup, tickets) are the next thing a reader or an answer engine
+          meets, ahead of the supporting logistics sections. */}
+      <section className="mb-8">
+        <h2 className="font-display mb-3 text-xl font-semibold text-forest">
+          Bear Valley Music Festival 2026 questions, answered
+        </h2>
+        <div className="space-y-4">
+          {QA.map((item) => (
+            <div key={item.q}>
+              <h3 className="font-semibold text-forest">{item.q}</h3>
+              <p className="speakable mt-1 leading-relaxed text-stone">
+                {item.a}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Getting there */}
       <section className="mb-8">
         <h2 className="font-display mb-3 text-xl font-semibold text-forest">
@@ -352,23 +385,6 @@ export default async function BvmfPage() {
             Full calendar
           </Link>
         </nav>
-      </section>
-
-      {/* Q&A: written to resolve the searches that land here */}
-      <section className="mb-10">
-        <h2 className="font-display mb-3 text-xl font-semibold text-forest">
-          Good to know
-        </h2>
-        <div className="space-y-4">
-          {QA.map((item) => (
-            <div key={item.q}>
-              <h3 className="font-semibold text-forest">{item.q}</h3>
-              <p className="speakable mt-1 leading-relaxed text-stone">
-                {item.a}
-              </p>
-            </div>
-          ))}
-        </div>
       </section>
 
       {/* Newsletter */}
