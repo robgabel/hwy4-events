@@ -24,9 +24,17 @@ const INBOX_ROUTES = [
   "/admin/actions",
 ];
 
-// Pulse spans the briefings page (Today + Growth-memo tabs), Experiments, and
-// Venues (a blurb backlog — its missing-count badge lives on the Pulse Venues tab).
-const PULSE_ROUTES = ["/admin/briefings", "/admin/experiments", "/admin/venues"];
+// Pulse spans the briefings page (Today + Growth-memo tabs), Experiments,
+// Venues and Artists (the blurb backlogs — their pending-count badges live on
+// the Pulse tabs), and Scrapers. Every route reachable from the PulseTabs row
+// belongs here, or the top-level Pulse nav item unlights when you drill in.
+const PULSE_ROUTES = [
+  "/admin/briefings",
+  "/admin/experiments",
+  "/admin/venues",
+  "/admin/artists",
+  "/admin/scrapers",
+];
 
 export default function AdminNav({ badges }: { badges: NavBadges }) {
   const pathname = usePathname();
