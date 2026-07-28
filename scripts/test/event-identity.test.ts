@@ -649,3 +649,247 @@ test("a timeless row still needs an identity signal, not just a shared venue", (
   };
   assert.equal(isSameEvent(juniorRangers, campfire), false);
 });
+
+// ---------------------------------------------------------------------------
+// Town is a LABEL, not an identity key (2026-07-28, the Doc Nancy dupe).
+//
+// A community submission put Calaveras Big Trees State Park in "Camp Connell";
+// the park's own listing says "Arnold". Same program, same night, same 8:00 PM
+// start. The town veto fired before any signal could be read, so the read-time
+// collapse, the write-time merge, the nightly reconcile, and the triage agent's
+// candidate query were ALL blind to it, and the duplicate shipped to the
+// homepage. These lock the softened rule: a differing town label loses to
+// provable venue agreement, and gets no other privileges.
+// ---------------------------------------------------------------------------
+
+test("cross-town: the SAME program at one venue merges despite different town labels", () => {
+  const parkListing = {
+    name: "Night Skies with Doc Nancy @ Big Trees State Park",
+    date: "2026-08-01",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    address: "1170 East Highway 4, Arnold, CA 95223",
+    start_time: "20:00:00",
+    end_time: null as string | null,
+    description:
+      "Doc Nancy shares the science, constellations, and stories of the night sky. Meet at the Scenic Overlook.",
+    artists: null,
+  };
+  const submission = {
+    name: "Night skies with Doc Nancy",
+    date: "2026-08-01",
+    town: "Camp Connell",
+    venue_name: "Big tree State Park overlook",
+    address: null as string | null,
+    start_time: "20:00:00",
+    end_time: "22:30:00",
+    description: "Bring a chair and a blanket",
+    artists: null,
+  };
+  // The venue names agree on token overlap even though neither contains the
+  // other, which lets the town labels stop vetoing; titlesShareTokens then
+  // supplies the identity signal (both title cores are "night skies with doc
+  // nancy" once the "@ venue" tail is stripped).
+  assert.equal(isSameEvent(parkListing, submission), true);
+  assert.equal(isSameEvent(submission, parkListing), true);
+});
+
+test("cross-town: a shared venue_key settles it outright, whatever the strings say", () => {
+  const a = ev({
+    name: "Junior Rangers",
+    date: "2026-08-16",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    venue_key: "big-trees-state-park",
+    start_time: "10:00:00",
+  });
+  const b = ev({
+    name: "Junior Rangers",
+    date: "2026-08-16",
+    town: "Dorrington",
+    venue_name: "the big trees park, north grove",
+    venue_key: "big-trees-state-park",
+    start_time: "10:00:00",
+  });
+  assert.equal(isSameEvent(a, b), true);
+  // Drop the shared key and the loose venue strings no longer clear the token
+  // bar, so the town labels veto again. The key is doing the work, on purpose.
+  assert.equal(
+    isSameEvent({ ...a, venue_key: null }, { ...b, venue_key: null }),
+    false
+  );
+});
+
+test("cross-town: an identical GENERIC title at different venues still does NOT merge", () => {
+  // The reason the town veto existed. Trivia runs everywhere at 7pm; loosening
+  // town must not let two towns' trivia nights collapse into one card.
+  const murphys = ev({
+    name: "Trivia Night",
+    date: "2026-07-10",
+    town: "Murphys",
+    venue_name: "Murphys Irish Pub",
+    start_time: "19:00:00",
+  });
+  const arnold = ev({
+    name: "Trivia Night",
+    date: "2026-07-10",
+    town: "Arnold",
+    venue_name: "Bistro Espresso",
+    start_time: "19:00:00",
+  });
+  assert.equal(isSameEvent(murphys, arnold), false);
+});
+
+test("cross-town: venues sharing a naming convention are not the same venue", () => {
+  // The token-overlap fallback must clear these: 2 shared tokens, not 3.
+  const lodge = ev({
+    name: "Live Music",
+    date: "2026-07-10",
+    town: "Bear Valley",
+    venue_name: "Bear Valley Lodge",
+    start_time: "19:00:00",
+  });
+  const adventureCo = ev({
+    name: "Live Music",
+    date: "2026-07-10",
+    town: "Arnold",
+    venue_name: "Bear Valley Adventure Company",
+    start_time: "19:00:00",
+  });
+  assert.equal(isSameEvent(lodge, adventureCo), false);
+
+  const murphysPark = ev({
+    name: "Summer Concert",
+    date: "2026-07-10",
+    town: "Murphys",
+    venue_name: "Murphys Community Park",
+    start_time: "18:00:00",
+  });
+  const arnoldPark = ev({
+    name: "Summer Concert",
+    date: "2026-07-10",
+    town: "Arnold",
+    venue_name: "Arnold Community Park",
+    start_time: "18:00:00",
+  });
+  assert.equal(isSameEvent(murphysPark, arnoldPark), false);
+});
+
+test("cross-town: one side's venue unknown still splits on the town label", () => {
+  // Nothing proves a shared room here, so the label keeps its veto and the
+  // conservative default holds.
+  const known = ev({
+    name: "Pancake Breakfast",
+    date: "2026-07-10",
+    town: "Arnold",
+    venue_name: "Ebbetts Pass Moose Lodge",
+    start_time: "08:00:00",
+  });
+  const unknown = ev({
+    name: "Pancake Breakfast",
+    date: "2026-07-10",
+    town: "Murphys",
+    venue_name: "TBA",
+    start_time: "08:00:00",
+  });
+  assert.equal(isSameEvent(known, unknown), false);
+});
+
+test("cross-town: venue words written INTO the title don't defeat the comparison", () => {
+  // The second duplicate from the same submitter, same night, same failure class.
+  // One source separates the venue with "@" (titleCore strips it), the other runs
+  // it straight into the title (titleCore cannot). Once the venues are known to
+  // agree, those words are noise on both sides.
+  const parkListing = {
+    name: "Optical Astronomy Nights @ Big Trees State Park",
+    date: "2026-08-13",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    address: "1170 East Highway 4, Arnold, CA 95223",
+    start_time: "20:00:00",
+    end_time: null as string | null,
+    description:
+      "Telescope viewing with park astronomers. Start times shift with sunset and the moon. Meet at the Scenic Overlook.",
+    artists: null,
+  };
+  const submission = {
+    name: "Optical astronomy big tree State Park",
+    date: "2026-08-13",
+    town: "Camp Connell",
+    venue_name: "Big tree State Park overlook",
+    address: null as string | null,
+    start_time: "20:00:00",
+    end_time: null as string | null,
+    description: "Bring a chair and a jacket",
+    artists: null,
+  };
+  assert.equal(isSameEvent(parkListing, submission), true);
+  assert.equal(isSameEvent(submission, parkListing), true);
+});
+
+test("discounting venue words does NOT merge different programs at one venue", () => {
+  // The guard the venue-word strip must not break: two real, distinct Big Trees
+  // programs in the same slot. Stripping the venue leaves "junior rangers" vs
+  // "south grove guided hike", which share nothing.
+  const juniorRangers = ev({
+    name: "Junior Rangers @ Big Trees State Park",
+    date: "2026-08-16",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    start_time: "10:00:00",
+    description: "A hands-on badge program for kids ages 7 to 12.",
+  });
+  const southGrove = ev({
+    name: "South Grove Guided Hike @ Big Trees State Park",
+    date: "2026-08-16",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    start_time: "10:00:00",
+    description: "A ranger-led walk through the South Grove. Five miles, moderate.",
+  });
+  assert.equal(isSameEvent(juniorRangers, southGrove), false);
+
+  // A title that is ONLY the venue name would strip to nothing, so the
+  // comparison falls back to the plain token sets rather than treating an empty
+  // set as a match against everything sharing the slot.
+  const venueOnly = ev({
+    name: "Big Trees State Park",
+    date: "2026-08-16",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    start_time: "10:00:00",
+    description: "A day at the park.",
+  });
+  const bareTitle = ev({
+    name: "South Grove Guided Hike",
+    date: "2026-08-16",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    start_time: "10:00:00",
+    description: "A ranger-led walk. Five miles, moderate.",
+  });
+  assert.equal(isSameEvent(venueOnly, bareTitle), false);
+});
+
+test("discounting venue words is additive: it never un-merges a shared-venue-word pair", () => {
+  // Both titles carry the venue name, so stripping it removes a SHARED token and
+  // can only push Jaccard down (0.6 -> 0.5 here). The plain comparison must still
+  // be allowed to win, or this "improvement" would quietly lose existing merges.
+  const anniversary = ev({
+    name: "Ironstone Concours d'Elegance (30th Anniversary)",
+    date: "2026-09-26",
+    town: "Murphys",
+    venue_name: "Ironstone Vineyards",
+    start_time: "09:00:00",
+    description: null,
+  });
+  const plain = ev({
+    name: "Ironstone Concours d'Elegance",
+    date: "2026-09-26",
+    town: "Murphys",
+    venue_name: "Ironstone Vineyards",
+    start_time: "09:00:00",
+    description: null,
+  });
+  assert.equal(isSameEvent(anniversary, plain), true);
+});

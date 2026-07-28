@@ -44,6 +44,12 @@ export interface EventIdentity {
    *  NULL start time could never share a dedup bucket, which also made a
    *  genuine timeless duplicate invisible to every layer (HWY-10). */
   series_umbrella?: boolean | null;
+  /** The venue registry key (`scripts/lib/venues.ts`), resolved at write time by
+   *  `resolveVenueKey` and stored on `hwy4_events.venue_key`. When two rows carry
+   *  the SAME key they are provably in the same physical room, which is stronger
+   *  than any name fuzzy: the registry, not the scraped string, is the authority
+   *  on what a venue is and where it sits. */
+  venue_key?: string | null;
 }
 
 const TOWN_ALIASES: Record<string, string> = {
@@ -178,6 +184,58 @@ function venueMatch(a: string, b: string): boolean {
   const shorter = a.length <= b.length ? a : b;
   const longer = a.length <= b.length ? b : a;
   return shorter.length >= 5 && longer.includes(shorter);
+}
+
+/** Venue-name tokens for overlap comparison: the normalized venue split into
+ *  words, short connectives dropped, and a trailing "s" folded so "Big Trees"
+ *  and "Big Tree" read alike. */
+function venueTokens(v: string): Set<string> {
+  return new Set(
+    v
+      .split(" ")
+      .filter((t) => t.length >= 3)
+      .map((t) => (t.length > 3 && t.endsWith("s") ? t.slice(0, -1) : t))
+  );
+}
+
+/** Two venue strings name the same place even though neither *contains* the
+ *  other (2026-07-28, the Doc Nancy dupe: "Calaveras Big Trees State Park" vs
+ *  "Big tree State Park overlook"). A community submitter describes a spot in
+ *  their own words, so containment fails from both ends at once — a dropped
+ *  prefix AND an added sub-location — and the venue veto then splits two
+ *  listings of the same program.
+ *
+ *  Deliberately a high bar, because venue names in this corridor share naming
+ *  conventions: at least 3 shared distinctive tokens AND 80% of the smaller
+ *  name. That admits the Big Trees pair (4 shared of 5) while still rejecting
+ *  "Bear Valley Lodge" vs "Bear Valley Adventure Company" and "Murphys
+ *  Community Park" vs "Arnold Community Park" (2 shared each), which are
+ *  genuinely different places. The caller still requires the same date, the
+ *  same time slot, and an identity signal on top. */
+function venueTokensAgree(a: string, b: string): boolean {
+  if (!a || !b || GENERIC_VENUES.has(a) || GENERIC_VENUES.has(b)) return false;
+  const ta = venueTokens(a);
+  const tb = venueTokens(b);
+  if (ta.size < 3 || tb.size < 3) return false;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  if (shared < 3) return false;
+  return shared / Math.min(ta.size, tb.size) >= 0.8;
+}
+
+/** Do two free-text venue strings name the same place? The name-only half of the
+ *  venue agreement `isSameEvent` computes (containment or high token overlap),
+ *  exported so the registry lookup in `lib/venue-match.ts` resolves a messy
+ *  submitted venue under exactly the rule the matcher will later apply to it.
+ *  Address and `venue_key` agreement are deliberately NOT folded in here — those
+ *  are properties of a row, not of a name. */
+export function venuesLikelyEqual(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const na = normalizeVenue(a);
+  const nb = normalizeVenue(b);
+  return venueMatch(na, nb) || venueTokensAgree(na, nb);
 }
 
 function artistsOverlap(
@@ -358,12 +416,52 @@ function titleCore(name: string | null | undefined): string {
  *  scores 0. Caller gates on venue agreement + same date + same exact start. */
 function titlesShareTokens(
   a: string | null | undefined,
-  b: string | null | undefined
+  b: string | null | undefined,
+  venueNoise: Set<string>
 ): boolean {
   const ta = titleCore(a);
   const tb = titleCore(b);
   if (!ta || !tb) return false;
-  return tokenJaccard(tokenSet(ta), tokenSet(tb)) >= 0.6;
+  const sa = tokenSet(ta);
+  const sb = tokenSet(tb);
+  if (tokenJaccard(sa, sb) >= 0.6) return true;
+
+  // Second chance, discounting venue words. Once the venues are known to agree,
+  // venue words in a title carry no identity information: they describe a place
+  // both rows already share. Dropping them recovers the case where one source
+  // separates the venue with punctuation ("… @ Big Trees State Park", which
+  // `titleCore` strips) while the other runs it straight into the title
+  // ("Optical astronomy big tree State Park", which it cannot) — there the venue
+  // words inflate one side's token count without helping the intersection, and
+  // the pair reads as 0.29 similar when the real titles are "Optical Astronomy
+  // Nights" and "Optical astronomy" (2026-07-28, the second duplicate from the
+  // Doc Nancy submitter).
+  //
+  // Strictly ADDITIVE, never a replacement. When the venue words appear in BOTH
+  // titles ("Ironstone Concours d'Elegance (30th Anniversary)" vs "Ironstone
+  // Concours d'Elegance") they are shared tokens, and removing a shared token can
+  // only push Jaccard down (0.6 -> 0.5 for that pair) — so stripping instead of
+  // adding would silently UN-merge pairs that match today. Requires both sides to
+  // survive the strip, so a title that is nothing but the venue name compares its
+  // real tokens above rather than an empty set here.
+  const stripA = new Set([...sa].filter((t) => !venueNoise.has(t)));
+  const stripB = new Set([...sb].filter((t) => !venueNoise.has(t)));
+  if (stripA.size === 0 || stripB.size === 0) return false;
+  return tokenJaccard(stripA, stripB) >= 0.6;
+}
+
+/** The venue words to discount when comparing two titles: the union of both
+ *  rows' venue names, tokenized the same way titles are, plus a singular/plural
+ *  fold so a title saying "big tree" is cleared by a venue saying "Big Trees". */
+function venueNoiseTokens(...venues: (string | null | undefined)[]): Set<string> {
+  const out = new Set<string>();
+  for (const v of venues) {
+    for (const t of tokenSet(normalizeVenue(v))) {
+      out.add(t);
+      out.add(t.endsWith("s") ? t.slice(0, -1) : `${t}s`);
+    }
+  }
+  return out;
 }
 
 /** The venue string to use for matching. Facebook-style place fields often
@@ -412,8 +510,10 @@ export function isGenericTitle(name: string): boolean {
 /** Are two rows the same real event? The one definition, imported by both the
  *  read-time collapse and the write-time merge.
  *
- *  Requires: same date + town when both are known (defensive — callers already
- *  guarantee it), the same time slot (`timesAnchor`: equal start; conflicting
+ *  Requires: same date; the same town when both are known AND the venues do not
+ *  provably agree (a shared `venue_key`, a name match, a street-number anchor, or
+ *  high venue-token overlap outranks a differing town label — see the veto
+ *  below); the same time slot (`timesAnchor`: equal start; conflicting
  *  known ends split the rows UNLESS the venues agree — same venue + same start
  *  means a differing end is scrape noise; a row with NO start anchors on the
  *  venue instead, unless either row is a marked `series_umbrella`), AND at
@@ -429,7 +529,6 @@ export function isGenericTitle(name: string): boolean {
  *  venue/time alone. */
 export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   if (a.date && b.date && a.date !== b.date) return false;
-  if (a.town && b.town && normalizeTown(a.town) !== normalizeTown(b.town)) return false;
 
   const va = venueForMatch(a);
   const vb = venueForMatch(b);
@@ -446,10 +545,38 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   // removes the title/artist/description shortcuts across conflicting venues.
   const bothVenuesKnown =
     !!va && !!vb && !GENERIC_VENUES.has(va) && !GENERIC_VENUES.has(vb);
-  // Venue-name fuzzy OR same-street-number address anchor: two sources naming
-  // the same lot differently ("Bristol's Ranch House Cafe" vs "Bristols's Cafe
-  // Parking Lot", both at 961 Highway 4) must not trip the veto below.
-  const venuesAgree = venueMatch(va, vb) || sameStreetNumber(a.address, b.address);
+  // The venue registry key is the strongest signal available: two rows carrying
+  // the same `venue_key` were resolved to the same registry entry at write time,
+  // so no amount of string divergence matters. Below it, the fuzzies: venue-name
+  // containment, a same-street-number address anchor (two sources naming the same
+  // lot differently — "Bristol's Ranch House Cafe" vs "Bristols's Cafe Parking
+  // Lot", both at 961 Highway 4), and token overlap for a name rewritten from
+  // both ends at once.
+  const venuesAgree =
+    (!!a.venue_key && a.venue_key === b.venue_key) ||
+    venueMatch(va, vb) ||
+    sameStreetNumber(a.address, b.address) ||
+    venueTokensAgree(va, vb);
+
+  // Town veto, softened by venue agreement (2026-07-28, the Doc Nancy dupe).
+  // `town` is a HUMAN-ENTERED LABEL, not a fact about the event: the corridor is
+  // one continuous string of settlements along Highway 4, and Calaveras Big Trees
+  // State Park sits between Arnold (its mailing address) and Camp Connell (what a
+  // submitter reasonably called it). Treating that label as an infallible identity
+  // key made every dedup layer — read-time collapse, write-time merge, the nightly
+  // reconcile, and the triage agent's candidate query — blind to the same program
+  // listed under two town names. So the label only vetoes when the venues do NOT
+  // provably agree; when they do, the physical room outranks the label, and the
+  // usual identity signal is still required below.
+  if (
+    !venuesAgree &&
+    a.town &&
+    b.town &&
+    normalizeTown(a.town) !== normalizeTown(b.town)
+  ) {
+    return false;
+  }
+
   if (bothVenuesKnown && !venuesAgree) return false;
 
   if (!timesAnchor(a, b, venuesAgree)) return false;
@@ -481,7 +608,10 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   if (venuesAgree && descriptionsShareCore(a.description, b.description)) {
     return true;
   }
-  if (venuesAgree && titlesShareTokens(a.name, b.name)) {
+  if (
+    venuesAgree &&
+    titlesShareTokens(a.name, b.name, venueNoiseTokens(a.venue_name, b.venue_name))
+  ) {
     return true;
   }
   return false;

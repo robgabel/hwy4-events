@@ -167,3 +167,66 @@ test("dedupeEvents keeps a marked festival umbrella beside its opening night", (
   const out = dedupeEvents([umbrella, openingNight]);
   assert.equal(out.length, 2, "the umbrella card is duplicative by design");
 });
+
+test("collapses a cross-town duplicate of the same program (bucket no longer keys on town)", () => {
+  // The 2026-07-28 Doc Nancy dupe as it reached the homepage. Both cards showed
+  // under "This Saturday" because the bucket key put them in separate buckets on
+  // the town label alone, so they were never even compared.
+  const parkListing: DedupableEvent = {
+    date: "2026-08-01",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    address: "1170 East Highway 4, Arnold, CA 95223",
+    visibility: "public",
+    name: "Night Skies with Doc Nancy @ Big Trees State Park",
+    start_time: "20:00",
+    end_time: null,
+    description:
+      "Doc Nancy shares the science, constellations, and stories of the night sky. Meet at the Scenic Overlook.",
+    artists: null,
+  };
+  const communityRow: DedupableEvent = {
+    date: "2026-08-01",
+    town: "Camp Connell",
+    venue_name: "Big tree State Park overlook",
+    visibility: "public",
+    name: "Night skies with Doc Nancy",
+    start_time: "20:00",
+    end_time: "22:30",
+    description: "Bring a chair and a blanket",
+    artists: null,
+  };
+
+  const out = dedupeEvents([parkListing, communityRow]);
+  assert.equal(out.length, 1, "one program, one card");
+  // The park's own listing is the richer row, so it keeps the display slot.
+  assert.equal(out[0].name, "Night Skies with Doc Nancy @ Big Trees State Park");
+});
+
+test("does NOT collapse two towns' same-titled events at different venues", () => {
+  // Dropping town from the bucket key must not let the predicate's venue veto be
+  // bypassed: these are two real, separate trivia nights.
+  const murphys: DedupableEvent = {
+    date: "2026-07-10",
+    town: "Murphys",
+    venue_name: "Murphys Irish Pub",
+    visibility: "public",
+    name: "Trivia Night",
+    start_time: "19:00",
+    end_time: null,
+    description: null,
+    artists: null,
+  };
+  const arnold: DedupableEvent = {
+    date: "2026-07-10",
+    town: "Arnold",
+    venue_name: "Bistro Espresso",
+    visibility: "public",
+    name: "Trivia Night",
+    start_time: "19:00",
+    end_time: null,
+    description: null,
+    artists: null,
+  };
+  assert.equal(dedupeEvents([murphys, arnold]).length, 2);
+});
