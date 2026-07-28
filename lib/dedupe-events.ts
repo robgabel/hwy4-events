@@ -15,7 +15,6 @@
 import {
   isSameEvent,
   isGenericTitle,
-  normalizeTown,
   normalizeVenue,
   GENERIC_VENUES,
   type EventIdentity,
@@ -66,20 +65,25 @@ function richness(e: DedupableEvent): number {
 }
 
 /** Groups rows that *could* be the same event so clustering stays near-linear.
- *  Keyed on town + date + visibility only — every time field is left to
- *  `isSameEvent` (`timesAnchor`), which is the single owner of the "same slot"
- *  rule.
+ *  Keyed on date + visibility only — every identity field is left to
+ *  `isSameEvent`, which is the single owner of the "same event" rule.
  *
- *  Start time used to be part of this key, which made the bucket a second,
- *  silent copy of the time rule: a row with NO start hashed to a bucket of its
- *  own, so it was never even compared against its timed twin, and no loosening
- *  inside `isSameEvent` could reach it (HWY-10 — the Kane Brown double and the
- *  Moose "Rib Feed" pair). Dropping it makes the pre-filter purely a
- *  performance device again, which is all it was ever meant to be. Buckets stay
- *  small: nine corridor towns times one date, so a busy Murphys Saturday is a
- *  few dozen rows and the in-bucket pairwise pass is trivial. */
+ *  This key has twice been caught holding a silent second copy of a rule that
+ *  lives in the predicate, and each time it made a whole class of duplicate
+ *  unreachable no matter how the predicate was loosened:
+ *   - **start time** (removed HWY-10): a row with no start hashed to a bucket of
+ *     its own and was never compared to its timed twin (the Kane Brown double,
+ *     the Moose "Rib Feed" pair).
+ *   - **town** (removed 2026-07-28): a community submission that labeled
+ *     Calaveras Big Trees State Park "Camp Connell" instead of "Arnold" landed in
+ *     a different bucket from the park's own listing of the same program on the
+ *     same night, so the softened town veto in `isSameEvent` could never have
+ *     been reached from here.
+ *  What is left is purely a performance device, which is all it was ever meant
+ *  to be. Buckets stay small: one corridor date is a few dozen rows even on a
+ *  busy Saturday, and the in-bucket pairwise pass over that is trivial. */
 function bucketKey(e: DedupableEvent): string {
-  return [normalizeTown(e.town), e.date, e.visibility ?? ""].join("|");
+  return [e.date, e.visibility ?? ""].join("|");
 }
 
 /**

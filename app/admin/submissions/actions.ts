@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
-import { generateDedupKey } from "@/lib/event-identity";
+import { generateDedupKey, isSameEvent, type EventIdentity } from "@/lib/event-identity";
+import { matchVenueRow, type VenueRegistryRow } from "@/lib/venue-match";
 import { EVENTS_CACHE_TAG } from "@/lib/events-data";
 import { TOWNS, CATEGORY_LABELS, type EventCategory } from "@/lib/types";
 import { SITE_URL } from "@/lib/constants";
@@ -132,6 +133,48 @@ export async function draftReplyForReviewed(formData: FormData) {
   flashRedirect(ADMIN_PATH, "Drafted a reply.", { replied: id });
 }
 
+// Resolve the reviewer-entered venue against the registry projection in
+// `hwy4_venues`, so a published community row carries the same `venue_key` +
+// address a scraped row would. Best-effort by design: a read failure resolves to
+// null and the publish proceeds unstamped rather than being blocked on it.
+async function resolveRegistryVenue(
+  supabase: ReturnType<typeof getAdminClient>,
+  venueName: string
+): Promise<VenueRegistryRow | null> {
+  if (!venueName || venueName.toUpperCase() === "TBA") return null;
+  const { data, error } = await supabase
+    .from("hwy4_venues")
+    .select("venue_key, canonical, town, address");
+  if (error || !data) return null;
+  return matchVenueRow(venueName, data as VenueRegistryRow[]);
+}
+
+// The resident event this submission would duplicate, or null.
+//
+// This is the gate the 2026-07-28 Doc Nancy duplicate walked straight past: the
+// publish path raw-inserted the form fields, so the ONLY duplicate check between
+// a reviewer's click and the live site was the `dedup_key` unique index, which
+// hashes name+date+town and therefore only catches a byte-identical re-listing.
+// Every richer layer (read-time collapse, the write-time cross-source merge, the
+// nightly reconcile) sits on paths a community publish never touches. Running the
+// SHARED `isSameEvent` here puts the community path behind the same definition as
+// every scraper. Same date only, since the matcher vetoes a date mismatch anyway.
+async function findResidentDuplicate(
+  supabase: ReturnType<typeof getAdminClient>,
+  candidate: EventIdentity & { date: string }
+): Promise<{ id: string; name: string; date: string; town: string } | null> {
+  const { data, error } = await supabase
+    .from("hwy4_events")
+    .select(
+      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, venue_key, series_umbrella"
+    )
+    .eq("date", candidate.date)
+    .neq("status", "cancelled");
+  if (error || !data) return null;
+  const rows = data as (EventIdentity & { id: string; date: string; town: string })[];
+  return rows.find((r) => isSameEvent(candidate, r)) ?? null;
+}
+
 // Publish a community submission as a public, community-sourced event. The human
 // has reviewed and completed the fields in the form (venue/category are often
 // blank on submission) before this runs. Outward, editorial action: always a
@@ -157,14 +200,50 @@ export async function publishSubmission(formData: FormData) {
   // poster-swap: image_url + poster_locked).
   const imageUrl = field(formData, "image_url");
 
+  const venueName = field(formData, "venue_name") || "TBA";
+  const startTime = field(formData, "start_time") || null;
+  const endTime = field(formData, "end_time") || null;
+  const description = field(formData, "description") || null;
+
+  // Stamp the registry venue the scrapers would have resolved, so the row can
+  // carry a durable venue identity (and light up the venue section + map).
+  const registryVenue = await resolveRegistryVenue(supabase, venueName);
+
+  // Refuse a publish the shared matcher reads as an event we already list. The
+  // reviewer can override, because the matcher is a heuristic and the human is
+  // the authority; what must not happen is publishing a duplicate *silently*.
+  if (field(formData, "override_duplicate") !== "1") {
+    const dupe = await findResidentDuplicate(supabase, {
+      name,
+      date,
+      town,
+      venue_name: venueName,
+      address: registryVenue?.address ?? null,
+      start_time: startTime,
+      end_time: endTime,
+      description,
+      artists: null,
+      venue_key: registryVenue?.venue_key ?? null,
+    });
+    if (dupe) {
+      failRedirect(
+        ADMIN_PATH,
+        `"${dupe.name}" (${dupe.date}, ${dupe.town}) is already listed and reads as this same event. Merge into it instead, or tick "Publish anyway" if it really is separate.`
+      );
+    }
+  }
+
   const row = {
     name,
     date,
-    start_time: field(formData, "start_time") || null,
-    end_time: field(formData, "end_time") || null,
-    venue_name: field(formData, "venue_name") || "TBA",
+    start_time: startTime,
+    end_time: endTime,
+    venue_name: venueName,
+    ...(registryVenue
+      ? { venue_key: registryVenue.venue_key, address: registryVenue.address }
+      : {}),
     town,
-    description: field(formData, "description") || null,
+    description,
     category,
     event_url: field(formData, "event_url") || null,
     ...(imageUrl ? { image_url: imageUrl, poster_locked: true } : {}),

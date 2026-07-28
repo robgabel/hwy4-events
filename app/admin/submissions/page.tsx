@@ -763,6 +763,15 @@ function SubmissionCard({
             <span style={{ fontSize: 14, color: "#999" }}>
               Inserts a public, community-sourced event.
             </span>
+            {/* Publishing is blocked when the shared matcher reads this as an event
+                already on the site. The reviewer is the authority, so the block is
+                overridable; the point is that it can't happen silently. */}
+            <label
+              style={{ fontSize: 13, color: "#666", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+            >
+              <input type="checkbox" name="override_duplicate" value="1" style={{ cursor: "pointer" }} />
+              Publish anyway if flagged as a duplicate
+            </label>
           </div>
         </form>
       </details>
