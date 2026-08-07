@@ -4,11 +4,8 @@ Community events site for the Highway 4 corridor (Angels Camp to Bear Valley, CA
 
 ## Tech Stack
 
-- **Framework:** Next.js 16 (App Router) + React 19 + Tailwind v4
 - **Database:** Supabase project **`uzediwokyshjbsymevtp`** — the shared rob-ai / PAOS project (org "Gabel.Global", labeled "Claude Code" in the Supabase dashboard, **not** a separate hwy4 project). Reachable via the Supabase MCP (`apply_migration` / `execute_sql` with that project_id). Tables: `hwy4_events`, `hwy4_orgs`, `hwy4_venues`, `hwy4_artists`, `hwy4_sources`, `site_config`, `event_submissions`, `analytics_daily`.
 - **AI:** Anthropic SDK (Claude Opus) for daily briefing generation
-- **Maps:** Leaflet / react-leaflet
-- **Hosting:** Vercel (auto-deploys from main branch)
 
 ## Architecture
 
@@ -153,133 +150,7 @@ Migration `20260729_agent_runs_pm_review.sql` shipped with it and fixes **two la
 
 ## Event Sources (scripts/scrape.ts — daily GitHub Action)
 
-Most events come from the `scripts/scrape.ts` orchestrator, run daily by
-`.github/workflows/scrape.yml` (a GitHub Action, **not** a Vercel cron). It
-dispatches per-source scrapers and writes through the shared
-`scripts/lib/dedup.ts::upsertEvents` path (dedup_key + corridor drop +
-cross-source merge). Two source shapes:
-
-- **Config-driven Firecrawl** — one entry in `scripts/scrapers/firecrawl-sources.ts`
-  (single fixed venue/town). The generic runner fetches markdown + LLM-extracts.
-  A source may set `extractHint` — a per-source instruction appended to the shared
-  extraction prompt's Rules (added 2026-07-08 for **bvac**, Bear Valley Adventure Co.:
-  skip its season-pass-sale promos, lift each event's own venue + Squarespace
-  permalink; see `PRD-bvac-events.md`). The shared extractor also skips already-past
-  events by prompt (BVAC's page lists past events alongside upcoming; the runner's
-  date filter stays as the backstop) and runs at `max_tokens: 8192` — a ~50-event
-  page overflows 2048 and truncated JSON silently extracts 0.
-- **Special scrapers** — hand-written files for non-generic shapes (GoCalaveras
-  EventON AJAX, visit-murphys + arnold-rim-trail WP REST, **red-cross**, …),
-  registered in `SPECIAL_SCRAPERS`. **Organizer-owned sources are listed first**
-  in that object so a same-night aggregator pass is never the last writer on a
-  row they own (the `manual-sources.ts` blocklist is the real guard; ordering is
-  belt-and-braces).
-
-**URL-stated date/time correction ([scripts/lib/url-date.ts](scripts/lib/url-date.ts), 2026-07-26).** Organizer permalinks routinely carry the occurrence date, and sometimes the start time, in a string the venue authored themselves (`bricestation.com/products/wolf-jett-july-25-2026-7pm`, `visitmurphys.com/event/music-on-the-rooftop/2026-07-31/`). That beats an LLM's reading of a rendered page. `correctFromUrl` runs in the shared `upsertEvents` pre-pass **before `dedup_key` is computed** (so the corrected date keys the row) and covers every scraper. **The Wolf Jett bug it closes:** the `brice-station` scraper wrote a row dated 2026-07-26 for an event whose own product URL said July 25 — the correct July 25 row already existed, so the site showed a duplicate advertising a show that had already happened. Deliberately a *correction, never a source*: it only overrides a date/time already extracted, only from the event's own `event_url`, and only when the URL states one unambiguously — a month **name** + day + 4-digit year, or an ISO path segment; a bare year ("…-2026"), a season, and "4th-of-july-2026" all parse to null, as does a calendar-impossible date. A slug time needs an explicit meridiem (a bare number is too ambiguous). Every correction is logged (`URL_DATE_CORRECTION`) — it firing means an extractor is getting dates wrong and that should be visible. Locked by `scripts/test/url-date.test.ts`.
-
-**Recurring-series ingest horizon ([scripts/lib/ingest-horizon.ts](scripts/lib/ingest-horizon.ts), 2026-07-25).** The Events Calendar materializes a recurring event as a real post per occurrence, so Visit Murphys' feed offers weekly instances **two years out** — and we ingested all of them: 104 rows of "Live Music Upstairs" at Boyle MacDonald, every one asserting a 6:00 PM start, running to 2028-07-21. Across the catalog that was 82 upcoming rows past 12 months from just 4 series (~12% of the whole upcoming set). Wrong for two reasons: **accuracy** (nobody confirmed a bar's trivia start time in July 2028, yet the site stated it as fact — the same "asserted a time we don't know" failure as the stale sunset-hike times, arriving from the other direction) and **crawl budget** (`PRD-search-indexing.md` blames exactly this population for the sitewide "Discovered – currently not indexed"; the sitemap was trimmed then, but the rows were never capped — this is the upstream fix). `capSeriesHorizon` runs in the shared `upsertEvents` pre-pass next to `dropOutOfCorridor`, so it covers **every** scraper, and is deliberately narrow: an event is dropped only when it is BOTH beyond `SERIES_HORIZON_DAYS` (365) AND one of `MIN_SERIES_SIZE` (6) or more instances sharing a name + venue in the same batch. A far-future **one-off** — next year's festival announced early — has a tiny group and always survives. Drops are logged per series (a silent cap would read as "we covered everything"). Locked by `scripts/test/ingest-horizon.test.ts`. The 82 resident rows were archived + deleted 2026-07-25; every one is restorable from **`hwy4_events_horizon_archive`** (migration `20260725_events_horizon_archive.sql`, service-role only): `INSERT INTO hwy4_events SELECT (jsonb_populate_record(null::hwy4_events, snapshot)).* FROM hwy4_events_horizon_archive WHERE event_id = '…'`.
-
-**Runner timeout + health logging (2026-07-09).** The GitHub Action job runs at
-`timeout-minutes: 20` (raised from 10 — the job was landing right at the old
-cap, hitting a runner-timeout **kill** on most days, which GitHub Actions
-reports as `cancelled`, not `failure`, so the workflow's own `if: failure()`
-alerting never fired). Independent of the timeout headroom, every run now
-writes a durable summary to **`scrape_runs`** via
-[scripts/lib/scrape-run-log.ts](scripts/lib/scrape-run-log.ts) — instrumented
-once at `upsertEvents` (`scripts/lib/dedup.ts`, the one choke point every
-scraper writes through) and flushed **right after the scraper loop, before**
-the slower URL-validation pass, so a future timeout kill during validation
-can't erase scraper health visibility again. Read at **`/admin/scrapers`**
-(the Pulse "Scrapers" tab) — see the Admin cockpit section above.
-
-### Shopify ticket-store sources (`scripts/lib/shopify-events.ts`)
-
-Some corridor venues have no calendar at all — they sell each concert as a
-Shopify **ticket product**, so the product list *is* the schedule. Shopify
-exposes every storefront collection as clean JSON at
-`/collections/<handle>/products.json`: title, permalink handle, description,
-price, images, and a stable numeric id. Pure parsing lives in
-`scripts/lib/shopify-events.ts` (locked by `scripts/test/shopify-events.test.ts`),
-transport is a plain fetch with the usual Firecrawl fallback.
-
-- **brice-station** (`scripts/scrapers/brice-station.ts`) — moved off the generic
-  Firecrawl + LLM runner 2026-07-26 after it produced two defects in two days: a
-  row dated 2026-07-26 for the **July 25** Wolf Jett show (a duplicate
-  advertising a concert that had already happened) and a mis-set start time. The
-  date and time were in structured fields all along. The venue hand-types the
-  titles, so the shape wobbles four ways — hyphen vs **en dash** separator, `@`
-  vs `-` before the time, doubled whitespace, and a trailing note
-  (`… @ 6pm ~ Earlier Time!`) — which is exactly what the model tripped on; every
-  live variant is a test case. The JSON is also **more complete than the rendered
-  page** (7 products vs 4 in the HTML grid), and it yields ticket prices we
-  previously had no source for.
-  **Deliberately NOT blocklisted** in `manual-sources.ts`: unlike Arnold Rim
-  Trail, this store only lists shows it is actively selling, so GoCalaveras
-  legitimately covers Brice events with no ticket product yet and blocklisting
-  would lose them. Ordering is the guard instead — it is registered **last** in
-  `SPECIAL_SCRAPERS` so the organizer is the final writer on the rows it covers,
-  and `correctFromUrl` cross-checks every row against the date/time in its own
-  product permalink.
-
-### Tribe / The Events Calendar sources (`scripts/lib/tribe.ts`)
-
-Several corridor sites run the same WordPress plugin ("The Events Calendar",
-a.k.a. Tribe), which exposes clean structured JSON at
-`/wp-json/tribe/events/v1/events` — venue, address, exact start/end datetimes,
-categories, cost, image. Far more reliable than Firecrawl-markdown + LLM
-extraction, and for an **organizer's own** site it is the authoritative record.
-The shared client holds the transport + field mappers (`fetchAllTribeEvents`,
-`splitDateTime`, `joinAddress`, `normalizeCost`, `htmlToText`,
-`stripTitleDateSuffix`), locked by `scripts/test/tribe.test.ts`.
-
-**Bot walls:** visitmurphys.com 403s a plain server-side fetch (or 200s with an
-HTML challenge page instead of JSON) since late June 2026 — confirmed from
-multiple source IPs, so it's not a User-Agent fix. `fetchTribePage` tries the
-plain fetch first (free, works if the wall ever lifts) and falls back to the
-same URL through **Firecrawl** (`formats: ["rawHtml"]`, which returns the
-endpoint's raw JSON body unprocessed) — the escape hatch `red-cross.ts` and
-`sequoia-woods.ts` use. So `FIRECRAWL_API_KEY` is required for **visit-murphys**.
-**arnoldrimtrail.org has not been observed walling anything** — the 403 seen
-while building that scraper came from the dev container's own egress allowlist,
-not the site — so its plain fetch should succeed in CI, with the fallback kept
-as insurance. (Don't repeat that diagnosis mistake: check
-`curl -sS "$HTTPS_PROXY/__agentproxy/status"` before concluding a site blocks us.)
-
-Adding another Tribe organizer is ~40 lines: clone
-`scripts/scrapers/arnold-rim-trail.ts`, point `API_URL` at their wp-json
-endpoint, map their venue cities to corridor towns, and register it in
-`SPECIAL_SCRAPERS`.
-
-- **visit-murphys** (`scripts/scrapers/visit-murphys.ts`) — the Murphys
-  aggregator. Keeps its own LLM cross-source dedup + virtual-event filtering.
-- **arnold-rim-trail** (`scripts/scrapers/arnold-rim-trail.ts`) — the
-  **organizer's own** calendar. Added 2026-07-25 after the site showed a hike
-  time 30 minutes wrong on the day of the hike. ART's guided hikes start at
-  sunset, so the start shifts ~40 min month to month, **and ART edits an
-  occurrence as the date nears** (the Jul 25 2026 hike moved 5:45 → 6:15 PM on
-  Jul 20, five days out). We were carrying these only via GoCalaveras, which
-  snapshots a listing once and never revisits it, so our copy was frozen at the
-  April scrape. Reading the organizer directly means the times self-heal on
-  every daily scrape; it also picked up the Volunteer Trail Workday series the
-  aggregator never listed. ART titles each occurrence with its own date
-  ("… – July 25, 2026"), stripped by `stripTitleDateSuffix`.
-
-### American Red Cross blood drives (`scripts/scrapers/red-cross.ts`)
-
-- Searches the public Red Cross **drive-results** SPA for corridor ZIP anchors
-  (Murphys 95247, Angels Camp 95222, Arnold 95223 — add ZIPs to `ANCHORS` to expand coverage).
-- The page is a JS SPA behind Akamai bot-protection (a plain `fetch` 403s), so it is
-  rendered + JSON-extracted via **Firecrawl** (`FIRECRAWL_API_KEY`, already set), not direct fetch.
-- Each drive → `category='civic'` (Community), `cost_tier='free'`, `visibility='public'`,
-  `org_slug='red-cross'`, `event_url` = the per-ZIP drive-results page (donor lands on the
-  bookable list). Cross-anchor repeats and out-of-corridor overspill (San Andreas, Sonora)
-  are dropped by the corridor filter + dedup. A 10-day-grace stale sweep removes cancelled drives.
-- Requires the `red-cross` row in `hwy4_orgs` (migration `20260601_add_red_cross_org.sql`;
-  FK `fk_hwy4_events_org`). `canonical_url` is left NULL so the link resolver surfaces the
-  precise per-ZIP `event_url` (path 3) instead of one generic organizer URL.
-- **URL validation:** `scripts/lib/validate-urls.ts` now treats **401/403** like 429
-  (access-denied / bot-walled ≠ dead link) and never nulls those URLs. Without this the
-  nightly check would HEAD the Red Cross page, get a 403, and wipe the booking CTA every run.
+Most events come from the `scripts/scrape.ts` orchestrator (run daily by `.github/workflows/scrape.yml`, a GitHub Action, **not** a Vercel cron), dispatching per-source scrapers through the shared `scripts/lib/dedup.ts::upsertEvents` path. **The full source guide moved to [scripts/CLAUDE.md](scripts/CLAUDE.md)** (2026-08-07 context trim): config-driven Firecrawl sources, special scrapers, URL-stated date/time correction, the recurring-series ingest horizon, runner timeout + health logging, Shopify ticket-store sources (brice-station), Tribe / The Events Calendar sources (visit-murphys, arnold-rim-trail), and the Red Cross blood-drive scraper. It auto-loads when working under `scripts/`.
 
 ## Event Verification
 
@@ -444,44 +315,10 @@ The engine is region-parameterized so it can run as N deployments off one repo (
 
 ## Dev Workflow
 
-- `npm run dev` for local development
-- Vercel auto-deploys from `main`
-- Migrations in `supabase/migrations/` — apply via Supabase dashboard or CLI
 - **Tests:** `cd scripts && npm test` (Node's built-in test runner + tsx, zero extra deps) — pure-logic locks in `scripts/test/*.test.ts` (dedup/event-identity, sitemap, voice lint, inbound-email, venue-gaps, weather, etc.). CI runs them on every PR touching `app/`, `content/`, `lib/`, or `scripts/` via [.github/workflows/test.yml](.github/workflows/test.yml), which installs **both** root and `scripts/` deps — the scripts tests import root `lib/` modules, some of which import app deps like react (so a scripts-only install fails in CI with "Cannot find module 'react'", even though it passes locally where the worktree is nested inside the app's node_modules).
 - **Venue & address resolution:** `scripts/lib/venues.ts` is the venue registry (canonical name, aliases, town, street address) — the single source of truth. The matcher (`scripts/lib/venue-matcher.ts` `applyVenueDetection`) resolves generic/messy venue names; the upsert path (`scripts/lib/dedup.ts` `normalizeEventLocation`) fills a registry address when an event's address is missing or town-only. When a real venue shows up with a bad/missing address, add it to the registry — don't hand-edit rows. To retro-fix existing rows after a registry change, run `cd scripts && npm run backfill-venues` (dry-run; add `--apply` to write, `--future-only` to limit). Out-of-corridor venues are dropped at write time via `scripts/lib/corridor.ts`. The daily `/api/check-events` audit reports any remaining unresolved venues / town-only addresses to Slack.
 - **Static venue maps:** the event detail page shows a static map thumbnail centered on the **venue** (not the town) and only loads the interactive Leaflet map on tap. The page server-geocodes the address ([lib/geocode.ts](lib/geocode.ts), cached weekly, tag `geocode`) and renders `<img src="/api/static-map?lat&lng&z">`. That route ([app/api/static-map/route.ts](app/api/static-map/route.ts) + [lib/static-map.ts](lib/static-map.ts)) stitches CARTO Voyager tiles with `sharp` into a webp, cached **immutably** (the image is a pure function of lat/lng/zoom — never needs busting). No street address / geocode miss → falls back to the town centroid. The old pre-baked `public/maps/*.webp` town assets and `generate-town-maps.ts` were removed in favor of this.
   - **Warm + bust:** after a deploy or a venue/address backfill, run `cd scripts && SITE_URL=https://hwy4events.com REVALIDATION_SECRET=… npm run warm-maps`. It busts the `geocode` tag via `/api/revalidate` (so pages re-geocode with corrected addresses) and pre-warms `/api/static-map` for every distinct upcoming-event center. `REVALIDATION_SECRET` lives in Vercel env, not local `.env.local` — set it inline to enable the bust (warm runs without it).
-
-## Project Structure
-
-```
-app/
-  page.tsx              ← homepage (event list + briefing)
-  events/               ← individual event pages
-  about/, faq/, privacy/, terms/  ← static pages
-  submit/               ← community event submission form
-  og/                   ← dynamic OG image generation
-  api/
-    generate-briefing/  ← daily AI briefing (Opus)
-    generate-weekend-briefing/
-    check-briefing/     ← monitoring/fallback
-    submit-event/       ← form submission handler
-    revalidate/         ← on-demand ISR
-components/
-  EventCard.tsx         ← single event display
-  EventList.tsx         ← main list with filtering
-  FilterBar.tsx         ← category/town filters
-  WeeklyBriefing.tsx    ← "This Week on the 4" display
-  EventMapStatic.tsx    ← detail-page map entry point: static town thumbnail + Get Directions; mounts interactive Leaflet (EventMap.tsx) only on tap
-  EventMap.tsx          ← interactive Leaflet map (CARTO Voyager tiles), lazy-loaded by EventMapStatic
-  VenueInfo.tsx         ← detail-page venue section: local-voice blurb + Google Places facts strip (server component)
-  Header.tsx, LiveBadge.tsx, ShareButton.tsx, etc.
-lib/
-  types.ts              ← Hwy4Event, EventCategory, TOWNS, etc.
-  supabase.ts           ← Supabase client singleton
-  event-time.ts         ← time formatting helpers
-  towns.ts, slugs.ts, constants.ts
-```
 
 ## Living Documents Registry
 
@@ -508,29 +345,7 @@ Tiers: **1** = code enforces the doc (drift impossible). **2** = a daily consume
 - **Personas:** `docs/PERSONAS.md` — 7 canonical user personas (Gary, Mia, Dave, Rob, Karen, Jen, Miguel). Reference these when making product/design/feature decisions.
 - **Design Principles:** Derived from personas — see bottom of PERSONAS.md. Key ones: mobile-first, no gates, "This Weekend" is the killer view, trust built on accuracy.
 - **Local Knowledge Base:** `docs/LOCAL-KNOWLEDGE-BASE.md` — Comprehensive hyperlocal knowledge: businesses by town (with hours, owners, vibe), persona daily routines, local vocabulary glossary, seasonal rhythms, media/info channels, inter-town cultural dynamics, community figures. Reference when writing copy, event descriptions, briefings, or anything that needs to sound like a local neighbor.
-- **PRDs & Plans:**
-  - `PRD-about-page-redesign.md` — About page redesign (Approach C: story top + reference bottom). Persona checklist, page structure, content guidelines, implementation priority.
-  - `PRD-local-authenticity.md` — Local voice and authenticity strategy
-  - `PRD-event-visibility.md` — Event discovery and visibility improvements
-  - `PRD-bear-valley-events.md` — Bear Valley events coverage expansion
-  - `PLAN-seo-aeo.md` — SEO and answer-engine optimization plan (the build)
-  - `AEO-SEO-MEASUREMENT.md` — measuring SEO/AEO success at $0: GSC + Bing setup, monthly SEO scoreboard, monthly AEO prompt-audit ritual + query bank, log template. Reminder delivered via `/api/aeo-audit-reminder` cron.
-  - `docs/INFRA-AUDIT-2026-07.md` — July 2026 infrastructure audit (Musk five-step lens vs BUSINESS-PLAN.md + personas): delete/simplify worklist, the engine-vs-fork architecture call (one repo → N deployments; per-region Supabase; forks only for partners), cost table, sequenced punch list with execution status, and open questions (Firecrawl/Apify bills, AEO ritual, briefing-model A/B, Supabase cutover window).
-  - `PRD-blue-lake-springs.md` — Blue Lake Springs HOA integration: members-only club events, Vision AI scraping of flyer images, `club` category, "Members & Guests" badge
-  - `PRD-event-identity-ingest.md` — Self-healing event identity (dedup Move 3): continuous DB-state reconcile (`lib/reconcile.ts` + `/api/reconcile-dupes`) so duplicates can't survive at rest, with a reversible `event_merge_log`. Implemented; live (execute mode) since 2026-07-01.
-  - `PRD-event-link-resolution.md` — Fixes rotting "Visit Event Page" links (404/403 GoCalaveras permalinks; ~69% of upcoming events). Root cause: the UI linked to scrape *provenance* (`event_url`) instead of event *identity*. Plan: one pure `resolveEventLink()` in `lib/event-link.ts`, reused by the detail page + its JSON-LD. **Implemented 2026-05-30** (organizer canonical → venue canonical → stable source → none). **Updated 2026-06-03:** re-enabled GoCalaveras as a non-durable fallback after browser-grade verification confirmed current permalinks return 200 in-browser — priority order is now organizer → venue → stable-source → GoCalaveras (non-durable, excluded for community) → none. GoCalaveras links kept out of JSON-LD. See "Outbound Event Links" below.
-  - `PRD-cloudflare-analytics.md` — Read Cloudflare Web Analytics (RUM) data via the GraphQL Analytics API. The site already emits the beacon (`NEXT_PUBLIC_CF_BEACON_TOKEN` in [app/layout.tsx](app/layout.tsx)); this adds the read path. hwy4events.com is Vercel-direct (not proxied through Cloudflare), so **no zone analytics exist** — the dashboard *is* Web Analytics RUM (`rumPageloadEventsAdaptiveGroups`, account-level, `siteTag` filter). Plan: one typed `lib/cloudflare-analytics.ts` client → `/api/analytics` (CRON_SECRET-gated) → daily snapshot cron into a new `analytics_daily` Supabase table (RLS, no public read; CF's RUM API serves only ~3wk back, so the snapshot is the system of record) → admin page + **auto-fill the answer-engine referral counts** that [AEO-SEO-MEASUREMENT.md](AEO-SEO-MEASUREMENT.md) currently tracks by hand. Token perm: Account → Account Analytics → Read (account-owned token — validate via the GraphQL endpoint, not `/user/tokens/verify`). **Shipped 2026-06-03 (Phases 1–3)** — read path + nightly `analytics_daily` persistence (30-day backfill) + the **`/admin/analytics` "Growth" tab** (7d/30d stats, pageviews trend, top pages/referrers/countries/devices, and answer-engine AEO referral counts), behind the existing Basic-Auth `/admin`.
-  - `PRD-agent-cockpit.md` — A supervised "business-manager" layer over the existing automation. The data layer is ~75–80% zero-person; the *decision* layer (triaging Slack alerts, the verification queue, submissions, `hwy4_orgs` rows, gate flips) is 100% manual and scattered. Plan: three tiers (dumb **collectors** write rows → one **reasoner** agent proposes actions on DB state → a **cockpit** under `/admin` to approve them, reusing Basic Auth `middleware.ts` + the `verification/actions.ts` server-action pattern). Staged on the codebase's own dry-run → canary → reversible arc: Stage 0 read-only digest, Stage 1 propose-human-approves, Stage 2 graduate low-stakes *internal* reversible actions to autonomous behind per-type `agent_policy` flags (the per-action `RECONCILE_EXECUTE`). Outward/editorial actions never auto-run; every executed action carries a reversible `before_snapshot` (mirrors `event_merge_log`). Also: **buy** the FB-group sensor (Devi AI/GroupsWatcher — the Groups API died 2024-04-22; reply stays manual), **build** the SEO/AEO collector (GSC + Bing APIs), and retrofit a human gate onto the one unsupervised outward action (the Thursday newsletter auto-send). **Stage 0 built 2026-05-31** (report-only, executes nothing): migration `20260531c_agent_cockpit_stage0.sql` (`agent_runs` + `seo_snapshots`, RLS service-role only); `/api/agent/chief-of-staff` (Sonnet reasoner) + `/api/agent/collect-seo` (zero-dep GSC client `lib/agent/gsc.ts`); `/admin/today` digest page in the existing Basic-Auth admin area; digest shape in `lib/agent/types.ts`; crons at 11:00 + 19:00 UTC. **To go live:** apply the migration, set `GOOGLE_SEARCH_CONSOLE_SA_JSON`, deploy. **Newsletter gate built 2026-06-02** (the Stage 2 outward-action retrofit, pulled forward): Wed `/api/newsletter/prepare` drafts → `/admin/newsletter` review/veto → Thu `/api/newsletter/send` auto-sends unless vetoed (migration `20260602_add_newsletter_drafts.sql`). **Submission triage built 2026-06-06** (Stage 1 for submissions, advise + one-click merge): `lib/agent/submission-triage.ts` (shared-matcher DB dedup + `web_search_20250305` + Sonnet verdict) writes `ai_*` columns on `event_submissions` (migration `20260606_submission_triage.sql`); `/api/agent/triage-submissions` cron backstop + `after()` on-submit trigger + manual re-analyze; `/admin/submissions` verdict banner, research-prefilled publish form, and reversible `mergeSubmission` (snapshots prior event row to `merge_snapshot`); verdicts flow into the chief-of-staff digest. The agent advises only — Publish/Merge/Dismiss is always a human click. Verified end-to-end against the live DB (the 21st Arnold Classic Car Show submission → `publish_new`, high confidence, organizer page found, venue typo corrected). **Reply loop added same day:** `lib/agent/submission-reply.ts` drafts a submitter reply per decision (approve / question / decline) stored in `event_submissions.ai_reply` (migration `20260606b_submission_reply.sql`), surfaced as a one-click Gmail compose deep-link in `/admin/submissions`; the app never sends mail. **Stage 1 action queue built 2026-06-09** (the generalized propose→approve→execute→revert loop): migration `agent_cockpit_stage1.sql` (`agent_actions` + `agent_policy`, RLS service-role only); the guardrail `lib/agent/policy.ts` `canAutoExecute` (low blast + reversible + internal + policy flag — outward-facing can NEVER auto-run, locked by `scripts/test/agent-policy.test.ts`); the reversible executor `lib/agent/actions-executor.ts`; first action type **`create_org_row`**, proposed by `lib/agent/propose-link-gaps.ts` + `/api/agent/propose-actions` (Mondays 19:30 UTC, draining the shared `lib/link-gaps.ts` worklist that `/api/check-events` also uses) and disposed at `/admin/actions` (page + `actions.ts`: approve fills the canonical URL then inserts the `hwy4_orgs` row; reject; revert = delete the row). **Stage 2 + web-research built 2026-06-09:** the proposer now web-researches each gap venue's canonical URL (`lib/agent/research-org.ts`, Sonnet + `web_search`, social/aggregator URLs rejected) so proposals arrive pre-filled (the human verifies + approves). The auto-runner (`lib/agent/auto-runner.ts`, wired into the proposer cron + the "Scan now" + the graduate toggle) executes graduated proposals — gated by `canAutoExecute` **AND** readiness (create_org_row needs a present, **high-confidence** researched URL; medium/low still waits for a human). `/admin/actions` gained an **autonomy-policy panel**: per-type approval-rate canary (approved/decided, weeks of data, vs the 100%-for-`min_clean_weeks` bar) + a graduate/pause toggle (`setPolicy`). **`agent_policy.auto_execute` is still false for both types** — graduation is a deliberate human click once the canary holds; flipping it on runs the auto-runner over already-staged proposals. Remaining: FB/AEO collectors; the newsletter already has its veto gate (the Stage 2 outward retrofit, built 2026-06-02).
-  - `PRD-growth-agent.md` — Repoints the cockpit reasoner from **inward ops triage to outward demand generation**. Adds a second reasoner with a growth lens: a **weekly Head-of-Growth memo** (Mondays) that optimizes for the North Star (**Weekly Returning Residents**, honestly proxied by weekly local-session trend from `site_events` since there's no persistent visitor id, plus the newsletter), secondary = visitor-driven business referrals, and names **the single highest-leverage move that week, drafted as ready-to-send copy** (copy button + Gmail deep-link, like the submission-reply loop). The daily chief-of-staff stays the demoted ops pulse. Reuses the cockpit: a second `agent_runs` flavor distinguished by a `run_type` column; read-only (drafts copy, sends nothing — outward stays a human click). **Phase 1 built 2026-06-09** (read-only reframe): migration `20260609_growth_memo.sql` (`agent_runs.run_type`, applied to `uzediwokyshjbsymevtp`); `lib/agent/growth-context.ts` (the growth signal pack) + growth types in `lib/agent/types.ts`; `/api/agent/growth-memo` (Sonnet reasoner, Mondays 16:00 UTC) + `/admin/growth-memo` page + `components/GrowthDraft.tsx`; `/admin/today` scoped to `run_type='chief_of_staff'`. **Phase 3 built same day** (experiment memory): `growth_experiments` table (migration `20260609b_growth_experiments.sql`, applied + seeded with the 2 live tests) — the memo now reads logged experiments as ground truth and reports an early read on each instead of inventing them; managed at `/admin/experiments` (page + `actions.ts`, no SQL). **Phase 4 (`src` capture) shipped + live:** arrival-channel attribution is in `site_events` and **ungated** — migration `20260609d_site_events_src.sql`, first-touch resolution in [lib/track.ts](lib/track.ts) (`?src=` param → external referrer `ref:host` → direct, persisted per session), persisted on view + outbound rows in `/api/track`, and surfaced in the `/admin/analytics` "Arrival channels" panel. So QR/share/host-card/newsletter channels are countable today. **GSC month-over-month + striking-distance shipped 2026-07-05** (see "Search Console (SEO analytics)"): the memo's `seo` signal now carries 28-day totals, month-over-month deltas, top queries, and a striking-distance list (page-1/2 fringe queries a rank nudge would convert), and the prompt treats the top striking query as a prime move-of-the-week. Verified end-to-end: the first search-aware memo named "build a dedicated Bear Valley Music Festival 2026 page" off a 326-impression / position-6 / 1-click query.
-  - `PRD-admin-submissions.md` — An `/admin/submissions` page to review, complete, publish, or dismiss community event submissions (the `event_submissions` queue that `/submit` fills). Today they land as `pending` with no UI, and publishing means raw SQL. Plan mirrors `/admin/verification`: a server-component page + `actions.ts` behind Basic Auth, an editable pre-filled form (most submissions miss venue/category) that inserts a `community_sourced` `hwy4_events` row (`visibility='public'`, `status='confirmed'`, computed `dedup_key`) and flips the submission to `approved`, plus a Dismiss → `rejected`. Extracts `generateDedupKey` into `lib/event-identity.ts` (one hash, shared with the scrapers); adds audit columns (`reviewed_at`, `published_event_id`, `review_note`); busts the `events` cache tag on publish. This is the **human-first half of the cockpit's Stage 1** (the agent later *proposes* into this same queue; a human always clicks Publish). **Built + deployed 2026-06-03** (page + `actions.ts`; `generateDedupKey` extracted to `lib/event-identity.ts`; `reviewed_at` / `published_event_id` / `review_note` audit columns; verified end-to-end in prod).
-  - `PRD-email-ingest.md` — **Email-to-event ingestion.** A curator forwards an unstructured event email (often with a poster) to a Resend Inbound address; [`/api/inbound-email`](app/api/inbound-email/route.ts) (signed webhook + sender allowlist) reads the email + poster via Sonnet and lands a `source='email'` pending `event_submissions` row, then fires the existing `triageSubmissionById` so it rides the shipped triage + reversible-merge + review UI unchanged (a **thin front door**, not a parallel system). Transport: Resend's free managed `.resend.app` receiving domain (no Pro, no DNS change). **Built 2026-06** (migration `20260604b_email_submissions.sql` adds `source`/`poster_url`/`raw_email`/`source_message_id`; pure core `lib/inbound-email.ts` + `scripts/test/inbound-email.test.ts`; webhook route; "Email" badge + "Original email" view on `/admin/submissions`). **Phase 4 pending:** create the `.resend.app` address + webhook, set `RESEND_INBOUND_WEBHOOK_SECRET` + `INBOUND_EMAIL_ALLOWLIST`, live test.
-  - `PRD-event-poster-loop.md` — Organizer-led viral growth loop: turn every event detail page into a beautiful, branded, shareable poster (web hero + OG image + downloadable poster) organizers reach for instead of a Facebook-only JPEG. Thesis: *the page is the poster; the poster is the billboard.* One artifact serves two organizer types (digital reach for poster-havers; a free downloadable poster for have-nots); Millie + `hwy4events.com` "Poster by" lockup + a QR (`?src=qr`) turn every share and every printed flyer into attributed marketing, closing the loop through a digital and a physical door. Poster system: AI **art-directs a single templated design** (8 category skins, type-first, local Sierra-screenprint motifs) — never freeform-illustrates, because consistency = brand recognition. **Branding rule:** only posters *we* generate carry the lockup/QR; organizer-supplied posters (`image_url`) are shown untouched. Non-goals: no RSVP/ticketing, not a general listings site, not Canva. **Phase 1 + generator shipped 2026-06-03:** `app/events/[slug]/poster/route.tsx` (next/og + Satori screenprint, Node runtime, Bitter/DM Sans from `public/fonts/`), detail page rebuilt around the poster hero + action rail (Share/Download/Calendar/Directions), `share_hits` attribution (`20260603_add_share_hits.sql` applied + `/api/track-share` + `components/ShareTracker.tsx` + `ShareButton ?src=share`), shared `lib/poster.ts` + `lib/events.ts`. Follow-ups: real QR encoder, full 8-category motif set, download-click attribution. **Organizer poster-swap (§10 claim/upload) shipped 2026-06-04:** an "Organizer? Swap in your own poster" link on the detail page → `app/events/[slug]/submit-poster` (`components/SubmitPosterForm.tsx`) → `app/api/submit-poster/route.ts` (validates type + ≤4MB — the Vercel body cap; uploads to the public **`event-posters`** Storage bucket as service-role, inserts a `pending` `poster_submissions` row, pings Slack `#hwy4events`) → `app/admin/posters` (page + `actions.ts`, Basic Auth, nav badge) where **Approve** sets `image_url` + `poster_locked=true` on every upcoming row of the event series (matched via shared `isSameEvent` with the date stripped, so a weekly event's many rows all swap) and **Dismiss** rejects + deletes the upload. Migration `20260604_poster_submissions.sql` (table RLS + service-role policy; bucket public-read + 8MB/image-MIME guard) already applied to `uzediwokyshjbsymevtp`. Originated in a `/brain scott-belsky` session.
-  - `PRD-newsletter-click-tracking.md` — Per-event newsletter click tracking, surfaced in the admin **Growth** tab. The newsletter links events to `/events/<slug>` with UTM tags, but Cloudflare RUM (the Growth tab's data) drops query strings and email clicks carry no referer, so we can't tell which events get clicked *from the newsletter*. Plan: a first-party redirect route `app/r/n/[campaign]/[event]` logs each click to a `newsletter_clicks` table then 302s to the event page; `lib/newsletter.ts` rewrites event hrefs to the tracker **at render time** (deterministic — the stored draft + public archive stay clean, no dependency on the LLM emitting tracking URLs); the Growth tab shows per-event clicks + a rough CTR (clicks ÷ `newsletter_drafts.sent_count`), bot-filtered and labeled directional. First-party chosen over Resend click tracking (keeps links + data ours). **Built 2026-06-03** — migration `20260603b_newsletter_clicks.sql`; redirect route `app/r/n/[campaign]/[event]/route.ts`; render rewrite in `lib/newsletter.ts` (`buildSlugToEventId` + `NewsletterTracking` threaded through `buildEmailHtml`); the send route builds the slug→id map per send; Growth-tab "Newsletter clicks" panel. Verify on the next Thursday send or with `?test_email=`.
-  - `PRD-search-indexing.md` — Fixes GSC **"Discovered – currently not indexed"** on the bulk of the site. Root cause: a ~1-week-old, zero-authority domain was handed **1,023 event URLs** (~70% near-duplicate recurring instances stretching to 2028), so Google rations crawl and reads the uniformity as thin content. Not a technical bug — the foundation (canonical/JSON-LD/internal links) is sound. Plan: concentrate crawl budget on the ~50–100 money pages, prove authority, let the long tail index over time. **Tier 0 + Tier 1 shipped 2026-06-03:** `/sitemap.xml` is now a `<sitemapindex>` over `/sitemap-core.xml` (home + temporal + 9 towns + static, isolated so GSC reports money-page coverage separately) and `/sitemap-events.xml` (crawl-trimmed via the pure `lib/sitemap.ts` — recurring series collapsed to the soonest 2 instances per `(title, town)`, 120-day horizon, honest `updated_at`-based `lastmod`; ~1,023 → a few hundred high-signal URLs). The three `app/sitemap*.xml/route.ts` handlers replace the old `app/sitemap.ts` (a route handler is required because Next's metadata `sitemap.ts` can only emit a flat `<urlset>`, not a `<sitemapindex>`). Logic locked by `scripts/test/sitemap.test.ts`; every event still reachable on-site, fully reversible (tune `SITEMAP_*` consts). **Roadmap (not built):** Tier 2 = canonical recurring-series pages (the permanent dedup fix), `/towns` + category hubs, more homepage SSR links; Tier 3 = local backlinks + standing Request-Indexing + Bing; Tier 4 = track core-sitemap indexed % in `AEO-SEO-MEASUREMENT.md`.
-  - `HANDOFF-newsletter-reconcile.md` — **Executed 2026-07-03.** Reconciled the three converging newsletter-send efforts (Rob #142–146: per-result checking + a POST recovery endpoint + Resend Batch API; Peter Hollens's fork: a durable `newsletter_send_log` ledger) into one idempotent `sendCampaign` (`lib/newsletter-send.ts`) — ledger backbone + Batch transport, so re-blasting is structurally impossible and recovery is just "re-run, the ledger dedups." Migration `20260703_newsletter_send_log.sql` (applied — `newsletter_send_log` + `newsletter_suppressions`, service-role RLS); pure core locked by `scripts/test/newsletter-send.test.ts`; the Wed→Thu veto gate untouched. See the `/api/newsletter/send` cron row for the operational shape.
-  - `PRD-live-music-experience.md` — Live music is the #1 category (259 upcoming); a `/brain shiva-rajaraman` plan to fill venue-detail blanks **accurately** (the Tier A verified-facts / Tier B human-reviewed-voice / Tier C graceful-blank contract) and, longer-term, compose the live-music *night*. **Phase 0 shipped 2026-06-21:** registered 7 missing venues in `scripts/lib/venues.ts` (incl. restoring `make-and-partake`), backfilled venue_keys (923 events), synced Places facts, published 7 voice blurbs, merged a Camp Connell dup, and built **`/admin/venues`** (the durable Tier-B blurb review surface — list + edit/save/clear + missing-blurb nav badge). Live-music venue-section coverage 246/259 → 257/258. **Phase 1A shipped 2026-06-22** (self-healing `create_venue_row` proposer): migration `20260622_create_venue_row_policy.sql` (seeds the `agent_policy` row, human-gated); `lib/venue-gaps.ts` (the unregistered-venue worklist — `venue_key IS NULL` + real non-generic name not already a registered canonical, ≥3 upcoming public events — pure core locked by `scripts/test/venue-gaps.test.ts`); `lib/agent/research-venue.ts` (Tier-A street-address web research, Sonnet + `web_search`); `lib/agent/propose-venue-rows.ts` (proposer + per-card / bounded-batch research), folded into the `/api/agent/propose-actions` cron + `/admin/actions` "Scan" button; the `create_venue_row` executor + revert in `lib/agent/actions-executor.ts`; a `create_venue_row` card in `/admin/actions` (research-prefilled fields + a copyable `scripts/lib/venues.ts` snippet). **Decision (row + snippet only):** approve writes the `hwy4_venues` row (so the venue section + weekly Places facts light up) and emits the registry snippet for a human to commit — events link durably only after that commit, because the matcher re-nulls an unregistered venue's `venue_key` on re-scrape. **Roadmap:** Phase 1B auto-queue blurb drafts into `/admin/venues`; Phase 2 compose the night (band + venue + weather + practical signals); Phase 3 artist-link layer + a `/live-music` hub. Open: Camp Connell posters; verify review-sourced blurb names. **Execution detail for a fresh session: `HANDOFF-live-music-phases.md`.**
-  - `HANDOFF-live-music-phases.md` — **Self-contained build guide for Phases 1–3** of the live-music PRD, for a new session to execute without prior context. Concrete steps + real file paths + patterns to clone: **Phase 1A** self-healing venue-gap proposer (clone the `lib/agent/propose-link-gaps.ts` + `agent_actions` / `/admin/actions` loop; new `create_venue_row` type), **Phase 1B** auto-queue blurb drafts into `/admin/venues` (new `blurb_draft` field; a human Save still publishes), **Phase 2** compose the live-music "night" (arrange the already-present `VenueInfo` / `WeatherChip` / `artists` + surface `places_attributes` badges), **Phase 3** artist links + `/live-music` hub. Plus cross-cutting guardrails (Tier A/B/C accuracy, `withVoice()`, reversibility, region-parameterized) and the stale-base / prod-admin-password gotchas.
-  - `PRD-roadmap-board.md` — **Agent-fed kanban inside `/admin`.** A lightweight `hwy4_tasks` board (Supabase, RLS service-role only) where Rob triages/prioritizes dev work, the cockpit agents + a new QA agent + Claude Code/Cowork sessions file tickets (agent rows land `proposed` → human promotes), and **Claude Code implements an approved ticket → opens a draft PR → flips the row to `in_review`** (never merges; "auto-draft, you approve"). Recovers the one thing a homegrown board gives up — native git-linking — by storing `pr_number` and parsing `Builds HWY-N` from the merged PR body via a `task-done.yml` Action → `/api/tasks/pr-merged` → `done` (Phase 3). Build (not Notion/Trello/Linear/GH-Issues) because the agents already write SQL natively and the board must live in the cockpit Rob runs. Fourth instance of the propose→approve→execute→revert pattern (reuses `agent_actions`/`agent_policy`/`actions.ts`/Basic-Auth). **Phase 1 built + live in prod 2026-07-03:** migration `20260703_roadmap_board.sql` (`hwy4_tasks` + `hwy4_task_ref_seq`, RLS service-role only, applied); shared types `lib/tasks.ts`; the **`/admin/roadmap`** kanban (page + `actions.ts`: create/move/set-priority/edit/promote/dismiss) + a **Roadmap** nav tab & `proposed`-count badge ([components/admin/AdminNav.tsx](components/admin/AdminNav.tsx) + [app/admin/layout.tsx](app/admin/layout.tsx)); the repo-local **`/build-ticket HWY-N`** command ([.claude/commands/build-ticket.md](.claude/commands/build-ticket.md)). **Phase 2 built 2026-07-04 (agent inflow):** `lib/agent/propose-tasks.ts` — after the `chief_of_staff` (daily) + `growth_memo` (weekly) reasoners write their `agent_runs` digest, it Sonnet-extracts any concrete *dev* work (not ops tasks), dedups vs open/recently-dismissed tickets by normalized title, and files ≤2 `proposed` tickets/run (best-effort, no new cron); a `task` row type joins the `/admin/inbox` list + badge. Pure core locked by `scripts/test/propose-tasks.test.ts`. **Phase 3 built 2026-07-04 (QA agent + auto-Done loop):** (1) `/api/agent/qa-audit` (weekly cron, Sun 20:00 UTC) + `lib/agent/qa-audit.ts` HTTP-check the live site's money pages + funnel + sitemaps + sampled event/town pages for CODE bugs (non-200, missing `<title>`, missing JSON-LD, malformed sitemap) and file `type='bug'` `proposed` tickets, one per check-class deduped by a `check_key` in `ai_rationale`; (2) `.github/workflows/task-done.yml` fires on a merged-to-main PR → POSTs the body to `/api/tasks/pr-merged` (CRON_SECRET-gated) → `parseBuiltRefs` extracts `Builds HWY-N` → flips those tickets to `done`. Pure cores locked by `scripts/test/qa-audit.test.ts` + `scripts/test/pr-refs.test.ts`. **⚠️ Manual step to activate auto-Done: add `CRON_SECRET` as a GitHub Actions repo secret** (Settings → Secrets and variables → Actions); without it `task-done.yml` no-ops gracefully. Pending: P4 optional `agent_policy`-gated auto-draft; DnD + `rank`.
+- **PRDs & Plans:** the per-doc status + shipped-history blurbs moved to [docs/PRD-INDEX.md](docs/PRD-INDEX.md) (2026-08-07 context trim). Read the relevant entry there before working on any feature a PRD covers. Maintenance rule unchanged: update a blurb inline when that doc's status genuinely changes; each PRD/handoff file also carries its own `> **Status (date):** …` stamp.
 
 ## UI Standards
 
