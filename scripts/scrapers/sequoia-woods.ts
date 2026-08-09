@@ -20,6 +20,13 @@ import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
  * and is never recorded; a title containing "Member Event" is gated behind the
  * Clubs filter (visibility='private'); anything else is public.
  *
+ * Known mapping gap (Rob, 2026-08-09): club championship / tournament days
+ * often wrap with PUBLIC live music at the clubhouse in the evening, but the
+ * club tags the whole calendar entry "Member Event" — the tag wins here
+ * (never-guess: the club's own label is the only signal on the page), so the
+ * public music-after stays members-only on the site until a curator flips that
+ * row's visibility by hand. See docs/LOCAL-KNOWLEDGE-BASE.md (Sequoia Woods).
+ *
  * Source shape: the calendar is a Duda-built month-grid widget. Rather than
  * LLM-extracting the rendered text (which turned out to non-deterministically
  * mis-stamp the YEAR on each row), each day cell carries its events as an exact
