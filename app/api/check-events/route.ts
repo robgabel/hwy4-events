@@ -9,6 +9,7 @@ import {
   findCategoryInconsistencies,
   findTimelessNearDupes,
   findSuspectTicketLinks,
+  findVenueSlotCollisions,
 } from "@/lib/audit-checks";
 
 export const maxDuration = 60;
@@ -145,7 +146,7 @@ export async function GET(request: Request) {
   const { data: events, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, town, venue_name, venue_key, address, start_time, end_time, description, artists, category, visibility, image_url, org_slug, event_url, last_scraped_at, status, series_umbrella"
+      "id, name, date, town, venue_name, venue_key, address, start_time, end_time, description, artists, category, visibility, is_routine, image_url, org_slug, event_url, last_scraped_at, status, series_umbrella"
     )
     .gte("date", today)
     .order("date", { ascending: true });
@@ -273,6 +274,11 @@ export async function GET(request: Request) {
   // The sanitizer strips KNOWN resale marketplaces at write time (HWY-11);
   // this surfaces the ones not on the list yet, before a reader overpays.
   const suspectTicketLinks = findSuspectTicketLinks(rows);
+  // Same single-operator venue, same ~slot, different named events — the shape
+  // a hallucinating or append-only organizer source produces (the pub's
+  // phantom trio; Sequoia's stranded rebooking). The matcher must never merge
+  // these (different acts ARE different events), so this count is the tripwire.
+  const venueSlotCollisions = findVenueSlotCollisions(rows);
 
   // Recent self-healing merges (lib/reconcile.ts via /api/reconcile-dupes).
   // Informational, NOT an issue — a merge means the dedup is working. Reported
@@ -379,6 +385,7 @@ export async function GET(request: Request) {
       category_inconsistencies: categoryInconsistencies.length,
       timeless_near_dupes: timelessNearDupes.length,
       suspect_ticket_links: suspectTicketLinks.length,
+      venue_slot_collisions: venueSlotCollisions.length,
     },
   };
 
@@ -418,6 +425,14 @@ export async function GET(request: Request) {
         suspect_ticket_links: suspectTicketLinks
           .slice(0, 3)
           .map((l) => `"${l.name}" (${l.date}) → ${l.host} [${l.reason}]`),
+        venue_slot_collisions: venueSlotCollisions
+          .slice(0, 3)
+          .map(
+            (c) =>
+              `${c.date} @ ${c.venue_name} ${c.start_times.join("/")} — ${c.names
+                .map((n) => `"${n}"`)
+                .join(" / ")}`
+          ),
       },
     };
     const { error: stashErr } = await supabase.from("site_config").upsert(
@@ -562,6 +577,7 @@ export async function GET(request: Request) {
       category_inconsistencies: categoryInconsistencies,
       timeless_near_dupes: timelessNearDupes,
       suspect_ticket_links: suspectTicketLinks,
+      venue_slot_collisions: venueSlotCollisions,
     },
   });
 }

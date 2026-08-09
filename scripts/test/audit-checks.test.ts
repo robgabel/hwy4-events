@@ -11,6 +11,7 @@ import {
   findCategoryInconsistencies,
   findTimelessNearDupes,
   findSuspectTicketLinks,
+  findVenueSlotCollisions,
   type AuditRow,
 } from "../../lib/audit-checks.js";
 
@@ -227,4 +228,53 @@ test("findSuspectTicketLinks ignores a non-ticket link to an unknown host", () =
     linkRow("g", "See the trail map at https://some-new-org.example/about for details."),
   ]);
   assert.deepEqual(found, []);
+});
+
+// ---------- findVenueSlotCollisions ----------
+
+test("venue slot collisions: the pub phantom-trio shape flags, chaining 30-min starts", () => {
+  // The 2026-08-09 live shape: one real act (Kyle Cox, pinned by the pub's own
+  // permalink) plus two invented rows stacked onto the same Thursday slot.
+  const rows = [
+    row({ name: "Kyle Cox", venue_name: "Murphys Irish Pub", start_time: "18:00", end_time: null }),
+    row({ name: "Rod Harris & Friends", venue_name: "Murphys Irish Pub", start_time: "18:00", end_time: null }),
+    row({ name: "Steve Ashman & Joe Barretta", venue_name: "Murphys Irish Pub", start_time: "18:30", end_time: null }),
+    // Another venue the same night is unrelated.
+    row({ name: "Trivia Night", venue_name: "The Watering Hole", start_time: "18:00" }),
+  ];
+  const found = findVenueSlotCollisions(rows);
+  assert.equal(found.length, 1);
+  assert.deepEqual(found[0].names, [
+    "Kyle Cox",
+    "Rod Harris & Friends",
+    "Steve Ashman & Joe Barretta",
+  ]);
+});
+
+test("venue slot collisions: sequential shows, parks, members-only, routine, timeless stay quiet", () => {
+  const rows = [
+    // Sequential same-venue programming (>30 min apart) is normal.
+    row({ name: "Alan Drown", venue_name: "Murphys Irish Pub", start_time: "16:00" }),
+    row({ name: "Kyle Cox", venue_name: "Murphys Irish Pub", start_time: "19:00" }),
+    // Parks host simultaneous different events legitimately (Big Trees).
+    row({ name: "North Grove Guided Walk", venue_name: "Calaveras Big Trees State Park", start_time: "10:00" }),
+    row({ name: "Junior Rangers", venue_name: "Calaveras Big Trees State Park", start_time: "10:00" }),
+    // Members-only golf and a hidden routine dinner beside a public show is
+    // club-normal (Sequoia Woods) — only the public non-routine row remains,
+    // and one row is no collision.
+    row({ name: "Club Championship", venue_name: "Sequoia Woods Country Club", start_time: "18:00", visibility: "private" }),
+    row({ name: "Thursday Night Dinner", venue_name: "Sequoia Woods Country Club", start_time: "18:00", is_routine: true }),
+    row({ name: "Live Music - Jill Warren", venue_name: "Sequoia Woods Country Club", start_time: "18:30" }),
+    // Timeless rows are findTimelessNearDupes territory, not this check's.
+    row({ name: "Mystery Listing", venue_name: "Murphys Irish Pub", start_time: null }),
+  ];
+  assert.deepEqual(findVenueSlotCollisions(rows), []);
+});
+
+test("venue slot collisions: same normalized name twice is dedup work, not a collision", () => {
+  const rows = [
+    row({ name: "Open Mic Night", venue_name: "Murphys Irish Pub", start_time: "18:00" }),
+    row({ name: "Open Mic Night", venue_name: "Murphys Irish Pub", start_time: "18:00" }),
+  ];
+  assert.deepEqual(findVenueSlotCollisions(rows), []);
 });

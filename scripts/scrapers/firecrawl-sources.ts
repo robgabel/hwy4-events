@@ -135,15 +135,10 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
     defaultAddress: "1965 Blagen Rd, Arnold, CA 95223",
     dumpOnEmpty: true,
   },
-  {
-    slug: "murphys-irish-pub",
-    name: "Murphys Irish Pub",
-    pageTitle: "Murphys Irish Pub Events",
-    url: "https://www.murphysirishpubca.com/",
-    defaultVenue: "Murphys Irish Pub",
-    defaultTown: "Murphys",
-    defaultAddress: "415 Main St, Murphys, CA 95247",
-  },
+  // murphys-irish-pub left this list 2026-08-09 for its own special scraper
+  // (scripts/scrapers/murphys-irish-pub.ts): the homepage widget exposes no
+  // absolute dates to a text scrape, so the LLM extractor here INVENTED them —
+  // a fresh phantom lineup every few days. See that file's header.
   {
     slug: "watering-hole",
     name: "The Watering Hole",

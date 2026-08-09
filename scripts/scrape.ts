@@ -5,6 +5,7 @@ import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeArnoldRimTrail } from "./scrapers/arnold-rim-trail.js";
 import { scrapeBriceStation } from "./scrapers/brice-station.js";
+import { scrapeMurphysIrishPub } from "./scrapers/murphys-irish-pub.js";
 import { scrapeRedCross } from "./scrapers/red-cross.js";
 import { scrapeSequoiaWoods } from "./scrapers/sequoia-woods.js";
 import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
@@ -29,6 +30,9 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  *     many hosts per search across multiple corridor ZIP anchors
  *   - sequoia-woods: Firecrawl JSON extraction of the country club's month-grid
  *     calendar, classifying each event public vs members-only (private)
+ *   - murphys-irish-pub: the pub's own Wix site read via per-event pages
+ *     (schema.org JSON-LD + dated occurrence slugs) after the generic LLM
+ *     runner invented dates off the dateless homepage widget
  *
  * Everything else goes through the config-driven generic Firecrawl runner.
  */
@@ -46,9 +50,12 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   // brice-station reads the venue's own Shopify ticket store but is NOT
   // blocklisted: the store only lists shows it is actively selling, so
   // GoCalaveras legitimately covers Brice events with no ticket product yet and
-  // blocklisting it would lose them. Ordering is the guard instead — this runs
-  // LAST so the organizer is the final writer on the rows it does cover.
+  // blocklisting it would lose them. Ordering is the guard instead — organizer
+  // sources run LAST so the organizer is the final writer on rows both cover.
+  // Same deal for murphys-irish-pub: GoCalaveras's weekly pub Open Mic rows
+  // are real, so both writers coexist and the pub's own site writes last.
   "brice-station": scrapeBriceStation,
+  "murphys-irish-pub": scrapeMurphysIrishPub,
 };
 
 const SCRAPERS: Record<string, () => Promise<void>> = {
