@@ -49,20 +49,34 @@ export async function sweepStaleSourceRows(opts: {
     console.log("  Sweep: nothing stale in the covered window.");
     return 0;
   }
+  // Annotate each selected row with its key situation: a "0 keys (legacy)"
+  // row can never match a batch, so it reads differently from a keyed row the
+  // source genuinely stopped asserting — the distinction the execute flip
+  // depends on.
+  const describeKeys = (r: SweepRow): string => {
+    const keys = opts.keysOf(r).filter(Boolean);
+    return keys.length === 0 ? "0 keys (legacy row)" : `${keys.length} key(s), absent from batch`;
+  };
   const cap = maxSweepAllowed((data ?? []).length);
   if (stale.length > cap) {
     console.error(
       `  Sweep ABORTED: ${stale.length} rows selected (cap ${cap} for ${(data ?? []).length} resident). ` +
         "No legitimate calendar edit strands this many — assuming a bad fetch. Nothing deleted."
     );
+    for (const r of stale.slice(0, 5)) {
+      console.error(`    would have selected: ${r.date} "${r.name}" — ${describeKeys(r)}`);
+    }
     return 0;
   }
   // Dry-run by default (the RECONCILE_EXECUTE precedent): report what WOULD
   // be swept; delete only once SWEEP_EXECUTE=true is set after the report-only
-  // logs have been reviewed.
+  // logs have been reviewed. In GitHub Actions the flag is a repository
+  // VARIABLE wired through .github/workflows/scrape.yml — NOT a Vercel env.
   if (process.env.SWEEP_EXECUTE !== "true") {
     for (const r of stale) {
-      console.log(`  Sweep DRY-RUN would remove: ${r.date} "${r.name}" (${r.id})`);
+      console.log(
+        `  Sweep DRY-RUN would remove: ${r.date} "${r.name}" (${r.id}) — ${describeKeys(r)}`
+      );
     }
     console.log(
       `  Sweep DRY-RUN: ${stale.length} row(s) selected. Set SWEEP_EXECUTE=true to enable deletion.`

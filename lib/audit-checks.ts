@@ -339,7 +339,10 @@ const COLLISION_WINDOW_MIN = 30;
 // ranger hike and a triathlon legitimately share a morning (the live
 // 2026-09-06 Bear Valley Adventure Company pair). Audit-local on purpose:
 // widening the shared isMultiTenantVenue would change link resolution.
-const OUTDOOR_BASE_VENUE = /\b(adventure|resort|mountain|marina|campground|ski)\b/i;
+// Deliberately NARROW (no resort/mountain): "Bear Valley Mountain Resort" is
+// the generic LLM extractor's default venue for unattributed Bear Valley
+// rows — the population most at risk of invented rows must keep its tripwire.
+const OUTDOOR_BASE_VENUE = /\b(adventure|marina|campground)\b/i;
 
 /** Same single-operator venue, same date, starts within ~30 minutes of each
  *  other, ≥2 distinct normalized names. Deliberately NOT a merge input —
