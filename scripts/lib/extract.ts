@@ -24,6 +24,14 @@ export interface ExtractedEvent {
    */
   source_event_id?: string | null;
   /**
+   * True when the date came from the page's own LIVE structured data
+   * (JSON-LD), which outranks a dated-but-frozen URL slug — makes the
+   * upsert pre-pass's correctFromUrl a no-op for this row (see
+   * scripts/lib/url-date.ts). Never written to the DB (insert/update
+   * payloads are built field-by-field).
+   */
+  date_authoritative?: boolean;
+  /**
    * Notability: true => a mundane recurring venue operation to hide. Computed
    * centrally in upsertEvents for the operational venues (sequoia-woods,
    * moose-lodge); left undefined by every other scraper, which means the upsert

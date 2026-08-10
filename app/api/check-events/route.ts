@@ -537,6 +537,20 @@ export async function GET(request: Request) {
       }
       if (timelessNearDupes.length > 5) lines.push(`  …and ${timelessNearDupes.length - 5} more`);
     }
+    if (venueSlotCollisions.length > 0) {
+      lines.push(
+        `\n*${venueSlotCollisions.length} same-slot collision(s) at a single-operator venue (invented or stranded row?):*`
+      );
+      for (const c of venueSlotCollisions.slice(0, 5)) {
+        lines.push(
+          `• \`${c.date}\` ${c.venue_name} ${c.start_times.join("/")} — ${c.names
+            .map((n) => `"${n}"`)
+            .join(" / ")}`
+        );
+      }
+      if (venueSlotCollisions.length > 5)
+        lines.push(`  …and ${venueSlotCollisions.length - 5} more`);
+    }
     if (mergesLast24h && mergesLast24h > 0) {
       lines.push(`\n_${mergesLast24h} duplicate merge(s) auto-healed in the last 24h (reversible via event_merge_log)._`);
     }

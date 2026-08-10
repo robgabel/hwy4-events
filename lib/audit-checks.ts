@@ -335,6 +335,12 @@ export interface VenueSlotCollision {
 // Starts this close together at a one-room venue are one physical slot.
 const COLLISION_WINDOW_MIN = 30;
 
+// Outdoor bases are single-operator for LINK purposes but not one room — a
+// ranger hike and a triathlon legitimately share a morning (the live
+// 2026-09-06 Bear Valley Adventure Company pair). Audit-local on purpose:
+// widening the shared isMultiTenantVenue would change link resolution.
+const OUTDOOR_BASE_VENUE = /\b(adventure|resort|mountain|marina|campground|ski)\b/i;
+
 /** Same single-operator venue, same date, starts within ~30 minutes of each
  *  other, ≥2 distinct normalized names. Deliberately NOT a merge input —
  *  different named acts are different events by the matcher's core rule — this
@@ -347,7 +353,7 @@ export function findVenueSlotCollisions(rows: AuditRow[]): VenueSlotCollision[] 
     if (r.series_umbrella === true || r.is_routine === true) continue;
     if ((r.visibility ?? "public") !== "public") continue;
     const venue = (r.venue_name ?? "").trim();
-    if (!venue || isMultiTenantVenue(venue)) continue;
+    if (!venue || isMultiTenantVenue(venue) || OUTDOOR_BASE_VENUE.test(venue)) continue;
     if (timeToMinutes(r.start_time) === null) continue;
     const key = `${r.date}|${venue.toLowerCase()}`;
     const list = groups.get(key) ?? [];

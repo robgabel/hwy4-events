@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import {
   inAnyWindow,
   isProtectedRow,
+  maxSweepAllowed,
   monthWindowFromLabel,
   selectStaleRows,
   sweepWindowsFromMonths,
@@ -140,4 +141,17 @@ test("selectStaleRows: legacy key-less rows sweep once the source is structured"
     keysOf: (r) => [r.source_event_id],
   });
   assert.deepEqual(stale.map((r) => r.name), ["Nathan Ignacio"]);
+});
+
+// ---------- relative abort cap ----------
+
+test("maxSweepAllowed scales the abort cap to the venue's resident count (2026-08-09 review)", () => {
+  // Sequoia-sized venue (29 future rows): a partially-rendered month view
+  // stranding 12 rows must abort — the flat 20 ceiling alone was inert here.
+  assert.equal(maxSweepAllowed(29), 10);
+  // Tiny venue still gets to retract a real cancellation.
+  assert.equal(maxSweepAllowed(4), 3);
+  assert.equal(maxSweepAllowed(0), 3);
+  // Large catalogs hit the hard ceiling.
+  assert.equal(maxSweepAllowed(200), 20);
 });

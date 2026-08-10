@@ -29,6 +29,12 @@
  *    hwy4_events_removed_archive before deleting. Restore with
  *    INSERT INTO hwy4_events SELECT (jsonb_populate_record(null::hwy4_events,
  *    snapshot)).* FROM hwy4_events_removed_archive WHERE event_id = '…'.
+ *  - Dry-run by default: the executor only deletes when SWEEP_EXECUTE=true
+ *    (the RECONCILE_EXECUTE precedent) — report-only logs first, then flip.
+ *
+ * Deliberate non-goal: a swept event's detail URL 404s. That is honest — the
+ * event is no longer asserted by anyone, so there is no better destination
+ * (contrast merged-away URLs, which 301 to their survivor via event_merge_log).
  *
  * This module is pure (no Supabase import) so tests run without env; the
  * DB-touching half lives in stale-sweep-exec.ts.
@@ -56,8 +62,20 @@ export interface SweepRow {
   notability_locked?: boolean | null;
 }
 
-/** Abort threshold: no legitimate single calendar edit strands this many rows. */
+/** Hard ceiling on per-run deletions regardless of venue size. */
 export const MAX_SWEEP_PER_RUN = 20;
+
+/**
+ * Per-run abort cap, RELATIVE to the venue's resident rows in the queried
+ * window (2026-08-09 review finding: a flat 20 was inert for a venue whose
+ * whole future catalog is ~29 rows — a partially-rendered month view could
+ * have stranded 12 real rows without tripping it). A sweep may remove at most
+ * ~a third of what is resident, floor 3 (tiny venues can still retract a real
+ * cancellation), ceiling MAX_SWEEP_PER_RUN.
+ */
+export function maxSweepAllowed(residentCount: number): number {
+  return Math.min(MAX_SWEEP_PER_RUN, Math.max(3, Math.ceil(residentCount * 0.34)));
+}
 
 const MONTH_INDEX: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,

@@ -123,9 +123,13 @@ export async function scrapeMurphysIrishPub(): Promise<void> {
     console.warn("No usable list page — nothing scraped, nothing swept.");
     return;
   }
-  const links = extractEventDetailLinks(listHtml, LIST_URL).slice(0, MAX_EVENT_PAGES);
-  console.log(`Found ${links.length} event page link(s)`);
-  if (links.length === 0) {
+  const allLinks = extractEventDetailLinks(listHtml, LIST_URL);
+  const links = allLinks.slice(0, MAX_EVENT_PAGES);
+  console.log(
+    `Found ${allLinks.length} event page link(s)` +
+      (allLinks.length > links.length ? ` (fetching first ${links.length})` : "")
+  );
+  if (allLinks.length === 0) {
     console.warn("0 event-details links — site shape changed? Nothing scraped, nothing swept.");
     return;
   }
@@ -172,6 +176,10 @@ export async function scrapeMurphysIrishPub(): Promise<void> {
         // unique per occurrence on recurring ones — a reschedule updates in
         // place instead of duplicating.
         source_event_id: `murphys-irish-pub|${parsed.slug}`,
+        // A JSON-LD date is the page's LIVE data; the dated slug is frozen at
+        // creation. Without this, correctFromUrl in the upsert pre-pass would
+        // re-impose the stale slug date on every rescheduled occurrence.
+        date_authoritative: parsed.dateSource === "jsonld",
       })
     );
   }
@@ -194,16 +202,21 @@ export async function scrapeMurphysIrishPub(): Promise<void> {
   }
 
   // 3. Retraction — see header. Only when the batch is healthy, only within
-  //    the dates this batch provably covers.
+  //    the dates this batch provably covers. A truncated link list means the
+  //    presence set and window are both untrustworthy — no sweep that run.
   let swept = 0;
-  if (future.length >= MIN_EVENTS_FOR_SWEEP) {
+  if (allLinks.length > MAX_EVENT_PAGES) {
+    console.log(
+      `  Sweep skipped: link list truncated (${allLinks.length} > ${MAX_EVENT_PAGES}) — presence set incomplete this run.`
+    );
+  } else if (future.length >= MIN_EVENTS_FOR_SWEEP) {
     const maxDate = future.map((e) => e.date).sort().at(-1)!;
     const presentKeys = new Set<string>();
     // EVERY linked page counts as present — including ones that failed to
     // fetch or parse. Absence from the pub's calendar is the sweep criterion;
     // our inability to read a page that is still linked must never delete its
     // row.
-    for (const link of links) {
+    for (const link of allLinks) {
       const slug = eventSlugFromUrl(link);
       if (slug) presentKeys.add(slug);
     }

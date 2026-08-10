@@ -278,3 +278,13 @@ test("venue slot collisions: same normalized name twice is dedup work, not a col
   ];
   assert.deepEqual(findVenueSlotCollisions(rows), []);
 });
+
+test("venue slot collisions: outdoor bases legitimately overlap and stay quiet", () => {
+  // The live 2026-09-06 pair this check would have false-flagged daily: an
+  // adventure company is single-operator for links but not one room.
+  const rows = [
+    row({ name: "Hike with a Ranger: Birds", venue_name: "Bear Valley Adventure Company", start_time: "09:30" }),
+    row({ name: "Bear Valley Triathlon", venue_name: "Bear Valley Adventure Company", start_time: "10:00" }),
+  ];
+  assert.deepEqual(findVenueSlotCollisions(rows), []);
+});

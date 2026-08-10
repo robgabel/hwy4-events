@@ -123,3 +123,25 @@ test("a URL that states nothing can never change an event", () => {
   assert.equal(applyUrlDate(noUrl).correctedDate, false);
   assert.equal(noUrl.date, "2026-08-14");
 });
+
+test("applyUrlDate defers to an extractor-authoritative date (2026-08-09 review finding)", () => {
+  // The rescheduled-Wix-occurrence case: JSON-LD (live data) says Aug 19, the
+  // slug (frozen at creation) says Aug 12. The extractor marked the date
+  // authoritative, so the URL correction must be a no-op — otherwise the
+  // stale slug date gets re-imposed on every nightly pass.
+  const event = {
+    name: "Open Mic Night",
+    date: "2026-08-19",
+    start_time: "18:00",
+    event_url: "https://www.murphysirishpubca.com/event-details/open-mic-night-2026-08-12-18-00",
+    date_authoritative: true,
+  };
+  const r = applyUrlDate(event);
+  assert.equal(r.correctedDate, false);
+  assert.equal(r.correctedTime, false);
+  assert.equal(event.date, "2026-08-19");
+  // Without the flag the same event IS corrected — the guard is the only gate.
+  const unflagged = { ...event, date: "2026-08-19", date_authoritative: false };
+  assert.equal(applyUrlDate(unflagged).correctedDate, true);
+  assert.equal(unflagged.date, "2026-08-12");
+});

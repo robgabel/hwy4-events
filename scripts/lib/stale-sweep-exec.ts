@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "./supabase-admin.js";
 import {
   selectStaleRows,
-  MAX_SWEEP_PER_RUN,
+  maxSweepAllowed,
   type SweepRow,
   type SweepWindow,
 } from "./stale-sweep.js";
@@ -49,10 +49,23 @@ export async function sweepStaleSourceRows(opts: {
     console.log("  Sweep: nothing stale in the covered window.");
     return 0;
   }
-  if (stale.length > MAX_SWEEP_PER_RUN) {
+  const cap = maxSweepAllowed((data ?? []).length);
+  if (stale.length > cap) {
     console.error(
-      `  Sweep ABORTED: ${stale.length} rows selected (> ${MAX_SWEEP_PER_RUN}). ` +
+      `  Sweep ABORTED: ${stale.length} rows selected (cap ${cap} for ${(data ?? []).length} resident). ` +
         "No legitimate calendar edit strands this many — assuming a bad fetch. Nothing deleted."
+    );
+    return 0;
+  }
+  // Dry-run by default (the RECONCILE_EXECUTE precedent): report what WOULD
+  // be swept; delete only once SWEEP_EXECUTE=true is set after the report-only
+  // logs have been reviewed.
+  if (process.env.SWEEP_EXECUTE !== "true") {
+    for (const r of stale) {
+      console.log(`  Sweep DRY-RUN would remove: ${r.date} "${r.name}" (${r.id})`);
+    }
+    console.log(
+      `  Sweep DRY-RUN: ${stale.length} row(s) selected. Set SWEEP_EXECUTE=true to enable deletion.`
     );
     return 0;
   }
