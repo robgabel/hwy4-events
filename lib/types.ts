@@ -13,7 +13,6 @@ export type EventCategory =
 
 export type EventStatus = "confirmed" | "tentative" | "cancelled";
 export type EventVisibility = "public" | "private";
-export type EventImportance = "major" | "minor";
 export type EventVerificationStatus =
   | "unchecked"
   | "verified"
@@ -64,7 +63,6 @@ export interface Hwy4Event {
   source_name: string | null;
   visibility: EventVisibility;
   org_slug: string | null;
-  importance: EventImportance | null;
   dedup_key: string | null;
   last_scraped_at: string | null;
   /** DB-maintained row last-modified. Drives honest sitemap <lastmod>. */
