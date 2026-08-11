@@ -6,6 +6,8 @@ import {
   type MappedEvent,
   type RawDayEvent,
 } from "../lib/sequoia-woods-map.js";
+import { sweepWindowsFromMonths } from "../lib/stale-sweep.js";
+import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
 
 /**
  * Sequoia Woods Country Club calendar scraper.
@@ -17,6 +19,13 @@ import {
  * a title containing "Private Event" is a third-party rental (wedding, buyout)
  * and is never recorded; a title containing "Member Event" is gated behind the
  * Clubs filter (visibility='private'); anything else is public.
+ *
+ * Known mapping gap (Rob, 2026-08-09): club championship / tournament days
+ * often wrap with PUBLIC live music at the clubhouse in the evening, but the
+ * club tags the whole calendar entry "Member Event" — the tag wins here
+ * (never-guess: the club's own label is the only signal on the page), so the
+ * public music-after stays members-only on the site until a curator flips that
+ * row's visibility by hand. See docs/LOCAL-KNOWLEDGE-BASE.md (Sequoia Woods).
  *
  * Source shape: the calendar is a Duda-built month-grid widget. Rather than
  * LLM-extracting the rendered text (which turned out to non-deterministically
@@ -35,9 +44,18 @@ import {
  * See buildActionsForOffset. We fetch MONTHS_TO_FETCH consecutive month views
  * (current + next 2) and dedupe the overlapping spillover across them.
  *
- * There is deliberately NO stale sweep — a sweep keyed on last_scraped_at would
- * delete real future rows outside the fetched window. Insert/upsert only,
- * mirroring the Blue Lake Springs member scraper.
+ * Retraction (2026-08-09): a WINDOW-scoped stale sweep. The original design
+ * had no sweep at all, because a sweep keyed on last_scraped_at would delete
+ * real future rows outside the fetched window — but the club EDITS its
+ * calendar, and an append-only ingest turns every edit into a stranded ghost
+ * ("Patio Party #4 ... (TBD)" was renamed "... - The Hit Men" and the TBD row
+ * lived on beside it; a same-night act swap strands a ghost no dedup layer may
+ * merge, since different named acts are different events). The sweep
+ * (scripts/lib/stale-sweep.ts) squares both concerns: only the month windows
+ * this run actually parsed are sweepable (a failed or thin month view
+ * contributes no window), human-touched rows are skipped, per-run deletions
+ * are capped, and every removal is archived to hwy4_events_removed_archive
+ * first — restore via jsonb_populate_record, same as event_merge_log.
  */
 
 const SOURCE_NAME = "Sequoia Woods Country Club";
@@ -220,9 +238,11 @@ export async function scrapeSequoiaWoods(): Promise<void> {
   //    Each carries a few spillover days from its neighbors, so consecutive
   //    fetches overlap at the edges — deduped below.
   const rawEvents: RawDayEvent[] = [];
+  const parsedMonths: { label: string | null; eventCount: number }[] = [];
   for (let offset = 0; offset < MONTHS_TO_FETCH; offset++) {
     const { monthLabel, events } = await fetchMonth(firecrawl, offset);
     console.log(`  Month +${offset}: ${monthLabel ?? "(unresolved)"} — ${events.length} entr(ies)`);
+    parsedMonths.push({ label: monthLabel, eventCount: events.length });
     rawEvents.push(...events);
   }
 
@@ -292,10 +312,30 @@ export async function scrapeSequoiaWoods(): Promise<void> {
     totals.skippedFuzzy += r.skippedFuzzy;
   }
 
+  // 6. Retraction — window-scoped stale sweep (see header). Only the months
+  //    this run parsed cleanly are sweepable, so a bad fetch can't mass-delete.
+  const windows = sweepWindowsFromMonths(parsedMonths, today);
+  const presentKeys = new Set(
+    deduped
+      .map((m) => m.event.source_event_id)
+      .filter((k): k is string => typeof k === "string" && k.length > 0)
+  );
+  const swept = await sweepStaleSourceRows({
+    orgSlug: ORG_SLUG,
+    reason: "sequoia-woods sweep (entry left the club's calendar)",
+    windows,
+    presentKeys,
+    keysOf: (r) => [r.source_event_id],
+    // Only rows written under our per-day id scheme — legacy or cross-source
+    // merged rows carrying a foreign id are not ours to retract.
+    ownRow: (r) => (r.source_event_id ?? "").startsWith("sequoia-woods|"),
+  });
+
   console.log("\n=== Sequoia Woods Summary ===");
   console.log(`Public events: ${publicEvents.length}, members-only: ${privateEvents.length}`);
   console.log(`Inserted: ${totals.inserted}`);
   console.log(`Updated: ${totals.updated}`);
   console.log(`Unchanged: ${totals.unchanged}`);
   console.log(`Merged (cross-source): ${totals.skippedFuzzy}`);
+  console.log(`Swept stale: ${swept}`);
 }

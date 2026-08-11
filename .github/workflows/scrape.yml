@@ -31,6 +31,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          # Organizer-source stale sweeps (scripts/lib/stale-sweep-exec.ts) run
+          # report-only until this REPOSITORY VARIABLE (not a Vercel env, not a
+          # secret) is set to "true" — Settings → Secrets and variables →
+          # Actions → Variables. Unset ⇒ dry-run.
+          SWEEP_EXECUTE: ${{ vars.SWEEP_EXECUTE }}
 
       - name: Sanity-check event locations
         id: sanity

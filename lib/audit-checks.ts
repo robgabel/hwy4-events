@@ -1,5 +1,6 @@
 import { normalizeName } from "./event-identity";
 import { extractUrls, isTicketResaleHost } from "./description-quality";
+import { isMultiTenantVenue } from "./event-link";
 
 /**
  * Pure data-plausibility checks for the daily /api/check-events audit.
@@ -34,6 +35,16 @@ import { extractUrls, isTicketResaleHost } from "./description-quality";
  *                              remains as the backstop for pairs the matcher
  *                              deliberately declines (one venue unknown, or no
  *                              identity signal), which still need a human.
+ *  - findVenueSlotCollisions:  two or more DIFFERENT events starting within
+ *                              ~30 minutes of each other at one single-operator
+ *                              venue (the 2026-08-09 Murphys Irish Pub phantom
+ *                              trio: three acts "at 6 PM Thursday" in one pub
+ *                              room; Sequoia Woods' stranded rebooking).
+ *                              Different named acts are events the matcher
+ *                              must NEVER merge, so when a scraper invents or
+ *                              strands rows this count is the only tripwire.
+ *                              Multi-tenant venues (parks, squares) host
+ *                              simultaneous events legitimately — excluded.
  *
  * Locked by scripts/test/audit-checks.test.ts.
  */
@@ -50,6 +61,10 @@ export interface AuditRow {
   status: string | null;
   /** Curated festival umbrella card — duplicative on purpose, so never a finding. */
   series_umbrella?: boolean | null;
+  /** Absent = treated as public. Members-only rows never make a collision. */
+  visibility?: string | null;
+  /** Routine venue operations (hidden from public surfaces) — never a collision. */
+  is_routine?: boolean | null;
 }
 
 export interface ImpossibleTime {
@@ -304,6 +319,80 @@ export function findTimelessNearDupes(rows: AuditRow[]): TimelessNearDupe[] {
         ids: list.map((r) => r.id),
       });
     }
+  }
+  return out;
+}
+
+/** Two different events cannot occupy one single-operator room at once. */
+export interface VenueSlotCollision {
+  date: string;
+  venue_name: string;
+  start_times: string[];
+  names: string[];
+  ids: string[];
+}
+
+// Starts this close together at a one-room venue are one physical slot.
+const COLLISION_WINDOW_MIN = 30;
+
+// Outdoor bases are single-operator for LINK purposes but not one room — a
+// ranger hike and a triathlon legitimately share a morning (the live
+// 2026-09-06 Bear Valley Adventure Company pair). Audit-local on purpose:
+// widening the shared isMultiTenantVenue would change link resolution.
+// Deliberately NARROW (no resort/mountain): "Bear Valley Mountain Resort" is
+// the generic LLM extractor's default venue for unattributed Bear Valley
+// rows — the population most at risk of invented rows must keep its tripwire.
+const OUTDOOR_BASE_VENUE = /\b(adventure|marina|campground)\b/i;
+
+/** Same single-operator venue, same date, starts within ~30 minutes of each
+ *  other, ≥2 distinct normalized names. Deliberately NOT a merge input —
+ *  different named acts are different events by the matcher's core rule — this
+ *  is the human tripwire for upstream fiction: an extractor inventing rows, or
+ *  an append-only source stranding the old act after a rebooking. Public,
+ *  non-routine rows only; multi-tenant venues legitimately overlap. */
+export function findVenueSlotCollisions(rows: AuditRow[]): VenueSlotCollision[] {
+  const groups = new Map<string, AuditRow[]>();
+  for (const r of active(rows)) {
+    if (r.series_umbrella === true || r.is_routine === true) continue;
+    if ((r.visibility ?? "public") !== "public") continue;
+    const venue = (r.venue_name ?? "").trim();
+    if (!venue || isMultiTenantVenue(venue) || OUTDOOR_BASE_VENUE.test(venue)) continue;
+    if (timeToMinutes(r.start_time) === null) continue;
+    const key = `${r.date}|${venue.toLowerCase()}`;
+    const list = groups.get(key) ?? [];
+    list.push(r);
+    groups.set(key, list);
+  }
+  const out: VenueSlotCollision[] = [];
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const sorted = [...list].sort(
+      (a, b) => (timeToMinutes(a.start_time) ?? 0) - (timeToMinutes(b.start_time) ?? 0)
+    );
+    let cluster: AuditRow[] = [sorted[0]];
+    const flush = () => {
+      const distinct = new Set(cluster.map((r) => normalizeName(r.name)));
+      if (cluster.length >= 2 && distinct.size >= 2) {
+        out.push({
+          date: cluster[0].date,
+          venue_name: cluster[0].venue_name as string,
+          start_times: cluster.map((r) => r.start_time as string),
+          names: cluster.map((r) => r.name),
+          ids: cluster.map((r) => r.id),
+        });
+      }
+    };
+    for (let i = 1; i < sorted.length; i++) {
+      const prevStart = timeToMinutes(cluster[cluster.length - 1].start_time) ?? 0;
+      const curStart = timeToMinutes(sorted[i].start_time) ?? 0;
+      if (curStart - prevStart <= COLLISION_WINDOW_MIN) {
+        cluster.push(sorted[i]);
+      } else {
+        flush();
+        cluster = [sorted[i]];
+      }
+    }
+    flush();
   }
   return out;
 }

@@ -105,6 +105,14 @@ export interface DateCorrectable {
   date: string;
   start_time: string | null;
   event_url?: string | null;
+  /**
+   * True when the extractor read the date from the page's own LIVE structured
+   * data (e.g. Wix schema.org Event JSON-LD). A dated URL slug is frozen at
+   * event creation, so on a reschedule the slug is the STALE side — the
+   * correction must defer or it re-breaks the date every night (2026-08-09
+   * review finding on the rescheduled-occurrence case).
+   */
+  date_authoritative?: boolean;
 }
 
 /**
@@ -117,6 +125,9 @@ export interface DateCorrectable {
  */
 export function applyUrlDate(event: DateCorrectable): UrlDateCorrection {
   const result: UrlDateCorrection = { correctedDate: false, correctedTime: false };
+  // A date read from live structured data outranks the URL: dated slugs are
+  // frozen at creation, so on a reschedule the URL is the stale side.
+  if (event.date_authoritative) return result;
   const url = event.event_url;
   if (!url) return result;
 
