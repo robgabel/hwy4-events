@@ -299,7 +299,7 @@ export async function scrapeSequoiaWoods(): Promise<void> {
   }
 
   // 5. Upsert through the shared path once per visibility.
-  const totals: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
+  const totals: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
   for (const [events, visibility] of [
     [publicEvents, "public"],
     [privateEvents, "private"],
@@ -310,6 +310,7 @@ export async function scrapeSequoiaWoods(): Promise<void> {
     totals.updated += r.updated;
     totals.unchanged += r.unchanged;
     totals.skippedFuzzy += r.skippedFuzzy;
+    totals.unpinned += r.unpinned;
   }
 
   // 6. Retraction — window-scoped stale sweep (see header). Only the months

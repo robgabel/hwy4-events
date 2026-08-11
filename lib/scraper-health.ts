@@ -8,6 +8,10 @@ export interface SourceResult {
   updated: number;
   unchanged: number;
   skippedFuzzy: number;
+  /** Rows written with neither source_event_id nor event_url (HWY-17). Optional
+   *  because every `scrape_runs` row captured before the guard shipped lacks it,
+   *  and because sources whose policy is "allow" report nothing. */
+  unpinned?: number;
   error: string | null;
 }
 

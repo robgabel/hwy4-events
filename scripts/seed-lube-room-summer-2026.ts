@@ -97,7 +97,17 @@ async function main(): Promise<void> {
   for (const e of events) {
     console.log(`  - ${e.date} ${e.start_time}-${e.end_time}  ${e.name}`);
   }
-  const result: UpsertResult = await upsertEvents(events, SOURCE_NAME, ORG_SLUG, SOURCE_URL);
+  // "allow": these rows are transcribed from a chalkboard photo, so there is no
+  // per-event page to pin them to and no source_event_id to carry. Unpinned by
+  // design, not a scraper defect. See scripts/lib/unpinned-guard.ts.
+  const result: UpsertResult = await upsertEvents(
+    events,
+    SOURCE_NAME,
+    ORG_SLUG,
+    SOURCE_URL,
+    "public",
+    "allow"
+  );
   console.log("\n=== Result ===");
   console.log(`Inserted:     ${result.inserted}`);
   console.log(`Updated:      ${result.updated}`);

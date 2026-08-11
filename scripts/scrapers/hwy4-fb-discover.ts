@@ -53,6 +53,7 @@ export async function scrapeHwy4FbDiscover(): Promise<void> {
     updated: 0,
     unchanged: 0,
     skippedFuzzy: 0,
+    unpinned: 0,
   };
 
   for (const config of TOWN_CONFIGS) {
@@ -106,6 +107,7 @@ export async function scrapeHwy4FbDiscover(): Promise<void> {
     totals.updated += result.updated;
     totals.unchanged += result.unchanged;
     totals.skippedFuzzy += result.skippedFuzzy;
+    totals.unpinned += result.unpinned;
   }
 
   console.log("\n=== Hwy 4 FB Discover Summary ===");

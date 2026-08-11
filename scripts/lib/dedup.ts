@@ -5,6 +5,7 @@ import { isGenericVenue, resolveVenueKey } from "./venue-matcher.js";
 import { isOutOfCorridor } from "./corridor.js";
 import { capSeriesHorizon } from "./ingest-horizon.js";
 import { applyUrlDate } from "./url-date.js";
+import { partitionUnpinned, type UnpinnedPolicy } from "./unpinned-guard.js";
 // The "same event" rule + its string helpers live in ONE place, shared with the
 // read-time collapse in lib/dedupe-events.ts. Do not re-implement them here.
 import {
@@ -308,7 +309,12 @@ export interface UpsertResult {
   updated: number;
   unchanged: number;
   skippedFuzzy: number;
+  /** Rows carrying neither `source_event_id` nor `event_url`. Always 0 for
+   *  sources whose policy is "allow" (seeds/vision — unpinned by design). */
+  unpinned: number;
 }
+
+export type { UnpinnedPolicy };
 
 // generateDedupKey now lives in lib/event-identity.ts (the one identity-key
 // definition, shared with the /admin/submissions publish action). Imported and
@@ -513,6 +519,62 @@ function dropFarFutureSeries(
 }
 
 /**
+ * Per-event normalization + data-quality signals, run over the whole batch
+ * before anything is keyed or written. Shared by the serial and batched paths
+ * so they can't drift. Every step here mutates one event in place and reads no
+ * other event, so running it as a pre-pass is equivalent to running it inline.
+ */
+function normalizeBatch(
+  events: ExtractedEvent[],
+  sourceName: string,
+  orgSlug: string
+): void {
+  for (const event of events) {
+    // Recovers from scrapers that crossed venue_name with address, back-fills
+    // the registry address, and trusts the organizer's own permalink over the
+    // extractor's reading of the page — all before the dedup_key is computed.
+    correctFromUrl(event, sourceName);
+    normalizeEventTimes(event);
+    normalizeEventLocation(event);
+    resolveNotability(event, orgSlug);
+    // Last-chance data-quality signal: anything still generic / address-less at
+    // this point is a real gap the matcher + registry couldn't close.
+    emitDataQualitySignal(event, sourceName, orgSlug);
+  }
+}
+
+/**
+ * Apply the source's unpinned-row policy. See scripts/lib/unpinned-guard.ts for
+ * why a row with no `source_event_id` and no `event_url` is a liability, and why
+ * the policy is per-source (seeds + vision sources are legitimately unpinned).
+ *
+ * Runs AFTER `normalizeBatch`, so it judges the URL that will actually be
+ * stored: `correctFromUrl` has had its look and `normalizeEventLocation` has
+ * already nulled a non-http(s) `event_url`.
+ */
+function guardUnpinned(
+  events: ExtractedEvent[],
+  sourceName: string,
+  policy: UnpinnedPolicy,
+  result: UpsertResult
+): ExtractedEvent[] {
+  const { kept, rejected, unpinnedCount } = partitionUnpinned(events, policy);
+  result.unpinned = unpinnedCount;
+  if (unpinnedCount > 0) {
+    // Never silent: an unpinned row from a text-scrape source is how the pub
+    // phantoms stayed invisible, so the count belongs in the scrape log (and,
+    // via recordSourceResult, in scrape_runs.source_results).
+    console.warn(
+      `  UNPINNED_ROWS ${sourceName} ${unpinnedCount} (policy=${policy})`
+    );
+  }
+  for (const e of rejected) {
+    console.warn(`    UNPINNED_REJECTED "${e.name}" ${e.date}`);
+  }
+  return kept;
+}
+
+/**
  * Batched upsert path. Replaces the per-event SELECT+UPDATE/INSERT loop with
  * a small fixed number of bulk queries regardless of batch size. Enabled by
  * BATCH_DEDUP=1 environment variable; falls back to the serial path otherwise
@@ -527,26 +589,30 @@ async function upsertEventsBatched(
   sourceName: string,
   orgSlug: string,
   sourceUrl: string,
-  visibility: "public" | "private" = "public"
+  visibility: "public" | "private" = "public",
+  unpinnedPolicy: UnpinnedPolicy = "warn"
 ): Promise<UpsertResult> {
-  const result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
+  const result: UpsertResult = {
+    inserted: 0,
+    updated: 0,
+    unchanged: 0,
+    skippedFuzzy: 0,
+    unpinned: 0,
+  };
   const now = new Date().toISOString();
 
   events = dropOutOfCorridor(events, orgSlug);
   events = dropFarFutureSeries(events, sourceName);
 
-  // Pre-pass: normalize + emit quality signals + compute dedup keys
-  const prepared = events.map((event) => {
-    correctFromUrl(event, sourceName);
-    normalizeEventTimes(event);
-    normalizeEventLocation(event);
-    resolveNotability(event, orgSlug);
-    emitDataQualitySignal(event, sourceName, orgSlug);
-    return {
-      event,
-      dedupKey: generateDedupKey(event.name, event.date, event.town),
-    };
-  });
+  // Pre-pass: normalize + emit quality signals, then apply the source's
+  // unpinned-row policy, then compute dedup keys for what survived.
+  normalizeBatch(events, sourceName, orgSlug);
+  events = guardUnpinned(events, sourceName, unpinnedPolicy, result);
+
+  const prepared = events.map((event) => ({
+    event,
+    dedupKey: generateDedupKey(event.name, event.date, event.town),
+  }));
 
   const dedupKeys = prepared.map((p) => p.dedupKey);
   const sourceEventIds = prepared
@@ -790,32 +856,43 @@ export async function upsertEvents(
   // Member-only sources (Blue Lake Springs, Sequoia Woods, …) pass "private" so
   // rows are gated behind the Clubs filter + render the "Members & Guests" badge.
   // Defaults to "public" so every existing caller is unchanged.
-  visibility: "public" | "private" = "public"
+  visibility: "public" | "private" = "public",
+  // What an unpinned row (no source_event_id AND no event_url) means for this
+  // source. Defaults to "warn" — report it, drop nothing. Seed scripts and
+  // vision/PDF sources pass "allow" because their rows are unpinned by design.
+  // See scripts/lib/unpinned-guard.ts.
+  unpinnedPolicy: UnpinnedPolicy = "warn"
 ): Promise<UpsertResult> {
   // Opt-in batched path. Falls back to the serial path so the rollout can be
   // gated per scrape run via `BATCH_DEDUP=1 npm run scrape`.
   if (process.env.BATCH_DEDUP === "1") {
-    return upsertEventsBatched(events, sourceName, orgSlug, sourceUrl, visibility);
+    return upsertEventsBatched(
+      events,
+      sourceName,
+      orgSlug,
+      sourceUrl,
+      visibility,
+      unpinnedPolicy
+    );
   }
 
-  const result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
+  const result: UpsertResult = {
+    inserted: 0,
+    updated: 0,
+    unchanged: 0,
+    skippedFuzzy: 0,
+    unpinned: 0,
+  };
 
   events = dropOutOfCorridor(events, orgSlug);
   events = dropFarFutureSeries(events, sourceName);
 
+  // Pre-pass: normalize + emit quality signals, then apply the source's
+  // unpinned-row policy, before anything is keyed or written.
+  normalizeBatch(events, sourceName, orgSlug);
+  events = guardUnpinned(events, sourceName, unpinnedPolicy, result);
+
   for (const event of events) {
-    // Normalize location fields before keying / writing — recovers from
-    // scrapers that crossed venue_name with address, and back-fills address
-    // from the venue registry where possible.
-    correctFromUrl(event, sourceName);
-    normalizeEventTimes(event);
-    normalizeEventLocation(event);
-    resolveNotability(event, orgSlug);
-
-    // Last-chance data-quality signal: anything still generic / address-less
-    // at this point is a real gap the matcher + registry couldn't close.
-    emitDataQualitySignal(event, sourceName, orgSlug);
-
     const dedupKey = generateDedupKey(event.name, event.date, event.town);
 
     // Prefer the source-side stable id when the scraper provided one — this

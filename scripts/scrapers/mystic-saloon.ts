@@ -122,7 +122,7 @@ export async function scrapeMysticSaloon(): Promise<void> {
     console.log(`  - ${e.name} | ${e.date} | ${e.category}`);
   }
 
-  let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
+  let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
 
   if (futureEvents.length > 0) {
     totalResult = await upsertEvents(futureEvents, SOURCE_NAME, ORG_SLUG, sourceUrl);
