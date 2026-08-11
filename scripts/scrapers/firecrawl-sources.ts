@@ -60,6 +60,16 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
     url: "https://www.bearvalley.com/events-activities",
     defaultVenue: "Bear Valley Mountain Resort",
     defaultTown: "Bear Valley",
+    dumpOnEmpty: true,
+    // Added 2026-08-11 (HWY-20 audit): the page mixes commerce promos into its
+    // events — a "2026 Stay & Ski Special: On Sale NOW" row shipped live as a
+    // December "event" for want of this hint (same class bvac's hint filters).
+    extractHint:
+      "Skip retail promotions, pass sales, and lodging or lift-ticket " +
+      "specials (e.g. 'Stay & Ski Special', season passes, gear sales); they " +
+      "are commerce announcements, not events. Only extract entries where a " +
+      "specific happening occurs on a specific date. Include each event's own " +
+      "bearvalley.com permalink as event_url when the page links one.",
   },
   {
     // Bear Valley Adventure Co. — the village outfitter (XC ski center, boat/
@@ -92,33 +102,20 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
       "in the body (e.g. lesson series 'Dates: July 15 & 16, 22 & 23'), emit " +
       "rows only for those stated dates.",
   },
-  {
-    slug: "branding-iron",
-    name: "Branding Iron Saloon",
-    pageTitle: "Branding Iron Saloon Events",
-    url: "https://murphysbrandingironsaloon.com/",
-    defaultVenue: "Branding Iron Saloon",
-    defaultTown: "Murphys",
-    defaultAddress: "75 Big Trees Rd, Murphys, CA 95247",
-  },
-  {
-    slug: "camp-connell-general-store",
-    name: "Camp Connell General Store",
-    pageTitle: "Camp Connell General Store Events",
-    url: "https://www.campconnellgeneralstore.com/new-page-2",
-    defaultVenue: "Camp Connell General Store",
-    defaultTown: "Camp Connell",
-    defaultAddress: "4036 Old Highway 4, Camp Connell, CA 95223",
-  },
-  {
-    slug: "lube-room",
-    name: "The Lube Room Saloon",
-    pageTitle: "The Lube Room Saloon Events",
-    url: "https://www.theluberoom.com/new-events",
-    defaultVenue: "The Lube Room Saloon",
-    defaultTown: "Dorrington",
-    defaultAddress: "3431 Highway 4, Dorrington, CA 95223",
-  },
+  // Four more entries left this list 2026-08-11 (HWY-20 data audit; LESSONS.md
+  // 2026-08-09 documents the failure class this guards against):
+  //  - branding-iron + watering-hole: ZERO rows ever produced — neither site
+  //    has an events page (The Watering Hole's real coverage arrives via
+  //    gocalaveras, whose rows match the venue's closed-Wednesday reality).
+  //    Dead weight burning a nightly Firecrawl fetch.
+  //  - lube-room + camp-connell-general-store: silently zero output for 65-73
+  //    days, 100% unpinned, and writing under the IDENTICAL org_slug +
+  //    source_name as their hand-curated seed scripts — a future invented row
+  //    would be indistinguishable from a trusted one. The seeds + fingerprint
+  //    watchers (/api/check-lube-schedule, /api/check-camp-connell-schedule)
+  //    own these venues. If structured coverage is ever wanted, the Lube
+  //    Room's site exposes dated Squarespace permalinks
+  //    (/new-events/YYYY/M/D/slug) — the bvac/wix pattern applies.
   {
     // The lodge's monthly PDF calendar (mostly member events, some public) is
     // scraped separately by /api/scrape-moose-lodge. THIS source is the public
@@ -139,15 +136,6 @@ export const FIRECRAWL_SOURCES: FirecrawlSource[] = [
   // (scripts/scrapers/murphys-irish-pub.ts): the homepage widget exposes no
   // absolute dates to a text scrape, so the LLM extractor here INVENTED them —
   // a fresh phantom lineup every few days. See that file's header.
-  {
-    slug: "watering-hole",
-    name: "The Watering Hole",
-    pageTitle: "The Watering Hole Events",
-    url: "https://murphyswateringhole.com/",
-    defaultVenue: "The Watering Hole",
-    defaultTown: "Murphys",
-    defaultAddress: "223 Big Trees Rd, Murphys, CA 95247",
-  },
 ];
 
 /** Lookup by slug for the CLI dispatcher. */
