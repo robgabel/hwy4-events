@@ -893,3 +893,138 @@ test("discounting venue words is additive: it never un-merges a shared-venue-wor
   });
   assert.equal(isSameEvent(anniversary, plain), true);
 });
+
+test("an identical start-AND-end window at the same venue is itself an identity signal", () => {
+  // 2026-08-11, the Angels-Murphys Rotary shrimp feed. Two aggregators listed
+  // the same fundraiser with independently-written titles AND prose, so every
+  // text signal missed by roughly half: titles 0.33 (bar 0.85), descriptions
+  // 0.27 (bar 0.92), title tokens 0.375 (bar 0.60), both artists arrays NULL.
+  // All that is left to match on is the window itself.
+  const visitMurphys = ev({
+    name: "Rotary’s Annual Shrimp Feed & Auction",
+    date: "2026-08-15",
+    town: "Murphys",
+    venue_name: "Murphys Community Park",
+    venue_key: "murphys-community-park",
+    start_time: "16:00:00",
+    end_time: "21:00:00",
+    description:
+      "The Angels-Murphys Rotary Club Annual Shrimp Feed & Online Auction is taking place on Saturday, August 15, 2026, from 4:00 PM to 9:00 PM at Murphys Community Park. Adults: $60 Children (under 12): $30.",
+  });
+  const goCalaveras = ev({
+    name: "Annual Shrimp & Pasta Feed Fundraiser",
+    date: "2026-08-15",
+    town: "Murphys",
+    venue_name: "Murphys Community Park",
+    venue_key: "murphys-community-park",
+    start_time: "16:00:00",
+    end_time: "21:00:00",
+    description:
+      "Join us for a delicious night at The Shrimp Feed in Murphys Park on Saturday, August 15, 2026! Indulge in delicious shrimp while supporting crucial community projects. Do good while having fun!",
+  });
+  assert.equal(isSameEvent(visitMurphys, goCalaveras), true);
+});
+
+test("a shared START time alone never merges simultaneous programs at one venue", () => {
+  // The counterexample that makes the end time mandatory rather than a nicety.
+  // Calaveras Big Trees really does run these three at 10:00 in the same park;
+  // measured over the whole upcoming catalog, same-venue + same-date +
+  // same-START yielded 6 pairs of which only 1 was a duplicate. Merging on the
+  // start would delete four real programs off the calendar.
+  const base = {
+    date: "2026-08-15",
+    town: "Arnold",
+    venue_name: "Calaveras Big Trees State Park",
+    venue_key: "big-trees-state-park",
+    start_time: "10:00:00",
+  };
+  const southGrove = ev({
+    ...base,
+    name: "South Grove Guided Hike @ Big Trees State Park",
+    end_time: "13:00:00",
+    description: "A ranger-led walk through the South Grove. Five miles, moderate.",
+  });
+  const meadowWalk = ev({
+    ...base,
+    name: "Meadow Walk @ Big Trees State Park",
+    end_time: "11:00:00",
+    description: "An easy stroll across the meadow looking for wildflowers.",
+  });
+  // Differing ends: stays split even though the venue and start agree.
+  assert.equal(isSameEvent(southGrove, meadowWalk), false);
+
+  // A NULL end on either side is NOT a match — two rows that both omit the end
+  // share no information, and treating NULL as equal re-admits these pairs.
+  const juniorRangers = ev({
+    ...base,
+    name: "Junior Rangers @ Big Trees State Park",
+    end_time: null,
+    description: "A hands-on badge program for kids ages 7 to 12.",
+  });
+  assert.equal(isSameEvent(southGrove, juniorRangers), false);
+  assert.equal(isSameEvent(meadowWalk, juniorRangers), false);
+
+  const alsoNoEnd = ev({
+    ...base,
+    name: "Campfire: Laugh then Learn @ Big Trees State Park",
+    end_time: null,
+    description: "An evening campfire program with songs and a short talk.",
+  });
+  assert.equal(isSameEvent(juniorRangers, alsoNoEnd), false);
+});
+
+test("an exact window does NOT merge across different venues", () => {
+  // The window signal is gated on venue agreement like every other venue-based
+  // signal, so two towns running a 17:00-20:00 event the same night stay split.
+  const arnold = ev({
+    name: "Summer Concert on the Green",
+    date: "2026-08-15",
+    town: "Arnold",
+    venue_name: "Arnold Community Park",
+    venue_key: "arnold-community-park",
+    start_time: "17:00:00",
+    end_time: "20:00:00",
+    description: "An evening of music on the lawn.",
+  });
+  const murphys = ev({
+    name: "Music in the Park",
+    date: "2026-08-15",
+    town: "Murphys",
+    venue_name: "Murphys Community Park",
+    venue_key: "murphys-community-park",
+    start_time: "17:00:00",
+    end_time: "20:00:00",
+    description: "Bring a blanket and enjoy the band.",
+  });
+  assert.equal(isSameEvent(arnold, murphys), false);
+});
+
+test("an exact window is disqualified when the two rows name different acts", () => {
+  // A venue can run two different shows in the same 19:00-21:00 slot. Rows that
+  // each name an act and disagree on who is playing are asserting two different
+  // shows — real evidence that outranks the matching window.
+  const salsa = ev({
+    name: "Salsa Night",
+    date: "2026-07-10",
+    venue_name: "Murphys Community Park",
+    start_time: "19:00:00",
+    end_time: "21:00:00",
+    artists: ["Los Caminos"],
+    description: "Salsa dancing",
+  });
+  const openMic = ev({
+    name: "Open Mic",
+    date: "2026-07-10",
+    venue_name: "Murphys Community Park",
+    start_time: "19:00:00",
+    end_time: "21:00:00",
+    artists: ["Jane Doe"],
+    description: "Bring your own instrument",
+  });
+  assert.equal(isSameEvent(salsa, openMic), false);
+
+  // One side naming an act while the other says nothing is NOT a disagreement,
+  // so the window still carries the merge (the aggregator-vs-venue shape).
+  const openMicNoActs = ev({ ...openMic, artists: null });
+  assert.equal(isSameEvent(salsa, openMicNoActs), true);
+});

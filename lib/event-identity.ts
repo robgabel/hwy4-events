@@ -507,6 +507,55 @@ export function isGenericTitle(name: string): boolean {
   );
 }
 
+/** Two rows occupy the exact same window: start AND end both known on both
+ *  sides, and both equal. Gated by the caller on venue agreement, this is an
+ *  identity signal in its own right — the last resort for a duplicate whose two
+ *  sources share no comparable text at all (2026-08-11, the Angels-Murphys
+ *  Rotary shrimp feed: Visit Murphys listed "Rotary's Annual Shrimp Feed &
+ *  Auction", GoCalaveras listed "Annual Shrimp & Pasta Feed Fundraiser", each
+ *  with independently-written prose. Same registry venue, same 16:00–21:00,
+ *  and every existing signal missed by roughly half — titles 0.33 against a
+ *  0.85 bar, descriptions 0.27 against 0.92, title tokens 0.375 against 0.60,
+ *  both `artists` arrays NULL. Because all four dedup layers reach this one
+ *  predicate, the pair was invisible to the read-time collapse, the write-time
+ *  merge, the nightly reconcile AND the audit simultaneously.)
+ *
+ *  The END time is what makes this safe, and it is not a detail. Same venue +
+ *  same date + same START is emphatically NOT sufficient: measured over the
+ *  whole upcoming catalog at ship time, that shape yielded 6 pairs of which
+ *  only 1 was a duplicate. The other 5 are Calaveras Big Trees genuinely
+ *  running Junior Rangers, Meadow Walk and the South Grove Guided Hike all at
+ *  10:00 in the same park — merging on start alone would have silently deleted
+ *  four real programs off the calendar. Requiring both ends known and equal
+ *  leaves exactly the 1 true duplicate: the park's programs are different
+ *  lengths, so they self-separate. One room cannot host two different events
+ *  that begin *and* end on the same minute.
+ *
+ *  Both ends must be KNOWN — a NULL end on either side falls through. Two rows
+ *  that merely both omit an end share no information, and treating NULL as a
+ *  matching value is what would re-admit the Big Trees pairs.
+ *
+ *  Naming DIFFERENT acts disqualifies the window outright. A venue can run a
+ *  Salsa Night with Los Caminos and an Open Mic with Jane Doe in the same
+ *  19:00–21:00 slot, and two rows that each name an act and disagree about who
+ *  is playing are asserting two different shows — that is real evidence, not an
+ *  absence of it, and it outranks the window. (By the time control reaches
+ *  here, `artistsOverlap` has already returned false, so any two known artist
+ *  lists are disjoint.) The signal is therefore aimed exactly where it is
+ *  needed: rows carrying no act information at all, which is the shape of the
+ *  cross-source aggregator duplicate it exists to catch. */
+function sameExactWindow(a: EventIdentity, b: EventIdentity): boolean {
+  const sa = normalizeTime(a.start_time);
+  const sb = normalizeTime(b.start_time);
+  const ea = normalizeTime(a.end_time);
+  const eb = normalizeTime(b.end_time);
+  if (!sa || !sb || !ea || !eb) return false;
+  if (sa !== sb || ea !== eb) return false;
+  const namesAct = (e: EventIdentity) => (e.artists ?? []).some((x) => (x ?? "").trim());
+  if (namesAct(a) && namesAct(b)) return false;
+  return true;
+}
+
 /** Are two rows the same real event? The one definition, imported by both the
  *  read-time collapse and the write-time merge.
  *
@@ -524,9 +573,11 @@ export function isGenericTitle(name: string): boolean {
  *   - same venue AND one title is a generic placeholder, or
  *   - same venue AND one row's act name appears in the other's text, or
  *   - same venue AND a shared substantive description core, or
- *   - same venue AND heavily-overlapping title tokens (minus the "@ venue" tail).
+ *   - same venue AND heavily-overlapping title tokens (minus the "@ venue" tail), or
+ *   - same venue AND an identical start-AND-end window (`sameExactWindow`).
  *  Two *different specific* titles with distinct descriptions never merge on
- *  venue/time alone. */
+ *  venue + date + START time alone — a park runs simultaneous programs. They do
+ *  merge when the whole window matches end to end. */
 export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   if (a.date && b.date && a.date !== b.date) return false;
 
@@ -612,6 +663,9 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
     venuesAgree &&
     titlesShareTokens(a.name, b.name, venueNoiseTokens(a.venue_name, b.venue_name))
   ) {
+    return true;
+  }
+  if (venuesAgree && sameExactWindow(a, b)) {
     return true;
   }
   return false;
