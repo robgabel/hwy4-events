@@ -3,8 +3,8 @@
 // machine-readable source the scraper can reach (it lives on a flyer + a static
 // arnoldparade.org page), so it's hand-seeded like the Lube Room summer series.
 //
-// This is a marquee community event: it gets robs_pick + importance=major and a
-// dedicated red/white/blue card + custom detail page in the app, both keyed off
+// This is a marquee community event: it gets robs_pick=true and a dedicated
+// red/white/blue card + custom detail page in the app, keyed off
 // org_slug='arnold-parade' (see lib/featured-events.ts). The org row must exist
 // first because hwy4_events.org_slug is FK'd to hwy4_orgs.
 //
@@ -81,14 +81,11 @@ async function main(): Promise<void> {
       source_name: "Arnold Independence Day Parade",
       visibility: "public",
       org_slug: ORG_SLUG,
-      importance: "major",
-      importance_override: true,
       robs_pick: true,
       is_weekly: false,
       is_past: false,
       verification_status: "verified",
       dedup_key: dedupKey,
-      sources: [],
     })
     .select("id, name, date")
     .single();

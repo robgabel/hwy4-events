@@ -27,9 +27,8 @@ const REVALIDATE_SECONDS = 1800; // 30 min upper bound on staleness
 const PAGE_SIZE = 1000;
 
 // Columns needed by the card renderer (EventCard), the read-time dedupe
-// assertion (dedupe-events.ts), and the JSON-LD builders (schema.tsx). Trimmed
-// vs. the old per-page selects: still drops `importance` (unread by any list
-// or schema). Outbound-link resolution lives solely on the detail page
+// assertion (dedupe-events.ts), and the JSON-LD builders (schema.tsx).
+// Outbound-link resolution lives solely on the detail page
 // (lib/event-link.ts); cards link only to our own detail pages.
 const EVENT_COLUMNS =
   "id, name, description, date, start_time, end_time, venue_name, town, " +

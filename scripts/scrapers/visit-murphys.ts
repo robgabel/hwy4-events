@@ -1,7 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
-import { supabaseAdmin } from "../lib/supabase-admin.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
 import { TOWNS } from "../../lib/towns.js";
@@ -42,8 +40,6 @@ const HWY4_TOWNS = new Set(TOWNS.map((t) => t.toLowerCase()));
 
 // Venue names that signal a virtual/non-physical event and should be dropped.
 const VIRTUAL_VENUES = new Set(["zoom", "online", "virtual", "google meet", "teams"]);
-
-const anthropic = new Anthropic();
 
 // ---------- Mapper ----------
 
@@ -88,105 +84,6 @@ function mapTribeEvent(ev: TribeEvent): ExtractedEvent | null {
     // Tribe `id` is stable per event occurrence — survives title/venue edits.
     source_event_id: String(ev.id),
   };
-}
-
-// ---------- Cross-source dedup (mirrors gocalaveras) ----------
-
-async function crossSourceDedup(
-  newEvents: ExtractedEvent[]
-): Promise<ExtractedEvent[]> {
-  if (newEvents.length === 0) return [];
-
-  const dates = newEvents.map((e) => e.date).sort();
-  const minDate = dates[0];
-  const maxDate = dates[dates.length - 1];
-
-  const { data: existingEvents, error } = await supabaseAdmin
-    .from("hwy4_events")
-    .select("name, date, town, venue_name, source_name")
-    .neq("source_name", SOURCE_NAME)
-    .gte("date", minDate)
-    .lte("date", maxDate);
-
-  if (error) {
-    console.warn("Failed to fetch existing events for dedup:", error.message);
-    return newEvents;
-  }
-
-  if (!existingEvents || existingEvents.length === 0) {
-    console.log("No existing events in date range — skipping cross-source dedup");
-    return newEvents;
-  }
-
-  console.log(
-    `\nCross-source dedup: checking ${newEvents.length} new events against ${existingEvents.length} existing events`
-  );
-
-  const existingList = existingEvents
-    .map(
-      (e, i) =>
-        `E${i}: "${e.name}" on ${e.date} at ${e.venue_name}, ${e.town} (source: ${e.source_name})`
-    )
-    .join("\n");
-
-  const newList = newEvents
-    .map(
-      (e, i) =>
-        `N${i}: "${e.name}" on ${e.date} at ${e.venue_name}, ${e.town}`
-    )
-    .join("\n");
-
-  const prompt = `You are deduplicating events. Below are EXISTING events already in our database (from venue-specific scrapers like Murphys Irish Pub, Brice Station, etc.) and NEW events from an aggregator site (visitmurphys.com).
-
-Identify which NEW events are duplicates of EXISTING events. Two events are duplicates if they are clearly the same event — same date, same or very similar venue/location, and the names refer to the same thing (even if worded differently).
-
-Examples of duplicates:
-- "Live Music: John Smith" and "John Smith Live" on the same date at the same venue
-- "Trivia Night" at "Murphys Irish Pub" appearing in both sources
-
-Examples of NOT duplicates:
-- Same name but different dates (these are separate occurrences)
-- Same date but clearly different venues and event types
-
-EXISTING events:
-${existingList}
-
-NEW events:
-${newList}
-
-Return a JSON array of the NEW event indices (just the numbers) that are DUPLICATES of existing events. If none are duplicates, return an empty array.
-Return ONLY the JSON array, e.g. [0, 3, 5] — no other text.`;
-
-  try {
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "";
-    const jsonStr = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-    const duplicateIndices: number[] = JSON.parse(jsonStr);
-
-    if (duplicateIndices.length > 0) {
-      const dupSet = new Set(duplicateIndices);
-      const duped = newEvents.filter((_, i) => dupSet.has(i));
-      console.log(
-        `Cross-source dedup removed ${duplicateIndices.length} duplicates:`
-      );
-      for (const e of duped) {
-        console.log(`  ✕ ${e.name} | ${e.date} | ${e.venue_name}`);
-      }
-      return newEvents.filter((_, i) => !dupSet.has(i));
-    }
-
-    console.log("Cross-source dedup: no duplicates found");
-    return newEvents;
-  } catch (err) {
-    console.warn("Cross-source dedup LLM call failed, proceeding without:", err);
-    return newEvents;
-  }
 }
 
 // ---------- Main ----------
@@ -278,18 +175,12 @@ export async function scrapeVisitMurphys(): Promise<void> {
     return;
   }
 
-  const deduped = await crossSourceDedup(future);
-
-  let result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
-  if (deduped.length > 0) {
-    result = await upsertEvents(deduped, SOURCE_NAME, ORG_SLUG, PAGE_URL);
-  }
+  const result: UpsertResult = await upsertEvents(future, SOURCE_NAME, ORG_SLUG, PAGE_URL);
 
   console.log("\n=== Visit Murphys Summary ===");
   console.log(`Fetched from Tribe API: ${tribeEvents.length}`);
   console.log(`Events in Hwy 4 corridor: ${corridor.length}`);
   console.log(`Future events: ${future.length}`);
-  console.log(`After cross-source dedup: ${deduped.length}`);
   console.log(`Inserted: ${result.inserted}`);
   console.log(`Updated: ${result.updated}`);
   console.log(`Unchanged: ${result.unchanged}`);
