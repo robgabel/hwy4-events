@@ -1,5 +1,6 @@
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
-import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import { beginOrganizerRun } from "../lib/organizer-source.js";
+import { writeOrganizerBatch } from "../lib/organizer-source-exec.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
 import { htmlToText } from "../lib/tribe.js";
@@ -36,6 +37,11 @@ import {
  * on the rows it does cover. As a second guard, `correctFromUrl` in the shared
  * upsert pre-pass cross-checks every row against the date/time in its own
  * `event_url`, which for both sources is the Brice product permalink.
+ *
+ * No stale sweep, for the same reason it is not blocklisted: the collection
+ * lists only shows with tickets on sale, so a listing's absence is not the
+ * venue retracting it. Retraction here would delete real concerts the store
+ * simply sold out of or never ticketed. See scripts/lib/organizer-source.ts.
  */
 
 const COLLECTION_URL = "https://bricestation.com/collections/events";
@@ -77,9 +83,12 @@ function mapProduct(p: ShopifyProduct): ExtractedEvent | null {
 }
 
 export async function scrapeBriceStation(): Promise<void> {
-  console.log("=== Brice Station (Shopify products.json) ===");
-
-  const today = new Date().toISOString().slice(0, 10);
+  const run = beginOrganizerRun({
+    title: "Brice Station (Shopify products.json)",
+    sourceName: SOURCE_NAME,
+    orgSlug: ORG_SLUG,
+    pageUrl: PAGE_URL,
+  });
 
   const products = await fetchShopifyProducts(COLLECTION_URL);
   console.log(`\nFetched ${products.length} product(s) from the events collection`);
@@ -102,7 +111,7 @@ export async function scrapeBriceStation(): Promise<void> {
   }
 
   // Future-only — the collection keeps selling-closed past shows around.
-  const future = mapped.filter((e) => e.date >= today);
+  const future = mapped.filter((e) => e.date >= run.today);
   const past = mapped.length - future.length;
   if (past > 0) console.log(`  Skipped ${past} past show(s)`);
 
@@ -110,18 +119,17 @@ export async function scrapeBriceStation(): Promise<void> {
     console.log(`  - ${e.date} ${e.start_time ?? "?"} | ${e.name} | ${e.price ?? "no price"}`);
   }
 
-  if (future.length === 0) {
+  const { upsert, written } = await writeOrganizerBatch(run, { events: future });
+  if (written === 0) {
     console.log("No future shows to upsert.");
     return;
   }
-
-  const result: UpsertResult = await upsertEvents(future, SOURCE_NAME, ORG_SLUG, PAGE_URL);
 
   console.log("\n=== Brice Station Summary ===");
   console.log(`Products fetched: ${products.length}`);
   console.log(`Mapped to events: ${mapped.length}`);
   console.log(`Future shows: ${future.length}`);
-  console.log(`Inserted: ${result.inserted}`);
-  console.log(`Updated: ${result.updated}`);
-  console.log(`Unchanged: ${result.unchanged}`);
+  console.log(`Inserted: ${upsert.inserted}`);
+  console.log(`Updated: ${upsert.updated}`);
+  console.log(`Unchanged: ${upsert.unchanged}`);
 }

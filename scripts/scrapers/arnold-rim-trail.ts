@@ -1,5 +1,6 @@
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
-import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import { beginOrganizerRun } from "../lib/organizer-source.js";
+import { writeOrganizerBatch } from "../lib/organizer-source-exec.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { TOWNS } from "../../lib/towns.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
@@ -34,6 +35,12 @@ import {
  * Aggregator copies of these events are blocked in `scripts/lib/manual-sources.ts`
  * (owned by this org_slug) so GoCalaveras can't overwrite the organizer's times
  * with its stale snapshot on a later pass of the same nightly run.
+ *
+ * No stale sweep (see scripts/lib/organizer-source.ts). The Tribe endpoint is
+ * queried forward from today with no upper bound, so the window would be
+ * derivable — but ART runs a handful of events a year, and against a catalog
+ * that small the sweep's floor cap (3 rows) is a large share of the whole
+ * calendar. If ghosts ever appear here, supply a plan; don't assume one.
  */
 
 const API_URL = "https://arnoldrimtrail.org/wp-json/tribe/events/v1/events";
@@ -100,12 +107,15 @@ function mapTribeEvent(ev: TribeEvent): ExtractedEvent | null {
 }
 
 export async function scrapeArnoldRimTrail(): Promise<void> {
-  console.log("=== Arnold Rim Trail (Tribe REST API) ===");
-
-  const today = new Date().toISOString().slice(0, 10);
+  const run = beginOrganizerRun({
+    title: "Arnold Rim Trail (Tribe REST API)",
+    sourceName: SOURCE_NAME,
+    orgSlug: ORG_SLUG,
+    pageUrl: PAGE_URL,
+  });
 
   const tribeEvents = await fetchAllTribeEvents(API_URL, {
-    startDate: today,
+    startDate: run.today,
     perPage: PER_PAGE,
     maxPages: MAX_PAGES,
   });
@@ -144,7 +154,7 @@ export async function scrapeArnoldRimTrail(): Promise<void> {
   }
 
   // Future-only — never write past events.
-  const future = corridor.filter((e) => e.date >= today);
+  const future = corridor.filter((e) => e.date >= run.today);
 
   // NOTE: deliberately no `isManuallyManagedEvent` filter. ART's events ARE
   // blocklisted there, but this scraper is the owner the blocklist protects them
@@ -157,23 +167,17 @@ export async function scrapeArnoldRimTrail(): Promise<void> {
     );
   }
 
-  if (future.length === 0) {
+  const { upsert, written } = await writeOrganizerBatch(run, { events: future });
+  if (written === 0) {
     console.log("No future corridor events to upsert.");
     return;
   }
-
-  const result: UpsertResult = await upsertEvents(
-    future,
-    SOURCE_NAME,
-    ORG_SLUG,
-    PAGE_URL
-  );
 
   console.log("\n=== Arnold Rim Trail Summary ===");
   console.log(`Fetched from Tribe API: ${tribeEvents.length}`);
   console.log(`Events in Hwy 4 corridor: ${corridor.length}`);
   console.log(`Future events: ${future.length}`);
-  console.log(`Inserted: ${result.inserted}`);
-  console.log(`Updated: ${result.updated}`);
-  console.log(`Unchanged: ${result.unchanged}`);
+  console.log(`Inserted: ${upsert.inserted}`);
+  console.log(`Updated: ${upsert.updated}`);
+  console.log(`Unchanged: ${upsert.unchanged}`);
 }

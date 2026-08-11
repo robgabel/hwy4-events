@@ -1,6 +1,7 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
-import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import { beginOrganizerRun } from "../lib/organizer-source.js";
+import { writeOrganizerBatch } from "../lib/organizer-source-exec.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
 import { htmlToText } from "../lib/tribe.js";
@@ -10,8 +11,7 @@ import {
   humanizeEventSlug,
   parseWixEventPage,
 } from "../lib/wix-events.js";
-import { type SweepRow } from "../lib/stale-sweep.js";
-import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
+import { type SweepPlan, type SweepRow } from "../lib/stale-sweep.js";
 
 /**
  * Murphys Irish Pub — the venue's own Wix events site, read structurally.
@@ -110,11 +110,15 @@ async function fetchHtml(url: string, firecrawl: FirecrawlApp | null): Promise<s
 }
 
 export async function scrapeMurphysIrishPub(): Promise<void> {
-  console.log("=== Murphys Irish Pub (Wix event pages) ===");
+  const run = beginOrganizerRun({
+    title: "Murphys Irish Pub (Wix event pages)",
+    sourceName: SOURCE_NAME,
+    orgSlug: ORG_SLUG,
+    pageUrl: LIST_URL,
+  });
 
   const apiKey = process.env.FIRECRAWL_API_KEY;
   const firecrawl = apiKey ? new FirecrawlApp({ apiKey }) : null;
-  const today = new Date().toISOString().slice(0, 10);
 
   // 1. The homepage IS the events page (its <title> is "EVENTS"); we only
   //    take the per-event links from it, never dates.
@@ -190,26 +194,31 @@ export async function scrapeMurphysIrishPub(): Promise<void> {
     }
   }
 
-  const future = mapped.filter((e) => e.date >= today);
+  const future = mapped.filter((e) => e.date >= run.today);
   console.log(`Parsed ${mapped.length} event(s), ${future.length} future:`);
   for (const e of future) {
     console.log(`  - ${e.date} ${e.start_time ?? "??:??"} | ${e.name}`);
   }
 
-  let result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
-  if (future.length > 0) {
-    result = await upsertEvents(future, SOURCE_NAME, ORG_SLUG, LIST_URL);
-  }
-
-  // 3. Retraction — see header. Only when the batch is healthy, only within
-  //    the dates this batch provably covers. A truncated link list means the
-  //    presence set and window are both untrustworthy — no sweep that run.
-  let swept = 0;
-  if (allLinks.length > MAX_EVENT_PAGES) {
-    console.log(
-      `  Sweep skipped: link list truncated (${allLinks.length} > ${MAX_EVENT_PAGES}) — presence set incomplete this run.`
-    );
-  } else if (future.length >= MIN_EVENTS_FOR_SWEEP) {
+  // 3. Retraction — see header. The shared writer upserts first, then asks for
+  //    this plan; it declines to run one at all when nothing was written. What
+  //    stays here is what only this source can judge: whether the run read the
+  //    pub's calendar completely enough to call a row absent.
+  const planSweep = (): SweepPlan | null => {
+    // A truncated link list means the presence set AND the window are both
+    // untrustworthy — no sweep that run.
+    if (allLinks.length > MAX_EVENT_PAGES) {
+      console.log(
+        `  Sweep skipped: link list truncated (${allLinks.length} > ${MAX_EVENT_PAGES}) — presence set incomplete this run.`
+      );
+      return null;
+    }
+    if (future.length < MIN_EVENTS_FOR_SWEEP) {
+      if (future.length > 0) {
+        console.log(`  Sweep skipped: only ${future.length} future event(s) parsed (< ${MIN_EVENTS_FOR_SWEEP}).`);
+      }
+      return null;
+    }
     const maxDate = future.map((e) => e.date).sort().at(-1)!;
     const presentKeys = new Set<string>();
     // EVERY linked page counts as present — including ones that failed to
@@ -225,10 +234,9 @@ export async function scrapeMurphysIrishPub(): Promise<void> {
       const slug = e.event_url ? eventSlugFromUrl(e.event_url) : null;
       if (slug) presentKeys.add(slug);
     }
-    swept = await sweepStaleSourceRows({
-      orgSlug: ORG_SLUG,
+    return {
       reason: "murphys-irish-pub sweep (no longer on the pub's Wix calendar)",
-      windows: [{ from: today, to: maxDate }],
+      windows: [{ from: run.today, to: maxDate }],
       presentKeys,
       keysOf: (r: SweepRow) => [
         r.source_event_id,
@@ -242,15 +250,15 @@ export async function scrapeMurphysIrishPub(): Promise<void> {
         if (r.event_url) return OWN_HOST.test(r.event_url);
         return !r.source_event_id || r.source_event_id.startsWith("murphys-irish-pub|");
       },
-    });
-  } else if (future.length > 0) {
-    console.log(`  Sweep skipped: only ${future.length} future event(s) parsed (< ${MIN_EVENTS_FOR_SWEEP}).`);
-  }
+    };
+  };
+
+  const { upsert, swept } = await writeOrganizerBatch(run, { events: future, planSweep });
 
   console.log("\n=== Murphys Irish Pub Summary ===");
   console.log(`Event pages: ${links.length}, parsed: ${mapped.length}, future: ${future.length}`);
-  console.log(`Inserted: ${result.inserted}`);
-  console.log(`Updated: ${result.updated}`);
-  console.log(`Unchanged: ${result.unchanged}`);
+  console.log(`Inserted: ${upsert.inserted}`);
+  console.log(`Updated: ${upsert.updated}`);
+  console.log(`Unchanged: ${upsert.unchanged}`);
   console.log(`Swept stale: ${swept}`);
 }
