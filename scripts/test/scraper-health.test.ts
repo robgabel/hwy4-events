@@ -11,6 +11,8 @@ import {
   runStatus,
   formatDuration,
   currentlyErroring,
+  findInsertRateAnomalies,
+  INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD,
   type ScrapeRunRow,
 } from "../../lib/scraper-health.js";
 
@@ -85,4 +87,81 @@ test("currentlyErroring: includes a source that has never once succeeded", () =>
 test("formatDuration formats minutes+seconds and bare seconds", () => {
   assert.equal(formatDuration(538000), "8m 58s");
   assert.equal(formatDuration(45000), "45s");
+});
+
+test("findInsertRateAnomalies: a sustained high-insert source flags (the pub case)", () => {
+  const runs = [
+    run("2026-08-09", { "murphys-irish-pub": ok(11) }, 0),
+    run("2026-08-08", { "murphys-irish-pub": ok(9) }, 0),
+    run("2026-08-07", { "murphys-irish-pub": ok(10) }, 0),
+    run("2026-08-06", { "murphys-irish-pub": ok(8) }, 0),
+  ];
+  const anomalies = findInsertRateAnomalies(runs);
+  assert.equal(anomalies.length, 1);
+  assert.deepEqual(anomalies[0], { source: "murphys-irish-pub", runCount: 4, medianInserted: 9.5 });
+});
+
+test("findInsertRateAnomalies: a normal steady-state source (median 0-3/run) does not flag", () => {
+  const runs = [
+    run("2026-08-09", { "arnold-rim-trail": ok(1) }, 0),
+    run("2026-08-08", { "arnold-rim-trail": ok(0) }, 0),
+    run("2026-08-07", { "arnold-rim-trail": ok(2) }, 0),
+    run("2026-08-06", { "arnold-rim-trail": ok(3) }, 0),
+  ];
+  assert.deepEqual(findInsertRateAnomalies(runs), []);
+});
+
+test("findInsertRateAnomalies: a one-off spike does not flag (the median stays low)", () => {
+  const runs = [
+    run("2026-08-09", { "gocalaveras": ok(0) }, 0),
+    run("2026-08-08", { "gocalaveras": ok(1) }, 0),
+    run("2026-08-07", { "gocalaveras": ok(20) }, 0), // one big legitimate batch, not sustained
+    run("2026-08-06", { "gocalaveras": ok(0) }, 0),
+    run("2026-08-05", { "gocalaveras": ok(1) }, 0),
+  ];
+  assert.deepEqual(findInsertRateAnomalies(runs), []);
+});
+
+test("findInsertRateAnomalies: fewer than MIN_RUNS never flags, even at a high median", () => {
+  const runs = [
+    run("2026-08-09", { "brand-new-source": ok(10) }, 0),
+    run("2026-08-08", { "brand-new-source": ok(12) }, 0),
+  ];
+  assert.deepEqual(findInsertRateAnomalies(runs), []);
+});
+
+test("findInsertRateAnomalies: median exactly at the threshold flags (>=, not >)", () => {
+  const runs = [
+    run("2026-08-09", { "boundary-source": ok(INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD) }, 0),
+    run("2026-08-08", { "boundary-source": ok(INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD) }, 0),
+    run("2026-08-07", { "boundary-source": ok(INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD) }, 0),
+  ];
+  const anomalies = findInsertRateAnomalies(runs);
+  assert.equal(anomalies.length, 1);
+  assert.equal(anomalies[0].medianInserted, INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD);
+});
+
+test("findInsertRateAnomalies: sorts worst-median-first and only flags the anomalous source", () => {
+  const runs = [
+    run(
+      "2026-08-09",
+      { "murphys-irish-pub": ok(20), "boundary-source": ok(5), "arnold-rim-trail": ok(1) },
+      0
+    ),
+    run(
+      "2026-08-08",
+      { "murphys-irish-pub": ok(18), "boundary-source": ok(5), "arnold-rim-trail": ok(2) },
+      0
+    ),
+    run(
+      "2026-08-07",
+      { "murphys-irish-pub": ok(19), "boundary-source": ok(5), "arnold-rim-trail": ok(0) },
+      0
+    ),
+  ];
+  const anomalies = findInsertRateAnomalies(runs);
+  assert.deepEqual(
+    anomalies.map((a) => a.source),
+    ["murphys-irish-pub", "boundary-source"]
+  );
 });

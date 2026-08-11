@@ -31,6 +31,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          # Lets scripts/lib/scrape-run-log.ts post a loud-fail alert if the
+          # scrape_runs telemetry insert itself fails (HWY-18) — optional,
+          # same secret the Vercel routes use for their own Slack posts.
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           # Organizer-source stale sweeps (scripts/lib/stale-sweep-exec.ts) run
           # report-only until this REPOSITORY VARIABLE (not a Vercel env, not a
           # secret) is set to "true" — Settings → Secrets and variables →

@@ -18,7 +18,52 @@ import type { UpsertResult } from "./dedup.js";
  * "cancelled", not "failure", so nothing downstream ever ran).
  *
  * Best-effort throughout: a failure here must never break the scrape.
+ *
+ * The insert itself is instrumented to fail LOUDLY (Slack, not just
+ * console.error): a sensor that can fail silently is not a sensor. This
+ * table's own insert was silently dead for a month (2026-07-09 -> 2026-08-09,
+ * see LESSONS.md) because a migration no-opped over a prod table-name
+ * collision and every write failed with nothing to show for it: an empty
+ * admin panel and a weekly memo reasoning over nothing.
+ *
+ * IMPORTANT: those writes never reached a `catch` at all.
+ * `@supabase/postgrest-js` resolves a DB/API failure (a 4xx/5xx from
+ * PostgREST, a missing column, an RLS denial, even most transport errors) as
+ * a normal `{ data: null, error }` result — it does not reject the promise
+ * — unless `.throwOnError()` is chained, which this call doesn't. So the
+ * actual July failure mode was a silently-ignored *resolved* error, not a
+ * caught-and-swallowed exception. The `if (error)` check below is what
+ * closes that gap; the surrounding try/catch is belt-and-braces for
+ * something that genuinely throws (e.g. the fetch itself never completing).
+ * Both paths post the same Slack alert, so this exact blind spot can't
+ * recur invisibly either way.
  */
+
+/** Posts a plain-text message to SLACK_WEBHOOK_URL if set; a no-op otherwise.
+ *  Best-effort — a Slack outage (including a hang) must never block or
+ *  throw out of the scrape run, which is why the fetch carries its own
+ *  timeout: finishScrapeRun sits on the critical path of a timeout-capped
+ *  GitHub Actions job, and without an explicit AbortSignal a hung webhook
+ *  can run far longer than that on undici's own default before failing.
+ *  This mirrors the fetch-a-webhook helper every `app/api/*` route defines
+ *  for itself (grepped: none of them share one, and scripts/ has never
+ *  posted to Slack before this), so there's nothing existing to import here. */
+async function postSlack(text: string): Promise<void> {
+  const webhook = process.env.SLACK_WEBHOOK_URL;
+  if (!webhook) return;
+  try {
+    await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    // Also swallows a timeout/abort from the signal above — a slow or dead
+    // webhook must not hold up (or fail) the scrape run.
+    console.error("[scrape-run-log] Slack post failed:", err);
+  }
+}
 
 interface SourceTotals {
   inserted: number;
@@ -90,8 +135,17 @@ export async function finishScrapeRun(sourcesAttempted: string[]): Promise<void>
     { inserted: 0, updated: 0 }
   );
 
+  const alert = (detail: string) =>
+    postSlack(
+      `:rotating_light: *scrape_runs telemetry write FAILED* — scraper health is blind until fixed: ${detail}`
+    );
+
   try {
-    await supabaseAdmin.from("scrape_runs").insert({
+    // Destructure `{ error }` (the repo's own idiom — see scripts/lib/dedup.ts
+    // and app/api/agent/scraper-health-memo/route.ts): supabase-js resolves a
+    // DB/API failure here, it does not throw, so this `if (error)` is the
+    // actual failure path (see the doc comment at the top of this file).
+    const { error } = await supabaseAdmin.from("scrape_runs").insert({
       started_at: startedAt,
       completed_at: completedAt,
       duration_ms: new Date(completedAt).getTime() - new Date(startedAt).getTime(),
@@ -101,7 +155,15 @@ export async function finishScrapeRun(sourcesAttempted: string[]): Promise<void>
       total_updated: totals.updated,
       source_results: sourceResults,
     });
+    if (error) {
+      console.error("Failed to write scrape_runs summary:", error.message, error.code);
+      await alert(`${error.message} (${error.code})`);
+    }
   } catch (err) {
-    console.error("Failed to write scrape_runs summary:", err);
+    // Belt-and-braces for something that genuinely threw — e.g. the request
+    // never completed at all — rather than resolving with an error above.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Failed to write scrape_runs summary (thrown):", err);
+    await alert(message);
   }
 }
