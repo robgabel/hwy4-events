@@ -16,6 +16,7 @@ import {
   goCalaverasSweepWindows,
   isGoCalaverasUrl,
   MIN_EVENTS_PER_MONTH,
+  MIN_PLAUSIBLE_CAP,
   ownsGoCalaverasRow,
   provenMonthLabel,
   slugExtractionHealthy,
@@ -299,8 +300,34 @@ test("detectShortcodeCap reads a cap off the live shortcode, ignoring non-caps",
   );
   // EventON's own "0" means unlimited; non-numeric attributes are not caps.
   assert.equal(detectShortcodeCap({ event_count: "0", show_limit: "yes" }), null);
+  // The live 2026-08-11 false positive: show_limit_paged is a 0/1 pagination
+  // TOGGLE, and reading its "1" as a display cap made every month "reach" it —
+  // zero windows proved, sweep silently inert. Toggle-scale values are not caps.
+  assert.equal(detectShortcodeCap({ show_limit_paged: "1" }), null);
+  assert.deepEqual(
+    detectShortcodeCap({ show_limit_paged: "1", event_count: "50" }),
+    { key: "event_count", value: 50 }
+  );
   assert.equal(detectShortcodeCap({}), null);
   assert.equal(detectShortcodeCap(null), null);
+  // The invariant that makes the floor SAFE: a genuine cap of 1..4 goes
+  // undetected here, and the month floor is what still refuses those months
+  // (a truly C-capped month returns <= C < MIN_EVENTS_PER_MONTH events). If
+  // the month floor is ever lowered below the cap floor, that band reopens
+  // and a tiny-capped month could prove a full-month window — this assertion
+  // is the tripwire.
+  assert.ok(MIN_PLAUSIBLE_CAP <= MIN_EVENTS_PER_MONTH);
+  // Exactly-at-cap is truncation (>= not >): the smallest detectable cap with
+  // a payload that just reaches it must refuse the month.
+  assert.equal(
+    provenMonthLabel({
+      requested: "August 2026",
+      ok: true,
+      dates: datesIn("2026-08", MIN_PLAUSIBLE_CAP),
+      cap: MIN_PLAUSIBLE_CAP,
+    }),
+    null
+  );
   // Two caps: the tighter one governs.
   assert.deepEqual(detectShortcodeCap({ event_count: "50", evc_limit: "25" }), {
     key: "evc_limit",

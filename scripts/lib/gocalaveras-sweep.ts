@@ -270,12 +270,23 @@ export interface MonthEnumeration {
 /** Shortcode keys that could cap how many events a month returns. Matched by
  *  shape rather than a hardcoded name: the live shortcode comes off the page's
  *  `data-sc` attribute and its exact keys are the plugin's to change. A false
- *  positive here only withholds windows, which is the safe direction. */
+ *  positive here only withholds windows, which is the safe direction — but not
+ *  a free one: the first prod dry-run (2026-08-11) read the live shortcode's
+ *  `show_limit_paged: "1"` — a BOOLEAN pagination toggle — as a display cap of
+ *  1, so every month "reached" it, zero windows proved, and the sweep was
+ *  silently inert. Hence the plausibility floor below. */
 const CAP_KEY = /count|limit/i;
 
+/** A real display cap bounds a month's event LIST — live months run
+ *  136/114/60/13/16/4 — while EventON's toggle-shaped settings carry 0/1.
+ *  Anything below this can't be a cap on a county-wide month and is treated as
+ *  a toggle, not a limit. */
+export const MIN_PLAUSIBLE_CAP = 5;
+
 /**
- * Smallest positive integer cap declared by the calendar shortcode, or null.
- * EventON's own "0" means unlimited, so only values > 0 count.
+ * Smallest plausible integer cap declared by the calendar shortcode, or null.
+ * EventON's own "0" means unlimited, and 1–4 are toggle values, so only
+ * values >= MIN_PLAUSIBLE_CAP count.
  */
 export function detectShortcodeCap(
   shortcode: Record<string, unknown> | null | undefined
@@ -285,8 +296,22 @@ export function detectShortcodeCap(
     if (!CAP_KEY.test(key)) continue;
     if (typeof raw !== "string" && typeof raw !== "number") continue;
     const value = Number(raw);
-    if (!Number.isInteger(value) || value <= 0) continue;
+    if (!Number.isInteger(value) || value < MIN_PLAUSIBLE_CAP) continue;
     if (!best || value < best.value) best = { key, value };
+  }
+  // A rejected sub-floor candidate is invisible in "no cap declared" unless it
+  // says so — this exact silence cost a day of inert sweep before anyone could
+  // see WHY zero windows proved. One line makes the next occurrence obvious.
+  if (!best) {
+    for (const [key, raw] of Object.entries(shortcode ?? {})) {
+      if (!CAP_KEY.test(key)) continue;
+      const value = Number(raw);
+      if (Number.isInteger(value) && value > 0 && value < MIN_PLAUSIBLE_CAP) {
+        console.log(
+          `Shortcode key ${key}=${value} is cap-shaped but below MIN_PLAUSIBLE_CAP (${MIN_PLAUSIBLE_CAP}) — treated as a toggle, not a display cap`
+        );
+      }
+    }
   }
   return best;
 }
