@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { rollupBySource, runStatus, currentlyErroring, type ScrapeRunRow } from "@/lib/scraper-health";
+import {
+  rollupBySource,
+  runStatus,
+  currentlyErroring,
+  findInsertRateAnomalies,
+  type ScrapeRunRow,
+} from "@/lib/scraper-health";
 import type { ScraperHealthContext } from "./types";
 
 const WINDOW_DAYS = 14;
@@ -27,6 +33,7 @@ export async function gatherScraperHealthContext(
   const quiet = rollups.filter(
     (r) => !broken.some((b) => b.key === r.key) && r.totalInserted === 0 && r.totalUpdated === 0
   );
+  const insertRateAnomalies = findInsertRateAnomalies(runs);
 
   const totals = runs.reduce(
     (acc, r) => ({
@@ -65,5 +72,10 @@ export async function gatherScraperHealthContext(
       errorRunsInWindow: r.errorRuns,
     })),
     quietSources: quiet.slice(0, 15).map((r) => ({ key: r.key, runsSeen: r.runsSeen })),
+    insertRateAnomalies: insertRateAnomalies.slice(0, 15).map((a) => ({
+      key: a.source,
+      runsSeen: a.runCount,
+      medianInserted: a.medianInserted,
+    })),
   };
 }

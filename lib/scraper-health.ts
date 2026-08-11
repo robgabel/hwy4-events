@@ -95,3 +95,69 @@ export function currentlyErroring(rollups: SourceRollup[]): SourceRollup[] {
     return new Date(r.lastErrorAt).getTime() > new Date(r.lastOkAt).getTime();
   });
 }
+
+/**
+ * Sustained per-run insert rate worth a human's eyes, independent of whether
+ * the source is erroring. Named for the case that motivated it: Murphys
+ * Irish Pub, a real venue booking roughly 5 events a week, had its
+ * homepage-widget scraper INSERTING around 10 *new* rows on every run,
+ * repeatedly, because the page carried no absolute dates and the extractor
+ * invented a fresh date for the same acts every few days — 36 of the venue's
+ * 50 upcoming rows were phantoms by the time it was caught (2026-08-09, see
+ * LESSONS.md). Nothing flagged it: the scraper never errored, so
+ * `currentlyErroring` never lit up and this was the blind spot.
+ *
+ * Steady-state healthy sources insert roughly 0-3 rows per run (real new
+ * events trickling in). A MEDIAN at or above this bar, sustained across at
+ * least MIN_RUNS_FOR_INSERT_RATE_ANOMALY runs, means either a genuinely
+ * booming venue or a hallucinating extractor — this check doesn't say which,
+ * only that it is worth a look.
+ */
+export const INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD = 5;
+
+/** Minimum runs a source must appear in before its median is trusted, so one
+ *  spike (a legitimate backfill, a big festival announced at once) can't by
+ *  itself read as a sustained anomaly. */
+export const MIN_RUNS_FOR_INSERT_RATE_ANOMALY = 3;
+
+export interface InsertRateAnomaly {
+  source: string;
+  runCount: number;
+  medianInserted: number;
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/** Flags sources whose per-run `inserted` count has a sustained high MEDIAN
+ *  across the runs provided (caller decides the window, same as
+ *  `rollupBySource`). A single spike does not flag: it takes
+ *  MIN_RUNS_FOR_INSERT_RATE_ANOMALY-or-more runs for that source before its
+ *  median counts, and the median itself (not a peak) is what's compared
+ *  against the threshold, so one big-but-real batch can't trip it. */
+export function findInsertRateAnomalies(runs: ScrapeRunRow[]): InsertRateAnomaly[] {
+  const insertsBySource = new Map<string, number[]>();
+  for (const run of runs) {
+    for (const [key, result] of Object.entries(run.source_results)) {
+      const list = insertsBySource.get(key);
+      if (list) list.push(result.inserted);
+      else insertsBySource.set(key, [result.inserted]);
+    }
+  }
+
+  const anomalies: InsertRateAnomaly[] = [];
+  for (const [source, inserted] of insertsBySource) {
+    if (inserted.length < MIN_RUNS_FOR_INSERT_RATE_ANOMALY) continue;
+    const medianInserted = median(inserted);
+    if (medianInserted >= INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD) {
+      anomalies.push({ source, runCount: inserted.length, medianInserted });
+    }
+  }
+
+  return anomalies.sort(
+    (a, b) => b.medianInserted - a.medianInserted || a.source.localeCompare(b.source)
+  );
+}

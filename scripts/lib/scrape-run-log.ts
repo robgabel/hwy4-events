@@ -18,7 +18,34 @@ import type { UpsertResult } from "./dedup.js";
  * "cancelled", not "failure", so nothing downstream ever ran).
  *
  * Best-effort throughout: a failure here must never break the scrape.
+ *
+ * The insert itself is instrumented to fail LOUDLY (Slack, not just
+ * console.error): a sensor that can fail silently is not a sensor. This
+ * table's own insert was silently dead for a month (2026-07-09 -> 2026-08-09,
+ * see LESSONS.md) because a migration no-opped over a prod table-name
+ * collision and every write died inside the catch below with nothing to show
+ * for it: an empty admin panel and a weekly memo reasoning over nothing. The
+ * Slack post below is the backstop so that failure mode can't recur invisibly.
  */
+
+/** Posts a plain-text message to SLACK_WEBHOOK_URL if set; a no-op otherwise.
+ *  Best-effort — a Slack outage must never throw out of the scrape run. This
+ *  mirrors the fetch-a-webhook helper every `app/api/*` route defines for
+ *  itself (grepped: none of them share one, and scripts/ has never posted to
+ *  Slack before this), so there's nothing existing to import here. */
+async function postSlack(text: string): Promise<void> {
+  const webhook = process.env.SLACK_WEBHOOK_URL;
+  if (!webhook) return;
+  try {
+    await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+  } catch (err) {
+    console.error("[scrape-run-log] Slack post failed:", err);
+  }
+}
 
 interface SourceTotals {
   inserted: number;
@@ -99,6 +126,10 @@ export async function finishScrapeRun(sourcesAttempted: string[]): Promise<void>
       source_results: sourceResults,
     });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error("Failed to write scrape_runs summary:", err);
+    await postSlack(
+      `:rotating_light: *scrape_runs telemetry write FAILED* — scraper health is blind until fixed: ${message}`
+    );
   }
 }

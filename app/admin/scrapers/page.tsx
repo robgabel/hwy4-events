@@ -7,7 +7,10 @@ import {
   runStatus,
   currentlyErroring,
   formatDuration,
+  findInsertRateAnomalies,
+  INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD,
   type ScrapeRunRow,
+  type InsertRateAnomaly,
 } from "@/lib/scraper-health";
 import type { Digest, DigestItem } from "@/lib/agent/types";
 import { runScraperHealthMemo } from "./actions";
@@ -85,6 +88,7 @@ export default async function ScrapersPage({
 
   const rollups = rollupBySource(runs);
   const broken = currentlyErroring(rollups);
+  const anomalies = findInsertRateAnomalies(runs);
   const totals = runs.reduce(
     (acc, r) => ({
       inserted: acc.inserted + r.total_inserted,
@@ -158,6 +162,8 @@ export default async function ScrapersPage({
             </>
           )}
 
+          <AnomaliesCallout anomalies={anomalies} />
+
           <SectionHeader>Recent runs</SectionHeader>
           <RunsTable runs={runs.slice(0, RECENT_RUNS_SHOWN)} />
 
@@ -210,6 +216,53 @@ function VitalsStrip({
         </div>
       ))}
     </div>
+  );
+}
+
+// Sustained high per-run insert median (see INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD
+// in lib/scraper-health.ts): not necessarily broken like the red box above, so
+// it gets its own amber "worth a look" treatment (same tone as the "proposed"
+// chips elsewhere in /admin) rather than the danger palette.
+function AnomaliesCallout({ anomalies }: { anomalies: InsertRateAnomaly[] }) {
+  if (anomalies.length === 0) return null;
+  return (
+    <>
+      <SectionHeader>Insert-rate anomalies</SectionHeader>
+      <div
+        style={{
+          background: "#fff7ed",
+          border: "1px solid #fde4c8",
+          borderRadius: 10,
+          padding: "14px 16px",
+          marginBottom: 24,
+        }}
+      >
+        <p style={{ margin: "0 0 10px", color: "#92400e", fontSize: 14 }}>
+          Sustained median &ge; {INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD} inserted/run. Not necessarily
+          broken, but worth a look: a genuinely booming venue, or an extractor inventing rows.
+        </p>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #fde4c8" }}>
+                {["Source", "Runs seen", "Median inserted/run"].map((h) => (
+                  <th key={h} style={thStyle}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {anomalies.map((a) => (
+                <tr key={a.source} style={{ borderBottom: "1px solid #fde4c8" }}>
+                  <td style={{ ...tdStyle, fontWeight: 600, color: "#92400e" }}>{a.source}</td>
+                  <td style={tdStyle}>{a.runCount}</td>
+                  <td style={tdStyle}>{a.medianInserted}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 

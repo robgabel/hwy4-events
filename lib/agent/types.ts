@@ -335,6 +335,13 @@ export type ScraperHealthContext = {
   // Sources that ran clean all window but never inserted/updated anything —
   // possibly a site that changed shape, or a genuinely quiet source.
   quietSources: { key: string; runsSeen: number }[];
+  // Sources with a sustained high per-run insert MEDIAN (see
+  // INSERT_RATE_ANOMALY_MEDIAN_THRESHOLD in lib/scraper-health.ts) — not
+  // necessarily broken, but worth a look: either a genuinely booming venue
+  // or an extractor inventing rows (the Murphys Irish Pub phantom-events
+  // case, 2026-08-09, see LESSONS.md). Optional because agent_runs rows
+  // persisted before this shipped lack it.
+  insertRateAnomalies?: { key: string; runsSeen: number; medianInserted: number }[];
 };
 
 // Defensive coercion of model JSON into a Digest. Never throws; returns null
