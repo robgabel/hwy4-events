@@ -1,7 +1,6 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
-import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
-import { applyVenueDetection } from "../lib/venue-matcher.js";
+import { runOrganizerSource } from "../lib/organizer-source.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
 import { htmlToText } from "../lib/tribe.js";
 import {
@@ -11,7 +10,6 @@ import {
   parseWixEventPage,
 } from "../lib/wix-events.js";
 import { type SweepRow } from "../lib/stale-sweep.js";
-import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
 
 /**
  * Murphys Irish Pub — the venue's own Wix events site, read structurally.
@@ -48,6 +46,14 @@ import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
  * stranded ghost. The sweep only covers [today .. latest date in this batch],
  * only rows this source owns, never human-touched rows, and archives to
  * hwy4_events_removed_archive before deleting.
+ *
+ * The pipeline around the parsing (venue detection, the ownership-aware
+ * blocklist, the future filter, the upsert, the sweep call, the summary) is
+ * the shared scripts/lib/organizer-source.ts skeleton. This source's sweep
+ * guards — presence counted from EVERY linked page including unparseable ones,
+ * no sweep when the link list was truncated, no sweep below
+ * MIN_EVENTS_FOR_SWEEP — stay here in planSweep, because they encode what a
+ * healthy fetch of THIS site looks like.
  */
 
 const LIST_URL = "https://www.murphysirishpubca.com/";
@@ -109,148 +115,153 @@ async function fetchHtml(url: string, firecrawl: FirecrawlApp | null): Promise<s
   return null;
 }
 
+/** What planSweep needs from the fetch stage: the full linked-page set. */
+interface PubContext {
+  /** Every /event-details/ link the homepage carried, before the page cap. */
+  allLinks: string[];
+}
+
 export async function scrapeMurphysIrishPub(): Promise<void> {
-  console.log("=== Murphys Irish Pub (Wix event pages) ===");
+  await runOrganizerSource<PubContext>({
+    sourceName: SOURCE_NAME,
+    orgSlug: ORG_SLUG,
+    pageUrl: LIST_URL,
+    banner: "Murphys Irish Pub (Wix event pages)",
 
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  const firecrawl = apiKey ? new FirecrawlApp({ apiKey }) : null;
-  const today = new Date().toISOString().slice(0, 10);
+    async harvest() {
+      const apiKey = process.env.FIRECRAWL_API_KEY;
+      const firecrawl = apiKey ? new FirecrawlApp({ apiKey }) : null;
 
-  // 1. The homepage IS the events page (its <title> is "EVENTS"); we only
-  //    take the per-event links from it, never dates.
-  const listHtml = await fetchHtml(LIST_URL, firecrawl);
-  if (!listHtml) {
-    console.warn("No usable list page — nothing scraped, nothing swept.");
-    return;
-  }
-  const allLinks = extractEventDetailLinks(listHtml, LIST_URL);
-  const links = allLinks.slice(0, MAX_EVENT_PAGES);
-  console.log(
-    `Found ${allLinks.length} event page link(s)` +
-      (allLinks.length > links.length ? ` (fetching first ${links.length})` : "")
-  );
-  if (allLinks.length === 0) {
-    console.warn("0 event-details links — site shape changed? Nothing scraped, nothing swept.");
-    return;
-  }
-
-  // 2. Each event page → structured date or nothing.
-  const mapped: ExtractedEvent[] = [];
-  for (const link of links) {
-    await sleep(PAGE_FETCH_DELAY_MS);
-    const html = await fetchHtml(link, firecrawl);
-    if (!html) {
-      console.warn(`  skipped (unfetchable): ${link}`);
-      continue;
-    }
-    const parsed = parseWixEventPage(html, link);
-    if (!parsed) {
-      console.warn(`  skipped (no unambiguous date): ${link}`);
-      continue;
-    }
-    if (parsed.dateConflict) {
-      console.warn(
-        `  DATE CONFLICT on ${parsed.slug}: JSON-LD says ${parsed.date}, slug disagrees — using JSON-LD`
+      // 1. The homepage IS the events page (its <title> is "EVENTS"); we only
+      //    take the per-event links from it, never dates.
+      const listHtml = await fetchHtml(LIST_URL, firecrawl);
+      if (!listHtml) {
+        console.warn("No usable list page — nothing scraped, nothing swept.");
+        return null;
+      }
+      const allLinks = extractEventDetailLinks(listHtml, LIST_URL);
+      const links = allLinks.slice(0, MAX_EVENT_PAGES);
+      console.log(
+        `Found ${allLinks.length} event page link(s)` +
+          (allLinks.length > links.length ? ` (fetching first ${links.length})` : "")
       );
-    }
-    const name = parsed.name?.trim() || humanizeEventSlug(parsed.slug);
-    // The pub's calendar is its music calendar; the keyword classifier's
-    // "other" (a bare band name carries no keyword) means live_music here.
-    const keywordCategory = classifyEventCategory(name);
-    mapped.push(
-      decodeEventFields({
-        name,
-        description: parsed.description ? htmlToText(parsed.description) || null : null,
-        date: parsed.date,
-        start_time: parsed.startTime,
-        end_time: parsed.endTime,
-        venue_name: VENUE,
-        town: TOWN,
-        address: ADDRESS,
-        category: keywordCategory === "other" ? "live_music" : keywordCategory,
-        price: null,
-        artists: NON_ACT.test(name) ? null : [name],
-        event_url: link,
-        image_url: parsed.imageUrl,
-        // The Wix slug is stable across date/time edits on a one-off event and
-        // unique per occurrence on recurring ones — a reschedule updates in
-        // place instead of duplicating.
-        source_event_id: `murphys-irish-pub|${parsed.slug}`,
-        // A JSON-LD date is the page's LIVE data; the dated slug is frozen at
-        // creation. Without this, correctFromUrl in the upsert pre-pass would
-        // re-impose the stale slug date on every rescheduled occurrence.
-        date_authoritative: parsed.dateSource === "jsonld",
-      })
-    );
-  }
+      if (allLinks.length === 0) {
+        console.warn(
+          "0 event-details links — site shape changed? Nothing scraped, nothing swept."
+        );
+        return null;
+      }
 
-  for (const e of mapped) {
-    if (applyVenueDetection(e)) {
-      // Registry match canonicalizes the venue name + street address.
-    }
-  }
+      // 2. Each event page → structured date or nothing.
+      const mapped: ExtractedEvent[] = [];
+      for (const link of links) {
+        await sleep(PAGE_FETCH_DELAY_MS);
+        const html = await fetchHtml(link, firecrawl);
+        if (!html) {
+          console.warn(`  skipped (unfetchable): ${link}`);
+          continue;
+        }
+        const parsed = parseWixEventPage(html, link);
+        if (!parsed) {
+          console.warn(`  skipped (no unambiguous date): ${link}`);
+          continue;
+        }
+        if (parsed.dateConflict) {
+          console.warn(
+            `  DATE CONFLICT on ${parsed.slug}: JSON-LD says ${parsed.date}, slug disagrees — using JSON-LD`
+          );
+        }
+        const name = parsed.name?.trim() || humanizeEventSlug(parsed.slug);
+        // The pub's calendar is its music calendar; the keyword classifier's
+        // "other" (a bare band name carries no keyword) means live_music here.
+        const keywordCategory = classifyEventCategory(name);
+        mapped.push(
+          decodeEventFields({
+            name,
+            description: parsed.description ? htmlToText(parsed.description) || null : null,
+            date: parsed.date,
+            start_time: parsed.startTime,
+            end_time: parsed.endTime,
+            venue_name: VENUE,
+            town: TOWN,
+            address: ADDRESS,
+            category: keywordCategory === "other" ? "live_music" : keywordCategory,
+            price: null,
+            artists: NON_ACT.test(name) ? null : [name],
+            event_url: link,
+            image_url: parsed.imageUrl,
+            // The Wix slug is stable across date/time edits on a one-off event and
+            // unique per occurrence on recurring ones — a reschedule updates in
+            // place instead of duplicating.
+            source_event_id: `murphys-irish-pub|${parsed.slug}`,
+            // A JSON-LD date is the page's LIVE data; the dated slug is frozen at
+            // creation. Without this, correctFromUrl in the upsert pre-pass would
+            // re-impose the stale slug date on every rescheduled occurrence.
+            date_authoritative: parsed.dateSource === "jsonld",
+          })
+        );
+      }
 
-  const future = mapped.filter((e) => e.date >= today);
-  console.log(`Parsed ${mapped.length} event(s), ${future.length} future:`);
-  for (const e of future) {
-    console.log(`  - ${e.date} ${e.start_time ?? "??:??"} | ${e.name}`);
-  }
+      return {
+        batches: [{ events: mapped }],
+        context: { allLinks },
+        summaryLines: [`Event pages: ${links.length}, parsed: ${mapped.length}`],
+      };
+    },
 
-  let result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
-  if (future.length > 0) {
-    result = await upsertEvents(future, SOURCE_NAME, ORG_SLUG, LIST_URL);
-  }
+    // 3. Retraction — see header. Only when the batch is healthy, only within
+    //    the dates this batch provably covers. A truncated link list means the
+    //    presence set and window are both untrustworthy — no sweep that run.
+    planSweep({ today, context, written }) {
+      const { allLinks } = context;
+      if (allLinks.length > MAX_EVENT_PAGES) {
+        console.log(
+          `  Sweep skipped: link list truncated (${allLinks.length} > ${MAX_EVENT_PAGES}) — presence set incomplete this run.`
+        );
+        return null;
+      }
+      if (written.length < MIN_EVENTS_FOR_SWEEP) {
+        if (written.length > 0) {
+          console.log(
+            `  Sweep skipped: only ${written.length} future event(s) parsed (< ${MIN_EVENTS_FOR_SWEEP}).`
+          );
+        }
+        return null;
+      }
 
-  // 3. Retraction — see header. Only when the batch is healthy, only within
-  //    the dates this batch provably covers. A truncated link list means the
-  //    presence set and window are both untrustworthy — no sweep that run.
-  let swept = 0;
-  if (allLinks.length > MAX_EVENT_PAGES) {
-    console.log(
-      `  Sweep skipped: link list truncated (${allLinks.length} > ${MAX_EVENT_PAGES}) — presence set incomplete this run.`
-    );
-  } else if (future.length >= MIN_EVENTS_FOR_SWEEP) {
-    const maxDate = future.map((e) => e.date).sort().at(-1)!;
-    const presentKeys = new Set<string>();
-    // EVERY linked page counts as present — including ones that failed to
-    // fetch or parse. Absence from the pub's calendar is the sweep criterion;
-    // our inability to read a page that is still linked must never delete its
-    // row.
-    for (const link of allLinks) {
-      const slug = eventSlugFromUrl(link);
-      if (slug) presentKeys.add(slug);
-    }
-    for (const e of future) {
-      if (e.source_event_id) presentKeys.add(e.source_event_id);
-      const slug = e.event_url ? eventSlugFromUrl(e.event_url) : null;
-      if (slug) presentKeys.add(slug);
-    }
-    swept = await sweepStaleSourceRows({
-      orgSlug: ORG_SLUG,
-      reason: "murphys-irish-pub sweep (no longer on the pub's Wix calendar)",
-      windows: [{ from: today, to: maxDate }],
-      presentKeys,
-      keysOf: (r: SweepRow) => [
-        r.source_event_id,
-        r.event_url ? eventSlugFromUrl(r.event_url) : null,
-      ],
-      // Only rows this source owns: our sid scheme, our host's permalinks, or
-      // the old LLM era's key-less/link-less rows. A row carrying another
-      // source's URL (e.g. a GoCalaveras permalink merged onto our org) is
-      // that source's to manage.
-      ownRow: (r: SweepRow) => {
-        if (r.event_url) return OWN_HOST.test(r.event_url);
-        return !r.source_event_id || r.source_event_id.startsWith("murphys-irish-pub|");
-      },
-    });
-  } else if (future.length > 0) {
-    console.log(`  Sweep skipped: only ${future.length} future event(s) parsed (< ${MIN_EVENTS_FOR_SWEEP}).`);
-  }
+      const maxDate = written.map((e) => e.date).sort().at(-1)!;
+      const presentKeys = new Set<string>();
+      // EVERY linked page counts as present — including ones that failed to
+      // fetch or parse. Absence from the pub's calendar is the sweep criterion;
+      // our inability to read a page that is still linked must never delete its
+      // row.
+      for (const link of allLinks) {
+        const slug = eventSlugFromUrl(link);
+        if (slug) presentKeys.add(slug);
+      }
+      for (const e of written) {
+        if (e.source_event_id) presentKeys.add(e.source_event_id);
+        const slug = e.event_url ? eventSlugFromUrl(e.event_url) : null;
+        if (slug) presentKeys.add(slug);
+      }
 
-  console.log("\n=== Murphys Irish Pub Summary ===");
-  console.log(`Event pages: ${links.length}, parsed: ${mapped.length}, future: ${future.length}`);
-  console.log(`Inserted: ${result.inserted}`);
-  console.log(`Updated: ${result.updated}`);
-  console.log(`Unchanged: ${result.unchanged}`);
-  console.log(`Swept stale: ${swept}`);
+      return {
+        reason: "murphys-irish-pub sweep (no longer on the pub's Wix calendar)",
+        windows: [{ from: today, to: maxDate }],
+        presentKeys,
+        keysOf: (r: SweepRow) => [
+          r.source_event_id,
+          r.event_url ? eventSlugFromUrl(r.event_url) : null,
+        ],
+        // Only rows this source owns: our sid scheme, our host's permalinks, or
+        // the old LLM era's key-less/link-less rows. A row carrying another
+        // source's URL (e.g. a GoCalaveras permalink merged onto our org) is
+        // that source's to manage.
+        ownRow: (r: SweepRow) => {
+          if (r.event_url) return OWN_HOST.test(r.event_url);
+          return !r.source_event_id || r.source_event_id.startsWith("murphys-irish-pub|");
+        },
+      };
+    },
+  });
 }

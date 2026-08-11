@@ -1,6 +1,5 @@
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
-import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
-import { applyVenueDetection } from "../lib/venue-matcher.js";
+import { runOrganizerSource } from "../lib/organizer-source.js";
 import { TOWNS } from "../../lib/towns.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
 import {
@@ -33,7 +32,16 @@ import {
  *
  * Aggregator copies of these events are blocked in `scripts/lib/manual-sources.ts`
  * (owned by this org_slug) so GoCalaveras can't overwrite the organizer's times
- * with its stale snapshot on a later pass of the same nightly run.
+ * with its stale snapshot on a later pass of the same nightly run. This scraper
+ * passes its own slug to the shared skeleton's blocklist check, so the five
+ * `owner: "arnold-rim-trail"` patterns let it through while any OTHER curated
+ * venue that turned up on ART's feed would still be protected.
+ *
+ * Everything around the mapping (venue detection, that blocklist, the future
+ * filter, the upsert, the summary) is the shared
+ * `scripts/lib/organizer-source.ts` skeleton. No stale sweep: ART's calendar is
+ * sparse enough that a single thin fetch is indistinguishable from a quiet
+ * season, and the times self-heal on every pass anyway.
  */
 
 const API_URL = "https://arnoldrimtrail.org/wp-json/tribe/events/v1/events";
@@ -100,80 +108,52 @@ function mapTribeEvent(ev: TribeEvent): ExtractedEvent | null {
 }
 
 export async function scrapeArnoldRimTrail(): Promise<void> {
-  console.log("=== Arnold Rim Trail (Tribe REST API) ===");
+  await runOrganizerSource({
+    sourceName: SOURCE_NAME,
+    orgSlug: ORG_SLUG,
+    pageUrl: PAGE_URL,
+    banner: "Arnold Rim Trail (Tribe REST API)",
+    // Runs after the skeleton's venue detection so the corridor test sees the
+    // registry-canonical town (a trailhead resolved from the registry can pull
+    // its row into a corridor town the raw feed didn't name).
+    refine(events) {
+      const corridor = events.filter((e) => HWY4_TOWNS.has(e.town.toLowerCase().trim()));
+      if (corridor.length < events.length) {
+        const skipped = [
+          ...new Set(
+            events
+              .filter((e) => !HWY4_TOWNS.has(e.town.toLowerCase().trim()))
+              .map((e) => e.town)
+          ),
+        ];
+        console.log(`  Skipped non-corridor towns: ${skipped.join(", ")}`);
+      }
+      console.log(`  Events in Hwy 4 corridor: ${corridor.length}`);
+      return corridor;
+    },
+    async harvest({ today }) {
+      const tribeEvents = await fetchAllTribeEvents(API_URL, {
+        startDate: today,
+        perPage: PER_PAGE,
+        maxPages: MAX_PAGES,
+      });
+      console.log(`\nFetched ${tribeEvents.length} events from Tribe API`);
 
-  const today = new Date().toISOString().slice(0, 10);
+      const mapped: ExtractedEvent[] = [];
+      for (const ev of tribeEvents) {
+        try {
+          const m = mapTribeEvent(ev);
+          if (m) mapped.push(decodeEventFields(m));
+        } catch (err) {
+          console.warn(`  Failed to map event ${ev.id} (${ev.title}):`, err);
+        }
+      }
 
-  const tribeEvents = await fetchAllTribeEvents(API_URL, {
-    startDate: today,
-    perPage: PER_PAGE,
-    maxPages: MAX_PAGES,
+      return {
+        batches: [{ events: mapped }],
+        context: undefined,
+        summaryLines: [`Fetched from Tribe API: ${tribeEvents.length}`],
+      };
+    },
   });
-  console.log(`\nFetched ${tribeEvents.length} events from Tribe API`);
-
-  const mapped: ExtractedEvent[] = [];
-  for (const ev of tribeEvents) {
-    try {
-      const m = mapTribeEvent(ev);
-      if (m) mapped.push(decodeEventFields(m));
-    } catch (err) {
-      console.warn(`  Failed to map event ${ev.id} (${ev.title}):`, err);
-    }
-  }
-
-  // Resolve trailhead / meeting-point names against the venue registry so they
-  // pick up canonical naming + a street address where one is registered.
-  let venueFixed = 0;
-  for (const e of mapped) {
-    if (applyVenueDetection(e)) venueFixed++;
-  }
-  if (venueFixed > 0) {
-    console.log(`  Venue detection: resolved ${venueFixed}/${mapped.length} venues`);
-  }
-
-  const corridor = mapped.filter((e) => HWY4_TOWNS.has(e.town.toLowerCase().trim()));
-  if (corridor.length < mapped.length) {
-    const skipped = [
-      ...new Set(
-        mapped
-          .filter((e) => !HWY4_TOWNS.has(e.town.toLowerCase().trim()))
-          .map((e) => e.town)
-      ),
-    ];
-    console.log(`  Skipped non-corridor towns: ${skipped.join(", ")}`);
-  }
-
-  // Future-only — never write past events.
-  const future = corridor.filter((e) => e.date >= today);
-
-  // NOTE: deliberately no `isManuallyManagedEvent` filter. ART's events ARE
-  // blocklisted there, but this scraper is the owner the blocklist protects them
-  // for — the guard exists to keep *aggregators* off these rows, not the
-  // organizer's own feed.
-
-  for (const e of future) {
-    console.log(
-      `  - ${e.name} | ${e.date} | ${e.start_time ?? "?"}–${e.end_time ?? "?"} | ${e.town} | ${e.venue_name} | ${e.category}`
-    );
-  }
-
-  if (future.length === 0) {
-    console.log("No future corridor events to upsert.");
-    return;
-  }
-
-  const result: UpsertResult = await upsertEvents(
-    future,
-    SOURCE_NAME,
-    ORG_SLUG,
-    PAGE_URL
-  );
-
-  console.log("\n=== Arnold Rim Trail Summary ===");
-  console.log(`Fetched from Tribe API: ${tribeEvents.length}`);
-  console.log(`Events in Hwy 4 corridor: ${corridor.length}`);
-  console.log(`Future events: ${future.length}`);
-  console.log(`Inserted: ${result.inserted}`);
-  console.log(`Updated: ${result.updated}`);
-  console.log(`Unchanged: ${result.unchanged}`);
 }

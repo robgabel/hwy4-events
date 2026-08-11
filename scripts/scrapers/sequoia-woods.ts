@@ -1,13 +1,12 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { decodeEventFields } from "../lib/extract.js";
-import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import { runOrganizerSource } from "../lib/organizer-source.js";
 import {
   mapRawEvent,
   type MappedEvent,
   type RawDayEvent,
 } from "../lib/sequoia-woods-map.js";
 import { sweepWindowsFromMonths } from "../lib/stale-sweep.js";
-import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
 
 /**
  * Sequoia Woods Country Club calendar scraper.
@@ -56,6 +55,12 @@ import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
  * contributes no window), human-touched rows are skipped, per-run deletions
  * are capped, and every removal is archived to hwy4_events_removed_archive
  * first — restore via jsonb_populate_record, same as event_merge_log.
+ *
+ * The pipeline around all of that (venue detection, the ownership-aware
+ * blocklist, the future filter, one upsert per visibility, the sweep call, the
+ * summary) is the shared scripts/lib/organizer-source.ts skeleton. The two
+ * audiences ride it as two batches; the month-window rules stay here, in
+ * planSweep, because only this source knows which months it parsed.
  */
 
 const SOURCE_NAME = "Sequoia Woods Country Club";
@@ -224,119 +229,116 @@ function mapDecoded(raw: RawDayEvent): MappedEvent | null {
 
 // ─── Main ───────────────────────────────────────────────────────────────
 
+/** What planSweep needs from the fetch stage: which months parsed cleanly. */
+interface SequoiaContext {
+  parsedMonths: { label: string | null; eventCount: number }[];
+}
+
 export async function scrapeSequoiaWoods(): Promise<void> {
-  console.log("=== Sequoia Woods Country Club (calendar) ===");
-
-  const apiKey = process.env.FIRECRAWL_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing FIRECRAWL_API_KEY environment variable");
-  }
-  const firecrawl = new FirecrawlApp({ apiKey });
-  const today = new Date().toISOString().slice(0, 10);
-
-  // 1. Fetch MONTHS_TO_FETCH consecutive clean month views (current + next 2).
-  //    Each carries a few spillover days from its neighbors, so consecutive
-  //    fetches overlap at the edges — deduped below.
-  const rawEvents: RawDayEvent[] = [];
-  const parsedMonths: { label: string | null; eventCount: number }[] = [];
-  for (let offset = 0; offset < MONTHS_TO_FETCH; offset++) {
-    const { monthLabel, events } = await fetchMonth(firecrawl, offset);
-    console.log(`  Month +${offset}: ${monthLabel ?? "(unresolved)"} — ${events.length} entr(ies)`);
-    parsedMonths.push({ label: monthLabel, eventCount: events.length });
-    rawEvents.push(...events);
-  }
-
-  // 2. Dedupe exact repeats from overlapping spillover across fetches.
-  const byRawKey = new Map<string, RawDayEvent>();
-  for (const e of rawEvents) {
-    const key = `${e.date}|${e.summary.trim().toLowerCase()}`;
-    if (!byRawKey.has(key)) byRawKey.set(key, e);
-  }
-  const dedupedRaw = [...byRawKey.values()];
-
-  // 3. Classify: Private Event -> skip, Member Event -> private, else public.
-  const mapped: MappedEvent[] = [];
-  for (const raw of dedupedRaw) {
-    const m = mapDecoded(raw);
-    if (m) mapped.push(m);
-  }
-
-  console.log(
-    `\n${rawEvents.length} raw entr(ies) across ${MONTHS_TO_FETCH} month(s), ` +
-      `${dedupedRaw.length} after spillover dedup, ${mapped.length} recorded (private rentals skipped)`
-  );
-  console.log(`  Mapped ${mapped.length} event(s) (pre-future-filter):`);
-  for (const m of mapped) {
-    console.log(
-      `    ${m.event.date} | ${m.visibility === "private" ? "MEMBERS" : "public "} | ${m.event.name}`
-    );
-  }
-
-  // 4. Future only, then a final defensive dedup by stable source id.
-  const future = mapped.filter((m) => m.event.date >= today);
-  const byId = new Map<string, MappedEvent>();
-  for (const m of future) {
-    const key = m.event.source_event_id ?? `${m.event.name}|${m.event.date}`;
-    if (!byId.has(key)) byId.set(key, m);
-  }
-  const deduped = [...byId.values()];
-
-  const publicEvents = deduped.filter((m) => m.visibility === "public").map((m) => m.event);
-  const privateEvents = deduped.filter((m) => m.visibility === "private").map((m) => m.event);
-
-  console.log(
-    `\n${future.length} future, ${deduped.length} after dedup (${publicEvents.length} public, ${privateEvents.length} members-only)`
-  );
-  for (const m of deduped) {
-    console.log(
-      `  - ${m.event.date} | ${m.visibility === "private" ? "MEMBERS" : "public "} | ${m.event.category.padEnd(11)} | ${m.event.name}`
-    );
-  }
-
-  if (deduped.length === 0) {
-    console.log("No future Sequoia Woods events to upsert.");
-    return;
-  }
-
-  // 5. Upsert through the shared path once per visibility.
-  const totals: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
-  for (const [events, visibility] of [
-    [publicEvents, "public"],
-    [privateEvents, "private"],
-  ] as const) {
-    if (events.length === 0) continue;
-    const r = await upsertEvents(events, SOURCE_NAME, ORG_SLUG, PAGE_URL, visibility);
-    totals.inserted += r.inserted;
-    totals.updated += r.updated;
-    totals.unchanged += r.unchanged;
-    totals.skippedFuzzy += r.skippedFuzzy;
-    totals.unpinned += r.unpinned;
-  }
-
-  // 6. Retraction — window-scoped stale sweep (see header). Only the months
-  //    this run parsed cleanly are sweepable, so a bad fetch can't mass-delete.
-  const windows = sweepWindowsFromMonths(parsedMonths, today);
-  const presentKeys = new Set(
-    deduped
-      .map((m) => m.event.source_event_id)
-      .filter((k): k is string => typeof k === "string" && k.length > 0)
-  );
-  const swept = await sweepStaleSourceRows({
+  await runOrganizerSource<SequoiaContext>({
+    sourceName: SOURCE_NAME,
     orgSlug: ORG_SLUG,
-    reason: "sequoia-woods sweep (entry left the club's calendar)",
-    windows,
-    presentKeys,
-    keysOf: (r) => [r.source_event_id],
-    // Only rows written under our per-day id scheme — legacy or cross-source
-    // merged rows carrying a foreign id are not ours to retract.
-    ownRow: (r) => (r.source_event_id ?? "").startsWith("sequoia-woods|"),
-  });
+    pageUrl: PAGE_URL,
+    banner: "Sequoia Woods Country Club (calendar)",
 
-  console.log("\n=== Sequoia Woods Summary ===");
-  console.log(`Public events: ${publicEvents.length}, members-only: ${privateEvents.length}`);
-  console.log(`Inserted: ${totals.inserted}`);
-  console.log(`Updated: ${totals.updated}`);
-  console.log(`Unchanged: ${totals.unchanged}`);
-  console.log(`Merged (cross-source): ${totals.skippedFuzzy}`);
-  console.log(`Swept stale: ${swept}`);
+    async harvest() {
+      const apiKey = process.env.FIRECRAWL_API_KEY;
+      if (!apiKey) {
+        throw new Error("Missing FIRECRAWL_API_KEY environment variable");
+      }
+      const firecrawl = new FirecrawlApp({ apiKey });
+
+      // 1. Fetch MONTHS_TO_FETCH consecutive clean month views (current + next 2).
+      //    Each carries a few spillover days from its neighbors, so consecutive
+      //    fetches overlap at the edges — deduped below.
+      const rawEvents: RawDayEvent[] = [];
+      const parsedMonths: { label: string | null; eventCount: number }[] = [];
+      for (let offset = 0; offset < MONTHS_TO_FETCH; offset++) {
+        const { monthLabel, events } = await fetchMonth(firecrawl, offset);
+        console.log(
+          `  Month +${offset}: ${monthLabel ?? "(unresolved)"} — ${events.length} entr(ies)`
+        );
+        parsedMonths.push({ label: monthLabel, eventCount: events.length });
+        rawEvents.push(...events);
+      }
+
+      // 2. Dedupe exact repeats from overlapping spillover across fetches.
+      const byRawKey = new Map<string, RawDayEvent>();
+      for (const e of rawEvents) {
+        const key = `${e.date}|${e.summary.trim().toLowerCase()}`;
+        if (!byRawKey.has(key)) byRawKey.set(key, e);
+      }
+      const dedupedRaw = [...byRawKey.values()];
+
+      // 3. Classify: Private Event -> skip, Member Event -> private, else public.
+      const mapped: MappedEvent[] = [];
+      for (const raw of dedupedRaw) {
+        const m = mapDecoded(raw);
+        if (m) mapped.push(m);
+      }
+
+      console.log(
+        `\n${rawEvents.length} raw entr(ies) across ${MONTHS_TO_FETCH} month(s), ` +
+          `${dedupedRaw.length} after spillover dedup, ${mapped.length} recorded (private rentals skipped)`
+      );
+      console.log(`  Mapped ${mapped.length} event(s) (pre-future-filter):`);
+      for (const m of mapped) {
+        console.log(
+          `    ${m.event.date} | ${m.visibility === "private" ? "MEMBERS" : "public "} | ${m.event.name}`
+        );
+      }
+
+      // 4. A final defensive dedup by stable source id. The id embeds the date,
+      //    so two entries sharing a key always share a date — deduping here vs
+      //    after the skeleton's future filter yields the identical future set.
+      const byId = new Map<string, MappedEvent>();
+      for (const m of mapped) {
+        const key = m.event.source_event_id ?? `${m.event.name}|${m.event.date}`;
+        if (!byId.has(key)) byId.set(key, m);
+      }
+      const deduped = [...byId.values()];
+      console.log(`\n${mapped.length} mapped, ${deduped.length} after dedup`);
+
+      // 5. Two audiences, two batches — the shared write path stamps one
+      //    visibility per call.
+      return {
+        batches: [
+          {
+            visibility: "public" as const,
+            events: deduped.filter((m) => m.visibility === "public").map((m) => m.event),
+          },
+          {
+            visibility: "private" as const,
+            events: deduped.filter((m) => m.visibility === "private").map((m) => m.event),
+          },
+        ],
+        context: { parsedMonths },
+      };
+    },
+
+    // 6. Retraction — window-scoped stale sweep (see header). Only the months
+    //    this run parsed cleanly are sweepable, so a bad fetch can't mass-delete.
+    planSweep({ today, context, written }) {
+      // A run that recorded nothing is a run whose presence set proves nothing;
+      // the month windows may still look healthy, so refuse outright rather
+      // than lean on the abort cap.
+      if (written.length === 0) {
+        console.log("  Sweep skipped: no future events recorded this run.");
+        return null;
+      }
+      return {
+        reason: "sequoia-woods sweep (entry left the club's calendar)",
+        windows: sweepWindowsFromMonths(context.parsedMonths, today),
+        presentKeys: new Set(
+          written
+            .map((e) => e.source_event_id)
+            .filter((k): k is string => typeof k === "string" && k.length > 0)
+        ),
+        keysOf: (r) => [r.source_event_id],
+        // Only rows written under our per-day id scheme — legacy or cross-source
+        // merged rows carrying a foreign id are not ours to retract.
+        ownRow: (r) => (r.source_event_id ?? "").startsWith("sequoia-woods|"),
+      };
+    },
+  });
 }
