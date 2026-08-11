@@ -115,7 +115,7 @@ export async function scrapeFirecrawlSource(source: FirecrawlSource): Promise<vo
     console.log(`  - ${e.name} | ${e.date} | ${e.category}`);
   }
 
-  let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
+  let totalResult: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
   if (futureEvents.length > 0) {
     totalResult = await upsertEvents(futureEvents, source.name, source.slug, sourceUrl);
   }

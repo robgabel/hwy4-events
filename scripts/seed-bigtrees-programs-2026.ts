@@ -43,7 +43,18 @@ async function main(): Promise<void> {
   for (const e of seeded) byProgram.set(e.name, (byProgram.get(e.name) ?? 0) + 1);
   for (const [name, n] of byProgram) console.log(`  ${String(n).padStart(3)}  ${name}`);
 
-  const result: UpsertResult = await upsertEvents(events, SOURCE_NAME, ORG_SLUG, SOURCE_URL);
+  // "allow": lib/bigtrees-schedule.ts writes event_url + source_event_id as
+  // null on purpose — the park publishes recurrence rules in prose, so an
+  // expanded occurrence has no page of its own. Unpinned by design, not a
+  // scraper defect. See scripts/lib/unpinned-guard.ts.
+  const result: UpsertResult = await upsertEvents(
+    events,
+    SOURCE_NAME,
+    ORG_SLUG,
+    SOURCE_URL,
+    "public",
+    "allow"
+  );
   console.log("\n=== Upsert result ===");
   console.log(`Inserted:        ${result.inserted}`);
   console.log(`Updated:         ${result.updated}`);

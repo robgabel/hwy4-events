@@ -76,6 +76,10 @@ export async function scrapeBistroEspresso(): Promise<void> {
     updated: 0,
     unchanged: 0,
     skippedFuzzy: 0,
+    // This scraper raw-inserts (it never calls upsertEvents), so the shared
+    // unpinned guard doesn't run here. Every row it writes carries event_url,
+    // so the honest value is 0 rather than "unmeasured".
+    unpinned: 0,
   };
 
   for (const event of events) {

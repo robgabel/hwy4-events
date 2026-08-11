@@ -280,7 +280,7 @@ export async function scrapeVisitMurphys(): Promise<void> {
 
   const deduped = await crossSourceDedup(future);
 
-  let result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0 };
+  let result: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
   if (deduped.length > 0) {
     result = await upsertEvents(deduped, SOURCE_NAME, ORG_SLUG, PAGE_URL);
   }

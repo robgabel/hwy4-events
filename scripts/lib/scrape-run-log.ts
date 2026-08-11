@@ -25,8 +25,22 @@ interface SourceTotals {
   updated: number;
   unchanged: number;
   skippedFuzzy: number;
+  /** Rows written with neither source_event_id nor event_url — unverifiable,
+   *  uncorrectable, unretractable (see scripts/lib/unpinned-guard.ts). Always 0
+   *  for sources whose policy is "allow" (seeds/vision, unpinned by design), so
+   *  a nonzero here is a text-scrape source worth looking at. */
+  unpinned: number;
   error: string | null;
 }
+
+const emptyTotals = (): SourceTotals => ({
+  inserted: 0,
+  updated: 0,
+  unchanged: 0,
+  skippedFuzzy: 0,
+  unpinned: 0,
+  error: null,
+});
 
 interface RunState {
   startedAt: string;
@@ -43,30 +57,19 @@ export function beginScrapeRun(): void {
  *  to sourceName) — the same key already shown in `hwy4_events.source_name`. */
 export function recordSourceResult(key: string, result: UpsertResult): void {
   if (!current) return;
-  const totals = current.sources.get(key) ?? {
-    inserted: 0,
-    updated: 0,
-    unchanged: 0,
-    skippedFuzzy: 0,
-    error: null,
-  };
+  const totals = current.sources.get(key) ?? emptyTotals();
   totals.inserted += result.inserted;
   totals.updated += result.updated;
   totals.unchanged += result.unchanged;
   totals.skippedFuzzy += result.skippedFuzzy;
+  totals.unpinned += result.unpinned;
   current.sources.set(key, totals);
 }
 
 /** Called from scrape.ts's top-level catch when a scraper throws. */
 export function recordSourceError(key: string, message: string): void {
   if (!current) return;
-  const totals = current.sources.get(key) ?? {
-    inserted: 0,
-    updated: 0,
-    unchanged: 0,
-    skippedFuzzy: 0,
-    error: null,
-  };
+  const totals = current.sources.get(key) ?? emptyTotals();
   totals.error = message.slice(0, 500);
   current.sources.set(key, totals);
 }
