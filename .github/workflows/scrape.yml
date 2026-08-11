@@ -35,10 +35,14 @@ jobs:
           # scrape_runs telemetry insert itself fails (HWY-18) — optional,
           # same secret the Vercel routes use for their own Slack posts.
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          # Organizer-source stale sweeps (scripts/lib/stale-sweep-exec.ts) run
-          # report-only until this REPOSITORY VARIABLE (not a Vercel env, not a
-          # secret) is set to "true" — Settings → Secrets and variables →
-          # Actions → Variables. Unset ⇒ dry-run.
+          # Stale sweeps (scripts/lib/stale-sweep-exec.ts) run report-only until
+          # this REPOSITORY VARIABLE (not a Vercel env, not a secret) NAMES the
+          # source — Settings → Secrets and variables → Actions → Variables.
+          # It is a comma-separated list of org slugs and nothing else
+          # ("murphys-irish-pub,sequoia-woods"): there is deliberately no
+          # "true"/all value, so arming one sweep can never arm the
+          # corridor-wide gocalaveras one by accident. Unset or unrecognized
+          # ⇒ every sweep dry-runs.
           SWEEP_EXECUTE: ${{ vars.SWEEP_EXECUTE }}
 
       - name: Sanity-check event locations

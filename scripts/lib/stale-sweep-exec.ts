@@ -1,10 +1,18 @@
 import { supabaseAdmin } from "./supabase-admin.js";
 import {
   selectStaleRows,
-  maxSweepAllowed,
+  effectiveSweepCap,
+  sweepExecuteEnabled,
   type SweepRow,
   type SweepWindow,
 } from "./stale-sweep.js";
+
+/** PostgREST caps an unbounded SELECT at its configured max rows and says
+ *  nothing about it. A silently truncated resident set would make the
+ *  considered population arbitrary — rows past the cut can't be selected, and
+ *  the abort cap would be computed against a short count. Ask for an explicit,
+ *  ordered page instead, and shout if we ever fill it. */
+const RESIDENT_ROW_LIMIT = 1000;
 
 /**
  * DB half of the window-scoped stale sweep (see stale-sweep.ts for the
@@ -20,6 +28,32 @@ export async function sweepStaleSourceRows(opts: {
   presentKeys: Set<string>;
   keysOf: (row: SweepRow) => (string | null | undefined)[];
   ownRow?: (row: SweepRow) => boolean;
+  /** Per-source deletion budget, applied on top of the relative abort cap
+   *  (effective cap = the lower of the two). Set it when the source's catalog
+   *  is big enough that the relative cap pins to MAX_SWEEP_PER_RUN. */
+  maxPerRun?: number;
+}): Promise<number> {
+  try {
+    return await runSweep(opts);
+  } catch (err) {
+    // The docstring's promise, actually kept: a thrown client/network error
+    // must not take the scrape down with it.
+    console.error(
+      `  Sweep: unexpected failure for ${opts.orgSlug}, nothing deleted:`,
+      err instanceof Error ? err.message : err
+    );
+    return 0;
+  }
+}
+
+async function runSweep(opts: {
+  orgSlug: string;
+  reason: string;
+  windows: SweepWindow[];
+  presentKeys: Set<string>;
+  keysOf: (row: SweepRow) => (string | null | undefined)[];
+  ownRow?: (row: SweepRow) => boolean;
+  maxPerRun?: number;
 }): Promise<number> {
   if (opts.windows.length === 0) {
     console.log("  Sweep: no qualifying windows this run — nothing considered.");
@@ -33,13 +67,22 @@ export async function sweepStaleSourceRows(opts: {
     .select("*")
     .eq("org_slug", opts.orgSlug)
     .gte("date", from)
-    .lte("date", to);
+    .lte("date", to)
+    .order("date")
+    .limit(RESIDENT_ROW_LIMIT);
   if (error) {
     console.error("  Sweep: resident-row query failed, skipping:", error.message);
     return 0;
   }
+  const residents = (data ?? []) as SweepRow[];
+  if (residents.length >= RESIDENT_ROW_LIMIT) {
+    console.error(
+      `  Sweep: resident query hit the ${RESIDENT_ROW_LIMIT}-row limit — the considered set is partial, skipping.`
+    );
+    return 0;
+  }
 
-  const { stale, protectedRows } = selectStaleRows((data ?? []) as SweepRow[], opts);
+  const { stale, protectedRows } = selectStaleRows(residents, opts);
   for (const p of protectedRows) {
     console.log(
       `  Sweep: "${p.row.name}" (${p.row.date}) is gone from the source but ${p.reason} — left in place for a human.`
@@ -57,30 +100,43 @@ export async function sweepStaleSourceRows(opts: {
     const keys = opts.keysOf(r).filter(Boolean);
     return keys.length === 0 ? "0 keys (legacy row)" : `${keys.length} key(s), absent from batch`;
   };
-  const cap = maxSweepAllowed((data ?? []).length);
-  if (stale.length > cap) {
-    console.error(
-      `  Sweep ABORTED: ${stale.length} rows selected (cap ${cap} for ${(data ?? []).length} resident). ` +
-        "No legitimate calendar edit strands this many — assuming a bad fetch. Nothing deleted."
-    );
-    for (const r of stale.slice(0, 5)) {
-      console.error(`    would have selected: ${r.date} "${r.name}" — ${describeKeys(r)}`);
-    }
-    return 0;
-  }
-  // Dry-run by default (the RECONCILE_EXECUTE precedent): report what WOULD
-  // be swept; delete only once SWEEP_EXECUTE=true is set after the report-only
-  // logs have been reviewed. In GitHub Actions the flag is a repository
-  // VARIABLE wired through .github/workflows/scrape.yml — NOT a Vercel env.
-  if (process.env.SWEEP_EXECUTE !== "true") {
+  const cap = effectiveSweepCap(residents.length, opts.maxPerRun);
+  // Dry-run unless SWEEP_EXECUTE names this source (the RECONCILE_EXECUTE
+  // precedent, per-source since HWY-21 — there is no "all sources" value, see
+  // sweepExecuteEnabled). In GitHub Actions the flag is a repository VARIABLE
+  // wired through .github/workflows/scrape.yml — NOT a Vercel env.
+  const executing = sweepExecuteEnabled(process.env.SWEEP_EXECUTE, opts.orgSlug);
+
+  // Dry-run reporting comes BEFORE the cap gate: graduation is a human reading
+  // several days of would-remove lists, and an over-cap selection is exactly
+  // the report that needs reading in full — it explains what an execute run
+  // would refuse and why. Execute mode keeps the hard abort below.
+  if (!executing) {
     for (const r of stale) {
       console.log(
         `  Sweep DRY-RUN would remove: ${r.date} "${r.name}" (${r.id}) — ${describeKeys(r)}`
       );
     }
-    console.log(
-      `  Sweep DRY-RUN: ${stale.length} row(s) selected. Set SWEEP_EXECUTE=true to enable deletion.`
+    if (stale.length > cap) {
+      console.log(
+        `  Sweep DRY-RUN: ${stale.length} row(s) selected — OVER the cap (${cap} for ${residents.length} resident); an execute run would ABORT. Nothing deleted.`
+      );
+    } else {
+      console.log(
+        `  Sweep DRY-RUN: ${stale.length} row(s) selected. Add "${opts.orgSlug}" to SWEEP_EXECUTE to enable deletion.`
+      );
+    }
+    return 0;
+  }
+
+  if (stale.length > cap) {
+    console.error(
+      `  Sweep ABORTED: ${stale.length} rows selected (cap ${cap} for ${residents.length} resident). ` +
+        "No legitimate calendar edit strands this many — assuming a bad fetch. Nothing deleted."
     );
+    for (const r of stale.slice(0, 5)) {
+      console.error(`    would have selected: ${r.date} "${r.name}" — ${describeKeys(r)}`);
+    }
     return 0;
   }
 

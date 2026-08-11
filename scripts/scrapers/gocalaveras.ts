@@ -10,12 +10,27 @@ import {
   classifyEventCategoryDetailed,
   reconcileCategory,
 } from "../../lib/categorize.js";
+import {
+  detectShortcodeCap,
+  goCalaverasPresenceKeys,
+  goCalaverasRowKeys,
+  goCalaverasSweepWindows,
+  ownsGoCalaverasRow,
+  slugExtractionHealthy,
+  type EnumeratedEvent,
+  type MonthEnumeration,
+} from "../lib/gocalaveras-sweep.js";
+import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
 
 const EVENTS_URL = "https://www.gocalaveras.com/events/";
 const AJAX_URL = "https://www.gocalaveras.com/wp-admin/admin-ajax.php";
 const SOURCE_NAME = "GoCalaveras.com";
 const ORG_SLUG = "gocalaveras";
 const MONTHS_TO_SCRAPE = 6;
+
+/** Deletion budget per run for the retraction sweep, tighter than the shared
+ *  relative cap (see the sweep block at the end of scrapeGoCalaveras). */
+const SWEEP_MAX_PER_RUN = 10;
 
 import { TOWNS } from "../../lib/towns.js";
 
@@ -80,6 +95,19 @@ export async function scrapeGoCalaveras(): Promise<void> {
   const baseShortcode = JSON.parse(dataSCMatch[1]);
   console.log(`Nonce: ${nonce}, Calendar: ${baseShortcode.cal_id}`);
 
+  // A shortcode that caps how many events a month view returns would truncate a
+  // busy month, and a truncated tail looks exactly like a retracted one. Read
+  // the cap off the shortcode the page just handed us and log it, so a month
+  // that hits it can be excluded from the sweep window (and so the dry-run
+  // reviewer can see why windows are missing).
+  const detectedCap = detectShortcodeCap(baseShortcode);
+  if (detectedCap) {
+    console.log(
+      `Shortcode declares a display cap: ${detectedCap.key}=${detectedCap.value} — months reaching it are not sweepable`
+    );
+  }
+  const cap = detectedCap?.value ?? null;
+
   // Step 2: Build list of months to scrape
   const now = new Date();
   const monthsToScrape: {
@@ -108,23 +136,30 @@ export async function scrapeGoCalaveras(): Promise<void> {
 
   // Step 3: Fetch each month via direct AJAX POST
   const allEvents: ExtractedEvent[] = [];
+  const monthEnumerations: MonthEnumeration[] = [];
+  const enumeratedEntries: EnumeratedEvent[] = [];
 
   for (const { month, year, label, startUnix, endUnix } of monthsToScrape) {
     console.log(`\n--- Fetching ${label} ---`);
 
     try {
-      const events = await fetchMonth(
+      const fetched = await fetchMonth(
         baseShortcode,
         nonce,
         month,
         year,
         startUnix,
-        endUnix
+        endUnix,
+        label,
+        cap
       );
-      console.log(`  ${label}: ${events.length} events extracted`);
-      allEvents.push(...events);
+      console.log(`  ${label}: ${fetched.events.length} events extracted`);
+      allEvents.push(...fetched.events);
+      monthEnumerations.push(fetched.month);
+      enumeratedEntries.push(...fetched.entries);
     } catch (err) {
       console.error(`  ${label}: fetch failed:`, err);
+      monthEnumerations.push({ requested: label, ok: false, dates: [], cap });
     }
   }
 
@@ -162,7 +197,7 @@ export async function scrapeGoCalaveras(): Promise<void> {
   }
 
   if (futureEvents.length === 0) {
-    console.log("No future corridor events to upsert.");
+    console.log("No future corridor events to upsert — nothing scraped, nothing swept.");
     return;
   }
 
@@ -175,6 +210,53 @@ export async function scrapeGoCalaveras(): Promise<void> {
     totalResult = await upsertEvents(deduped, SOURCE_NAME, ORG_SLUG, EVENTS_URL);
   }
 
+  // Step 6: Retraction — window-scoped stale sweep (HWY-21). An aggregator row
+  // rots with no retraction: GoCalaveras drops a listing and our copy lives on
+  // forever (stale_scrapes stood at 138 on 2026-08-08). The rules for which
+  // rows are ours to retract, and which months we may claim to have read in
+  // full, are all in scripts/lib/gocalaveras-sweep.ts — the ownership test is
+  // deliberately much narrower than the organizer sweeps', because a merged or
+  // organizer-linked row here is maintained by someone else.
+  //
+  // SHIPPED IN DRY-RUN: SWEEP_EXECUTE is per-source (sweepExecuteEnabled), so
+  // this sweep reports what it would remove and deletes nothing until
+  // "gocalaveras" is named in that repository variable — read a few days of
+  // those logs first. Note the relative abort cap (maxSweepAllowed, ≤20 rows):
+  // if the first honest report is a large backlog, that backlog needs a
+  // reviewed one-off purge — the sweep is a steady-state maintainer, not a drain.
+  const sweepWindows = goCalaverasSweepWindows(monthEnumerations, today);
+  console.log(
+    `\nSweep windows proven this run: ${
+      sweepWindows.length === 0
+        ? "none"
+        : sweepWindows.map((w) => `${w.from}..${w.to}`).join(", ")
+    } (of ${monthEnumerations.length} month(s) requested)`
+  );
+  const presentKeys = goCalaverasPresenceKeys(enumeratedEntries);
+  // Numeric EventON ids come off the JSON and are always observed; permalinks
+  // are regexed out of the response HTML and are not. When that extraction is
+  // thin, rows keyed ONLY by their slug (id-less legacy rows) can't be proven
+  // present, so they are not ours to retract this run.
+  const observed = { slugs: slugExtractionHealthy(enumeratedEntries) };
+  if (!observed.slugs) {
+    console.log(
+      "  Sweep: permalink extraction was thin this run — id-less legacy rows are not sweepable."
+    );
+  }
+  const swept = await sweepStaleSourceRows({
+    orgSlug: ORG_SLUG,
+    reason: "gocalaveras sweep (listing gone from the EventON feed)",
+    windows: sweepWindows,
+    presentKeys,
+    keysOf: goCalaverasRowKeys,
+    ownRow: (r) => ownsGoCalaverasRow(r, observed),
+    // The relative cap is inert at this catalog size (169 resident rows already
+    // pins it to the flat 20 ceiling, ~12% of the aggregator's future events
+    // deletable nightly). A real mass retraction should take several nights and
+    // stay legible in the logs.
+    maxPerRun: SWEEP_MAX_PER_RUN,
+  });
+
   console.log("\n=== GoCalaveras Summary ===");
   console.log(`Months scraped: ${MONTHS_TO_SCRAPE}`);
   console.log(`Events extracted (all): ${allEvents.length}`);
@@ -183,9 +265,29 @@ export async function scrapeGoCalaveras(): Promise<void> {
   console.log(`Events inserted: ${totalResult.inserted}`);
   console.log(`Events updated: ${totalResult.updated}`);
   console.log(`Events unchanged: ${totalResult.unchanged}`);
+  console.log(`Feed listings enumerated: ${enumeratedEntries.length}, presence keys: ${presentKeys.size}`);
+  console.log(`Swept stale: ${swept}`);
 }
 
 // ---------- Direct AJAX month fetching ----------
+
+/** One month's fetch: the events we keep, plus the evidence the retraction
+ *  sweep needs about what the feed itself asserted (see the sweep block at the
+ *  end of scrapeGoCalaveras). */
+interface MonthFetch {
+  /** Corridor-filtered, enriched events destined for the upsert batch. */
+  events: ExtractedEvent[];
+  /** Whether this month's payload proved it covered the month we asked for. */
+  month: MonthEnumeration;
+  /** Every event the payload listed, BEFORE any of our filters — the raw
+   *  material for the presence set. */
+  entries: EnumeratedEvent[];
+}
+
+/** A month whose fetch failed: no events, no enumeration, no window. */
+function failedMonth(requested: string, cap: number | null): MonthFetch {
+  return { events: [], entries: [], month: { requested, ok: false, dates: [], cap } };
+}
 
 /**
  * Fetch a single month of events via direct POST to EventON's AJAX endpoint.
@@ -198,8 +300,10 @@ async function fetchMonth(
   month: number,
   year: number,
   startUnix: number,
-  endUnix: number
-): Promise<ExtractedEvent[]> {
+  endUnix: number,
+  requestedLabel: string,
+  cap: number | null
+): Promise<MonthFetch> {
   // Build shortcode with target month's date range
   const shortcode = {
     ...baseShortcode,
@@ -243,7 +347,7 @@ async function fetchMonth(
   const text = await resp.text();
   if (text.length <= 5) {
     console.log(`  Empty response (${text.length} chars) — no events this month`);
-    return [];
+    return failedMonth(requestedLabel, cap);
   }
 
   let data: EventONResponse;
@@ -251,12 +355,12 @@ async function fetchMonth(
     data = JSON.parse(text);
   } catch {
     console.warn(`  Failed to parse AJAX response (${text.length} chars)`);
-    return [];
+    return failedMonth(requestedLabel, cap);
   }
 
   if (data.status !== "GOOD" || !data.json || !Array.isArray(data.json)) {
     console.warn(`  Unexpected response status: ${data.status}`);
-    return [];
+    return failedMonth(requestedLabel, cap);
   }
 
   console.log(
@@ -265,6 +369,44 @@ async function fetchMonth(
 
   // Extract real event URLs from the HTML response
   const urlMap = extractUrlsFromHtml(data.html, data.json);
+
+  // Snapshot what the feed asserted for this month before we filter anything.
+  // The sweep's presence test has to run against THIS, not against the batch we
+  // end up writing: an event dropped by the corridor filter, the manual-source
+  // blocklist, or the cross-source dedup is still an event GoCalaveras lists,
+  // and treating our own filtering as the source's retraction would delete
+  // every corridor event a venue scraper also covers.
+  // Never throws: `new Date(NaN).toISOString()` is a RangeError, and this map
+  // runs BEFORE parseEventONEvents' per-event try/catch, so one entry with a
+  // missing or non-numeric event_start_unix would escape fetchMonth and cost
+  // the WHOLE month's ingest — a strictly worse failure than the single event
+  // the parser already tolerates losing. An unusable entry still contributes
+  // PRESENCE (the feed asserted the event exists; withholding its key would
+  // read as retraction — the delete direction) but no date, so it can only
+  // make the month look less complete, never a resident row look stale.
+  const entries: EnumeratedEvent[] = [];
+  const enumeratedDates: string[] = [];
+  for (const ev of data.json) {
+    entries.push({ id: ev.event_id, url: urlMap.get(ev.event_id) ?? null });
+    // Number(), not a bare Number.isFinite on the raw field: parseEventONEvents
+    // coerces the same way (`ev.event_start_unix * 1000`), so a feed that ever
+    // sends the timestamp as a numeric string must not enumerate as all-junk
+    // here while parsing fine there. Seconds-scale epochs only — a µs/ns-scale
+    // value would push toISOString() past its representable range and throw,
+    // the exact whole-month failure this guard exists to prevent.
+    const startUnix = Number(ev.event_start_unix);
+    if (!Number.isFinite(startUnix) || startUnix <= 0 || startUnix >= 1e11) {
+      console.warn(`  Enumeration: event ${ev.event_id} has no usable start — no date contributed`);
+      continue;
+    }
+    enumeratedDates.push(new Date(startUnix * 1000).toISOString().slice(0, 10));
+  }
+  const monthEnumeration: MonthEnumeration = {
+    requested: requestedLabel,
+    ok: true,
+    dates: enumeratedDates,
+    cap,
+  };
 
   // Parse structured event data directly from JSON and decode HTML entities
   const events = parseEventONEvents(data.json, year, urlMap).map(decodeEventFields);
@@ -339,7 +481,7 @@ async function fetchMonth(
     console.log(`  Venue detection: resolved ${venueFixed}/${kept.length} generic venues`);
   }
 
-  return kept;
+  return { events: kept, month: monthEnumeration, entries };
 }
 
 // ---------- HTML URL extraction ----------
