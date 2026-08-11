@@ -2,16 +2,20 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeName } from "@/lib/event-identity";
 import { pacificToday } from "@/lib/date-windows";
 import { researchArtist, type ArtistResearch } from "./research-artist";
+import { autoPublishColumns, shouldAutoPublishArtist } from "./artist-autopublish";
 
 // Self-healing artist/band-blurb drafter (PRD-artist-descriptions.md, Phase 1).
-// Mirrors lib/agent/draft-venue-addresses.ts exactly.
+// Mirrors lib/agent/draft-venue-addresses.ts, with one deliberate divergence.
 //
 // Worklist: the distinct acts named in the `artists` field of upcoming PUBLIC
 // live_music events that don't yet have a resolved hwy4_artists row. For each, it
 // web-researches the act (lib/agent/research-artist.ts — conservative, errs on
-// nothing) and stages the result as a PENDING draft for human review at
-// /admin/artists. It NEVER writes the live `blurb`/`genre`/`links` — a human Save
-// does (the accuracy contract: a confident-wrong band bio is worse than a blank).
+// nothing). What happens next is a SPLIT policy (standing rule — Rob, 2026-08-11):
+// a HIGH-confidence result with prose auto-publishes the live
+// `blurb`/`genre`/`links` outright (the cron route Slack-informs; no approval),
+// while medium and below stage a PENDING draft that only a human Save at
+// /admin/artists publishes. See lib/agent/artist-autopublish.ts for the policy
+// and why artists (not venues) earned it.
 //
 // Idempotent + self-limiting, same gate shape as the address queue:
 //   no hwy4_artists row yet, OR a row with
@@ -23,9 +27,16 @@ import { researchArtist, type ArtistResearch } from "./research-artist";
 export type DraftArtistsResult = {
   scanned: number; // distinct candidate acts found needing a draft
   researched: number; // acts we actually ran this batch (bounded by limit)
-  drafted: number; // research produced a blurb
+  drafted: number; // research produced a blurb staged as a pending draft
+  published: number; // high-confidence results auto-published live (Rob's rule)
   empty: number; // looked, found nothing publishable (still stamped)
-  artists: { artist_key: string; name: string; confidence: string; hasBlurb: boolean }[];
+  artists: {
+    artist_key: string;
+    name: string;
+    confidence: string;
+    hasBlurb: boolean;
+    published: boolean;
+  }[];
 };
 
 function adminClient(): SupabaseClient | null {
@@ -100,6 +111,7 @@ export async function draftMissingArtistBlurbs(opts?: {
     scanned: todo.length,
     researched: 0,
     drafted: 0,
+    published: 0,
     empty: 0,
     artists: [],
   };
@@ -113,6 +125,30 @@ export async function draftMissingArtistBlurbs(opts?: {
       continue;
     }
 
+    const now = new Date().toISOString();
+
+    // High confidence publishes straight to the live columns (Rob's standing
+    // rule, 2026-08-11) — identical writes to a human Save, so the row leaves
+    // the review queue as published. The route Slack-informs afterward.
+    if (shouldAutoPublishArtist(research)) {
+      const { error: pubErr } = await supabase.from("hwy4_artists").upsert(
+        { artist_key: c.artist_key, name: c.name, ...autoPublishColumns(research, now) },
+        { onConflict: "artist_key" }
+      );
+      if (pubErr) throw pubErr;
+
+      result.researched += 1;
+      result.published += 1;
+      result.artists.push({
+        artist_key: c.artist_key,
+        name: c.name,
+        confidence: research.confidence,
+        hasBlurb: true,
+        published: true,
+      });
+      continue;
+    }
+
     const meta = {
       confidence: research.confidence,
       genre: research.genre,
@@ -123,18 +159,19 @@ export async function draftMissingArtistBlurbs(opts?: {
       sources: research.sources,
     };
 
-    // Upsert on artist_key: insert a fresh row, or fill an as-yet-untried existing
-    // one. blurb_draft_at stamps regardless (the "already tried" marker), so an
-    // empty result isn't re-researched tomorrow. Live blurb/genre/links stay NULL —
-    // only a human Save writes those.
+    // Medium and below: upsert on artist_key as a PENDING draft — insert a fresh
+    // row, or fill an as-yet-untried existing one. blurb_draft_at stamps
+    // regardless (the "already tried" marker), so an empty result isn't
+    // re-researched tomorrow. Live blurb/genre/links stay NULL — a human Save
+    // writes those.
     const { error: upErr } = await supabase.from("hwy4_artists").upsert(
       {
         artist_key: c.artist_key,
         name: c.name,
         blurb_draft: research.blurb, // null when nothing publishable was found
-        blurb_draft_at: new Date().toISOString(),
+        blurb_draft_at: now,
         blurb_draft_meta: meta,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       },
       { onConflict: "artist_key" }
     );
@@ -148,6 +185,7 @@ export async function draftMissingArtistBlurbs(opts?: {
       name: c.name,
       confidence: research.confidence,
       hasBlurb: Boolean(research.blurb),
+      published: false,
     });
   }
 

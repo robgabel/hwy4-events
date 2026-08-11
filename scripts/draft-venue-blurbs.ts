@@ -29,7 +29,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { supabaseAdmin } from "./lib/supabase-admin.js";
-import { withVoice } from "../lib/voice.js";
+import { BANNED_PHRASES, withVoice } from "../lib/voice.js";
 import { getActiveFacts } from "../lib/local-facts.js";
 
 const args = process.argv.slice(2);
@@ -163,13 +163,9 @@ function stripFences(text: string): string {
     .trim();
 }
 
-const BANNED = [
-  "discover", "explore", "your gateway", "nestled in", "charming", "hidden gem",
-  "something for everyone", "experience the magic", "step back in time",
-  "moreover", "furthermore", "it's worth noting",
-  // Internal tooling must never leak into public copy (see hard rule above).
-  "knowledge base", "my notes", "public info", "the data",
-];
+// Shared with the artist-blurb coercion floor (which publishes unattended at
+// high confidence) — one list, defined in lib/voice.ts, so the two can't drift.
+const BANNED = BANNED_PHRASES;
 
 async function main() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

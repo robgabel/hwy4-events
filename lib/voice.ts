@@ -82,6 +82,27 @@ verify a specific, don't fake it — write plainer instead.
  * the pipeline asks a model for reader-facing copy (briefings, newsletter,
  * description rewrites, venue blurbs, town content, Rob's Picks).
  */
+// The lint-able banned-phrase floor under LLM-written public copy. Lifted from
+// scripts/draft-venue-blurbs.ts (2026-08-11) when band blurbs gained an
+// unattended high-confidence publish path (lib/agent/artist-autopublish.ts):
+// the path with no human gate must not be the one with the weaker code-level
+// voice check. The venue drafter imports this same list, so the floors can't
+// drift.
+export const BANNED_PHRASES = [
+  "discover", "explore", "your gateway", "nestled in", "charming", "hidden gem",
+  "something for everyone", "experience the magic", "step back in time",
+  "moreover", "furthermore", "it's worth noting",
+  // Internal tooling must never leak into public copy.
+  "knowledge base", "my notes", "public info", "the data",
+];
+
+/** First banned phrase found in the text (case-insensitive), or null. */
+export function findBannedPhrase(text: string): string | null {
+  const hay = text.toLowerCase();
+  for (const p of BANNED_PHRASES) if (hay.includes(p)) return p;
+  return null;
+}
+
 export function withVoice(systemPrompt: string): string {
   return `${systemPrompt}
 

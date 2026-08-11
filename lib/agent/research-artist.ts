@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { withVoice } from "@/lib/voice";
+import { findBannedPhrase, withVoice } from "@/lib/voice";
 
 // Web research for the artist-blurb drafter (PRD-artist-descriptions.md, Phase 1).
 // Given a band/act name (as it appears in an event's `artists` field) plus the
@@ -146,6 +146,10 @@ function coerce(o: unknown): ArtistResearch {
   let blurb = grounded && typeof obj.blurb === "string" ? obj.blurb.trim() || null : null;
   // Defensive voice floor: an em dash is a hard voice violation — drop rather than ship.
   if (blurb && blurb.includes("—")) blurb = null;
+  // Same floor for the banned-phrase list: this path can publish UNATTENDED at
+  // high confidence (lib/agent/artist-autopublish.ts), so its code-level voice
+  // check must be at least as strong as the human-gated venue drafter's.
+  if (blurb && findBannedPhrase(blurb)) blurb = null;
 
   const genre = grounded && typeof obj.genre === "string" ? obj.genre.trim() || null : null;
   const hometown = grounded && typeof obj.hometown === "string" ? obj.hometown.trim() || null : null;
