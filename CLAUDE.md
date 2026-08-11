@@ -161,6 +161,16 @@ cross-source merge). Two source shapes:
 
 - **Config-driven Firecrawl** — one entry in `scripts/scrapers/firecrawl-sources.ts`
   (single fixed venue/town). The generic runner fetches markdown + LLM-extracts.
+  **Registry audited + trimmed 2026-08-11 (HWY-20):** `watering-hole` +
+  `branding-iron` deleted (zero rows ever — neither site has an events page;
+  gocalaveras covers The Watering Hole accurately) and `lube-room` +
+  `camp-connell-general-store` deleted (silently zero for 65+ days, 100%
+  unpinned, writing under the identical org_slug/source_name as their seed
+  scripts — an invented row would have been indistinguishable from a curated
+  one; the seeds + fingerprint watchers own those venues). Three entries
+  remain: `bear-valley` (now with a commerce-promo `extractHint` + `dumpOnEmpty`),
+  `bvac`, and the `moose-lodge` public-events page (its 3 marquee public rows
+  are disjoint from the members' PDF calendar — unique coverage, kept).
   A source may set `extractHint` — a per-source instruction appended to the shared
   extraction prompt's Rules (added 2026-07-08 for **bvac**, Bear Valley Adventure Co.:
   skip its season-pass-sale promos, lift each event's own venue + Squarespace
