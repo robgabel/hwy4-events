@@ -34,10 +34,19 @@ const LODGE = {
   venue: "Ebbetts Pass Moose Lodge",
   town: "Arnold",
   orgSlug: "moose-lodge",
-  address: "3049 CA-4, Arnold, CA 95223",
+  // The lodge is on Blagen Rd at White Pines Lake, NOT out on Highway 4. Must
+  // stay equal to the "ebbetts-pass-moose-lodge" entry in scripts/lib/venues.ts,
+  // which is the registry source of truth. This route writes its own INSERT
+  // rather than going through upsertEvents, so it never gets the registry
+  // address fill that every other scraper does and this literal is the address.
+  address: "1965 Blagen Rd, Arnold, CA 95223",
   calendarUrl: "https://ebbettspassmoose.com/current-calendar",
   eventsUrl: "https://ebbettspassmoose.com/events",
 };
+
+// The source_name every row this route writes carries. Also the scope of the
+// stale sweep below, so the PDF can only retract listings the PDF made.
+const SOURCE_NAME = "moose-lodge-calendar";
 
 // ─── Canonical dedup-key generator ─────────────────────────────────────
 //
@@ -450,7 +459,7 @@ export async function GET(request: Request) {
         price: evt.price || null,
         event_url: null,
         source_url: pdfUrl,
-        source_name: "moose-lodge-calendar",
+        source_name: SOURCE_NAME,
         visibility: vis,
         org_slug: LODGE.orgSlug,
         dedup_key: dedupKey,
@@ -519,6 +528,18 @@ export async function GET(request: Request) {
     //    SKIPPED on an override run (?pdf_url=…): that PDF may be a partial or
     //    newsletter document, so absence of a row in it does not mean the event
     //    was cancelled. A manual override is purely additive.
+    //
+    //    SCOPED TO THIS SOURCE'S OWN ROWS (source_name = SOURCE_NAME). "Absent
+    //    from this month's PDF" only means "cancelled" for rows the PDF wrote.
+    //    The lodge has a second writer (the daily events-page scraper, source
+    //    "Ebbetts Pass Moose Lodge", which carries the Rib Feed and Oktoberfest)
+    //    plus hand-curated rows off the newsletter, and neither appears in the
+    //    monthly calendar PDF. Unscoped, this delete owned every future
+    //    moose-lodge row: those only survived by being re-scraped daily, so a
+    //    14-day outage of the other source would have silently deleted real
+    //    events, and a curated row (last_scraped_at NULL) died on the next run.
+    //    Same invariant the organizer sweeps hold in scripts/lib/stale-sweep.ts:
+    //    rows carrying another source's identity are untouchable.
     let swept: Array<{ id: string; name: string; date: string; last_scraped_at: string | null }> | null = null;
     if (overridePdfUrl) {
       console.log("[scrape-moose-lodge] Override run — skipping stale sweep");
@@ -533,6 +554,7 @@ export async function GET(request: Request) {
         .from("hwy4_events")
         .delete()
         .eq("org_slug", LODGE.orgSlug)
+        .eq("source_name", SOURCE_NAME)
         .gte("date", todayDate)
         .or(`last_scraped_at.is.null,last_scraped_at.lt.${staleCutoff}`)
         .select("id, name, date, last_scraped_at");
