@@ -1,13 +1,13 @@
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { decodeEventFields } from "../lib/extract.js";
-import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
+import { beginOrganizerRun } from "../lib/organizer-source.js";
+import { writeOrganizerBatch } from "../lib/organizer-source-exec.js";
 import {
   mapRawEvent,
   type MappedEvent,
   type RawDayEvent,
 } from "../lib/sequoia-woods-map.js";
 import { sweepWindowsFromMonths } from "../lib/stale-sweep.js";
-import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
 
 /**
  * Sequoia Woods Country Club calendar scraper.
@@ -225,14 +225,18 @@ function mapDecoded(raw: RawDayEvent): MappedEvent | null {
 // ─── Main ───────────────────────────────────────────────────────────────
 
 export async function scrapeSequoiaWoods(): Promise<void> {
-  console.log("=== Sequoia Woods Country Club (calendar) ===");
+  const run = beginOrganizerRun({
+    title: "Sequoia Woods Country Club (calendar)",
+    sourceName: SOURCE_NAME,
+    orgSlug: ORG_SLUG,
+    pageUrl: PAGE_URL,
+  });
 
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey) {
     throw new Error("Missing FIRECRAWL_API_KEY environment variable");
   }
   const firecrawl = new FirecrawlApp({ apiKey });
-  const today = new Date().toISOString().slice(0, 10);
 
   // 1. Fetch MONTHS_TO_FETCH consecutive clean month views (current + next 2).
   //    Each carries a few spillover days from its neighbors, so consecutive
@@ -273,7 +277,7 @@ export async function scrapeSequoiaWoods(): Promise<void> {
   }
 
   // 4. Future only, then a final defensive dedup by stable source id.
-  const future = mapped.filter((m) => m.event.date >= today);
+  const future = mapped.filter((m) => m.event.date >= run.today);
   const byId = new Map<string, MappedEvent>();
   for (const m of future) {
     const key = m.event.source_event_id ?? `${m.event.name}|${m.event.date}`;
@@ -293,44 +297,32 @@ export async function scrapeSequoiaWoods(): Promise<void> {
     );
   }
 
-  if (deduped.length === 0) {
+  // 5. Write both visibilities, then retract — the shared organizer spine
+  //    (scripts/lib/organizer-source.ts) owns that order and refuses a sweep on
+  //    a run that wrote nothing. What stays here is the club-specific part:
+  //    only the months this run parsed cleanly are sweepable, so a bad fetch
+  //    can't mass-delete.
+  const { upsert: totals, swept, written } = await writeOrganizerBatch(run, {
+    events: publicEvents,
+    privateEvents,
+    planSweep: () => ({
+      reason: "sequoia-woods sweep (entry left the club's calendar)",
+      windows: sweepWindowsFromMonths(parsedMonths, run.today),
+      presentKeys: new Set(
+        deduped
+          .map((m) => m.event.source_event_id)
+          .filter((k): k is string => typeof k === "string" && k.length > 0)
+      ),
+      keysOf: (r) => [r.source_event_id],
+      // Only rows written under our per-day id scheme — legacy or cross-source
+      // merged rows carrying a foreign id are not ours to retract.
+      ownRow: (r) => (r.source_event_id ?? "").startsWith("sequoia-woods|"),
+    }),
+  });
+  if (written === 0) {
     console.log("No future Sequoia Woods events to upsert.");
     return;
   }
-
-  // 5. Upsert through the shared path once per visibility.
-  const totals: UpsertResult = { inserted: 0, updated: 0, unchanged: 0, skippedFuzzy: 0, unpinned: 0 };
-  for (const [events, visibility] of [
-    [publicEvents, "public"],
-    [privateEvents, "private"],
-  ] as const) {
-    if (events.length === 0) continue;
-    const r = await upsertEvents(events, SOURCE_NAME, ORG_SLUG, PAGE_URL, visibility);
-    totals.inserted += r.inserted;
-    totals.updated += r.updated;
-    totals.unchanged += r.unchanged;
-    totals.skippedFuzzy += r.skippedFuzzy;
-    totals.unpinned += r.unpinned;
-  }
-
-  // 6. Retraction — window-scoped stale sweep (see header). Only the months
-  //    this run parsed cleanly are sweepable, so a bad fetch can't mass-delete.
-  const windows = sweepWindowsFromMonths(parsedMonths, today);
-  const presentKeys = new Set(
-    deduped
-      .map((m) => m.event.source_event_id)
-      .filter((k): k is string => typeof k === "string" && k.length > 0)
-  );
-  const swept = await sweepStaleSourceRows({
-    orgSlug: ORG_SLUG,
-    reason: "sequoia-woods sweep (entry left the club's calendar)",
-    windows,
-    presentKeys,
-    keysOf: (r) => [r.source_event_id],
-    // Only rows written under our per-day id scheme — legacy or cross-source
-    // merged rows carrying a foreign id are not ours to retract.
-    ownRow: (r) => (r.source_event_id ?? "").startsWith("sequoia-woods|"),
-  });
 
   console.log("\n=== Sequoia Woods Summary ===");
   console.log(`Public events: ${publicEvents.length}, members-only: ${privateEvents.length}`);

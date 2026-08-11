@@ -3,8 +3,8 @@ import {
   selectStaleRows,
   effectiveSweepCap,
   sweepExecuteEnabled,
+  type SweepPlan,
   type SweepRow,
-  type SweepWindow,
 } from "./stale-sweep.js";
 
 /** PostgREST caps an unbounded SELECT at its configured max rows and says
@@ -20,19 +20,9 @@ const RESIDENT_ROW_LIMIT = 1000;
  * failed archive means nothing is deleted. Best-effort: any error logs and
  * returns 0 — a sweep failure must never fail the scrape.
  */
-export async function sweepStaleSourceRows(opts: {
-  orgSlug: string;
-  /** Stored on the archive rows — say which sweep and why. */
-  reason: string;
-  windows: SweepWindow[];
-  presentKeys: Set<string>;
-  keysOf: (row: SweepRow) => (string | null | undefined)[];
-  ownRow?: (row: SweepRow) => boolean;
-  /** Per-source deletion budget, applied on top of the relative abort cap
-   *  (effective cap = the lower of the two). Set it when the source's catalog
-   *  is big enough that the relative cap pins to MAX_SWEEP_PER_RUN. */
-  maxPerRun?: number;
-}): Promise<number> {
+export async function sweepStaleSourceRows(
+  opts: SweepPlan & { orgSlug: string }
+): Promise<number> {
   try {
     return await runSweep(opts);
   } catch (err) {
@@ -46,15 +36,9 @@ export async function sweepStaleSourceRows(opts: {
   }
 }
 
-async function runSweep(opts: {
-  orgSlug: string;
-  reason: string;
-  windows: SweepWindow[];
-  presentKeys: Set<string>;
-  keysOf: (row: SweepRow) => (string | null | undefined)[];
-  ownRow?: (row: SweepRow) => boolean;
-  maxPerRun?: number;
-}): Promise<number> {
+async function runSweep(
+  opts: SweepPlan & { orgSlug: string }
+): Promise<number> {
   if (opts.windows.length === 0) {
     console.log("  Sweep: no qualifying windows this run — nothing considered.");
     return 0;

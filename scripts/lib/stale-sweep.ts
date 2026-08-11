@@ -47,6 +47,28 @@ export interface SweepWindow {
   to: string;
 }
 
+/**
+ * Everything a sweep needs except the org it targets. The executor takes
+ * `SweepPlan & { orgSlug }`, and the organizer skeleton
+ * (organizer-source-exec.ts) fills that slug in from the same declaration that
+ * drove the upsert — so a source physically cannot write as one org and
+ * retract another's rows. Defined here, next to the primitive, so the option
+ * list has one definition rather than a copy per call site.
+ */
+export interface SweepPlan {
+  /** Stored on the archive rows — say which sweep and why. */
+  reason: string;
+  windows: SweepWindow[];
+  /** Identity keys the source asserted this run. */
+  presentKeys: Set<string>;
+  keysOf: (row: SweepRow) => (string | null | undefined)[];
+  ownRow?: (row: SweepRow) => boolean;
+  /** Per-source deletion budget, applied on top of the relative abort cap
+   *  (effective cap = the lower of the two). Set it when the source's catalog
+   *  is big enough that the relative cap pins to MAX_SWEEP_PER_RUN. */
+  maxPerRun?: number;
+}
+
 export interface SweepRow {
   id: string;
   name: string;
