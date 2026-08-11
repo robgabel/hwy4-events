@@ -29,8 +29,9 @@
  *    hwy4_events_removed_archive before deleting. Restore with
  *    INSERT INTO hwy4_events SELECT (jsonb_populate_record(null::hwy4_events,
  *    snapshot)).* FROM hwy4_events_removed_archive WHERE event_id = '…'.
- *  - Dry-run by default: the executor only deletes when SWEEP_EXECUTE=true
- *    (the RECONCILE_EXECUTE precedent) — report-only logs first, then flip.
+ *  - Dry-run by default: the executor only deletes when SWEEP_EXECUTE names
+ *    the calling source (the RECONCILE_EXECUTE precedent, per-source since
+ *    HWY-21 — see sweepExecuteEnabled): report-only logs first, then flip.
  *
  * Deliberate non-goal: a swept event's detail URL 404s. That is honest — the
  * event is no longer asserted by anyone, so there is no better destination
@@ -52,6 +53,9 @@ export interface SweepRow {
   date: string;
   source_event_id: string | null;
   event_url: string | null;
+  /** The executor selects `*`, so an ownRow predicate may read the venue — the
+   *  aggregator sweep needs it to honor the manual-sources blocklist. */
+  venue_name?: string | null;
   robs_pick?: boolean | null;
   community_sourced?: boolean | null;
   series_umbrella?: boolean | null;
@@ -66,6 +70,41 @@ export interface SweepRow {
 export const MAX_SWEEP_PER_RUN = 20;
 
 /**
+ * Is deletion enabled for THIS caller? `SWEEP_EXECUTE` is an ALLOWLIST OF ORG
+ * SLUGS and nothing else:
+ *
+ *   unset / "" / "true" / any other text → every sweep is report-only
+ *   "murphys-irish-pub,sequoia-woods"    → those two delete, everyone else reports
+ *
+ * There is deliberately **no "true" = all alias** (HWY-21). It started as one
+ * global switch, which was fine while both callers were organizer scrapers
+ * graduating together, and became a trap the moment a corridor-wide aggregator
+ * joined them: the natural way to graduate the pub sweep is to type "true",
+ * which would have armed the GoCalaveras sweep on the same run, over hundreds
+ * of rows, before anyone had read one line of its dry-run log. Arming a sweep
+ * now costs exactly one deliberate act — naming that sweep. A flag left at
+ * "true" from the old semantics fails safe (nothing deletes) rather than
+ * silently arming everything.
+ *
+ * Each caller passes its own org slug, so a source graduates on its own clock.
+ * Pure + exported so scripts/test/stale-sweep.test.ts can lock the parsing
+ * without the Supabase env the executor needs.
+ */
+export function sweepExecuteEnabled(
+  flag: string | null | undefined,
+  orgSlug: string
+): boolean {
+  const raw = (flag ?? "").trim().toLowerCase();
+  if (!raw) return false;
+  const wanted = orgSlug.trim().toLowerCase();
+  if (!wanted) return false;
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .some((s) => s !== "" && s === wanted);
+}
+
+/**
  * Per-run abort cap, RELATIVE to the venue's resident rows in the queried
  * window (2026-08-09 review finding: a flat 20 was inert for a venue whose
  * whole future catalog is ~29 rows — a partially-rendered month view could
@@ -75,6 +114,26 @@ export const MAX_SWEEP_PER_RUN = 20;
  */
 export function maxSweepAllowed(residentCount: number): number {
   return Math.min(MAX_SWEEP_PER_RUN, Math.max(3, Math.ceil(residentCount * 0.34)));
+}
+
+/**
+ * The cap actually applied to a run: the relative cap, further lower-bounded by
+ * a per-source budget when the caller sets one (HWY-21).
+ *
+ * The relative cap alone degenerates on a large catalog — at 169 resident rows
+ * `maxSweepAllowed` is already pinned to the flat ceiling of 20, i.e. ~12% of a
+ * corridor-wide aggregator's future catalog deletable every single night. A
+ * source that knows its own blast radius passes a tighter number; a genuine
+ * mass retraction then takes several nights and stays visible in the logs,
+ * which for a deletion path is the right speed.
+ */
+export function effectiveSweepCap(
+  residentCount: number,
+  maxPerRun?: number
+): number {
+  const relative = maxSweepAllowed(residentCount);
+  if (maxPerRun === undefined || !Number.isFinite(maxPerRun)) return relative;
+  return Math.min(relative, Math.max(0, Math.floor(maxPerRun)));
 }
 
 const MONTH_INDEX: Record<string, number> = {

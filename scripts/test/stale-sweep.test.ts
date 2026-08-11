@@ -8,11 +8,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  effectiveSweepCap,
   inAnyWindow,
   isProtectedRow,
   maxSweepAllowed,
   monthWindowFromLabel,
   selectStaleRows,
+  sweepExecuteEnabled,
   sweepWindowsFromMonths,
   type SweepRow,
 } from "../lib/stale-sweep.js";
@@ -143,6 +145,44 @@ test("selectStaleRows: legacy key-less rows sweep once the source is structured"
   assert.deepEqual(stale.map((r) => r.name), ["Nathan Ignacio"]);
 });
 
+// ---------- per-source execute gate ----------
+
+test("sweepExecuteEnabled: anything that is not a slug list means dry-run", () => {
+  assert.equal(sweepExecuteEnabled(undefined, "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled("", "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled("  ", "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled("false", "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled("1", "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled("yes please", "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled(",,", "sequoia-woods"), false);
+});
+
+// There is NO "all sources" value, on purpose (HWY-21). The natural way to
+// graduate the pub sweep is to type "true"; when that armed everything, it
+// would have armed the corridor-wide aggregator sweep over hundreds of rows on
+// the same run, with zero dry-run review. "true" is just an unknown slug now.
+test("sweepExecuteEnabled: \"true\" arms nothing — a sweep is armed only by name", () => {
+  assert.equal(sweepExecuteEnabled("true", "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled("true", "gocalaveras"), false);
+  assert.equal(sweepExecuteEnabled(" TRUE ", "murphys-irish-pub"), false);
+  // …and it doesn't poison a list that also names a real source.
+  assert.equal(sweepExecuteEnabled("true,sequoia-woods", "sequoia-woods"), true);
+  assert.equal(sweepExecuteEnabled("true,sequoia-woods", "gocalaveras"), false);
+});
+
+test("sweepExecuteEnabled: an allowlist graduates named sources only", () => {
+  const flag = "murphys-irish-pub, sequoia-woods";
+  assert.equal(sweepExecuteEnabled(flag, "murphys-irish-pub"), true);
+  assert.equal(sweepExecuteEnabled(flag, "sequoia-woods"), true);
+  assert.equal(sweepExecuteEnabled(flag, "gocalaveras"), false);
+  // No partial matches: a slug is in the list or it isn't.
+  assert.equal(sweepExecuteEnabled("sequoia", "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled("sequoia-woods-annex", "sequoia-woods"), false);
+  assert.equal(sweepExecuteEnabled("sequoia-woods", "sequoia"), false);
+  assert.equal(sweepExecuteEnabled("Sequoia-Woods", "sequoia-woods"), true);
+  assert.equal(sweepExecuteEnabled("gocalaveras", ""), false);
+});
+
 // ---------- relative abort cap ----------
 
 test("maxSweepAllowed scales the abort cap to the venue's resident count (2026-08-09 review)", () => {
@@ -154,4 +194,16 @@ test("maxSweepAllowed scales the abort cap to the venue's resident count (2026-0
   assert.equal(maxSweepAllowed(0), 3);
   // Large catalogs hit the hard ceiling.
   assert.equal(maxSweepAllowed(200), 20);
+});
+
+// A big catalog pins the relative cap to the flat ceiling — 20 of an
+// aggregator's ~169 future rows is ~12% deletable every night — so a source
+// that knows its own blast radius sets a tighter budget (HWY-21).
+test("effectiveSweepCap takes the LOWER of the relative cap and the source budget", () => {
+  assert.equal(effectiveSweepCap(169), 20); // relative cap alone: the flat ceiling
+  assert.equal(effectiveSweepCap(169, 10), 10); // source budget is tighter
+  assert.equal(effectiveSweepCap(12, 10), 5); // relative cap is tighter — it wins
+  assert.equal(effectiveSweepCap(4, 10), 3); // small-venue floor still governs
+  assert.equal(effectiveSweepCap(169, 50), 20); // a looser budget can never raise it
+  assert.equal(effectiveSweepCap(169, 0), 0); // a zero budget disables deletion
 });
