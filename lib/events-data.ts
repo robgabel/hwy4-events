@@ -17,7 +17,7 @@
 import { unstable_cache } from "next/cache";
 import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event, EventListItem } from "@/lib/types";
-import { dedupeEvents } from "@/lib/dedupe-events";
+import { assertNoResidentDuplicates } from "@/lib/dedupe-events";
 import { gateEventDescription } from "@/lib/description-quality";
 import { pacificToday, addDays } from "@/lib/date-windows";
 import type { SitemapEventRow } from "@/lib/sitemap";
@@ -26,18 +26,19 @@ export const EVENTS_CACHE_TAG = "events";
 const REVALIDATE_SECONDS = 1800; // 30 min upper bound on staleness
 const PAGE_SIZE = 1000;
 
-// Columns needed by the card renderer (EventCard), the read-time deduper
-// (dedupe-events.ts), and the JSON-LD builders (schema.tsx). Trimmed vs. the
-// old per-page selects: still drops `importance` (unread by any list or
-// schema). Outbound-link resolution lives solely on the detail page
+// Columns needed by the card renderer (EventCard), the read-time dedupe
+// assertion (dedupe-events.ts), and the JSON-LD builders (schema.tsx). Trimmed
+// vs. the old per-page selects: still drops `importance` (unread by any list
+// or schema). Outbound-link resolution lives solely on the detail page
 // (lib/event-link.ts); cards link only to our own detail pages.
 const EVENT_COLUMNS =
   "id, name, description, date, start_time, end_time, venue_name, town, " +
   "address, category, artists, status, price, cost_tier, event_url, " +
   "source_event_id, source_name, source_url, image_url, visibility, org_slug, " +
   "robs_pick, is_weekly, verification_status, community_sourced, venue_key, " +
-  // series_umbrella feeds dedupeEvents below — without it the read-time collapse
-  // would merge a festival umbrella card into one of its own nightly shows.
+  // series_umbrella feeds assertNoResidentDuplicates below — without it a
+  // festival umbrella card would cluster as a false-positive duplicate of one
+  // of its own nightly shows.
   "series_umbrella, last_scraped_at, updated_at";
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
@@ -78,14 +79,16 @@ async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
     from += PAGE_SIZE;
   }
 
-  const deduped = dedupeEvents(all);
-  console.log(
-    `[events-data] fetched ${all.length} upcoming rows, ${deduped.length} after dedupe`
-  );
-  // Gate descriptions ONCE here, after dedupe: strip calendar-widget junk and
-  // suppress meaningless stubs so no list card renders them. Done post-dedupe so
-  // read-time clustering still sees raw text. See lib/description-quality.ts.
-  return deduped.map(gateEventDescription);
+  // HWY-16 (2026-08-11): this used to collapse duplicates with `dedupeEvents`.
+  // The write-time merge (scripts/lib/dedup.ts) + nightly /api/reconcile-dupes
+  // now own dedup at rest, so this is a loud assertion instead — it logs
+  // READTIME_DEDUPE_ASSERT per cluster found and passes every row through
+  // unchanged. See CLAUDE.md "Deduplication (defense in depth)".
+  const asserted = assertNoResidentDuplicates(all);
+  console.log(`[events-data] fetched ${all.length} upcoming rows`);
+  // Gate descriptions ONCE here: strip calendar-widget junk and suppress
+  // meaningless stubs so no list card renders them. See lib/description-quality.ts.
+  return asserted.map(gateEventDescription);
 }
 
 /**
