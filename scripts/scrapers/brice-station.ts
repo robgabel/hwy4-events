@@ -1,6 +1,5 @@
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
-import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
-import { applyVenueDetection } from "../lib/venue-matcher.js";
+import { runOrganizerSource } from "../lib/organizer-source.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
 import { htmlToText } from "../lib/tribe.js";
 import {
@@ -36,6 +35,12 @@ import {
  * on the rows it does cover. As a second guard, `correctFromUrl` in the shared
  * upsert pre-pass cross-checks every row against the date/time in its own
  * `event_url`, which for both sources is the Brice product permalink.
+ *
+ * Everything around the parsing (venue detection, the ownership-aware
+ * blocklist, the future filter, the upsert, the summary) is the shared
+ * `scripts/lib/organizer-source.ts` skeleton. No stale sweep: the store lists
+ * only what it is actively selling, so a product leaving the collection means
+ * "tickets closed", not "show cancelled".
  */
 
 const COLLECTION_URL = "https://bricestation.com/collections/events";
@@ -77,51 +82,34 @@ function mapProduct(p: ShopifyProduct): ExtractedEvent | null {
 }
 
 export async function scrapeBriceStation(): Promise<void> {
-  console.log("=== Brice Station (Shopify products.json) ===");
+  await runOrganizerSource({
+    sourceName: SOURCE_NAME,
+    orgSlug: ORG_SLUG,
+    pageUrl: PAGE_URL,
+    banner: "Brice Station (Shopify products.json)",
+    async harvest() {
+      const products = await fetchShopifyProducts(COLLECTION_URL);
+      console.log(`\nFetched ${products.length} product(s) from the events collection`);
 
-  const today = new Date().toISOString().slice(0, 10);
+      const mapped: ExtractedEvent[] = [];
+      for (const p of products) {
+        try {
+          const m = mapProduct(p);
+          if (m) mapped.push(decodeEventFields(m));
+          else console.log(`  skipped (no date in title): "${p.title}"`);
+        } catch (err) {
+          console.warn(`  Failed to map product ${p.id} ("${p.title}"):`, err);
+        }
+      }
 
-  const products = await fetchShopifyProducts(COLLECTION_URL);
-  console.log(`\nFetched ${products.length} product(s) from the events collection`);
-
-  const mapped: ExtractedEvent[] = [];
-  for (const p of products) {
-    try {
-      const m = mapProduct(p);
-      if (m) mapped.push(decodeEventFields(m));
-      else console.log(`  skipped (no date in title): "${p.title}"`);
-    } catch (err) {
-      console.warn(`  Failed to map product ${p.id} ("${p.title}"):`, err);
-    }
-  }
-
-  for (const e of mapped) {
-    if (applyVenueDetection(e)) {
-      // Registry match fills the canonical name + street address.
-    }
-  }
-
-  // Future-only — the collection keeps selling-closed past shows around.
-  const future = mapped.filter((e) => e.date >= today);
-  const past = mapped.length - future.length;
-  if (past > 0) console.log(`  Skipped ${past} past show(s)`);
-
-  for (const e of future) {
-    console.log(`  - ${e.date} ${e.start_time ?? "?"} | ${e.name} | ${e.price ?? "no price"}`);
-  }
-
-  if (future.length === 0) {
-    console.log("No future shows to upsert.");
-    return;
-  }
-
-  const result: UpsertResult = await upsertEvents(future, SOURCE_NAME, ORG_SLUG, PAGE_URL);
-
-  console.log("\n=== Brice Station Summary ===");
-  console.log(`Products fetched: ${products.length}`);
-  console.log(`Mapped to events: ${mapped.length}`);
-  console.log(`Future shows: ${future.length}`);
-  console.log(`Inserted: ${result.inserted}`);
-  console.log(`Updated: ${result.updated}`);
-  console.log(`Unchanged: ${result.unchanged}`);
+      return {
+        batches: [{ events: mapped }],
+        context: undefined,
+        summaryLines: [
+          `Products fetched: ${products.length}`,
+          `Mapped to events: ${mapped.length}`,
+        ],
+      };
+    },
+  });
 }
