@@ -277,6 +277,18 @@ export interface MonthEnumeration {
  *  silently inert. Hence the plausibility floor below. */
 const CAP_KEY = /count|limit/i;
 
+/** Cap-shaped keys that are known UI-navigation settings, never display caps.
+ *  EventON's `jumper_count` sizes the month-jumper dropdown, and on the live
+ *  page it sits at exactly 5 — MIN_PLAUSIBLE_CAP — so from the day the floor
+ *  shipped (2026-08-12) it cleared the floor, read as a display cap of 5,
+ *  every real month (136/114/60-event payloads) "reached" it, and zero windows
+ *  proved for three straight runs: the second false positive, landing on the
+ *  opposite side of the same floor that fixed the first. A DENYLIST (not an
+ *  allowlist of real cap keys) because the two directions fail differently: an
+ *  unknown real cap key that isn't listed still withholds windows (safe), while
+ *  a listed non-cap key can only stop the sweep from being silently inert. */
+const NON_CAP_KEYS = /^jumper_/i;
+
 /** A real display cap bounds a month's event LIST — live months run
  *  136/114/60/13/16/4 — while EventON's toggle-shaped settings carry 0/1.
  *  Anything below this can't be a cap on a county-wide month and is treated as
@@ -291,27 +303,36 @@ export const MIN_PLAUSIBLE_CAP = 5;
 export function detectShortcodeCap(
   shortcode: Record<string, unknown> | null | undefined
 ): { key: string; value: number } | null {
+  // EVERY cap-shaped key gets one logged disposition line, kept or skipped.
+  // Three inert-sweep episodes in four days were each diagnosed off a single
+  // logged key while the rest stayed invisible — the detector keeps only the
+  // smallest candidate, and jumper_count=5 (the smallest value able to clear
+  // the floor) masked everything at or above it, so the Aug 12–14 logs could
+  // not show whether it was the only blocker. Logging all of them settles the
+  // next episode in one run instead of one fix per run.
   let best: { key: string; value: number } | null = null;
   for (const [key, raw] of Object.entries(shortcode ?? {})) {
     if (!CAP_KEY.test(key)) continue;
+    if (NON_CAP_KEYS.test(key)) {
+      console.log(
+        `Shortcode key ${key}=${String(raw)} is cap-shaped but a known UI setting — ignored, not a display cap`
+      );
+      continue;
+    }
     if (typeof raw !== "string" && typeof raw !== "number") continue;
     const value = Number(raw);
-    if (!Number.isInteger(value) || value < MIN_PLAUSIBLE_CAP) continue;
-    if (!best || value < best.value) best = { key, value };
-  }
-  // A rejected sub-floor candidate is invisible in "no cap declared" unless it
-  // says so — this exact silence cost a day of inert sweep before anyone could
-  // see WHY zero windows proved. One line makes the next occurrence obvious.
-  if (!best) {
-    for (const [key, raw] of Object.entries(shortcode ?? {})) {
-      if (!CAP_KEY.test(key)) continue;
-      const value = Number(raw);
-      if (Number.isInteger(value) && value > 0 && value < MIN_PLAUSIBLE_CAP) {
+    if (!Number.isInteger(value)) continue;
+    if (value < MIN_PLAUSIBLE_CAP) {
+      // 0 is EventON's own "unlimited" — not a skipped cap, no line for it.
+      if (value > 0) {
         console.log(
           `Shortcode key ${key}=${value} is cap-shaped but below MIN_PLAUSIBLE_CAP (${MIN_PLAUSIBLE_CAP}) — treated as a toggle, not a display cap`
         );
       }
+      continue;
     }
+    console.log(`Shortcode key ${key}=${value} is a plausible display-cap candidate`);
+    if (!best || value < best.value) best = { key, value };
   }
   return best;
 }

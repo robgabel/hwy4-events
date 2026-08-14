@@ -335,6 +335,37 @@ test("detectShortcodeCap reads a cap off the live shortcode, ignoring non-caps",
   });
 });
 
+test("detectShortcodeCap: jumper_* keys are UI settings, never display caps", () => {
+  // The live 2026-08-12..14 false positive, the sequel to show_limit_paged:
+  // EventON's jumper_count (month-jumper dropdown size) sits at exactly
+  // MIN_PLAUSIBLE_CAP on the real page, so it cleared the toggle floor, read
+  // as a display cap of 5, and every real month "reached" it — zero windows
+  // proved for three straight runs. The key is navigation chrome, not a limit.
+  assert.equal(detectShortcodeCap({ jumper_count: "5" }), null);
+  // Denylist is by name, not value — a differently-configured jumper is still
+  // not a cap.
+  assert.equal(detectShortcodeCap({ jumper_count: "12" }), null);
+  // The denylist only removes the known UI key; a real cap beside it still
+  // governs (this is the live shortcode's shape plus a genuine event_count).
+  assert.deepEqual(
+    detectShortcodeCap({ jumper_count: "5", show_limit_paged: "1", event_count: "20" }),
+    { key: "event_count", value: 20 }
+  );
+  // Pins the PREFIX, not the one key: NON_CAP_KEYS is /^jumper_/, and this is
+  // the assertion that fails if it's ever narrowed to /^jumper_count$/.
+  // (jumper_limit is hypothetical — EventON's real jumper_offset never reaches
+  // the denylist because "offset" isn't cap-shaped — but the plugin's keys are
+  // its own to change, and the denylist claims the namespace.)
+  assert.equal(detectShortcodeCap({ jumper_limit: "10" }), null);
+  // Both cap-shaped keys observed in prod logs as of 2026-08-14 (the live
+  // data-sc carries many more keys; these are the two CAP_KEY sees), no
+  // genuine cap — months must prove on the agreement + floor rules alone.
+  assert.equal(
+    detectShortcodeCap({ jumper_count: "5", show_limit_paged: "1" }),
+    null
+  );
+});
+
 test("goCalaverasSweepWindows: only proven months, clamped to today", () => {
   const today = "2026-08-11";
   const windows = goCalaverasSweepWindows(
