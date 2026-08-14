@@ -277,6 +277,18 @@ export interface MonthEnumeration {
  *  silently inert. Hence the plausibility floor below. */
 const CAP_KEY = /count|limit/i;
 
+/** Cap-shaped keys that are known UI-navigation settings, never display caps.
+ *  EventON's `jumper_count` sizes the month-jumper dropdown, and on the live
+ *  page it sits at exactly 5 — MIN_PLAUSIBLE_CAP — so from the day the floor
+ *  shipped (2026-08-12) it cleared the floor, read as a display cap of 5,
+ *  every real month (136/114/60-event payloads) "reached" it, and zero windows
+ *  proved for three straight runs: the second false positive, landing on the
+ *  opposite side of the same floor that fixed the first. A DENYLIST (not an
+ *  allowlist of real cap keys) because the two directions fail differently: an
+ *  unknown real cap key that isn't listed still withholds windows (safe), while
+ *  a listed non-cap key can only stop the sweep from being silently inert. */
+const NON_CAP_KEYS = /^jumper_/i;
+
 /** A real display cap bounds a month's event LIST — live months run
  *  136/114/60/13/16/4 — while EventON's toggle-shaped settings carry 0/1.
  *  Anything below this can't be a cap on a county-wide month and is treated as
@@ -294,6 +306,16 @@ export function detectShortcodeCap(
   let best: { key: string; value: number } | null = null;
   for (const [key, raw] of Object.entries(shortcode ?? {})) {
     if (!CAP_KEY.test(key)) continue;
+    if (NON_CAP_KEYS.test(key)) {
+      // Loud for the same reason the sub-floor log below is loud: a skipped
+      // candidate that silently vanishes from "no cap declared" is how each
+      // inert-sweep episode stayed invisible until a human read three days of
+      // window-proof failures.
+      console.log(
+        `Shortcode key ${key}=${String(raw)} is cap-shaped but a known UI setting — ignored, not a display cap`
+      );
+      continue;
+    }
     if (typeof raw !== "string" && typeof raw !== "number") continue;
     const value = Number(raw);
     if (!Number.isInteger(value) || value < MIN_PLAUSIBLE_CAP) continue;
@@ -304,7 +326,7 @@ export function detectShortcodeCap(
   // see WHY zero windows proved. One line makes the next occurrence obvious.
   if (!best) {
     for (const [key, raw] of Object.entries(shortcode ?? {})) {
-      if (!CAP_KEY.test(key)) continue;
+      if (!CAP_KEY.test(key) || NON_CAP_KEYS.test(key)) continue;
       const value = Number(raw);
       if (Number.isInteger(value) && value > 0 && value < MIN_PLAUSIBLE_CAP) {
         console.log(

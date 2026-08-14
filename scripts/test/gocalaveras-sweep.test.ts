@@ -335,6 +335,30 @@ test("detectShortcodeCap reads a cap off the live shortcode, ignoring non-caps",
   });
 });
 
+test("detectShortcodeCap: jumper_* keys are UI settings, never display caps", () => {
+  // The live 2026-08-12..14 false positive, the sequel to show_limit_paged:
+  // EventON's jumper_count (month-jumper dropdown size) sits at exactly
+  // MIN_PLAUSIBLE_CAP on the real page, so it cleared the toggle floor, read
+  // as a display cap of 5, and every real month "reached" it — zero windows
+  // proved for three straight runs. The key is navigation chrome, not a limit.
+  assert.equal(detectShortcodeCap({ jumper_count: "5" }), null);
+  // Denylist is by name, not value — a differently-configured jumper is still
+  // not a cap.
+  assert.equal(detectShortcodeCap({ jumper_count: "12" }), null);
+  // The denylist only removes the known UI key; a real cap beside it still
+  // governs (this is the live shortcode's shape plus a genuine event_count).
+  assert.deepEqual(
+    detectShortcodeCap({ jumper_count: "5", show_limit_paged: "1", event_count: "20" }),
+    { key: "event_count", value: 20 }
+  );
+  // The full live shape as of 2026-08-14: both false-positive keys present,
+  // no genuine cap — months must prove on the agreement + floor rules alone.
+  assert.equal(
+    detectShortcodeCap({ jumper_count: "5", show_limit_paged: "1" }),
+    null
+  );
+});
+
 test("goCalaverasSweepWindows: only proven months, clamped to today", () => {
   const today = "2026-08-11";
   const windows = goCalaverasSweepWindows(
