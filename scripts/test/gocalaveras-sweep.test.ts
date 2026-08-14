@@ -351,8 +351,15 @@ test("detectShortcodeCap: jumper_* keys are UI settings, never display caps", ()
     detectShortcodeCap({ jumper_count: "5", show_limit_paged: "1", event_count: "20" }),
     { key: "event_count", value: 20 }
   );
-  // The full live shape as of 2026-08-14: both false-positive keys present,
-  // no genuine cap — months must prove on the agreement + floor rules alone.
+  // Pins the PREFIX, not the one key: NON_CAP_KEYS is /^jumper_/, and this is
+  // the assertion that fails if it's ever narrowed to /^jumper_count$/.
+  // (jumper_limit is hypothetical — EventON's real jumper_offset never reaches
+  // the denylist because "offset" isn't cap-shaped — but the plugin's keys are
+  // its own to change, and the denylist claims the namespace.)
+  assert.equal(detectShortcodeCap({ jumper_limit: "10" }), null);
+  // Both cap-shaped keys observed in prod logs as of 2026-08-14 (the live
+  // data-sc carries many more keys; these are the two CAP_KEY sees), no
+  // genuine cap — months must prove on the agreement + floor rules alone.
   assert.equal(
     detectShortcodeCap({ jumper_count: "5", show_limit_paged: "1" }),
     null

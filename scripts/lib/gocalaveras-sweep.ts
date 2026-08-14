@@ -303,14 +303,17 @@ export const MIN_PLAUSIBLE_CAP = 5;
 export function detectShortcodeCap(
   shortcode: Record<string, unknown> | null | undefined
 ): { key: string; value: number } | null {
+  // EVERY cap-shaped key gets one logged disposition line, kept or skipped.
+  // Three inert-sweep episodes in four days were each diagnosed off a single
+  // logged key while the rest stayed invisible — the detector keeps only the
+  // smallest candidate, and jumper_count=5 (the smallest value able to clear
+  // the floor) masked everything at or above it, so the Aug 12–14 logs could
+  // not show whether it was the only blocker. Logging all of them settles the
+  // next episode in one run instead of one fix per run.
   let best: { key: string; value: number } | null = null;
   for (const [key, raw] of Object.entries(shortcode ?? {})) {
     if (!CAP_KEY.test(key)) continue;
     if (NON_CAP_KEYS.test(key)) {
-      // Loud for the same reason the sub-floor log below is loud: a skipped
-      // candidate that silently vanishes from "no cap declared" is how each
-      // inert-sweep episode stayed invisible until a human read three days of
-      // window-proof failures.
       console.log(
         `Shortcode key ${key}=${String(raw)} is cap-shaped but a known UI setting — ignored, not a display cap`
       );
@@ -318,22 +321,18 @@ export function detectShortcodeCap(
     }
     if (typeof raw !== "string" && typeof raw !== "number") continue;
     const value = Number(raw);
-    if (!Number.isInteger(value) || value < MIN_PLAUSIBLE_CAP) continue;
-    if (!best || value < best.value) best = { key, value };
-  }
-  // A rejected sub-floor candidate is invisible in "no cap declared" unless it
-  // says so — this exact silence cost a day of inert sweep before anyone could
-  // see WHY zero windows proved. One line makes the next occurrence obvious.
-  if (!best) {
-    for (const [key, raw] of Object.entries(shortcode ?? {})) {
-      if (!CAP_KEY.test(key) || NON_CAP_KEYS.test(key)) continue;
-      const value = Number(raw);
-      if (Number.isInteger(value) && value > 0 && value < MIN_PLAUSIBLE_CAP) {
+    if (!Number.isInteger(value)) continue;
+    if (value < MIN_PLAUSIBLE_CAP) {
+      // 0 is EventON's own "unlimited" — not a skipped cap, no line for it.
+      if (value > 0) {
         console.log(
           `Shortcode key ${key}=${value} is cap-shaped but below MIN_PLAUSIBLE_CAP (${MIN_PLAUSIBLE_CAP}) — treated as a toggle, not a display cap`
         );
       }
+      continue;
     }
+    console.log(`Shortcode key ${key}=${value} is a plausible display-cap candidate`);
+    if (!best || value < best.value) best = { key, value };
   }
   return best;
 }
