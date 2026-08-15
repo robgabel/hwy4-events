@@ -734,6 +734,21 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Murphys",
     address: "389 Main St, Murphys, CA 95247",
   },
+  // Craft distillery + tasting room in Arnold, in the 925 Highway 4 complex it
+  // shares with El Vaquero. "Hinterhaus" is a distinctive enough word that the
+  // bare alias is safe; the misspelling variants are the ones people type.
+  "hinterhaus-distilling": {
+    canonical: "Hinterhaus Distilling",
+    aliases: [
+      "hinterhaus distilling",
+      "hinterhaus distillery",
+      "hinterhaus",
+      "hinterhouse distilling",
+      "hinterhaus tasting room",
+    ],
+    town: "Arnold",
+    address: "925 Highway 4, Ste 2, Arnold, CA 95223",
+  },
   // Maker/pottery studio in Arnold (Cameo Plaza). It already has a live
   // hwy4_venues row + 40+ keyed events but had fallen out of this registry, so
   // a venue-key backfill would have stripped those links — re-registered here
