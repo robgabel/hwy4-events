@@ -18,7 +18,12 @@
 --   * Everything else is service-role only (the server API routes).
 -- ============================================================================
 
-create extension if not exists pg_trgm;
+-- Installed into `extensions`, never `public` -- an extension in public is a
+-- Supabase security-advisor finding (0014_extension_in_public), and its
+-- functions/operators sit in the PostgREST-exposed schema. See
+-- 20260815_security_lints.sql, which moved this on the live project.
+create schema if not exists extensions;
+create extension if not exists pg_trgm with schema extensions;
 
 -- ----------------------------------------------------------------------------
 -- Enums
@@ -506,9 +511,16 @@ create policy "Public read" on hwy4_sources for select using (true);
 create policy "Public read" on hwy4_venues for select using (true);
 create policy "Public read" on site_config for select using (true);
 
--- Public (anon) insert on the two community forms.
-create policy "Public submit" on event_submissions for insert with check (true);
-create policy "Public subscribe" on newsletter_subscribers for insert with check (true);
+-- NO public (anon) insert on the two community forms. Both are written only by
+-- the server API routes using the service-role key, which bypasses RLS, so an
+-- anon INSERT policy grants the app nothing and grants an attacker a direct
+-- PostgREST write path with the anon key that ships in the client bundle:
+-- straight into event_submissions past the honeypot / rate cap / validation in
+-- app/api/submit-event, and into newsletter_subscribers with confirmed = true,
+-- putting arbitrary addresses on the Thursday send list. This bootstrap carried
+-- both policies until 2026-08-15; see 20260815_security_lints.sql.
+-- RLS on with zero policies is the correct end state: anon is denied, the
+-- service-role routes are unaffected.
 
 -- Everything else is service-role only (the server API routes).
 create policy "service role full access" on briefing_history
