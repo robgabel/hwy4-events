@@ -90,8 +90,11 @@ function tokensMatch(a: string, b: string): boolean {
   return short.length >= 4 && long.startsWith(short);
 }
 
-function nameScore(reqTokens: string[], candTokens: string[]): number {
-  if (!reqTokens.length || !candTokens.length) return 0;
+function nameScore(
+  reqTokens: string[],
+  candTokens: string[]
+): { score: number; matched: number } {
+  if (!reqTokens.length || !candTokens.length) return { score: 0, matched: 0 };
   const used = new Array(candTokens.length).fill(false);
   let matched = 0;
   for (const t of reqTokens) {
@@ -101,39 +104,133 @@ function nameScore(reqTokens: string[], candTokens: string[]): number {
       matched++;
     }
   }
-  return matched / Math.max(reqTokens.length, candTokens.length);
+  return {
+    score: matched / Math.max(reqTokens.length, candTokens.length),
+    matched,
+  };
 }
 
 const MIN_SCORE = 0.7; // confident-enough to redirect; below this we 404
 
+// Dominance second chance: a partial name match too weak for MIN_SCORE is
+// still confident when it's substantial AND nothing else comes close — an
+// exact date + town with one 60%-overlap candidate and dead silence behind it
+// is not a coincidence. The real case: "Rotary's Annual Shrimp Feed & Auction"
+// was renamed to "Annual Shrimp & Pasta Feed Fundraiser" by the 2026-08-11
+// hand merge, orphaning the old slug at 0.6 while every other same-day event
+// scored 0 — and the already-sent newsletter still pointed at it.
+const DOMINANT_MIN_SCORE = 0.5;
+const DOMINANT_MIN_MATCHED = 3;
+const DOMINANT_MAX_RUNNER_UP = 0.25;
+
+/** Tokens of a bare phrase in slug alphabet (same normalization as slugs). */
+function phraseTokens(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .split(/[\s-]+/)
+    .filter(Boolean);
+}
+
+// Venue words too generic to identify a venue on their own — without this,
+// "murphys-community-park" would containment-match every event in the park.
+const GENERIC_VENUE_TOKENS = new Set([
+  "a",
+  "an",
+  "and",
+  "at",
+  "center",
+  "club",
+  "community",
+  "hall",
+  "lodge",
+  "of",
+  "park",
+  "parks",
+  "plaza",
+  "square",
+  "state",
+  "the",
+]);
+
+type FallbackEvent = {
+  name: string;
+  date: string;
+  town: string;
+  artists?: string[] | null;
+  venue_name?: string | null;
+};
+
+/**
+ * Second-chance identity containment for slugs the name matcher can't see.
+ * LLM-written surfaces (briefings, newsletters) mint slugs from their prose
+ * rename of an event — the act ("kane-brown-murphys-…" for a row named
+ * "Ironstone Summer Concert Series") or the venue ("live-music-brice-station-
+ * vineyards-…" for "Deep Thicket Dwellers") — which share zero name tokens
+ * with the row. If the stale slug carries ALL tokens of exactly one same-town
+ * candidate's act (≥2 tokens) or distinctive venue core (≥2 tokens), that
+ * candidate is the event; two hits is ambiguity and stays a 404.
+ */
+function containmentFallback<T extends FallbackEvent>(
+  candidates: T[],
+  slugTokens: string[]
+): T | null {
+  if (slugTokens.length < 2) return null;
+  const covers = (tokens: string[]) =>
+    tokens.length >= 2 &&
+    tokens.every((t) => slugTokens.some((s) => tokensMatch(t, s)));
+  const hits = candidates.filter((e) => {
+    if ((e.artists ?? []).some((a) => covers(phraseTokens(a)))) return true;
+    const venueCore = phraseTokens(e.venue_name).filter(
+      (t) => !GENERIC_VENUE_TOKENS.has(t)
+    );
+    return covers(venueCore);
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+
 /**
  * Pure: pick the event a stale slug almost certainly meant. Requires the same
  * town and a strong, *unambiguous* name match (clear winner over runner-up),
- * so we never 301 to the wrong event when two share a date+town. Returns null
- * when nothing is confident — a 404 is safer than a wrong redirect.
+ * so we never 301 to the wrong event when two share a date+town; when the name
+ * pass fails, a stricter act/venue containment pass catches slugs written from
+ * an event's artist or venue instead of its title. Returns null when nothing
+ * is confident — a 404 is safer than a wrong redirect.
  */
-export function pickFallbackEvent<
-  T extends { name: string; date: string; town: string }
->(events: T[], slug: string): T | null {
+export function pickFallbackEvent<T extends FallbackEvent>(
+  events: T[],
+  slug: string
+): T | null {
   const parsed = splitSlug(slug);
   if (!parsed) return null;
-  const scored = events
-    .filter((e) => townSlug(e.town) === parsed.town)
+  const sameTown = events.filter((e) => townSlug(e.town) === parsed.town);
+  const scored = sameTown
     .map((e) => {
       const candSlug = generateEventSlug(e.name, e.date, e.town);
       const candNameTokens = candSlug
         .slice(0, candSlug.indexOf(`-${e.date}-`))
         .split("-")
         .filter(Boolean);
-      return { e, score: nameScore(parsed.nameTokens, candNameTokens) };
+      return { e, ...nameScore(parsed.nameTokens, candNameTokens) };
     })
     .sort((a, b) => b.score - a.score);
 
   const best = scored[0];
-  if (!best || best.score < MIN_SCORE) return null;
   const runnerUp = scored[1];
-  if (runnerUp && runnerUp.score >= best.score - 0.05) return null; // ambiguous
-  return best.e;
+  if (best && best.score >= MIN_SCORE) {
+    if (runnerUp && runnerUp.score >= best.score - 0.05) return null; // ambiguous
+    return best.e;
+  }
+  if (
+    best &&
+    best.score >= DOMINANT_MIN_SCORE &&
+    best.matched >= DOMINANT_MIN_MATCHED &&
+    (!runnerUp || runnerUp.score <= DOMINANT_MAX_RUNNER_UP)
+  ) {
+    return best.e;
+  }
+  return containmentFallback(sameTown, parsed.nameTokens);
 }
 
 // --- Merge-loser recovery (exact, via event_merge_log) ---------------------

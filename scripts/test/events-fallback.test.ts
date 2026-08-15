@@ -70,6 +70,110 @@ test("prefix tokens match (fest ↔ festival) but trivial short tokens don't", (
   assert.equal(pickFallbackEvent([festival], stale), festival);
 });
 
+// --- Dominance second chance (substantial partial match, no rivals) --------
+
+test("real case: recovers the renamed shrimp-feed survivor (dominant partial match)", () => {
+  // The 2026-08-11 hand merge kept "Annual Shrimp & Pasta Feed Fundraiser",
+  // orphaning the old "Rotary's Annual Shrimp Feed & Auction" slug at a 0.6
+  // name score — under MIN_SCORE, but with every other same-day event at 0.
+  const survivor = ev("Annual Shrimp & Pasta Feed Fundraiser", "2026-08-15", "Murphys");
+  const others = [
+    ev("Live Music @ Murphys Irish Pub", "2026-08-15", "Murphys"),
+    ev("Murphys Creek Theatre presents", "2026-08-15", "Murphys"),
+    survivor,
+  ];
+  const stale = "rotarys-annual-shrimp-feed-auction-2026-08-15-murphys";
+  assert.equal(pickFallbackEvent(others, stale), survivor);
+});
+
+test("dominance needs silence behind it — a mid-score rival blocks the redirect", () => {
+  const a = ev("Annual Shrimp & Pasta Feed Fundraiser", "2026-08-15", "Murphys");
+  const b = ev("Annual Shrimp Boil & Auction", "2026-08-15", "Murphys");
+  const stale = "rotarys-annual-shrimp-feed-auction-2026-08-15-murphys";
+  assert.equal(pickFallbackEvent([a, b], stale), null);
+});
+
+test("dominance needs ≥3 matched tokens — two shared words are not identity", () => {
+  const only = ev("Wine Tasting Night", "2026-08-15", "Murphys");
+  // "wine" + "tasting" match, but 2 tokens on a 4-token slug is a guess.
+  assert.equal(
+    pickFallbackEvent([only], "wine-tasting-summer-social-2026-08-15-murphys"),
+    null
+  );
+});
+
+// --- Containment second chance (artist/venue-shaped stale slugs) -----------
+// LLM-written surfaces (briefings, newsletters) mint slugs from their prose
+// rename of an event — the act or the venue — which share zero tokens with the
+// row's actual name. Both cases below shipped as live 404s on 2026-08-15.
+
+test("real case: an artist-first minted slug recovers via artists (Kane Brown)", () => {
+  const concert = {
+    ...ev("Ironstone Summer Concert Series", "2026-08-16", "Murphys"),
+    artists: ["Kane Brown"],
+    venue_name: "Ironstone Vineyards",
+  };
+  const mimosa = {
+    ...ev("Mimosa Sundays at Ironstone Vineyards", "2026-08-16", "Murphys"),
+    artists: null,
+    venue_name: "Ironstone Vineyards",
+  };
+  const minted = "kane-brown-murphys-2026-08-16-murphys";
+  assert.equal(pickFallbackEvent([concert, mimosa], minted), concert);
+});
+
+test("real case: a venue-shaped minted slug recovers via the venue core (Brice)", () => {
+  const show = {
+    ...ev("Deep Thicket Dwellers", "2026-08-15", "Murphys"),
+    artists: ["Deep Thicket Dwellers"],
+    venue_name: "Brice Station Vineyards",
+  };
+  const pub = {
+    ...ev("Live Music @ Murphys Irish Pub", "2026-08-15", "Murphys"),
+    artists: null,
+    venue_name: "Murphys Irish Pub",
+  };
+  const minted = "live-music-brice-station-vineyards-2026-08-15-murphys";
+  assert.equal(pickFallbackEvent([show, pub], minted), show);
+});
+
+test("containment never fires when two same-venue events both qualify", () => {
+  const base = {
+    artists: null as string[] | null,
+    venue_name: "Calaveras Big Trees State Park",
+  };
+  const a = { ...ev("Junior Rangers @ Big Trees State Park", "2026-08-15", "Arnold"), ...base };
+  const b = { ...ev("Meadow Walk @ Big Trees State Park", "2026-08-15", "Arnold"), ...base };
+  // Venue-only slug: the park's distinctive core matches both programs.
+  const minted = "calaveras-big-trees-2026-08-15-arnold";
+  assert.equal(pickFallbackEvent([a, b], minted), null);
+});
+
+test("a single-token act can't containment-match (too weak a signal)", () => {
+  const show = {
+    ...ev("Summer Concert Series", "2026-08-15", "Murphys"),
+    artists: ["Waterloo"],
+    venue_name: "Ironstone Vineyards",
+  };
+  // "waterloo" appears in the slug, but one token is not identity.
+  assert.equal(
+    pickFallbackEvent([show], "waterloo-night-2026-08-15-murphys"),
+    null
+  );
+});
+
+test("containment still requires the same town", () => {
+  const concert = {
+    ...ev("Ironstone Summer Concert Series", "2026-08-16", "Murphys"),
+    artists: ["Kane Brown"],
+    venue_name: "Ironstone Vineyards",
+  };
+  assert.equal(
+    pickFallbackEvent([concert], "kane-brown-2026-08-16-arnold"),
+    null
+  );
+});
+
 // --- matchMergedSlug (merge-loser recovery) --------------------------------
 // The reconcile engine deletes merged losers, and precisely those rows carry
 // titles too different for the fuzzy matcher above (that's why they were

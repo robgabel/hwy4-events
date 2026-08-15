@@ -11,6 +11,11 @@ import Anthropic from "@anthropic-ai/sdk";
 // Relative (not "@/") imports so the scripts/ test runner, which doesn't load
 // the app's tsconfig path alias, can import this module directly.
 import { generateEventSlug } from "./slugs";
+import {
+  repairEventLinks,
+  logLinkRepairs,
+  type LinkableEvent,
+} from "./briefing-links";
 import { SITE_URL, SITE_NAME } from "./constants";
 import { REGION } from "./region";
 import { REGION_OPS } from "./region-ops";
@@ -63,6 +68,7 @@ Rules:
 - No corporate language, no emojis in body text (sign-off paw print is the only exception).
 - FRESHNESS: Never reuse jokes, openers, closers, structural patterns, OR closing invitations from recent briefings below.
 - LINKS: Include event links as [event text](url). Keep natural — don't link every single event.
+- URLS ARE NOT YOURS TO WRITE: when you link an event, copy its "URL:" value from the event list above character for character. Never construct, guess, or edit a URL, and never reuse a URL from RECENT BRIEFINGS — those may be stale.
 - FORMAT: Output plain text with markdown-style links. No HTML tags. No JSON. No code fences. No preamble. Paragraphs separated by ONE blank line. Just the newsletter body — nothing else.`;
 
 export function getServiceClient(): SupabaseClient {
@@ -248,7 +254,14 @@ export async function generateNewsletter(
 
   // Defensive: if the LLM accidentally returns a JSON wrapper, unwrap it so we
   // never leak raw JSON into the email body. Otherwise return text as-is.
-  return unwrapAccidentalJson(block.text);
+  const body = unwrapAccidentalJson(block.text);
+
+  // Enforce link integrity before the draft is stored: a minted slug here
+  // would bypass the click-tracking rewrite (buildSlugToEventId only maps
+  // known slugs) and ship as a permanent dead link in an immutable email.
+  const repair = repairEventLinks(body, events as unknown as LinkableEvent[]);
+  logLinkRepairs("newsletter", repair);
+  return repair.text;
 }
 
 function unwrapAccidentalJson(raw: string): string {
