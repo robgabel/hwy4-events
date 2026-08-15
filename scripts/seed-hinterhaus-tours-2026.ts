@@ -63,7 +63,7 @@ const TOURS: Tour[] = [
     date: "2026-08-29",
     robsPick: true, // Rob's call, 2026-08-15
     pickReason:
-      "Nate and Bonnie's distillery is one of Rob's favorite stops in Arnold, and the tour is the one time you get the makers themselves for an hour. Their North Grove Vodka took Country Winner USA at the 2024 World Vodka Awards. $45, 21 and over, book ahead on their VISIT page.",
+      "Their Singularity single malt was named Best American Single Cask Single Malt at the World Whiskies Awards in February 2026, so the people pouring on this tour hold a current world title. Nate and Bonnie's place is one of Rob's favorite stops in Arnold, and the tour is the one time you get the makers themselves for an hour. $45, 21 and over, book ahead on their VISIT page.",
   },
 ];
 
