@@ -55,9 +55,10 @@ const TOURS: string[] = ["2026-08-15", "2026-08-29"];
 
 const DESCRIPTION = [
   "An hour and change behind the bottle with the father and son who make the spirits.",
-  "The tour runs 12:30 to about 1:45 and includes a distiller-led tasting, time to ask",
-  "whatever you want about the process, a Hinterhaus Glencairn glass to take home, and",
-  "10% off bottles and merch afterward. Alpine Club members get 15% off the booking.",
+  "It runs 12:30 to about 1:45 and costs $45 per person, which covers a distiller-led",
+  "tasting, time to ask whatever you want about the process, a Hinterhaus Glencairn glass",
+  "to take home, and 10% off bottles and merch afterward. Alpine Club members get 15% off",
+  "the booking.",
   "Spots are limited, so reserve on the VISIT page of hinterhausdistilling.com; walk-ins",
   "get in only as space allows. Everyone has to be 21 or over, and service animals only.",
 ].join(" ");
