@@ -26,9 +26,9 @@
 // distiller-led tasting + Q&A + a take-home Glencairn glass + 10% off bottles
 // and merch after the tour, 15% off the booking for Alpine Club members, spots
 // limited (reserve on the VISIT page; walk-ins only as space allows), 21+,
-// service animals only. The post states no ticket price, so cost_tier stays
-// "unknown" and price_locked stays false: /api/extract-prices may lift a fee
-// later if one is ever stated, and we never guess an amount.
+// service animals only. The post states no ticket price; $45 per person comes
+// from Rob (2026-08-14) and is therefore price_locked, so no automated writer
+// can overwrite or drop it.
 //
 // Run (real write, needs Supabase service-role env):
 //   env $(grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY)=' ../.env.local | xargs) \
@@ -79,9 +79,12 @@ function toRow(date: string) {
     category: "wine",
     status: "confirmed",
     is_past: false,
-    price: null as string | null,
-    cost_tier: "unknown", // the post states no ticket price; never guess one
-    price_locked: false,
+    price: "$45" as string | null,
+    // $45 per person, from Rob (2026-08-14). The Facebook post states no price,
+    // so this is the human-supplied figure: locked so /api/extract-prices and
+    // any future scrape of the same event can't overwrite or drop it.
+    cost_tier: "paid",
+    price_locked: true,
     description_locked: true, // hand-written from the organizer's post
     times_locked: true, // organizer-stated 12:30 to ~1:45
     event_url: VISIT_URL,
