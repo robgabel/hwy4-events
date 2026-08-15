@@ -51,7 +51,21 @@ const START_TIME = "12:30:00";
 const END_TIME = "13:45:00";
 
 // Saturdays announced in the 2026-08-13 post. Append new dates as they post them.
-const TOURS: string[] = ["2026-08-15", "2026-08-29"];
+//
+// robsPick/pickReason live here rather than only in the DB because this script
+// writes every column on a re-run: a curation flag set by hand at the database
+// would be silently reverted to false the next time someone extends TOURS.
+type Tour = { date: string; robsPick?: boolean; pickReason?: string };
+
+const TOURS: Tour[] = [
+  { date: "2026-08-15" },
+  {
+    date: "2026-08-29",
+    robsPick: true, // Rob's call, 2026-08-15
+    pickReason:
+      "Nate and Bonnie's distillery is one of Rob's favorite stops in Arnold, and the tour is the one time you get the makers themselves for an hour. Their North Grove Vodka took Country Winner USA at the 2024 World Vodka Awards. $45, 21 and over, book ahead on their VISIT page.",
+  },
+];
 
 const DESCRIPTION = [
   "An hour and change behind the bottle with the father and son who make the spirits.",
@@ -63,7 +77,8 @@ const DESCRIPTION = [
   "get in only as space allows. Everyone has to be 21 or over, and service animals only.",
 ].join(" ");
 
-function toRow(date: string) {
+function toRow(tour: Tour) {
+  const { date } = tour;
   return {
     name: NAME,
     description: DESCRIPTION,
@@ -94,7 +109,8 @@ function toRow(date: string) {
     visibility: "public",
     org_slug: ORG_SLUG,
     is_weekly: false,
-    robs_pick: false,
+    robs_pick: tour.robsPick ?? false,
+    pick_reason: tour.pickReason ?? null,
     community_sourced: false,
     dedup_key: generateDedupKey(NAME, date, TOWN),
     last_scraped_at: new Date().toISOString(),
