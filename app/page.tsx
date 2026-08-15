@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { Hwy4Org } from "@/lib/types";
 import { getHomepageEvents, toListEvents } from "@/lib/events-data";
+import { repairEventLinks, logLinkRepairs } from "@/lib/briefing-links";
 import { JsonLd, buildItemList } from "@/lib/schema";
 import Header from "@/components/Header";
 import EventList from "@/components/EventList";
@@ -108,6 +109,22 @@ export default async function Home() {
       getWeekendBriefing(),
       getForecastsByTown(),
     ]);
+
+  // Self-heal briefing links at render: a link that was valid at generation
+  // time dies when its event is renamed or merged away later that day (the
+  // 2026-08-11 shrimp-feed rename). Re-validate stored text against the live
+  // feed; only slugs dated inside the feed's own window are judged, so links
+  // to days that have scrolled out of the feed are never touched.
+  if (events.length > 0) {
+    const dates = events.map((e) => e.date).sort();
+    const activeRange = { start: dates[0], end: dates[dates.length - 1] };
+    for (const b of [briefing, weekendBriefing]) {
+      if (!b.text) continue;
+      const repair = repairEventLinks(b.text, events, { activeRange });
+      logLinkRepairs("homepage-render", repair);
+      b.text = repair.text;
+    }
+  }
 
   return (
     <main>
