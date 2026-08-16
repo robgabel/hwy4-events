@@ -402,8 +402,22 @@ export function buildStrongMatchUpdate(
       .filter((a): a is string => !!a)
   );
 
+  // A placeholder title never overwrites a specific one (HWY-29 follow-up):
+  // "whoever scraped last takes the name" let the daily aggregator pass rename
+  // a properly-titled row to "<venue> presents" within a day of every merge —
+  // and the organizer-adjacent source's next pass stole it back, a permanent
+  // ping-pong. The dedup_key must stay the hash of the name the row keeps —
+  // which is ALSO existing.name when the incoming name is blank (pick falls
+  // back to it; writing the incoming blank's hash beside the kept name was a
+  // pre-existing name↔key mismatch, review finding N5).
+  const keepName =
+    placeholderNameSteal(existing, event) || !(event.name && event.name.trim());
+
   return {
-    name: pick(event.name, existing.name),
+    name: keepName ? existing.name : pick(event.name, existing.name),
+    dedup_key: keepName
+      ? generateDedupKey(existing.name, event.date, event.town)
+      : dedupKey,
     venue_name: pickVenue(event.venue_name, existing.venue_name),
     // description + price are human-set when locked — leave them out entirely.
     ...(existing.description_locked
@@ -429,7 +443,6 @@ export function buildStrongMatchUpdate(
       ? { category: event.category }
       : {}),
     artists: artistSet.size > 0 ? [...artistSet] : null,
-    dedup_key: dedupKey,
     ...(event.source_event_id && { source_event_id: event.source_event_id }),
     last_scraped_at: now,
   };
@@ -474,39 +487,167 @@ type ExistingRow = {
 // barren re-insert daily. Locks already exempt human edits; this protects
 // agent/reconcile/extract-prices enrichment on unlocked rows. Treats
 // null/undefined/blank as absent (a scrape's "" means "didn't find it").
-function keepStr(
+export function keepStr(
   incoming: string | null | undefined,
   stored: string | null | undefined
 ): string | null {
   return incoming && incoming.trim() ? incoming : stored ?? null;
 }
 
+/**
+ * Aggregator placeholder shapes that carry NO act information — the ONLY
+ * titles the name-steal guard treats as placeholders. Deliberately NARROWER
+ * than `isGenericTitle` (adversarial review of #264, finding B1), because two
+ * of its arms mean something different here:
+ *
+ *  - The TBD/TBA tail is an ORGANIZER RETRACTION, not a lazy title. Sequoia
+ *    Woods really does revert "Patio Party #4 … - The Hit Men" to
+ *    "… (TBD)" when an act cancels (its sid embeds the slugified name, so the
+ *    rename arrives through the fuzzy path). That write states "the act is no
+ *    longer booked" and MUST land — blocking it would advertise a withdrawn
+ *    act permanently, with `rowChanged` reading the row as "unchanged" so
+ *    nothing would ever log.
+ *  - The live-music arm of `isGenericTitle` is PREFIX-anchored, so titles
+ *    that name the act ("Live Music - Jill Warren" — real sequoia-woods
+ *    rows) classify as generic. Here bare live-music only counts when the
+ *    whole title is the phrase (an "@ <venue>" tail included: "@" introduces
+ *    a place, not an act).
+ */
+export function isActlessPlaceholderTitle(name: string): boolean {
+  const n = normalizeName(name);
+  return (
+    /\bpresents?\b\W*$/.test(n) ||
+    /^live (?:music|entertainment|tunes)(?:\s*@.*)?$/.test(n) ||
+    /\b(?:concerts?|music) series$/.test(n) ||
+    /\bsummer concerts?$/.test(n)
+  );
+}
+
+/**
+ * The title-level twin of `keepStr` (HWY-29 follow-up): an ACTLESS PLACEHOLDER
+ * name never overwrites a specific one, on any write path. GoCalaveras titles
+ * every performance of a Murphys Creek Theatre play "Murphys Creek Theatre
+ * presents" while Visit Murphys uses the show's real name; once both writers
+ * converge on one row, "whoever scraped last takes the name" — and the
+ * aggregator scrapes daily, so the properly-titled row was renamed to the
+ * placeholder within a day of every merge (live on 2026-08-15: the Aug-21 row
+ * Visit Murphys had named was "Murphys Creek Theatre presents" by the next
+ * morning's pass; the next Visit Murphys pass would steal it back — a
+ * permanent rename ping-pong).
+ *
+ * When the name is kept, the caller must keep the `dedup_key` CONSISTENT with
+ * it — recompute from the kept name, never store the incoming title's hash
+ * beside the stored title (a name↔key mismatch breaks every future exact-key
+ * lookup for both sources). The healing direction still writes: a SPECIFIC
+ * incoming name replaces a stored placeholder, which is how a gocal-only date
+ * gets its real title the first time the organizer-adjacent source lists it —
+ * and, with this guard, keeps it permanently.
+ */
+export function placeholderNameSteal(
+  existing: { name: string },
+  event: { name: string }
+): boolean {
+  if (!isActlessPlaceholderTitle(event.name)) return false;
+  return !isActlessPlaceholderTitle(existing.name) && existing.name.trim() !== "";
+}
+
 export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
   return (
-    existing.name !== event.name ||
+    // A placeholder name would not be written over a specific one
+    // (placeholderNameSteal), so that diff is not a change.
+    (!placeholderNameSteal(existing, event) && existing.name !== event.name) ||
     // A rescheduled event keeps its stable source_event_id but changes date.
     // (For sources whose source_event_id or dedup_key already embeds the date,
     // the matched row's date equals the incoming date, so this is a no-op.)
     existing.date !== event.date ||
     existing.venue_name !== event.venue_name ||
-    // A locked field can't be written, so a diff there is not a change.
-    (!existing.description_locked && existing.description !== event.description) ||
+    // A locked field can't be written, so a diff there is not a change. For
+    // the keepStr-guarded display fields, "changed" is defined as "what the
+    // payload WOULD write differs from what is stored" — the exact same
+    // expression the payload uses — so a wipe-shaped diff (scraped blank vs
+    // stored content) can never re-mark a row "updated" every run while the
+    // guard writes nothing. That churn fed the per-source updated counts on
+    // /admin/scrapers and held sources out of the weekly memo's quiet-source
+    // bucket (scraper-health-context gates on inserted===0 && updated===0);
+    // the insert-rate anomaly detector reads inserted only and never saw it.
+    (!existing.description_locked &&
+      keepStr(event.description, existing.description) !== (existing.description ?? null)) ||
     (!existing.times_locked &&
-      (existing.start_time !== event.start_time ||
-        existing.end_time !== event.end_time)) ||
-    (!existing.price_locked && existing.price !== event.price) ||
-    existing.event_url !== event.event_url ||
-    existing.address !== event.address ||
+      (keepStr(event.start_time, existing.start_time) !== (existing.start_time ?? null) ||
+        keepStr(event.end_time, existing.end_time) !== (existing.end_time ?? null))) ||
+    (!existing.price_locked &&
+      keepStr(event.price, existing.price) !== (existing.price ?? null)) ||
+    keepStr(event.event_url, existing.event_url) !== (existing.event_url ?? null) ||
+    keepStr(event.address, existing.address) !== (existing.address ?? null) ||
     existing.town !== event.town ||
     // Self-heal: a specific incoming category that differs from the stored one
     // counts as a change (so a stuck "other" row updates). Never a downgrade —
     // the update payload itself refuses to write "other" over a specific value.
     (event.category !== "other" && existing.category !== event.category) ||
-    (!existing.poster_locked && existing.image_url !== (event.image_url ?? null)) ||
+    (!existing.poster_locked &&
+      keepStr(event.image_url ?? null, existing.image_url) !== (existing.image_url ?? null)) ||
     // Re-classification: a routine flag that flips counts as a change (unless the
     // human locked it). Keeps a re-scrape self-healing.
     (!existing.notability_locked && !!existing.is_routine !== !!(event.is_routine ?? false))
   );
+}
+
+/**
+ * The ONE exact-match update payload, shared by the batched and serial paths.
+ * They were hand-duplicated object literals until 2026-08-16, and the drift
+ * was not hypothetical: the batched copy silently lacked the category
+ * self-heal, and a mutation deleting the name guard from just one copy passed
+ * the whole suite (adversarial review of #264, finding N4). Exported so the
+ * payload's guarantees — keepStr on every display field, the placeholder
+ * name guard with its key-consistency invariant, upgrade-only category —
+ * are directly testable instead of living inside DB-writing closures.
+ */
+export function buildExactMatchUpdate(
+  existing: ExistingRow,
+  event: ExtractedEvent,
+  dedupKey: string,
+  now: string
+): Record<string, unknown> {
+  // A placeholder title never overwrites a specific one; the dedup_key must
+  // stay the hash of whichever name the row actually carries.
+  const keepName = placeholderNameSteal(existing, event);
+  return {
+    name: keepName ? existing.name : event.name,
+    // Propagate a rescheduled date (dedup_key below stays consistent with it).
+    date: event.date,
+    venue_name: event.venue_name,
+    venue_key: resolveVenueKey(event),
+    // Locked fields are human-set — never overwrite them. Unlocked display
+    // fields are null-guarded (HWY-29): a scraped blank keeps the stored
+    // value rather than wiping reconcile's back-fill.
+    ...(existing.description_locked
+      ? {}
+      : { description: keepStr(event.description, existing.description) }),
+    ...(existing.times_locked
+      ? {}
+      : {
+          start_time: keepStr(event.start_time, existing.start_time),
+          end_time: keepStr(event.end_time, existing.end_time),
+        }),
+    ...(existing.price_locked ? {} : { price: keepStr(event.price, existing.price) }),
+    event_url: keepStr(event.event_url, existing.event_url),
+    address: keepStr(event.address, existing.address),
+    town: event.town,
+    // Self-heal category on re-scrape, upgrade-only: never write "other" over
+    // a specific value (avoids the reverse ratchet).
+    ...(event.category && event.category !== "other" ? { category: event.category } : {}),
+    ...(existing.poster_locked
+      ? {}
+      : { image_url: keepStr(event.image_url ?? null, existing.image_url) }),
+    ...(existing.notability_locked
+      ? {}
+      : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),
+    // Keep dedup_key in sync with the (possibly-changed) date/town so key
+    // lookups still find this row if source_event_id ever disappears.
+    dedup_key: keepName ? generateDedupKey(existing.name, event.date, event.town) : dedupKey,
+    ...(event.source_event_id && { source_event_id: event.source_event_id }),
+    last_scraped_at: now,
+  };
 }
 
 /**
@@ -753,35 +894,7 @@ async function upsertEventsBatched(
     const updates = await Promise.all(
       matched.map(({ event, existing, dedupKey, changed }) => {
         const payload = changed
-          ? {
-              name: event.name,
-              // Propagate a rescheduled date (dedup_key is recomputed from it
-              // below, keeping identity self-consistent).
-              date: event.date,
-              venue_name: event.venue_name,
-              venue_key: resolveVenueKey(event),
-              // Locked fields are human-set — never overwrite them. Unlocked
-              // display fields are null-guarded (HWY-29): a scraped blank keeps
-              // the stored value rather than wiping reconcile's back-fill.
-              ...(existing.description_locked ? {} : { description: keepStr(event.description, existing.description) }),
-              ...(existing.times_locked
-                ? {}
-                : {
-                    start_time: keepStr(event.start_time, existing.start_time),
-                    end_time: keepStr(event.end_time, existing.end_time),
-                  }),
-              ...(existing.price_locked ? {} : { price: keepStr(event.price, existing.price) }),
-              event_url: event.event_url,
-              address: event.address,
-              town: event.town,
-              ...(existing.poster_locked ? {} : { image_url: keepStr(event.image_url ?? null, existing.image_url) }),
-              ...(existing.notability_locked
-                ? {}
-                : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),
-              dedup_key: dedupKey,
-              ...(event.source_event_id && { source_event_id: event.source_event_id }),
-              last_scraped_at: now,
-            }
+          ? buildExactMatchUpdate(existing, event, dedupKey, now)
           : {
               last_scraped_at: now,
               ...(event.source_event_id && { source_event_id: event.source_event_id }),
@@ -965,69 +1078,16 @@ export async function upsertEvents(
     const now = new Date().toISOString();
 
     if (existing) {
-      // Check if any mutable fields changed. A locked field can't be written,
-      // so a diff there doesn't count as a change.
-      const changed =
-        existing.name !== event.name ||
-        // Rescheduled event (stable source_event_id, new date). No-op for sources
-        // whose source_event_id / dedup_key already embeds the date.
-        existing.date !== event.date ||
-        existing.venue_name !== event.venue_name ||
-        (!existing.description_locked && existing.description !== event.description) ||
-        (!existing.times_locked &&
-          (existing.start_time !== event.start_time ||
-            existing.end_time !== event.end_time)) ||
-        (!existing.price_locked && existing.price !== event.price) ||
-        existing.event_url !== event.event_url ||
-        existing.address !== event.address ||
-        existing.town !== event.town ||
-        (event.category !== "other" && existing.category !== event.category) ||
-        (!existing.poster_locked && existing.image_url !== (event.image_url ?? null)) ||
-        (!existing.notability_locked && !!existing.is_routine !== !!(event.is_routine ?? false));
+      // One definition of "changed" — the exported rowChanged (this block was
+      // an inline copy until 2026-08-16, the exact drift shape that let the
+      // two exact-match paths disagree about category and the null-guards),
+      // and one payload — the shared buildExactMatchUpdate.
+      const changed = rowChanged(existing, event);
 
       if (changed) {
         await supabaseAdmin
           .from("hwy4_events")
-          .update({
-            name: event.name,
-            // Propagate a rescheduled date; dedup_key below is recomputed from it.
-            date: event.date,
-            venue_name: event.venue_name,
-            venue_key: resolveVenueKey(event),
-            // Locked fields are human-set — never overwrite them. Unlocked
-            // display fields are null-guarded (HWY-29): a scraped blank keeps
-            // the stored value rather than wiping reconcile's back-fill.
-            ...(existing.description_locked ? {} : { description: keepStr(event.description, existing.description) }),
-            ...(existing.times_locked
-              ? {}
-              : {
-                  start_time: keepStr(event.start_time, existing.start_time),
-                  end_time: keepStr(event.end_time, existing.end_time),
-                }),
-            ...(existing.price_locked ? {} : { price: keepStr(event.price, existing.price) }),
-            event_url: event.event_url,
-            address: event.address,
-            town: event.town,
-            // Self-heal category on re-scrape so a row that once landed in
-            // "other" (e.g. a failed classify run) gets corrected when a later
-            // run classifies it. Only ever *upgrade*: never overwrite a specific
-            // category with "other" (avoids the reverse ratchet).
-            ...(event.category && event.category !== "other"
-              ? { category: event.category }
-              : {}),
-            ...(existing.poster_locked ? {} : { image_url: keepStr(event.image_url ?? null, existing.image_url) }),
-            ...(existing.notability_locked
-              ? {}
-              : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),
-            // Keep dedup_key in sync with the (possibly-changed) town so
-            // dedup_key lookups still find this row if source_event_id
-            // ever disappears.
-            dedup_key: dedupKey,
-            ...(event.source_event_id && {
-              source_event_id: event.source_event_id,
-            }),
-            last_scraped_at: now,
-          })
+          .update(buildExactMatchUpdate(existing, event, dedupKey, now))
           .eq("id", existing.id);
         result.updated++;
       } else {
