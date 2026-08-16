@@ -34,6 +34,9 @@ export interface DedupableEvent extends EventIdentity {
   image_url?: string | null;
   event_url?: string | null;
   robs_pick?: boolean;
+  // For the survivor tie-break (HWY-29). Optional: read-time projections drop
+  // the timestamps; reconcile selects `*`, so its rows carry it.
+  created_at?: string | null;
 }
 
 /** Higher score = better card to show / keep. Curated picks always win; then
@@ -120,11 +123,23 @@ export function clusterEvents<T extends DedupableEvent>(events: T[]): T[][] {
   return clusters;
 }
 
-/** The richest row of a cluster — the one to keep / display. */
+/** The richest row of a cluster — the one to keep / display. On a richness tie,
+ *  break deterministically toward the OLDER row (HWY-29): a 1-day-old aggregator
+ *  re-insert must not displace a months-old enriched resident, and the survivor
+ *  must not flip on nondeterministic DB row order (which reset the row's id and
+ *  its verification/price stamps every reconcile). Falls back to keeping the
+ *  incumbent when neither row carries a created_at. */
 export function pickSurvivor<T extends DedupableEvent>(cluster: T[]): T {
-  return cluster.reduce((best, cur) =>
-    richness(cur) > richness(best) ? cur : best
-  );
+  return cluster.reduce((best, cur) => {
+    const rc = richness(cur);
+    const rb = richness(best);
+    if (rc !== rb) return rc > rb ? cur : best;
+    const ac = cur.created_at ?? null;
+    const ab = best.created_at ?? null;
+    if (ac && ab && ac !== ab) return ac < ab ? cur : best; // older wins
+    if (ac && !ab) return cur; // a known age beats an unknown one
+    return best; // both unknown or equal: keep the incumbent (stable)
+  });
 }
 
 /** The survivor of a cluster, enriched by backfilling display fields it lacks

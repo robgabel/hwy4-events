@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import {
   dedupeEvents,
   mergeCluster,
+  pickSurvivor,
   assertNoResidentDuplicates,
   type DedupableEvent,
 } from "../../lib/dedupe-events.js";
@@ -65,6 +66,24 @@ test("does not mutate the input rows", () => {
 
 test("mergeCluster returns the row unchanged for a singleton", () => {
   assert.equal(mergeCluster([act]), act);
+});
+
+test("pickSurvivor breaks a richness tie toward the older row (HWY-29)", () => {
+  // Two identically-rich rows (same fields), differing only in age. The older
+  // resident must win so a fresh aggregator re-insert can't displace it.
+  const base: DedupableEvent = { ...slot, name: "Same Show", description: "x", artists: null };
+  const older = { ...base, created_at: "2026-03-01T00:00:00Z" };
+  const newer = { ...base, created_at: "2026-08-14T00:00:00Z" };
+  assert.equal(pickSurvivor([newer, older]).created_at, older.created_at); // order-independent
+  assert.equal(pickSurvivor([older, newer]).created_at, older.created_at);
+});
+
+test("pickSurvivor still lets a richer row win regardless of age", () => {
+  // Age only breaks a tie; a genuinely richer (has artists) row still wins even
+  // if it's newer.
+  const poorOld: DedupableEvent = { ...slot, name: "Show", description: null, artists: null, created_at: "2026-01-01T00:00:00Z" };
+  const richNew: DedupableEvent = { ...slot, name: "Show", description: "a much longer blurb here", artists: ["The Band"], created_at: "2026-08-01T00:00:00Z" };
+  assert.equal(pickSurvivor([poorOld, richNew]).artists?.[0], "The Band");
 });
 
 test("leaves genuinely different shows alone (different venue)", () => {

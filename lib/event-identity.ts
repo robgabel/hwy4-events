@@ -503,7 +503,13 @@ export function isGenericTitle(name: string): boolean {
     // the act and re-lists, the placeholder row must merge into the named row
     // (2026-07-16 QA: the Sequoia Woods Patio Party #4 dupe). End-anchored
     // (normalizeName keeps punctuation, so allow a trailing ")").
-    /\b(?:tbd|tba)\W*$/.test(n)
+    /\b(?:tbd|tba)\W*$/.test(n) ||
+    // "<Venue> presents" with no show name after it: GoCalaveras titles every
+    // Murphys Creek Theatre occurrence "Murphys Creek Theatre presents" and
+    // puts the real play name only in the URL slug (HWY-29). End-anchored, so
+    // "... presents What the Constitution Means to Me" stays specific and the
+    // -12 richness penalty lets the specific-titled row win the display slot.
+    /\bpresents?\b\W*$/.test(n)
   );
 }
 

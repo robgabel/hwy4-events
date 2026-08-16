@@ -102,6 +102,17 @@ function describeMatch(a: ReconcileRow, b: ReconcileRow): string {
   ) {
     return "description";
   }
+  // Same venue + an identical known start-AND-end window is its own identity
+  // signal (isSameEvent's sameExactWindow). Label it as such so an audit read
+  // isn't misled into thinking a title/act signal fired (HWY-29 fix #4).
+  if (
+    a.start_time &&
+    a.end_time &&
+    a.start_time === b.start_time &&
+    a.end_time === b.end_time
+  ) {
+    return "venue+exact-window";
+  }
   const va = normalizeVenue(a.venue_name);
   const vb = normalizeVenue(b.venue_name);
   if (va && vb && !GENERIC_VENUES.has(va) && !GENERIC_VENUES.has(vb)) {
