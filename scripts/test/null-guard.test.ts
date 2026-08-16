@@ -3,8 +3,10 @@
 //
 // #262 null-guarded the exact-match payloads (keepStr) — but rowChanged still
 // counted a wipe-shaped diff as a change, so a flaky-feed row re-marked itself
-// "updated" every run forever while the guard wrote nothing (churn in the
-// exact telemetry the insert-rate anomaly detector reads). And no write path
+// "updated" every run forever while the guard wrote nothing — churning the
+// per-source updated counts on /admin/scrapers and holding flaky-feed sources
+// out of the weekly memo's quiet-source bucket (which gates on zero inserted
+// AND zero updated; the insert-rate anomaly detector reads inserted only). And no write path
 // guarded the NAME: "whoever scraped last takes the name" let the daily
 // GoCalaveras pass rename Visit Murphys' properly-titled play row to "Murphys
 // Creek Theatre presents" within a day of every merge (live on 2026-08-15,
@@ -169,5 +171,122 @@ test("keepStr now also guards event_url and address on the exact-match paths", a
       image_url: storedRow.image_url,
     } as never),
     false
+  );
+});
+
+// ---------------------------------------------------------------------------
+// B1 (adversarial review of #264): the steal predicate must be NARROWER than
+// isGenericTitle. A TBD/TBA tail is an ORGANIZER RETRACTION — Sequoia Woods
+// really reverts "Patio Party #4 … - The Hit Men" to "… (TBD)" when an act
+// cancels — and isGenericTitle's live-music arm is prefix-anchored, so titles
+// that NAME the act ("Live Music - Jill Warren") classify as generic.
+
+test("isActlessPlaceholderTitle: aggregator shapes only — retractions and act-naming titles excluded", async () => {
+  const { isActlessPlaceholderTitle } = await load();
+  // Actless aggregator shapes: blocked from stealing a specific name.
+  assert.equal(isActlessPlaceholderTitle("Murphys Creek Theatre presents"), true);
+  assert.equal(isActlessPlaceholderTitle("Live Music"), true);
+  assert.equal(isActlessPlaceholderTitle("Live Music @ The Lube Room"), true);
+  assert.equal(isActlessPlaceholderTitle("Bistro Summer Concerts Series"), true);
+  // An organizer stating the act is UNKNOWN is information, not a lazy title.
+  assert.equal(isActlessPlaceholderTitle("Patio Party #4 featuring live music (TBD)"), false);
+  // Prefix-anchored generic ≠ actless: these name the act.
+  assert.equal(isActlessPlaceholderTitle("Live Music - Jill Warren"), false);
+  assert.equal(isActlessPlaceholderTitle("Live Music - Sequoia Blue"), false);
+});
+
+test("an organizer's TBD retraction still writes over a cancelled act's name", async () => {
+  const { placeholderNameSteal, rowChanged, buildStrongMatchUpdate } = await load();
+  const hitMen = {
+    ...storedRow,
+    name: "Patio Party #4 featuring live music - The Hit Men",
+    venue_name: "Sequoia Woods Country Club",
+  };
+  const tbd = {
+    ...(placeholderScrape as object),
+    name: "Patio Party #4 featuring live music (TBD)",
+    venue_name: "Sequoia Woods Country Club",
+    source_event_id: "sequoia-woods|2026-08-28|patio-party-4-featuring-live-music-tbd",
+  } as never;
+  // The retraction is NOT a steal: it must count as a change and must write.
+  assert.equal(placeholderNameSteal(hitMen, tbd), false);
+  assert.equal(rowChanged(hitMen as never, tbd), true);
+  const merged = buildStrongMatchUpdate(
+    { ...hitMen, artists: null, series_umbrella: false } as never,
+    { ...(tbd as object), date: "2026-08-28", town: "Arnold" } as never,
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "2026-08-16T00:00:00Z"
+  ) as Record<string, unknown>;
+  assert.equal(merged.name, "Patio Party #4 featuring live music (TBD)");
+  assert.equal(merged.dedup_key, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+});
+
+// ---------------------------------------------------------------------------
+// N4: both exact-match paths now build their payload through the ONE exported
+// buildExactMatchUpdate, so pinning the builder pins both (a mutation deleting
+// the name guard from "one of the two payloads" is no longer expressible).
+
+test("buildExactMatchUpdate: name guard, key consistency, guards, category self-heal", async () => {
+  const { buildExactMatchUpdate } = await load();
+  const incomingKey = "cccccccccccccccccccccccccccccccc";
+  const p = buildExactMatchUpdate(
+    storedRow as never,
+    { ...(placeholderScrape as object), category: "fine_arts" } as never,
+    incomingKey,
+    "2026-08-16T00:00:00Z"
+  );
+  // Placeholder name kept out; key recomputed from the KEPT name.
+  assert.equal(p.name, "WHAT THE CONSTITUTION MEANS TO ME");
+  assert.equal(
+    p.dedup_key,
+    generateDedupKey("WHAT THE CONSTITUTION MEANS TO ME", storedRow.date, storedRow.town)
+  );
+  // keepStr on every display field: barren scrape keeps stored content.
+  assert.equal(p.description, storedRow.description);
+  assert.equal(p.end_time, storedRow.end_time);
+  assert.equal(p.price, storedRow.price);
+  assert.equal(p.image_url, storedRow.image_url);
+  assert.equal(p.event_url, storedRow.event_url);
+  assert.equal(p.address, storedRow.address);
+  // Upgrade-only category self-heal is present (the batched path lacked it).
+  assert.equal(p.category, "fine_arts");
+  const noDowngrade = buildExactMatchUpdate(
+    storedRow as never,
+    { ...(placeholderScrape as object), category: "other" } as never,
+    incomingKey,
+    "2026-08-16T00:00:00Z"
+  );
+  assert.equal("category" in noDowngrade, false);
+  // A specific incoming name writes normally and carries the incoming key.
+  const renamed = buildExactMatchUpdate(
+    storedRow as never,
+    { ...(placeholderScrape as object), name: "Constitution (final weekend)" } as never,
+    incomingKey,
+    "2026-08-16T00:00:00Z"
+  );
+  assert.equal(renamed.name, "Constitution (final weekend)");
+  assert.equal(renamed.dedup_key, incomingKey);
+});
+
+// N5: an EMPTY incoming name falls back to the stored name via pick — the key
+// must follow the kept name, never store the empty title's hash beside it.
+
+test("buildStrongMatchUpdate: an empty incoming name keeps the stored name AND its key", async () => {
+  const { buildStrongMatchUpdate } = await load();
+  const merged = buildStrongMatchUpdate(
+    { ...storedRow, artists: null, series_umbrella: false } as never,
+    {
+      ...(placeholderScrape as object),
+      name: "",
+      date: "2026-08-28",
+      town: "Murphys",
+    } as never,
+    "dddddddddddddddddddddddddddddddd",
+    "2026-08-16T00:00:00Z"
+  ) as Record<string, unknown>;
+  assert.equal(merged.name, "WHAT THE CONSTITUTION MEANS TO ME");
+  assert.equal(
+    merged.dedup_key,
+    generateDedupKey("WHAT THE CONSTITUTION MEANS TO ME", "2026-08-28", "Murphys")
   );
 });
