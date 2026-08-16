@@ -237,7 +237,38 @@ export async function scrapeGoCalaveras(): Promise<void> {
   // are regexed out of the response HTML and are not. When that extraction is
   // thin, rows keyed ONLY by their slug (id-less legacy rows) can't be proven
   // present, so they are not ours to retract this run.
-  const observed = { slugs: slugExtractionHealthy(enumeratedEntries) };
+  // HWY-26: a row a non-gocalaveras source was reconcile-merged into is not
+  // sole-witnessed by GoCalaveras (reconcile keeps the gocal survivor's sid/URL),
+  // so a dropped gocal listing is not proof the event ended. Read event_merge_log
+  // once and exclude those survivors from the sweep. Bounded to recent merges — a
+  // merge into an upcoming event happened recently — and conservative: a loser
+  // that is not PROVABLY gocalaveras (any other or missing org_slug) protects the
+  // survivor, since the whole risk here is deleting a real event.
+  const coWitnessedRowIds = new Set<string>();
+  {
+    const since = new Date(Date.now() - 180 * 86_400_000).toISOString();
+    const { data: mergeLog } = await supabaseAdmin
+      .from("event_merge_log")
+      .select("survivor_id, merged_snapshot")
+      .gte("merged_at", since);
+    for (const m of (mergeLog ?? []) as {
+      survivor_id: string;
+      merged_snapshot: Record<string, unknown> | null;
+    }[]) {
+      if ((m.merged_snapshot?.org_slug ?? null) !== "gocalaveras") {
+        coWitnessedRowIds.add(m.survivor_id);
+      }
+    }
+    if (coWitnessedRowIds.size > 0) {
+      console.log(
+        `  Sweep: ${coWitnessedRowIds.size} row(s) have a non-gocal merge witness — excluded from retraction (HWY-26).`
+      );
+    }
+  }
+  const observed = {
+    slugs: slugExtractionHealthy(enumeratedEntries),
+    coWitnessedRowIds,
+  };
   if (!observed.slugs) {
     console.log(
       "  Sweep: permalink extraction was thin this run — id-less legacy rows are not sweepable."

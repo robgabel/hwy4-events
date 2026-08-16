@@ -174,6 +174,17 @@ export interface EnumeratedEvent {
  */
 export interface ObservedKeys {
   slugs: boolean;
+  /**
+   * Survivor row ids that a NON-GoCalaveras source was reconcile-merged into
+   * (built from event_merge_log by the executor). GoCalaveras is not the sole
+   * witness of these: reconcile keeps the gocal survivor's sid + URL, so a row
+   * that a Visit Murphys / organizer scraper also asserted is indistinguishable,
+   * in the columns a sweep reads, from a pure aggregator row. GoCalaveras
+   * dropping its listing is therefore NOT evidence the event stopped happening,
+   * so these are never ours to retract (HWY-26, deferred from the HWY-21 review).
+   * Optional so existing callers/tests default to "no known co-witness".
+   */
+  coWitnessedRowIds?: ReadonlySet<string>;
 }
 
 /**
@@ -218,6 +229,9 @@ export function ownsGoCalaverasRow(row: SweepRow, observed: ObservedKeys): boole
   if (isManuallyManagedEvent({ name: row.name, venue_name: row.venue_name })) {
     return false;
   }
+  // A second, non-gocal source was merged into this row (event_merge_log): its
+  // continued existence is not GoCalaveras's to assert or retract (HWY-26).
+  if (observed.coWitnessedRowIds?.has(row.id)) return false;
   if (row.event_url && !isGoCalaverasUrl(row.event_url)) return false;
   const id = eventOnId(row.source_event_id);
   if (!id) {

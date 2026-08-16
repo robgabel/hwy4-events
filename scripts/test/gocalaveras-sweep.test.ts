@@ -134,6 +134,24 @@ test("ownsGoCalaverasRow: a row an organizer scraper merged into is untouchable"
   );
 });
 
+test("ownsGoCalaverasRow: a row with a non-gocal merge witness is not ours (HWY-26)", () => {
+  const r = row({ source_event_id: "191902", event_url: GOC("x") });
+  // Absent any known co-witness, this plain EventON row is ours.
+  assert.equal(ownsGoCalaverasRow(r, SAW_SLUGS), true);
+  assert.equal(ownsGoCalaverasRow(r, { slugs: true, coWitnessedRowIds: new Set() }), true);
+  // A non-gocal source was reconcile-merged into it: GoCalaveras is not the sole
+  // witness, so its dropped listing is not proof the event stopped.
+  assert.equal(
+    ownsGoCalaverasRow(r, { slugs: true, coWitnessedRowIds: new Set([r.id]) }),
+    false
+  );
+  // Another row's id in the set does not affect this row.
+  assert.equal(
+    ownsGoCalaverasRow(r, { slugs: true, coWitnessedRowIds: new Set(["other-id"]) }),
+    true
+  );
+});
+
 test("ownsGoCalaverasRow: an unkeyed row is never ours", () => {
   // Nothing to match against the feed, so a presence test can only ever say
   // "absent" — an aggregator sweep would select it every run, forever.
