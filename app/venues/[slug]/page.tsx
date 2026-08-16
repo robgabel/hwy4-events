@@ -10,7 +10,7 @@ import { TOWN_INFO } from "@/lib/towns";
 import { townSlug } from "@/lib/slugs";
 import { getTownContent } from "@/app/towns/town-content";
 import { getUpcomingEvents } from "@/lib/events-data";
-import { venueMetaTitle, venueMetaDescription } from "@/lib/venue-pages";
+import { venueMetaTitle, venueMetaDescription, venueListSection } from "@/lib/venue-pages";
 import {
   JsonLd,
   buildBreadcrumbs,
@@ -183,11 +183,26 @@ export default async function VenuePage({ params }: PageProps) {
       {/* Blurb + Google facts strip + practical badges (shared component). */}
       <VenueInfo venue={venue} />
 
-      {/* Upcoming events */}
+      {/* Upcoming events. Concert venues get a search-shaped heading + lede
+          (HWY-28) so the page matches "<venue> concerts <year>" queries. */}
       <section className="mb-10">
-        <h2 className="font-display mb-4 text-xl font-semibold text-forest">
-          What&apos;s coming up at {venue.canonical}
-        </h2>
+        {(() => {
+          const { heading, lede } = venueListSection(venue, events, year);
+          return (
+            <>
+              <h2
+                className={`font-display text-xl font-semibold text-forest ${
+                  lede ? "mb-2" : "mb-4"
+                }`}
+              >
+                {heading}
+              </h2>
+              {lede && (
+                <p className="mb-4 leading-relaxed text-stone">{lede}</p>
+              )}
+            </>
+          );
+        })()}
         {events.length > 0 ? (
           <SimpleEventList
             events={events.slice(0, 25)}
