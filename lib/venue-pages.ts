@@ -46,6 +46,27 @@ export function venueMetaDescription(
   return `${venue.canonical} in ${venue.town}, CA: ${countPhrase} with times and prices where stated, updated daily from the Highway 4 corridor calendar.`;
 }
 
+/**
+ * The upcoming-events section's heading + optional lede on a venue hub page
+ * (HWY-28). A live-music venue gets a concert-shaped heading with the year and a
+ * one-sentence lede, so the page carries the surrounding text that concert-series
+ * queries ("brice station concerts 2026") match; every other venue keeps the
+ * plain heading and no lede. Copy is honest and voice-safe (no em dashes).
+ */
+export function venueListSection(
+  venue: VenueMetaInput,
+  events: Pick<Hwy4Event, "category">[],
+  year: number
+): { heading: string; lede: string | null } {
+  if (venueHasLiveMusic(events)) {
+    return {
+      heading: `Upcoming Concerts at ${venue.canonical} ${year}`,
+      lede: `Every upcoming concert at ${venue.canonical} in ${venue.town}, CA for ${year}, pulled from the Highway 4 corridor calendar and updated daily. Dates, acts, and ticket links are below.`,
+    };
+  }
+  return { heading: `What's coming up at ${venue.canonical}`, lede: null };
+}
+
 /** Venue keys that earn a sitemap URL: at least MIN upcoming public events, so
  *  a young domain never advertises a thin venue page to crawlers. Every
  *  registry venue still renders at /venues/[key]; this only gates the sitemap. */

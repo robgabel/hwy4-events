@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   venueMetaTitle,
   venueMetaDescription,
+  venueListSection,
   sitemapVenueKeys,
   venueGateCounts,
   nameWithArtists,
@@ -25,6 +26,19 @@ test("venueMetaTitle: non-music venue gets plain events title", () => {
     venueMetaTitle({ canonical: "Arnold Library", town: "Arnold" }, noMusic, 2026),
     "Arnold Library | Upcoming Events in Arnold, CA"
   );
+});
+
+test("venueListSection: music venue gets a concert heading + lede (HWY-28)", () => {
+  const s = venueListSection(brice, music, 2026);
+  assert.equal(s.heading, "Upcoming Concerts at Brice Station Vineyards 2026");
+  assert.ok(s.lede && s.lede.includes("Brice Station Vineyards") && s.lede.includes("2026"));
+  assert.ok(!s.lede!.includes("—")); // no em dash
+});
+
+test("venueListSection: non-music venue keeps the plain heading, no lede", () => {
+  const s = venueListSection({ canonical: "Arnold Library", town: "Arnold" }, noMusic, 2026);
+  assert.equal(s.heading, "What's coming up at Arnold Library");
+  assert.equal(s.lede, null);
 });
 
 test("venueMetaDescription: counts events and pluralizes", () => {
