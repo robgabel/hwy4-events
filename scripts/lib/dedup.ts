@@ -466,6 +466,21 @@ type ExistingRow = {
   times_locked?: boolean | null;
 };
 
+// HWY-29 (the "merge treadmill"): on an exact-key re-scrape, never write a
+// scraped-empty display value over a stored non-empty one. An aggregator pass
+// routinely extracts null for a description/time/price/image that reconcile
+// back-filled from a richer source the night before; writing that null wipes
+// the enrichment every morning, so the card churns between a rich merge and a
+// barren re-insert daily. Locks already exempt human edits; this protects
+// agent/reconcile/extract-prices enrichment on unlocked rows. Treats
+// null/undefined/blank as absent (a scrape's "" means "didn't find it").
+function keepStr(
+  incoming: string | null | undefined,
+  stored: string | null | undefined
+): string | null {
+  return incoming && incoming.trim() ? incoming : stored ?? null;
+}
+
 export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
   return (
     existing.name !== event.name ||
@@ -745,16 +760,21 @@ async function upsertEventsBatched(
               date: event.date,
               venue_name: event.venue_name,
               venue_key: resolveVenueKey(event),
-              // Locked fields are human-set — never overwrite them.
-              ...(existing.description_locked ? {} : { description: event.description }),
+              // Locked fields are human-set — never overwrite them. Unlocked
+              // display fields are null-guarded (HWY-29): a scraped blank keeps
+              // the stored value rather than wiping reconcile's back-fill.
+              ...(existing.description_locked ? {} : { description: keepStr(event.description, existing.description) }),
               ...(existing.times_locked
                 ? {}
-                : { start_time: event.start_time, end_time: event.end_time }),
-              ...(existing.price_locked ? {} : { price: event.price }),
+                : {
+                    start_time: keepStr(event.start_time, existing.start_time),
+                    end_time: keepStr(event.end_time, existing.end_time),
+                  }),
+              ...(existing.price_locked ? {} : { price: keepStr(event.price, existing.price) }),
               event_url: event.event_url,
               address: event.address,
               town: event.town,
-              ...(existing.poster_locked ? {} : { image_url: event.image_url ?? null }),
+              ...(existing.poster_locked ? {} : { image_url: keepStr(event.image_url ?? null, existing.image_url) }),
               ...(existing.notability_locked
                 ? {}
                 : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),
@@ -974,12 +994,17 @@ export async function upsertEvents(
             date: event.date,
             venue_name: event.venue_name,
             venue_key: resolveVenueKey(event),
-            // Locked fields are human-set — never overwrite them.
-            ...(existing.description_locked ? {} : { description: event.description }),
+            // Locked fields are human-set — never overwrite them. Unlocked
+            // display fields are null-guarded (HWY-29): a scraped blank keeps
+            // the stored value rather than wiping reconcile's back-fill.
+            ...(existing.description_locked ? {} : { description: keepStr(event.description, existing.description) }),
             ...(existing.times_locked
               ? {}
-              : { start_time: event.start_time, end_time: event.end_time }),
-            ...(existing.price_locked ? {} : { price: event.price }),
+              : {
+                  start_time: keepStr(event.start_time, existing.start_time),
+                  end_time: keepStr(event.end_time, existing.end_time),
+                }),
+            ...(existing.price_locked ? {} : { price: keepStr(event.price, existing.price) }),
             event_url: event.event_url,
             address: event.address,
             town: event.town,
@@ -990,7 +1015,7 @@ export async function upsertEvents(
             ...(event.category && event.category !== "other"
               ? { category: event.category }
               : {}),
-            ...(existing.poster_locked ? {} : { image_url: event.image_url ?? null }),
+            ...(existing.poster_locked ? {} : { image_url: keepStr(event.image_url ?? null, existing.image_url) }),
             ...(existing.notability_locked
               ? {}
               : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),

@@ -448,6 +448,18 @@ test("isGenericTitle keeps titles that name a specific act", () => {
   );
 });
 
+test("isGenericTitle flags a bare '<venue> presents' placeholder (HWY-29)", () => {
+  // GoCalaveras titles every Murphys Creek Theatre show "... presents" with the
+  // real play name only in the URL slug.
+  assert.equal(isGenericTitle("Murphys Creek Theatre presents"), true);
+  assert.equal(isGenericTitle("The Barn Presents"), true);
+  // ...but a title that names the show after "presents" stays specific.
+  assert.equal(
+    isGenericTitle("Murphys Creek Theatre presents What the Constitution Means to Me"),
+    false
+  );
+});
+
 test("isGenericTitle flags trailing TBD/TBA act placeholders", () => {
   // The Sequoia Woods Patio Party dupe (2026-07-16 QA): the venue re-lists
   // the same night once the act is named, and the placeholder row must merge.
