@@ -248,7 +248,7 @@ Note: **Twisted Oak Winery (Vallecito) — CLOSED** after 20+ years (was known f
 
 | Name | Location | Details | Vibe | Source |
 |------|----------|---------|------|--------|
-| Murphys Irish Pub | 415 Main St | **Live music multiple nights weekly (NOT 7 days a week).** Typical pattern: Wed Open Mic (6pm), plus various bands and acoustic acts Thu–Sun. Programming includes rock, folk, Americana, karaoke. Check current calendar before promising a show. | Music venue (real schedule) | [murphysirishpubca.com](https://www.murphysirishpubca.com/) |
+| Murphys Irish Pub | 415 Main St | **Live music multiple nights weekly (NOT 7 days a week).** Typical pattern: Wed Open Mic (6pm), plus various bands and acoustic acts Thu–Sun. Programming includes rock, folk, Americana, karaoke. Check current calendar before promising a show. **Beer and wine only, no liquor.** **Very dog friendly** (Rob, 2026-08-17). | Music venue (real schedule), dogs welcome | [murphysirishpubca.com](https://www.murphysirishpubca.com/) |
 | The Watering Hole | 223 Big Trees Rd | 40 draft beers + hundreds of bottles, chef-driven pub food (owner Jason Wright is a trained chef). Giant sequoia wood bar. Creek-side patio + fire pit. Mon–Tue 11–8, Thu 11–8, Fri–Sat 11–8:30, Sun 11–8. Closed Wed. | Craft beer crowd | [murphyswateringhole.com](https://murphyswateringhole.com/) |
 | Knights of the Long Ash | 419 Main St Suite B | Cigar lounge + premium spirits/wine. Opens 5pm Thu, 12pm Fri–Sun (Yelp). | Upscale relaxation | [yelp.com/biz/knights-of-the-long-ash-murphys](https://www.yelp.com/biz/knights-of-the-long-ash-murphys) |
 | Murphys Hotel Saloon | 457 Main St | In historic 1856 hotel. Gold Rush era saloon. | Tourist/historic | [murphyshotel.com](https://murphyshotel.com/rooms/) |
