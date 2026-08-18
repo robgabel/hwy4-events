@@ -476,6 +476,9 @@ export function buildStrongMatchUpdate(
     artists: artistSet.size > 0 ? [...artistSet] : null,
     ...(event.source_event_id && { source_event_id: event.source_event_id }),
     last_scraped_at: now,
+    // A merge is by definition a content change. See buildExactMatchUpdate for
+    // why `updated_at` is written here and not on every pass.
+    updated_at: now,
   };
 }
 
@@ -678,6 +681,22 @@ export function buildExactMatchUpdate(
     dedup_key: keepName ? generateDedupKey(existing.name, event.date, event.town) : dedupKey,
     ...(event.source_event_id && { source_event_id: event.source_event_id }),
     last_scraped_at: now,
+    // `last_scraped_at` is "when we last looked"; `updated_at` is "when the row
+    // last actually changed". Both builders are reached ONLY when rowChanged()
+    // is true (an unchanged row just touches last_scraped_at), so writing it
+    // here is what makes the column mean what its name says.
+    //
+    // It was dead before this: the column defaults to now() on INSERT, has no
+    // trigger, and no scraper write path set it — so every row read
+    // updated_at === created_at forever, and lib/sitemap.ts was handing Google
+    // a <lastmod> of "first seen" while calling it DB-maintained.
+    //
+    // Safe only because rowChanged is precise. Before the HWY-29 follow-up
+    // (#262/#264) a scraped-blank field counted as a diff, so a flaky feed
+    // re-marked its rows "updated" every single run — which would have churned
+    // <lastmod> daily across the catalog and burned the crawl budget
+    // PRD-search-indexing.md is trying to protect.
+    updated_at: now,
   };
 }
 

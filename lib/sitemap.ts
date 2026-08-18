@@ -37,7 +37,14 @@ export type SitemapEventRow = {
   /** YYYY-MM-DD */
   date: string;
   town: string;
-  /** DB-maintained last-modified; drives honest <lastmod>. May be null. */
+  /**
+   * When the row's content last actually changed — written by the scraper's
+   * update payloads and the nightly reconcile fill, both of which run only on
+   * a real change (see scripts/lib/dedup.ts). NOT `last_scraped_at`, which
+   * bumps every night and would tell Google the whole catalog changed daily.
+   * A row that has never changed since insert honestly reads created_at.
+   * Drives <lastmod>. May be null.
+   */
   updated_at: string | null;
   robs_pick: boolean;
 };
