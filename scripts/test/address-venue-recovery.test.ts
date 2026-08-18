@@ -32,6 +32,10 @@ async function load() {
 
 test("a registry venue's address in the venue_name field resolves venue AND town", async () => {
   const { normalizeEventLocation } = await load();
+  // Deliberate registry lock: this pins Brice Station's live registry entry
+  // (address prefix, canonical name, town). If the registry entry changes,
+  // update this fixture with it — the coupling is the point, since the
+  // recovery's whole promise is "the registry's data wins".
   const ev = {
     name: "Arnold Angels Music Festival",
     description: "Tickets are on sale now for the Arnold Angels Music Festival.",
@@ -53,11 +57,17 @@ test("a registry venue's address in the venue_name field resolves venue AND town
   assert.ok((ev.address ?? "").startsWith("3353"));
 });
 
-test("a non-registry street address still swaps but adopts nothing", async () => {
+test("a non-registry street address swaps but adopts NOTHING — even with registry mentions in text", async () => {
   const { normalizeEventLocation } = await load();
+  // The load-bearing lock (adversarial review of #265, finding 1): after the
+  // swap the venue is generic, and the FULL matcher's text layer would adopt
+  // any registry venue merely mentioned in the title/description/URL — moving
+  // town off a mention, contradicting the row's own address, and killing the
+  // event's town-bearing URL. The recovery must accept the ADDRESS layer only,
+  // so this event mentions Ironstone three ways and must still adopt nothing.
   const ev = {
-    name: "Yard Sale",
-    description: null,
+    name: "Shuttle to Ironstone Vineyards",
+    description: "Wine tasting featuring Ironstone Vineyards pours. Hosted at a private residence.",
     date: "2026-10-04",
     town: "Arnold",
     venue_name: "9999 Nowhere Lane, Arnold CA 95223",
@@ -65,7 +75,7 @@ test("a non-registry street address still swaps but adopts nothing", async () =>
     start_time: null,
     end_time: null,
     price: null,
-    event_url: null,
+    event_url: "https://www.gocalaveras.com/events/shuttle-to-ironstone-vineyards/",
     category: "other",
   } as never as Parameters<typeof normalizeEventLocation>[0];
   normalizeEventLocation(ev);

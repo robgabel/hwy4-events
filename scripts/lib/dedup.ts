@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "./supabase-admin.js";
 import type { ExtractedEvent } from "./extract.js";
 import { KNOWN_VENUES } from "./venues.js";
-import { applyVenueDetection, isGenericVenue, resolveVenueKey } from "./venue-matcher.js";
+import { isGenericVenue, matchVenue, resolveVenueKey } from "./venue-matcher.js";
 import { isOutOfCorridor } from "./corridor.js";
 import { capSeriesHorizon } from "./ingest-horizon.js";
 import { applyUrlDate } from "./url-date.js";
@@ -227,18 +227,37 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
   if (!event.address && looksLikeStreetAddress(event.venue_name)) {
     event.address = event.venue_name;
     event.venue_name = "Unknown Venue";
-    // Re-run venue detection NOW: the per-scraper detection pass has already
-    // run by this point, and it saw a street string in venue_name with no
-    // address — neither its name layer nor its address layer could fire. With
-    // the fields swapped, the address layer can resolve the registry venue
-    // (adopting its canonical name, key, and TOWN — the registry outranks a
-    // town label the extractor guessed from the event's wording). Without
-    // this, the row lands as "Unknown Venue" + a possibly-wrong town and every
-    // re-scrape compares equal, so it can never self-heal: the Arnold Angels
-    // Music Festival row (EventON location field = Brice Station's street
-    // address, town labeled "Arnold" off the charity's name) sat exactly like
-    // that and failed the location sanity check two days running (2026-08-18).
-    applyVenueDetection(event);
+    // Re-run venue detection NOW — but accept ONLY an ADDRESS-anchored match.
+    // The per-scraper detection pass has already run by this point, and it saw
+    // a street string in venue_name with no address, so its address layer
+    // could not fire; with the fields swapped it can, and a registry address
+    // is strong enough to adopt the venue's canonical name AND town (the
+    // registry outranks a town label the extractor guessed off the event's
+    // wording). Without this, the row lands as "Unknown Venue" + a possibly-
+    // wrong town and every re-scrape compares equal, so it can never
+    // self-heal: the Arnold Angels Music Festival row (EventON location field
+    // = Brice Station's street address, town labeled "Arnold" off the
+    // charity's name) sat exactly like that, failing the location sanity
+    // check daily (2026-08-18).
+    //
+    // NOT applyVenueDetection: with venue_name now generic, the full matcher
+    // would fall through to its TEXT layer and adopt a venue merely mentioned
+    // in the title/description/URL — moving town off a mention, contradicting
+    // the row's own street address (manufacturing the exact TOWN_CONFLICT
+    // this fixes), changing the event's town-bearing URL, and silencing the
+    // UNRESOLVED_VENUE signal (adversarial review of #265, finding 1). A
+    // mention is not an address; only the address layer earns the adoption.
+    const match = matchVenue(
+      event.name,
+      event.description,
+      event.venue_name,
+      event.address,
+      event.event_url ?? null
+    );
+    if (match && /^address(-prefix)?:/.test(match.matched_alias)) {
+      event.venue_name = match.venue_name;
+      event.town = match.town;
+    }
   }
   // Registry fill-in. Fill when the address is missing OR imprecise — a
   // town-only string like "Murphys, CA" / "Avery, CA 95224" carries no street
