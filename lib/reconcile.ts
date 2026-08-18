@@ -231,9 +231,13 @@ export async function reconcileDuplicates(
     }
 
     if (Object.keys(fill).length > 0) {
+      // Back-filling the survivor is a content change, so stamp `updated_at`
+      // (the sitemap's <lastmod>). Inside the non-empty guard on purpose:
+      // stamping unconditionally would make the guard always true and bump
+      // every survivor's lastmod on every nightly run with nothing to fill.
       const { error: ue } = await supabase
         .from("hwy4_events")
-        .update(fill)
+        .update({ ...fill, updated_at: new Date().toISOString() })
         .eq("id", survivor.id);
       if (ue) log(`    update failed (survivor kept as-is): ${ue.message}`);
     }

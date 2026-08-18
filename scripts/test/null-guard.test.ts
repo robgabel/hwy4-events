@@ -290,3 +290,41 @@ test("buildStrongMatchUpdate: an empty incoming name keeps the stored name AND i
     generateDedupKey("WHAT THE CONSTITUTION MEANS TO ME", "2026-08-28", "Murphys")
   );
 });
+
+// --- updated_at is a real last-modified, not a scrape heartbeat (2026-08-18) ---
+//
+// The column defaulted to now() on INSERT, had no trigger, and no scraper path
+// set it — so every row read updated_at === created_at forever while
+// lib/sitemap.ts fed it to Google as <lastmod> and called it DB-maintained.
+//
+// Both update builders are reached ONLY when rowChanged() is true, so stamping
+// there is what makes the name true. These pin the distinction from
+// last_scraped_at ("when we last looked", every night) — confusing the two
+// would claim the whole catalog changed daily and burn the crawl budget
+// PRD-search-indexing.md exists to protect.
+
+test("exact-match update stamps updated_at alongside last_scraped_at", async () => {
+  const { buildExactMatchUpdate } = await load();
+  const now = "2026-08-18T08:30:00.000Z";
+  const payload = buildExactMatchUpdate(
+    storedRow as never,
+    { ...(placeholderScrape as object) } as never,
+    "k",
+    now
+  );
+  assert.equal(payload.updated_at, now);
+  assert.equal(payload.last_scraped_at, now);
+});
+
+test("strong-match merge stamps updated_at — a merge is a content change", async () => {
+  const { buildStrongMatchUpdate } = await load();
+  const now = "2026-08-18T08:30:00.000Z";
+  const payload = buildStrongMatchUpdate(
+    storedRow as never,
+    { ...(placeholderScrape as object) } as never,
+    "k",
+    now
+  ) as Record<string, unknown>;
+  assert.equal(payload.updated_at, now);
+  assert.equal(payload.last_scraped_at, now);
+});
