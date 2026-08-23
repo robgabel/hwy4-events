@@ -5,7 +5,6 @@ import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
 import { generateEventSlug } from "@/lib/slugs";
 import { SITE_URL } from "@/lib/constants";
-import { assertNoResidentDuplicates } from "@/lib/dedupe-events";
 import {
   repairEventLinks,
   logLinkRepairs,
@@ -69,10 +68,11 @@ async function getEventsForBriefing() {
     .order("start_time", { ascending: true });
 
   if (error) throw error;
-  // HWY-16 (2026-08-11): loud assertion, not a collapse — the write-time merge
-  // + nightly /api/reconcile-dupes own dedup at rest. See CLAUDE.md
-  // "Deduplication (defense in depth)".
-  return assertNoResidentDuplicates(data || []);
+  // Rows arrive already deduped at rest (write-time merge + nightly
+  // /api/reconcile-dupes; the read-time assertion was retired 2026-08-23
+  // after a clean soak — dedup Move 3 complete). The daily audit is the
+  // standing duplicate detector.
+  return data || [];
 }
 
 async function getRecentBriefings() {
