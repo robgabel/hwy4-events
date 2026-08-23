@@ -252,5 +252,7 @@ test("does NOT collapse two towns' same-titled events at different venues", () =
 
 // The read-time assertion (HWY-16's loud successor to the collapse) and its
 // tests were removed with the assertion itself (2026-08-23, dedup Move 3
-// complete). findDuplicateClusters — the same clustering — stays locked via
-// the audit-checks and reconcile suites.
+// complete). Coverage after the removal, stated precisely: the predicate is
+// heavily locked by event-identity.test.ts, and clusterEvents/pickSurvivor
+// are exercised transitively by the dedupeEvents tests above; nothing locks
+// findDuplicateClusters by name (it is clusterEvents(...).filter(len>1)).

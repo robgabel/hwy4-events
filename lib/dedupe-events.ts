@@ -217,5 +217,8 @@ export function findDuplicateClusters<T extends DedupableEvent>(events: T[]): T[
 // the nightly /api/reconcile-dupes; the daily /api/check-events audit runs
 // the SAME clustering via `findDuplicateClusters` above, so a regression
 // still surfaces within a day — just in the audit, not the render path.
-// `dedupeEvents`/`mergeCluster`/`clusterEvents`/`pickSurvivor` stay: the
-// reconcile engine and the audit are their consumers now.
+// Consumers, precisely: `clusterEvents` + `pickSurvivor` feed
+// lib/reconcile.ts; `findDuplicateClusters` feeds /api/check-events;
+// `dedupeEvents`/`mergeCluster` have no production consumers and survive for
+// the dev CLI (scripts/check-feed-dedup.ts) and as the collapse
+// implementation should a read-time layer ever be wanted back.

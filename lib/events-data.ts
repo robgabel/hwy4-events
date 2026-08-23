@@ -26,7 +26,7 @@ const REVALIDATE_SECONDS = 1800; // 30 min upper bound on staleness
 const PAGE_SIZE = 1000;
 
 // Columns needed by the card renderer (EventCard), the read-time dedupe
-// assertion (dedupe-events.ts), and the JSON-LD builders (schema.tsx).
+// JSON-LD builders (schema.tsx).
 // Outbound-link resolution lives solely on the detail page
 // (lib/event-link.ts); cards link only to our own detail pages.
 const EVENT_COLUMNS =
@@ -34,9 +34,9 @@ const EVENT_COLUMNS =
   "address, category, artists, status, price, cost_tier, event_url, " +
   "source_event_id, source_name, source_url, image_url, visibility, org_slug, " +
   "robs_pick, is_weekly, verification_status, community_sourced, venue_key, " +
-  // series_umbrella rides along in the shared row shape (Hwy4Event) — the
-  // curated festival umbrella cards are deliberate look-alikes of their
-  // nightly shows, and downstream consumers may need to tell them apart.
+  // series_umbrella: nothing downstream of this fetch reads it today; kept
+  // because the shared Hwy4Event shape declares it and dropping one boolean
+  // buys nothing (the read-time dedup that needed it was retired 2026-08-23).
   "series_umbrella, last_scraped_at, updated_at";
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
