@@ -17,7 +17,6 @@
 import { unstable_cache } from "next/cache";
 import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event, EventListItem } from "@/lib/types";
-import { assertNoResidentDuplicates } from "@/lib/dedupe-events";
 import { gateEventDescription } from "@/lib/description-quality";
 import { pacificToday, addDays } from "@/lib/date-windows";
 import type { SitemapEventRow } from "@/lib/sitemap";
@@ -35,9 +34,9 @@ const EVENT_COLUMNS =
   "address, category, artists, status, price, cost_tier, event_url, " +
   "source_event_id, source_name, source_url, image_url, visibility, org_slug, " +
   "robs_pick, is_weekly, verification_status, community_sourced, venue_key, " +
-  // series_umbrella feeds assertNoResidentDuplicates below — without it a
-  // festival umbrella card would cluster as a false-positive duplicate of one
-  // of its own nightly shows.
+  // series_umbrella rides along in the shared row shape (Hwy4Event) — the
+  // curated festival umbrella cards are deliberate look-alikes of their
+  // nightly shows, and downstream consumers may need to tell them apart.
   "series_umbrella, last_scraped_at, updated_at";
 
 async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
@@ -78,16 +77,17 @@ async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
     from += PAGE_SIZE;
   }
 
-  // HWY-16 (2026-08-11): this used to collapse duplicates with `dedupeEvents`.
-  // The write-time merge (scripts/lib/dedup.ts) + nightly /api/reconcile-dupes
-  // now own dedup at rest, so this is a loud assertion instead — it logs
-  // READTIME_DEDUPE_ASSERT per cluster found and passes every row through
-  // unchanged. See CLAUDE.md "Deduplication (defense in depth)".
-  const asserted = assertNoResidentDuplicates(all);
+  // Dedup Move 3 completed 2026-08-23: this path once collapsed duplicates
+  // (`dedupeEvents`, until HWY-16) and then loudly asserted none existed
+  // (`assertNoResidentDuplicates`, until today). The write-time merge
+  // (scripts/lib/dedup.ts) + the nightly /api/reconcile-dupes own dedup at
+  // rest, and the assertion soaked silent for a clean week post-HWY-29 — the
+  // daily /api/check-events audit (same clustering) is the standing detector
+  // now. See CLAUDE.md "Deduplication (defense in depth)".
   console.log(`[events-data] fetched ${all.length} upcoming rows`);
   // Gate descriptions ONCE here: strip calendar-widget junk and suppress
   // meaningless stubs so no list card renders them. See lib/description-quality.ts.
-  return asserted.map(gateEventDescription);
+  return all.map(gateEventDescription);
 }
 
 /**

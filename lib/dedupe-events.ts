@@ -208,39 +208,14 @@ export function findDuplicateClusters<T extends DedupableEvent>(events: T[]): T[
   return clusterEvents(events).filter((c) => c.length > 1);
 }
 
-/**
- * Loud, non-collapsing successor to `dedupeEvents` for read paths (HWY-16,
- * 2026-08-11 — Step 1 of the documented removal plan; see CLAUDE.md
- * "Deduplication (defense in depth)" > the dedup Move 3, Step 4 open item).
- *
- * The write-time merge (`scripts/lib/dedup.ts`) and the nightly self-healing
- * `/api/reconcile-dupes` pass now own dedup at rest, and `/api/check-events`
- * held 0 same-event duplicate clusters for 4 consecutive weeks — the canary
- * this layer was gated on. So this stops collapsing a cluster into one
- * survivor card and instead SCREAMS: it runs the exact same clustering
- * `dedupeEvents` and the audit use (`findDuplicateClusters`, so this can never
- * disagree with either about what counts as a duplicate) and, for every
- * cluster found, `console.error`s one greppable `READTIME_DEDUPE_ASSERT` line
- * naming the date, venue(s), and every member's name + id.
- *
- * Input is always returned UNCHANGED — clean or not, nothing is ever
- * collapsed. A resident duplicate reaching this point is now a bug to fix
- * upstream (the write-time merge or the nightly reconcile), not something the
- * render path quietly papers over. Removing this assertion entirely, once the
- * write-time layers have soaked clean under it, is the remaining step.
- */
-export function assertNoResidentDuplicates<T extends DedupableEvent>(
-  events: T[]
-): T[] {
-  for (const cluster of findDuplicateClusters(events)) {
-    const idOf = (e: T) => String((e as { id?: unknown }).id ?? "no-id");
-    const venues = [...new Set(cluster.map((e) => e.venue_name || "unknown venue"))];
-    const members = cluster.map((e) => `"${e.name ?? "(unnamed)"}"#${idOf(e)}`);
-    console.error(
-      `READTIME_DEDUPE_ASSERT date=${cluster[0]?.date ?? "unknown"} ` +
-        `venue=[${venues.join(" | ")}] cluster_size=${cluster.length} ` +
-        `events=[${members.join(", ")}]`
-    );
-  }
-  return events;
-}
+// The read-time layer's history, for the archaeologist: `dedupeEvents` ran a
+// silent COLLAPSE on every user-facing list until HWY-16 (2026-08-11)
+// downgraded it to a loud, non-collapsing `assertNoResidentDuplicates`, and
+// that assertion was removed from the render paths entirely on 2026-08-23
+// after soaking silent for a clean week post-HWY-29 (dedup Move 3 complete).
+// Dedup at rest is owned by the write-time merge (scripts/lib/dedup.ts) and
+// the nightly /api/reconcile-dupes; the daily /api/check-events audit runs
+// the SAME clustering via `findDuplicateClusters` above, so a regression
+// still surfaces within a day — just in the audit, not the render path.
+// `dedupeEvents`/`mergeCluster`/`clusterEvents`/`pickSurvivor` stay: the
+// reconcile engine and the audit are their consumers now.

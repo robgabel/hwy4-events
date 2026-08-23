@@ -13,7 +13,6 @@ import {
   dedupeEvents,
   mergeCluster,
   pickSurvivor,
-  assertNoResidentDuplicates,
   type DedupableEvent,
 } from "../../lib/dedupe-events.js";
 
@@ -251,120 +250,7 @@ test("does NOT collapse two towns' same-titled events at different venues", () =
   assert.equal(dedupeEvents([murphys, arnold]).length, 2);
 });
 
-// ---------------------------------------------------------------------------
-// HWY-16: read-time dedupe becomes a loud assertion, not a collapse.
-//
-// `assertNoResidentDuplicates` reuses the exact same clustering
-// `dedupeEvents` does (so it can never disagree about what's a duplicate) but
-// must NEVER merge — a resident duplicate is now a bug for the write-time
-// merge / nightly reconcile to fix, not something the render path hides.
-// ---------------------------------------------------------------------------
-
-/** Runs `fn` with `console.error` swapped for a recorder, always restoring the
- *  real one afterward (even on assertion failure). Returns the recorded calls. */
-function captureConsoleError(fn: () => void): unknown[][] {
-  const original = console.error;
-  const calls: unknown[][] = [];
-  console.error = (...args: unknown[]) => {
-    calls.push(args);
-  };
-  try {
-    fn();
-  } finally {
-    console.error = original;
-  }
-  return calls;
-}
-
-test("assertNoResidentDuplicates returns a clean set unchanged and silent", () => {
-  const arnold: DedupableEvent = {
-    date: "2026-09-01",
-    town: "Arnold",
-    venue_name: "Bistro Espresso",
-    visibility: "public",
-    name: "Open Mic",
-    start_time: "19:00",
-    end_time: null,
-    description: null,
-    artists: null,
-  };
-  const murphys: DedupableEvent = {
-    date: "2026-09-01",
-    town: "Murphys",
-    venue_name: "Murphys Creek Theatre",
-    visibility: "public",
-    name: "Fall Play Opening Night",
-    start_time: "19:00",
-    end_time: null,
-    description: null,
-    artists: null,
-  };
-  const input = [arnold, murphys];
-
-  let out!: DedupableEvent[];
-  const calls = captureConsoleError(() => {
-    out = assertNoResidentDuplicates(input);
-  });
-
-  assert.equal(out, input, "returns the SAME array reference — never collapses");
-  assert.deepEqual(out, [arnold, murphys]);
-  assert.equal(calls.length, 0, "a clean set never logs");
-});
-
-test("assertNoResidentDuplicates leaves a real duplicate cluster fully intact, but screams", () => {
-  // umbrella + act is the exact pair the earlier test in this file confirms
-  // `dedupeEvents` collapses to ONE card. The assertion must do the opposite:
-  // keep both rows, and log instead of merge.
-  const input = [umbrella, act];
-
-  let out!: DedupableEvent[];
-  const calls = captureConsoleError(() => {
-    out = assertNoResidentDuplicates(input);
-  });
-
-  assert.equal(out, input, "returns the SAME array reference — never collapses");
-  assert.equal(out.length, 2, "both rows survive; nothing is merged away");
-  assert.deepEqual(out, [umbrella, act]);
-
-  assert.equal(calls.length, 1, "one greppable line per cluster found");
-  const line = String(calls[0][0]);
-  assert.ok(
-    line.startsWith("READTIME_DEDUPE_ASSERT"),
-    `line must start with the greppable prefix, got: ${line}`
-  );
-  assert.ok(line.includes(slot.date), "names the date");
-  assert.ok(line.includes(slot.venue_name), "names the venue");
-  assert.ok(
-    line.includes(umbrella.name) && line.includes(act.name),
-    "names every member of the cluster"
-  );
-});
-
-test("assertNoResidentDuplicates does not mutate the input rows", () => {
-  captureConsoleError(() => {
-    assertNoResidentDuplicates([umbrella, act]);
-  });
-  assert.equal(act.description, null);
-  assert.equal(umbrella.name, "Bistro Summer Concerts Series");
-});
-
-test("assertNoResidentDuplicates logs one line per cluster, not per duplicate row", () => {
-  // Three-way cluster (umbrella + two near-identical acts) must still yield
-  // exactly one READTIME_DEDUPE_ASSERT line, not one per pair.
-  const secondAct: DedupableEvent = {
-    ...slot,
-    name: "Avalon Revival (Acoustic Set)",
-    description: null,
-    artists: ["Avalon Revival"],
-  };
-  const input = [umbrella, act, secondAct];
-
-  let out!: DedupableEvent[];
-  const calls = captureConsoleError(() => {
-    out = assertNoResidentDuplicates(input);
-  });
-
-  assert.equal(out, input);
-  assert.equal(out.length, 3, "no row is ever dropped");
-  assert.equal(calls.length, 1, "one line for the one 3-member cluster");
-});
+// The read-time assertion (HWY-16's loud successor to the collapse) and its
+// tests were removed with the assertion itself (2026-08-23, dedup Move 3
+// complete). findDuplicateClusters — the same clustering — stays locked via
+// the audit-checks and reconcile suites.
