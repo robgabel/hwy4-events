@@ -59,6 +59,18 @@ const END_TIME = "18:00:00";
 // upgrade-only, so a specific category can never be knocked back to "other".
 const CATEGORY = "civic";
 
+// Rob's Pick (Rob's call, 2026-08-26): pasture golf that rolls straight into
+// the night's band at the same place. Lives here rather than only in the DB
+// because this script writes every column on a re-run, so a flag set by hand
+// at the database would be silently reverted the next time someone edits it.
+const ROBS_PICK = true;
+const PICK_REASON = [
+  "Golf played across a horse pasture, and when the awards wrap at 6 the band starts at the same place.",
+  "Registration is at 10, tee off at 11, $25 a player or $85 for a foursome,",
+  "with proceeds going to Hazel Fischer Elementary in Arnold.",
+  "Hit Eject plays the saloon 6 to 9 that night.",
+].join(" ");
+
 const DESCRIPTION = [
   "The Lube Room's annual golf tournament, played across a horse pasture instead of a course.",
   "Registration opens at 10 AM, tee off is at 11, and awards are at 6 PM.",
@@ -95,8 +107,8 @@ function toRow() {
     visibility: "public",
     org_slug: ORG_SLUG,
     is_weekly: false,
-    robs_pick: false,
-    pick_reason: null as string | null,
+    robs_pick: ROBS_PICK,
+    pick_reason: PICK_REASON as string | null,
     community_sourced: false,
     dedup_key: generateDedupKey(NAME, DATE, TOWN),
     last_scraped_at: new Date().toISOString(),
