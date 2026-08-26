@@ -1,4 +1,15 @@
+import Link from "next/link";
 import { getAdminClientOrNull } from "@/lib/admin/db";
+import type { SearchParams } from "@/lib/admin/flash";
+import {
+  RANGE_OPTIONS,
+  bucketLabel,
+  bucketSeries,
+  bucketSizeFor,
+  parseRange,
+  type Bucket,
+  type RangeOption,
+} from "@/lib/analytics-range";
 import type { CountRow } from "@/lib/cloudflare-analytics";
 import { getNewsletterStats, type NewsletterStats } from "@/lib/newsletter-stats";
 import { getSeoOverview, type SeoOverview } from "@/lib/seo-data";
@@ -22,17 +33,20 @@ type DailyRow = {
   synced_at: string;
 };
 
-const WINDOW_DAYS = 30;
-const TREND_DAYS = 14;
+// The window is reader-selected (?range=, lib/analytics-range.ts) so months of
+// banked history are actually reachable; 30d stays the default view.
+const SHORT_WINDOW_DAYS = 7; // the "recent" comparison stat, capped by the range
+// Bars in a trend chart before it collapses to weekly buckets.
+const MAX_TREND_BARS = 30;
 
-async function loadDaily(): Promise<DailyRow[]> {
+async function loadDaily(days: number): Promise<DailyRow[]> {
   const supabase = getAdminClientOrNull();
   if (!supabase) return [];
   const { data } = await supabase
     .from("analytics_daily")
     .select("date, pageviews, visits, top_pages, referrers, countries, devices, ai_referrals, synced_at")
     .order("date", { ascending: false })
-    .limit(WINDOW_DAYS);
+    .limit(days);
   return (data as DailyRow[] | null) ?? [];
 }
 
@@ -99,16 +113,17 @@ type Gate0 = {
   outboundByType: { type: string; count: number }[];
   topEvents: { name: string; clicks: number }[];
   bySrc: { src: string; count: number }[];
-  windowDays: number; // lesser of 30 or days since tracking began
-  windowDays7: number; // lesser of 7 or days since tracking began
-  windowStart: string | null; // ISO of the first event, only when the window is capped (< 30d)
+  windowDays: number; // lesser of the selected range or days since tracking began
+  windowDays7: number; // lesser of SHORT_WINDOW_DAYS or windowDays
+  windowStart: string | null; // ISO of the first event, only when the range outran the history
+  requestedDays: number; // the range that was asked for (may exceed the history)
   hasData: boolean;
 };
 
 // Gate 0 (BUSINESS-PLAN.md §15): visitor-vs-local pageviews + business-referral
 // outbound clicks from site_events (written by /api/track). Service role, human
 // signal only (is_bot = false). The two things Cloudflare RUM can't answer.
-async function loadGate0(): Promise<Gate0> {
+async function loadGate0(days: number): Promise<Gate0> {
   const empty: Gate0 = {
     views: { local: 0, visitor: 0, unknown: 0, total: 0 },
     views7: { local: 0, visitor: 0, unknown: 0, total: 0 },
@@ -116,18 +131,20 @@ async function loadGate0(): Promise<Gate0> {
     outboundByType: [],
     topEvents: [],
     bySrc: [],
-    windowDays: WINDOW_DAYS,
-    windowDays7: 7,
+    windowDays: days,
+    windowDays7: Math.min(SHORT_WINDOW_DAYS, days),
     windowStart: null,
+    requestedDays: days,
     hasData: false,
   };
   const supabase = getAdminClientOrNull();
   if (!supabase) return empty;
 
-  // Window = the LESSER OF 30 days or the time since first-party visitor tracking
-  // began (site_events started 2026-06-08). Anchoring the floor to the earliest
-  // row keeps the label honest (e.g. "13d" today) and self-corrects to a true
-  // "30d" once a full month of history exists — no hard-coded launch date to rot.
+  // Window = the LESSER OF the selected range or the time since first-party
+  // visitor tracking began (site_events started 2026-06-08). Anchoring the floor
+  // to the earliest row keeps the label honest (a 12mo pick over 79 days of data
+  // says "79d", not a fictional 365) and self-corrects as history accrues — no
+  // hard-coded launch date to rot.
   const { data: firstRow } = await supabase
     .from("site_events")
     .select("created_at")
@@ -136,13 +153,13 @@ async function loadGate0(): Promise<Gate0> {
     .maybeSingle();
 
   const now = Date.now();
-  const fullWindowMs = WINDOW_DAYS * 86400000;
+  const fullWindowMs = days * 86400000;
   const firstSeen = firstRow?.created_at
     ? new Date(firstRow.created_at as string).getTime()
     : now - fullWindowMs;
   const sinceMs = Math.max(now - fullWindowMs, firstSeen);
   const windowDays = Math.max(1, Math.ceil((now - sinceMs) / 86400000));
-  const windowDays7 = Math.min(7, windowDays);
+  const windowDays7 = Math.min(SHORT_WINDOW_DAYS, windowDays);
   const since = new Date(sinceMs).toISOString();
   const since7 = new Date(now - windowDays7 * 86400000).toISOString();
 
@@ -198,7 +215,8 @@ async function loadGate0(): Promise<Gate0> {
     bySrc,
     windowDays,
     windowDays7,
-    windowStart: windowDays < WINDOW_DAYS ? new Date(firstSeen).toISOString() : null,
+    windowStart: windowDays < days ? new Date(firstSeen).toISOString() : null,
+    requestedDays: days,
     hasData: views.total > 0 || outboundTotal > 0,
   };
 }
@@ -249,6 +267,12 @@ function aggregateAi(rows: DailyRow[]): Array<{ key: string; label: string; visi
 
 const nf = (n: number) => n.toLocaleString("en-US");
 
+// Honest window label: says what the data actually covers, not what was clicked.
+// A 12mo pick over 89 days of snapshots reads "89d", never a fictional "365d".
+function windowLabel(requested: number, actual: number): string {
+  return `${Math.min(requested, Math.max(actual, 0))}d`;
+}
+
 function fmtDay(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -260,10 +284,10 @@ function shortDay(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-async function loadNewsletterStats(): Promise<NewsletterStats | null> {
+async function loadNewsletterStats(days: number): Promise<NewsletterStats | null> {
   const supabase = getAdminClientOrNull();
   if (!supabase) return null;
-  return getNewsletterStats(supabase, 60);
+  return getNewsletterStats(supabase, Math.max(60, days));
 }
 
 // "Signups vs Visitors" series (PRD-growth-agent.md, Path A). Cloudflare stores
@@ -272,10 +296,10 @@ async function loadNewsletterStats(): Promise<NewsletterStats | null> {
 // pairs that UTC day's confirmed signups with that UTC day's Cloudflare visits.
 type SvvDay = { date: string; visits: number; signups: number };
 
-async function loadSignupsVsVisitors(rows: DailyRow[]): Promise<SvvDay[]> {
+async function loadSignupsVsVisitors(rows: DailyRow[], days: number): Promise<SvvDay[]> {
   const supabase = getAdminClientOrNull();
   if (!supabase) return [];
-  const stats = await getNewsletterStats(supabase, WINDOW_DAYS, "UTC");
+  const stats = await getNewsletterStats(supabase, days, "UTC");
   const visitsByDate = new Map(rows.map((r) => [r.date, r.visits]));
   return stats.days.map((d) => ({
     date: d.date,
@@ -292,18 +316,32 @@ async function loadSeo(): Promise<SeoOverview | null> {
   return getSeoOverview(supabase);
 }
 
-export default async function GrowthPage() {
-  const rows = await loadDaily();
+export default async function GrowthPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const range = parseRange((await searchParams).range);
+  const days = range.days;
+
+  const rows = await loadDaily(days);
   const newsletterClicks = await loadNewsletterClicks();
-  const newsletter = await loadNewsletterStats();
-  const gate0 = await loadGate0();
-  const svv = await loadSignupsVsVisitors(rows);
+  const newsletter = await loadNewsletterStats(days);
+  const gate0 = await loadGate0(days);
+  const svv = await loadSignupsVsVisitors(rows, days);
   const seo = await loadSeo();
   const nlMax = newsletterClicks ? Math.max(1, ...newsletterClicks.perEvent.map((e) => e.clicks)) : 1;
   const hasData = rows.some((r) => r.pageviews > 0);
 
-  const last7 = sumLast(rows, 7);
-  const last30 = sumLast(rows, WINDOW_DAYS);
+  // Traffic history is shallower than a long range asks for (the Cloudflare
+  // snapshot began 2026-05-28), so every heading below says how many days it
+  // ACTUALLY covers rather than the range that was clicked.
+  const trafficDays = rows.length;
+  const trafficLabel = windowLabel(days, trafficDays);
+  const shortDays = Math.min(SHORT_WINDOW_DAYS, Math.max(1, trafficDays));
+
+  const lastShort = sumLast(rows, shortDays);
+  const lastFull = sumLast(rows, trafficDays);
   const topPages = aggregate(rows, "top_pages", 12);
   const referrers = aggregate(rows, "referrers", 12);
   const countries = aggregate(rows, "countries", 6);
@@ -312,7 +350,7 @@ export default async function GrowthPage() {
   const aiTotal = ai.reduce((a, r) => a + r.visits, 0);
   const lastSynced = rows.map((r) => r.synced_at).filter(Boolean).sort().at(-1);
 
-  const trend = rows.slice(0, TREND_DAYS).reverse(); // chronological
+  const trend = bucketSeries([...rows].reverse(), bucketSizeFor(trafficDays, MAX_TREND_BARS));
 
   return (
     <div style={{ maxWidth: 940, margin: "0 auto" }}>
@@ -321,17 +359,18 @@ export default async function GrowthPage() {
         North Star first: who&rsquo;s showing up (local vs visitor) and whether they act (business
         referrals, signups). Newsletter and raw traffic follow.
       </p>
+      <RangePicker active={range} />
 
       {/* North Star — the flywheel metrics (BUSINESS-PLAN): who shows up, whether they act. */}
       <GroupHeader title="North Star" sub="Who shows up, and whether they act. The flywheel." />
       <Gate0Section data={gate0} />
-      <SignupsVsVisitorsPanel days={svv} gate0={gate0} />
+      <SignupsVsVisitorsPanel days={svv} gate0={gate0} label={trafficLabel} />
 
       {/* Newsletter — the owned retention channel. */}
       {newsletter && newsletter.total_active > 0 && (
         <>
           <GroupHeader title="Newsletter" sub="The owned retention channel." />
-          <NewsletterSignupsPanel stats={newsletter} />
+          <NewsletterSignupsPanel stats={newsletter} days={days} />
         </>
       )}
 
@@ -373,7 +412,7 @@ export default async function GrowthPage() {
         title="Search (Google)"
         sub="What people search to find us, from Search Console — the visitor-acquisition channel. Data lags ~2 days."
       />
-      <SearchConsoleSection seo={seo} />
+      <SearchConsoleSection seo={seo} days={days} />
 
       {/* Traffic detail — demoted below the metrics that matter. */}
       <GroupHeader
@@ -393,17 +432,19 @@ export default async function GrowthPage() {
         <>
           <StatStrip
             stats={[
-              { label: "Pageviews · 7d", value: last7.pageviews },
-              { label: "Visits · 7d", value: last7.visits },
-              { label: "Pageviews · 30d", value: last30.pageviews },
-              { label: "Visits · 30d", value: last30.visits },
+              { label: `Pageviews · ${shortDays}d`, value: lastShort.pageviews },
+              { label: `Visits · ${shortDays}d`, value: lastShort.visits },
+              { label: `Pageviews · ${trafficLabel}`, value: lastFull.pageviews },
+              { label: `Visits · ${trafficLabel}`, value: lastFull.visits },
             ]}
           />
 
-          <SectionHeader>Visitors per day · last {TREND_DAYS} days</SectionHeader>
-          <DailyTrafficChart rows={trend} />
+          <SectionHeader>
+            Visitors {trend[0]?.count > 1 ? "per week" : "per day"} · last {trafficLabel}
+          </SectionHeader>
+          <DailyTrafficChart buckets={trend} />
 
-          <SectionHeader>Answer-engine referrals · 30d</SectionHeader>
+          <SectionHeader>Answer-engine referrals · {trafficLabel}</SectionHeader>
           <section style={cardStyle}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 }}>
               {ai.map((e) => (
@@ -417,7 +458,7 @@ export default async function GrowthPage() {
             </div>
             <p style={{ color: "#999", fontSize: 14, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
               {aiTotal > 0
-                ? `${nf(aiTotal)} visits referred from answer engines in the last 30 days. `
+                ? `${nf(aiTotal)} visits referred from answer engines in the last ${trafficLabel.replace("d", " days")}. `
                 : "No answer-engine referrals captured yet. "}
               This is a lower bound: Google AI Overviews show up as <code>google.com</code> and many
               AI clickthroughs arrive with no referrer. Pair it with the monthly prompt audit in
@@ -426,17 +467,17 @@ export default async function GrowthPage() {
           </section>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 16, marginTop: 4 }}>
-            <RankedList title="Top pages · 30d" rows={topPages} kind="page" />
-            <RankedList title="Top referrers · 30d" rows={referrers} kind="referrer" />
+            <RankedList title={`Top pages · ${trafficLabel}`} rows={topPages} kind="page" />
+            <RankedList title={`Top referrers · ${trafficLabel}`} rows={referrers} kind="referrer" />
           </div>
 
-          <SectionHeader>Audience · 30d</SectionHeader>
+          <SectionHeader>Audience · {trafficLabel}</SectionHeader>
           <p style={{ color: "#aaa", fontSize: 13, margin: "0 0 12px", lineHeight: 1.5 }}>
             Low-signal for a single-corridor site — kept for completeness, not a metric to steer by.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 16 }}>
-            <RankedList title="Countries · 30d" rows={countries} kind="plain" />
-            <RankedList title="Devices · 30d" rows={devices} kind="plain" />
+            <RankedList title={`Countries · ${trafficLabel}`} rows={countries} kind="plain" />
+            <RankedList title={`Devices · ${trafficLabel}`} rows={devices} kind="plain" />
           </div>
 
           <p style={{ color: "#aaa", fontSize: 14, margin: "28px 0 0", lineHeight: 1.5 }}>
@@ -473,16 +514,31 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-// Daily visitors (Cloudflare "visits" ≈ unique sessions) as the hero bars, with
-// the count printed above each so the numbers are readable without a tooltip
-// (the old chart was bars-only with a flaky native title). Pageviews ride along
-// as a pale ghost bar behind. Both series scale to a shared max so the ghost
-// always caps the visits bar. HTML (not SVG) so the value labels stay a fixed
-// pixel size and don't shrink to nothing on a phone-width viewport.
-function DailyTrafficChart({ rows }: { rows: DailyRow[] }) {
-  if (rows.length === 0) return null;
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.pageviews, r.visits)));
-  const peak = Math.max(0, ...rows.map((r) => r.visits));
+// Traffic bars: visitors (Cloudflare "visits" ≈ unique sessions) as the hero,
+// with the count printed above each so the numbers are readable without a
+// tooltip. Pageviews ride along as a pale ghost bar behind, scaled to the same
+// max so the ghost always caps the visits bar. HTML (not SVG) so the value
+// labels stay a fixed pixel size and don't shrink to nothing on a phone.
+//
+// Takes BUCKETS, not raw days: a 6-month range is 182 days, which as 182 bars
+// is an unreadable smear, so lib/analytics-range.ts collapses long ranges into
+// whole weeks. A bucket of one day renders exactly as the old per-day chart did.
+function DailyTrafficChart({ buckets }: { buckets: Bucket<DailyRow>[] }) {
+  if (buckets.length === 0) return null;
+  const totals = buckets.map((b) => ({
+    key: b.start,
+    label: bucketLabel(b, shortDay),
+    span: b.start === b.end ? fmtDay(b.start) : `${fmtDay(b.start)} – ${fmtDay(b.end)}`,
+    days: b.count,
+    visits: b.rows.reduce((a, r) => a + (r.visits || 0), 0),
+    pageviews: b.rows.reduce((a, r) => a + (r.pageviews || 0), 0),
+  }));
+  const weekly = buckets[0].count > 1;
+  const max = Math.max(1, ...totals.map((t) => Math.max(t.pageviews, t.visits)));
+  const peak = Math.max(0, ...totals.map((t) => t.visits));
+  // Above ~20 columns the per-bar numbers collide; drop them and let the
+  // tooltip carry the exact counts rather than printing an illegible row.
+  const showValues = totals.length <= 20;
   return (
     <section style={cardStyle}>
       <div style={{ display: "flex", gap: 18, marginBottom: 14, fontSize: 13, color: "#666", flexWrap: "wrap" }}>
@@ -496,29 +552,33 @@ function DailyTrafficChart({ rows }: { rows: DailyRow[] }) {
         </span>
       </div>
       <div style={{ display: "flex", alignItems: "stretch", gap: "1.6%", height: 156 }}>
-        {rows.map((r) => {
-          const vh = Math.round((r.visits / max) * 100);
-          const ph = Math.round((r.pageviews / max) * 100);
+        {totals.map((t) => {
+          const vh = Math.round((t.visits / max) * 100);
+          const ph = Math.round((t.pageviews / max) * 100);
           return (
             <div
-              key={r.date}
-              title={`${fmtDay(r.date)}: ${nf(r.visits)} visitors · ${nf(r.pageviews)} pageviews`}
+              key={t.key}
+              title={`${t.span}: ${nf(t.visits)} visitors · ${nf(t.pageviews)} pageviews${t.days > 1 ? ` (${t.days} days)` : ""}`}
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%" }}
             >
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#1B3A2D", lineHeight: 1, marginBottom: 4 }}>{nf(r.visits)}</span>
+              {showValues && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#1B3A2D", lineHeight: 1, marginBottom: 4 }}>{nf(t.visits)}</span>
+              )}
               <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 0 }}>
                 <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${ph}%`, background: "#e7dcc2", borderRadius: "3px 3px 0 0" }} />
-                <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${vh}%`, minHeight: r.visits > 0 ? 3 : 0, background: "#1B3A2D", borderRadius: "3px 3px 0 0" }} />
+                <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${vh}%`, minHeight: t.visits > 0 ? 3 : 0, background: "#1B3A2D", borderRadius: "3px 3px 0 0" }} />
               </div>
-              <span style={{ fontSize: 10, color: "#aaa", lineHeight: 1, marginTop: 5 }}>{shortDay(r.date)}</span>
+              <span style={{ fontSize: 10, color: "#aaa", lineHeight: 1, marginTop: 5, whiteSpace: "nowrap" }}>{t.label}</span>
             </div>
           );
         })}
       </div>
       <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "14px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
-        Numbers above each bar are <strong>visitors</strong> that day (Cloudflare visits, roughly unique
-        sessions). The pale bar behind is <strong>pageviews</strong>. Peak: {nf(peak)} visitors. Hover a
-        bar for both counts.
+        Each bar is {weekly ? <>one <strong>week</strong> of</> : <>one <strong>day</strong> of</>}{" "}
+        <strong>visitors</strong> (Cloudflare visits, roughly unique sessions); the pale bar behind is{" "}
+        <strong>pageviews</strong>. Peak {weekly ? "week" : "day"}: {nf(peak)} visitors. Hover a bar for
+        both counts{weekly ? " and the dates it spans" : ""}.
+        {weekly ? " The oldest bar may be a part-week." : ""}
       </p>
     </section>
   );
@@ -578,7 +638,7 @@ function Gate0Section({ data }: { data: Gate0 }) {
   const known7 = v7.local + v7.visitor;
   const clickMax = Math.max(1, ...data.topEvents.map((e) => e.clicks));
   const srcMax = Math.max(1, ...data.bySrc.map((s) => s.count));
-  const { windowDays, windowDays7 } = data;
+  const { windowDays, windowDays7, requestedDays } = data;
   const startStr = data.windowStart
     ? new Date(data.windowStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : null;
@@ -596,8 +656,8 @@ function Gate0Section({ data }: { data: Gate0 }) {
           {startStr ? (
             <>
               <strong>Full history so far:</strong> first-party visitor tracking began {startStr} (
-              {windowDays} {windowDays === 1 ? "day" : "days"} ago), so this is the whole window, not a
-              full 30 days yet.{" "}
+              {windowDays} {windowDays === 1 ? "day" : "days"} ago), so this is the whole window, not
+              the full {requestedDays} days the range asks for.{" "}
             </>
           ) : null}
           Directional. Location is coarse IP geolocation (Vercel edge), which often places corridor
@@ -667,7 +727,15 @@ function Gate0Section({ data }: { data: Gate0 }) {
   );
 }
 
-function SignupsVsVisitorsPanel({ days, gate0 }: { days: SvvDay[]; gate0: Gate0 }) {
+function SignupsVsVisitorsPanel({
+  days,
+  gate0,
+  label,
+}: {
+  days: SvvDay[];
+  gate0: Gate0;
+  label: string;
+}) {
   const totalVisits = days.reduce((a, d) => a + d.visits, 0);
   const totalSignups = days.reduce((a, d) => a + d.signups, 0);
   // Needs visits to correlate against; the standalone signups panel covers the
@@ -725,7 +793,7 @@ function SignupsVsVisitorsPanel({ days, gate0 }: { days: SvvDay[]; gate0: Gate0 
 
   return (
     <>
-      <SectionHeader>Signups vs visitors · 30d (UTC-aligned)</SectionHeader>
+      <SectionHeader>Signups vs visitors · {label} (UTC-aligned)</SectionHeader>
       <section style={cardStyle}>
         <div style={{ display: "flex", gap: 18, marginBottom: 12, fontSize: 13, color: "#666", flexWrap: "wrap" }}>
           <span>
@@ -763,9 +831,9 @@ function SignupsVsVisitorsPanel({ days, gate0 }: { days: SvvDay[]; gate0: Gate0 
       </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 4 }}>
-        <Stat label="Visits · 30d (UTC)" value={nf(totalVisits)} />
-        <Stat label="Signups · 30d (UTC)" value={nf(totalSignups)} />
-        <Stat label="Visit→signup · 30d" value={convStr(conv)} sub={`${nf(totalSignups)} ÷ ${nf(totalVisits)}`} />
+        <Stat label={`Visits · ${label} (UTC)`} value={nf(totalVisits)} />
+        <Stat label={`Signups · ${label} (UTC)`} value={nf(totalSignups)} />
+        <Stat label={`Visit→signup · ${label}`} value={convStr(conv)} sub={`${nf(totalSignups)} ÷ ${nf(totalVisits)}`} />
         <Stat label="Local share of visits" value={located ? `${pct(vw.local, located)}%` : "—"} sub={`${gate0.windowDays}d · directional`} />
       </div>
 
@@ -813,8 +881,8 @@ function SignupsVsVisitorsPanel({ days, gate0 }: { days: SvvDay[]; gate0: Gate0 
   );
 }
 
-function NewsletterSignupsPanel({ stats }: { stats: NewsletterStats }) {
-  const trend = stats.days.slice(-45); // chronological (oldest -> newest)
+function NewsletterSignupsPanel({ stats, days }: { stats: NewsletterStats; days: number }) {
+  const trend = stats.days.slice(-Math.max(45, days)); // chronological (oldest -> newest)
   const trendMax = Math.max(1, ...trend.map((d) => d.signups));
   const comp = stats.by_class;
   const sources = Object.entries(stats.by_source)
@@ -945,7 +1013,7 @@ function RankedList({ title, rows, kind }: { title: string; rows: CountRow[]; ki
 // Google Search Console — top-of-funnel demand. Ordered by what steers action:
 // the striking-distance opportunities first (the highest-leverage SEO work),
 // then queries, pages, and the clicks trend. Data via lib/seo-data.ts.
-function SearchConsoleSection({ seo }: { seo: SeoOverview | null }) {
+function SearchConsoleSection({ seo, days }: { seo: SeoOverview | null; days: number }) {
   if (!seo || !seo.hasData) {
     return (
       <section style={emptyCardStyle}>
@@ -960,7 +1028,7 @@ function SearchConsoleSection({ seo }: { seo: SeoOverview | null }) {
     );
   }
 
-  const { totals, mom, striking, topQueries, topPages, trend, window: win } = seo;
+  const { totals, mom, striking, topQueries, topPages, trend } = seo;
   const pctSub = (d: number | null) =>
     d === null ? undefined : `${d >= 0 ? "▲" : "▼"} ${Math.abs(d)}% vs prior 28d`;
   const posSub = (d: number | null) =>
@@ -1018,12 +1086,21 @@ function SearchConsoleSection({ seo }: { seo: SeoOverview | null }) {
         <SeoRankTable title="Top pages · 28d" rows={topPages.map((p) => ({ label: p.page, clicks: p.clicks, impressions: p.impressions, position: p.position }))} />
       </div>
 
-      {trend.length > 1 && (
-        <>
-          <SectionHeader>Clicks per day{win ? ` · ${shortDay(win.start)}–${shortDay(win.end)}` : ""}</SectionHeader>
-          <SeoTrendChart points={trend.slice(-TREND_DAYS)} />
-        </>
-      )}
+      {trend.length > 1 &&
+        (() => {
+          const points = trend.slice(-days);
+          const buckets = bucketSeries(points, bucketSizeFor(points.length, MAX_TREND_BARS));
+          const per = buckets[0]?.count > 1 ? "week" : "day";
+          return (
+            <>
+              <SectionHeader>
+                Clicks per {per}
+                {points.length ? ` · ${shortDay(points[0].date)}–${shortDay(points[points.length - 1].date)}` : ""}
+              </SectionHeader>
+              <SeoTrendChart buckets={buckets} />
+            </>
+          );
+        })()}
     </>
   );
 }
@@ -1058,30 +1135,82 @@ function SeoRankTable({
   );
 }
 
-// Clicks-per-day bars with an impressions ghost behind, mirroring
-// DailyTrafficChart's HTML-bar approach so labels stay legible on mobile.
-function SeoTrendChart({ points }: { points: { date: string; clicks: number; impressions: number }[] }) {
-  if (points.length === 0) return null;
+// Clicks bars with an impressions ghost behind, mirroring DailyTrafficChart's
+// HTML-bar + bucketing approach so labels stay legible on mobile and a long
+// range collapses to weeks instead of a 365-column smear.
+function SeoTrendChart({ buckets }: { buckets: Bucket<{ date: string; clicks: number; impressions: number }>[] }) {
+  if (buckets.length === 0) return null;
+  const points = buckets.map((b) => ({
+    key: b.start,
+    label: bucketLabel(b, shortDay),
+    span: b.start === b.end ? fmtDay(b.start) : `${fmtDay(b.start)} – ${fmtDay(b.end)}`,
+    clicks: b.rows.reduce((a, r) => a + r.clicks, 0),
+    impressions: b.rows.reduce((a, r) => a + r.impressions, 0),
+  }));
+  const weekly = buckets[0].count > 1;
   const maxClicks = Math.max(1, ...points.map((p) => p.clicks));
   const maxImpr = Math.max(1, ...points.map((p) => p.impressions));
+  const showValues = points.length <= 20;
   return (
     <section style={cardStyle}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 130 }}>
-        {points.map((p, i) => (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
-            <span style={{ fontSize: 11, color: "#1B3A2D", fontWeight: 600, marginBottom: 2 }}>{p.clicks || ""}</span>
-            <div style={{ width: "100%", position: "relative", display: "flex", justifyContent: "center", alignItems: "flex-end", height: "100%" }}>
-              <div title={`${p.impressions} impressions`} style={{ position: "absolute", bottom: 0, width: "100%", height: `${Math.round((p.impressions / maxImpr) * 100)}%`, background: "#eef0e6", borderRadius: 3 }} />
-              <div title={`${p.clicks} clicks`} style={{ position: "relative", width: "62%", height: `${Math.round((p.clicks / maxClicks) * 100)}%`, background: "#9bb87a", borderRadius: 3, minHeight: p.clicks > 0 ? 2 : 0 }} />
+        {points.map((p) => (
+          <div key={p.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+            {showValues && (
+              <span style={{ fontSize: 11, color: "#1B3A2D", fontWeight: 600, marginBottom: 2 }}>{p.clicks || ""}</span>
+            )}
+            <div
+              title={`${p.span}: ${nf(p.clicks)} clicks · ${nf(p.impressions)} impressions`}
+              style={{ width: "100%", position: "relative", display: "flex", justifyContent: "center", alignItems: "flex-end", height: "100%" }}
+            >
+              <div style={{ position: "absolute", bottom: 0, width: "100%", height: `${Math.round((p.impressions / maxImpr) * 100)}%`, background: "#eef0e6", borderRadius: 3 }} />
+              <div style={{ position: "relative", width: "62%", height: `${Math.round((p.clicks / maxClicks) * 100)}%`, background: "#9bb87a", borderRadius: 3, minHeight: p.clicks > 0 ? 2 : 0 }} />
             </div>
-            <span style={{ ...axisStyle, marginTop: 4, whiteSpace: "nowrap" }}>{shortDay(p.date)}</span>
+            <span style={{ ...axisStyle, marginTop: 4, whiteSpace: "nowrap" }}>{p.label}</span>
           </div>
         ))}
       </div>
       <p style={{ color: "#999", fontSize: 12, margin: "10px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 8 }}>
-        Green bar = clicks; pale ghost = impressions (scaled independently). Google finalizes each day ~2 days late.
+        Green bar = clicks{weekly ? " per week" : ""}; pale ghost = impressions (scaled independently).
+        Google finalizes each day ~2 days late.{weekly ? " The oldest bar may be a part-week." : ""}
       </p>
     </section>
+  );
+}
+
+// Server-rendered segmented control — plain links, no client JS, so the page
+// stays a server component and a chosen range is shareable/bookmarkable.
+function RangePicker({ active }: { active: RangeOption }) {
+  return (
+    <div
+      role="group"
+      aria-label="Date range"
+      style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center", margin: "0 0 6px" }}
+    >
+      <span style={{ ...labelStyle, marginRight: 6 }}>Range</span>
+      {RANGE_OPTIONS.map((o) => {
+        const on = o.key === active.key;
+        return (
+          <Link
+            key={o.key}
+            href={`/admin/analytics?range=${o.key}`}
+            aria-current={on ? "true" : undefined}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 8,
+              border: `1px solid ${on ? "#1B3A2D" : "#E7E0D5"}`,
+              background: on ? "#1B3A2D" : "#fff",
+              color: on ? "#fff" : "#2d3a22",
+              fontSize: 13,
+              fontWeight: on ? 700 : 500,
+              textDecoration: "none",
+            }}
+          >
+            {o.label}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
