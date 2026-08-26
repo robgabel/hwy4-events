@@ -20,13 +20,12 @@
 // coexist on 2026-09-12 by design (the tournament runs 10 AM to 6 PM at the
 // pasture; Hit Eject plays the saloon 6 to 9 PM). They are not duplicates.
 //
-// LOCATION, stated honestly: the post names no street address. Play is on
-// Wayne and Marilyn Renaud's and Travis and Debbie Loughran's property, which
-// is not a public venue and is not in the venue registry, so this row carries
-// no address and no venue_key (the detail page then shows no map or venue
-// section rather than pointing a golfer at the saloon's bar). Town is set to
-// Dorrington, the host saloon's town. If the pasture's location is ever
-// published, add it here.
+// LOCATION: the venue is the saloon (Rob's call, 2026-08-26). The flyer names
+// no street address for the pasture itself, and play is on Wayne and Marilyn
+// Renaud's and Travis and Debbie Loughran's property, which is private and not
+// a registry venue. The saloon is where the tournament is organized and where
+// the flyer sends people, so the row carries the registry venue_key and address
+// and the description credits the property owners.
 //
 // Idempotent: upserts on the unique dedup_key (= hash(name|date|town)), so a
 // re-run updates the row in place instead of duplicating it.
@@ -41,7 +40,10 @@ import { generateDedupKey } from "../lib/event-identity.js";
 
 const NAME = "Annual Lube Room Horse Pasture Golf Tournament";
 const DATE = "2026-09-12"; // Saturday
-const VENUE = "The Lube Room Horse Pasture";
+const VENUE = "The Lube Room Saloon";
+const VENUE_KEY = "lube-room";
+// From the venue registry (scripts/lib/venues.ts), the source of truth for addresses.
+const ADDRESS = "3497 CA-4, Dorrington, CA 95223";
 const TOWN = "Dorrington";
 const ORG_SLUG = "lube-room";
 const SOURCE_NAME = "The Lube Room Saloon";
@@ -63,8 +65,7 @@ const DESCRIPTION = [
   "It costs $25 per player or $85 for a foursome, and extra donations are welcome;",
   "proceeds go to Hazel Fischer Elementary School in Arnold.",
   "Wayne and Marilyn Renaud and Travis and Debbie Loughran are lending their property for the day.",
-  "The saloon has not published an address for the pasture, so ask when you sign up:",
-  "event director Paul Cardinalli is taking questions at paulcardinalli@comcast.net.",
+  "Event director Paul Cardinalli is taking questions at paulcardinalli@comcast.net.",
 ].join(" ");
 
 function toRow() {
@@ -75,9 +76,9 @@ function toRow() {
     start_time: START_TIME,
     end_time: END_TIME,
     venue_name: VENUE,
-    venue_key: null as string | null,
+    venue_key: VENUE_KEY,
     town: TOWN,
-    address: null as string | null,
+    address: ADDRESS,
     category: CATEGORY,
     status: "confirmed",
     is_past: false,
