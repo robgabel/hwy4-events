@@ -2,6 +2,7 @@ import "server-only";
 import sharp from "sharp";
 import { REGION } from "./region";
 import { REGION_OPS } from "./region-ops";
+import { CARTO_API_KEY, withCartoKey } from "./carto";
 
 /**
  * Stitch a static map image centered on a coordinate, from CARTO Voyager raster
@@ -14,6 +15,21 @@ import { REGION_OPS } from "./region-ops";
  */
 
 const TILE = 512; // CARTO @2x tiles are 512px (retina)
+
+// A keyless request still returns HTTP 200 with a valid PNG — CARTO just bakes
+// an "API KEY REQUIRED" watermark into it — so the fetch path below cannot tell
+// a good tile from a bad one. Say so once per process rather than shipping the
+// watermark silently.
+let warnedNoKey = false;
+function warnIfKeyless(): void {
+  if (CARTO_API_KEY || warnedNoKey) return;
+  warnedNoKey = true;
+  console.warn(
+    "CARTO_BASEMAP_KEY_MISSING — NEXT_PUBLIC_CARTO_API_KEY is unset, so CARTO serves " +
+      "watermarked tiles. They arrive as HTTP 200, so the stitch succeeds and the " +
+      "watermark ships. Free key: https://carto.com/basemaps/apikey"
+  );
+}
 
 function lngToWorldPx(lng: number, zoom: number): number {
   const n = Math.pow(2, zoom);
@@ -28,7 +44,9 @@ function latToWorldPx(lat: number, zoom: number): number {
 }
 
 async function fetchTile(z: number, x: number, y: number): Promise<Buffer | null> {
-  const url = `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`;
+  const url = withCartoKey(
+    `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}@2x.png`
+  );
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": `${REGION.domain} (events map; contact: ${REGION_OPS.emails.hello})` },
@@ -55,6 +73,8 @@ export async function renderStaticMap(opts: {
   width?: number;
   height?: number;
 }): Promise<Buffer | null> {
+  warnIfKeyless();
+
   const { lat, lng, zoom } = opts;
   const OUT_W = opts.width ?? 1200;
   const OUT_H = opts.height ?? 600;

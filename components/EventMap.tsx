@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { withCartoKey } from "@/lib/carto";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { TOWN_INFO } from "@/lib/towns";
@@ -99,7 +100,7 @@ export default function EventMap({
           <Recenter center={center} zoom={zoom} />
           <TileLayer
             attribution='&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            url={withCartoKey("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png")}
             maxZoom={19}
           />
           <Marker position={center} icon={markerIcon}>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import DirectionsLink from "./DirectionsLink";
+import { BASEMAP_VERSION } from "@/lib/carto";
 
 const EventMap = dynamic(() => import("./EventMap"), {
   ssr: false,
@@ -58,7 +59,8 @@ export default function EventMapStatic({
     );
   }
 
-  const staticSrc = `/api/static-map?lat=${mapLat}&lng=${mapLng}&z=${mapZoom}`;
+  // v= retires the keyless, watermarked images the immutable cache is still holding.
+  const staticSrc = `/api/static-map?lat=${mapLat}&lng=${mapLng}&z=${mapZoom}&v=${BASEMAP_VERSION}`;
 
   return (
     <section className="mb-6">
