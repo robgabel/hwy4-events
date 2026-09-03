@@ -192,3 +192,13 @@ test("an in-progress guide outranks a same-day event pick for the spotlight", ()
   assert.equal(spotlight?.kind, "guide");
   assert.deepEqual(names(picks), ["tonight elsewhere"]);
 });
+
+test("a sold-out pick drops out, even with robs_pick still true", () => {
+  const events = [
+    { ...pick("2026-07-04", "sold out show"), sold_out: true },
+    pick("2026-07-06", "still on"),
+  ];
+  const { spotlight, picks } = selectPicks(events, TODAY, MORNING);
+  assert.equal(spotlight?.kind === "event" && spotlight.event.name, "still on");
+  assert.deepEqual(names(picks), []);
+});

@@ -239,6 +239,13 @@ export default function EventCard({
               Up Next
             </span>
           )}
+          {/* Sold out is the loudest thing on the card: a reader scanning the
+              feed must not drive to Murphys for tickets that are gone. */}
+          {event.sold_out && (
+            <span className="font-display inline-flex shrink-0 items-center rounded-md bg-alert px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-widest text-white shadow-sm">
+              Sold Out
+            </span>
+          )}
           {event.robs_pick && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">

@@ -72,6 +72,10 @@ export interface Hwy4Event {
   created_at?: string | null;
   image_url: string | null;
   robs_pick: boolean;
+  /** Human-set: tickets are gone. Renders a SOLD OUT badge on the card and the
+   *  detail page, and drops the event out of Rob's Picks. No scraper writes it
+   *  (see supabase/migrations/20260903_add_sold_out.sql). */
+  sold_out?: boolean;
   is_weekly: boolean;
   verification_status?: EventVerificationStatus;
   community_sourced?: boolean;
@@ -168,6 +172,7 @@ export type EventListItem = Pick<
   | "visibility"
   | "org_slug"
   | "robs_pick"
+  | "sold_out"
   | "is_weekly"
   | "verification_status"
   | "community_sourced"

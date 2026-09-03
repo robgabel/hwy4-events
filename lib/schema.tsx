@@ -197,12 +197,17 @@ export function buildBreadcrumbs(crumbs: Crumb[]) {
 // state a number for: free (0) or paid with a parseable amount. donation /
 // varies / unknown omit offers entirely (the property is optional).
 export function buildEventOffer(event: Hwy4Event, url: string) {
+  // A sold-out event still has a real offer; it is just unavailable. Saying so
+  // is more honest than dropping the offer, and search results render it.
+  const availability = event.sold_out
+    ? "https://schema.org/SoldOut"
+    : "https://schema.org/InStock";
   if (event.cost_tier === "free") {
     return {
       "@type": "Offer",
       price: "0",
       priceCurrency: "USD",
-      availability: "https://schema.org/InStock",
+      availability,
       url,
     };
   }
@@ -213,7 +218,7 @@ export function buildEventOffer(event: Hwy4Event, url: string) {
         "@type": "Offer",
         price: match[0],
         priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
+        availability,
         url,
       };
     }

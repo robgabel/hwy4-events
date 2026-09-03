@@ -359,6 +359,13 @@ export default async function EventPage({ params }: PageProps) {
                 startTime={event.start_time}
                 endTime={event.end_time}
               />
+              {/* Sold out leads the badge row and is the only badge that
+                  shouts: the reader is here to decide whether to go. */}
+              {event.sold_out && (
+                <span className="font-display inline-flex items-center rounded-md bg-alert px-3 py-1 text-sm font-extrabold uppercase tracking-widest text-white shadow-sm">
+                  Sold Out
+                </span>
+              )}
               <span
                 className={`badge-${event.category} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium`}
               >

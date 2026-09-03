@@ -18,6 +18,7 @@
   --color-sky-light: #7DB3CC;
   --color-sunset: #D4855C;
   --color-gold: #C4922A;
+  --color-alert: #8B2E2E;       /* sold out / hard stop: ~8.3:1 with white */
 
   /* Fonts — set by next/font CSS variables */
   --font-sans: var(--font-sans, "DM Sans", ui-sans-serif, system-ui, sans-serif);

@@ -33,7 +33,7 @@ const EVENT_COLUMNS =
   "id, name, description, date, start_time, end_time, venue_name, town, " +
   "address, category, artists, status, price, cost_tier, event_url, " +
   "source_event_id, source_name, source_url, image_url, visibility, org_slug, " +
-  "robs_pick, is_weekly, verification_status, community_sourced, venue_key, " +
+  "robs_pick, sold_out, is_weekly, verification_status, community_sourced, venue_key, " +
   // series_umbrella: nothing downstream of this fetch reads it today; kept
   // because the shared Hwy4Event shape declares it and dropping one boolean
   // buys nothing (the read-time dedup that needed it was retired 2026-08-23).
@@ -158,6 +158,7 @@ export function toListEvents(events: Hwy4Event[]): EventListItem[] {
     visibility: e.visibility,
     org_slug: e.org_slug,
     robs_pick: e.robs_pick,
+    sold_out: e.sold_out,
     is_weekly: e.is_weekly,
     verification_status: e.verification_status,
     community_sourced: e.community_sourced,

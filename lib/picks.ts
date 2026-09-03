@@ -33,6 +33,7 @@ export type PickCandidate = {
   start_time?: string | null;
   end_time?: string | null;
   robs_pick?: boolean | null;
+  sold_out?: boolean | null;
   visibility?: string | null;
   venue_key?: string | null;
 };
@@ -63,6 +64,9 @@ export function selectPicks<T extends PickCandidate>(
     .filter(
       (e) =>
         e.robs_pick === true &&
+        // A sold-out event is not a recommendation. Belt-and-braces next to
+        // clearing robs_pick by hand: whichever one is done, it drops out.
+        e.sold_out !== true &&
         e.visibility === "public" &&
         e.date >= todayIso &&
         // Ended picks are not recommendations. hasEventEnded: known end → over
