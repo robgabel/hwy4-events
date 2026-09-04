@@ -103,3 +103,55 @@ test("a properly-named venue with its own address is untouched", async () => {
   assert.equal(ev.venue_name, "Brice Station Vineyards");
   assert.equal(ev.town, "Murphys");
 });
+
+test("a generic venue beside a street address in the ADDRESS field adopts venue AND town", async () => {
+  const { normalizeEventLocation } = await load();
+  // Generic venue_name beside a street address in the address field proper.
+  // The original recovery only fired on the swap shape, so a source that
+  // never runs applyVenueDetection (red-cross, mystic-saloon) — or any
+  // resolvable-but-unresolved shape reaching the write boundary — got no
+  // address-layer look here at all. The detecting scrapers' events arrive
+  // non-generic whenever this could fire (their own detection accepts a
+  // superset of address matches), so this arm is the non-detecting sources'
+  // recovery plus choke-point self-sufficiency. Same registry lock as above.
+  const ev = {
+    name: "Arnold Angels Music Festival",
+    description: "Tickets are on sale now for the Arnold Angels Music Festival.",
+    date: "2026-10-04",
+    town: "Arnold",
+    venue_name: "Unknown Venue",
+    address: "3353 East Highway 4, Murphys CA 95247",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: "https://www.gocalaveras.com/events/arnold-angels-music-festival/",
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.venue_name, "Brice Station Vineyards");
+  assert.equal(ev.town, "Murphys");
+  assert.equal(ev.address, "3353 East Highway 4, Murphys CA 95247");
+});
+
+test("a generic venue with NO street address adopts nothing off text mentions", async () => {
+  const { normalizeEventLocation } = await load();
+  // The #265 invariant, re-asserted for the widened entry condition: only the
+  // ADDRESS layer earns adoption. A generic venue whose event merely mentions
+  // a registry venue in title/description/URL must stay unresolved.
+  const ev = {
+    name: "Shuttle to Ironstone Vineyards",
+    description: "Wine tasting featuring Ironstone Vineyards pours.",
+    date: "2026-10-04",
+    town: "Arnold",
+    venue_name: "Unknown Venue",
+    address: "Arnold, CA",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: "https://www.gocalaveras.com/events/shuttle-to-ironstone-vineyards/",
+    category: "other",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.venue_name, "Unknown Venue");
+  assert.equal(ev.town, "Arnold");
+});
