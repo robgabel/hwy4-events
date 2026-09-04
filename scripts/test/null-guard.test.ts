@@ -328,3 +328,154 @@ test("strong-match merge stamps updated_at — a merge is a content change", asy
   assert.equal(payload.updated_at, now);
   assert.equal(payload.last_scraped_at, now);
 });
+
+// ---------------------------------------------------------------------------
+// placeholderVenueSteal (2026-09-04): the venue-level twin of the name guard.
+// GoCalaveras served the Arnold Angels Music Festival with no location
+// attached (venue "Unknown Venue", town GUESSED "Arnold" off the charity's
+// name), and the daily exact-match pass wiped the resolved row (Brice Station
+// Vineyards / Murphys / venue_key) back to that shape while keepStr kept the
+// stored Murphys street address — a standing TOWN_CONFLICT that failed the
+// location sanity check on every such run (red 2026-08-26/27/29, 09-03/04),
+// hand-healed each afternoon, re-broken the next morning.
+// ---------------------------------------------------------------------------
+
+// The resolved row as reconcile/venue-detection left it.
+const briceRow = {
+  id: "e2",
+  name: "Arnold Angels Music Festival",
+  date: "2026-10-04",
+  venue_name: "Brice Station Vineyards",
+  description: "Benefit festival for the Arnold Angels.",
+  start_time: "12:00",
+  end_time: null,
+  price: null,
+  event_url: "https://www.gocalaveras.com/events/arnold-angels-music-festival/",
+  address: "3353 East Highway 4, Murphys CA 95247",
+  town: "Murphys",
+  image_url: null,
+  category: "live_music",
+};
+
+// The degraded aggregator shape for the same sid: no location, guessed town,
+// nothing else extracted.
+const degradedScrape = {
+  ...briceRow,
+  venue_name: "Unknown Venue",
+  town: "Arnold",
+  description: null,
+  start_time: null,
+  address: null,
+  event_url: null,
+  artists: null,
+  source_event_id: "192816",
+} as never;
+
+test("placeholderVenueSteal: generic loses to specific, in exactly one direction", async () => {
+  const { placeholderVenueSteal } = await load();
+  // The steal the guard exists to block — and the bare-town variant.
+  assert.equal(placeholderVenueSteal(briceRow, { venue_name: "Unknown Venue" }), true);
+  assert.equal(placeholderVenueSteal(briceRow, { venue_name: "Murphys" }), true);
+  // The HEALING direction — a specific incoming venue over a stored generic —
+  // must still write (that's how an Unknown Venue row resolves the first time
+  // a source names the place, and with the guard it stays resolved).
+  assert.equal(
+    placeholderVenueSteal(
+      { venue_name: "Unknown Venue" },
+      { venue_name: "Brice Station Vineyards" }
+    ),
+    false
+  );
+  // Generic-over-generic is a normal write.
+  assert.equal(
+    placeholderVenueSteal({ venue_name: "Unknown Venue" }, { venue_name: "Murphys" }),
+    false
+  );
+  // A stored ARTIFACT venue carries no clean signal — never "kept".
+  assert.equal(
+    placeholderVenueSteal(
+      { venue_name: "@Murphys Park featuring The Star Dogs" },
+      { venue_name: "Unknown Venue" }
+    ),
+    false
+  );
+});
+
+test("a degraded venue re-scrape is not a change; a real venue change still is", async () => {
+  const { rowChanged } = await load();
+  // venue/town wipe + null display fields: the payload would keep everything,
+  // so the row must read unchanged (no daily "updated" re-mark).
+  assert.equal(rowChanged(briceRow as never, degradedScrape), false);
+  // A specific-to-specific venue change is a genuine correction and counts.
+  assert.equal(
+    rowChanged(briceRow as never, {
+      ...(degradedScrape as object),
+      venue_name: "Ironstone Vineyards",
+      town: "Murphys",
+    } as never),
+    true
+  );
+});
+
+test("buildExactMatchUpdate keeps venue AND town, resolves venue_key from the kept name, keys the kept town", async () => {
+  const { buildExactMatchUpdate } = await load();
+  const now = "2026-09-04T12:27:21.000Z";
+  const incomingKey = generateDedupKey("Arnold Angels Music Festival", "2026-10-04", "Arnold");
+  const payload = buildExactMatchUpdate(
+    briceRow as never,
+    degradedScrape,
+    incomingKey,
+    now
+  ) as Record<string, unknown>;
+  assert.equal(payload.venue_name, "Brice Station Vineyards");
+  assert.equal(payload.town, "Murphys");
+  // The key must be the registry key of the venue the row KEEPS — resolving
+  // from the degraded incoming shape would null it every morning.
+  assert.equal(payload.venue_key, "brice-station");
+  // dedup_key hashes what the row actually carries: kept town, not "Arnold".
+  assert.equal(
+    payload.dedup_key,
+    generateDedupKey("Arnold Angels Music Festival", "2026-10-04", "Murphys")
+  );
+  // keepStr family unchanged alongside the venue guard.
+  assert.equal(payload.address, briceRow.address);
+  assert.equal(payload.start_time, "12:00");
+});
+
+test("buildExactMatchUpdate still lets a specific venue heal a stored generic one", async () => {
+  const { buildExactMatchUpdate } = await load();
+  const now = "2026-09-04T12:27:21.000Z";
+  const storedGeneric = {
+    ...briceRow,
+    venue_name: "Unknown Venue",
+    town: "Arnold",
+  };
+  const healingScrape = {
+    ...(degradedScrape as object),
+    venue_name: "Brice Station Vineyards",
+    town: "Murphys",
+  } as never;
+  const key = generateDedupKey("Arnold Angels Music Festival", "2026-10-04", "Murphys");
+  const payload = buildExactMatchUpdate(
+    storedGeneric as never,
+    healingScrape,
+    key,
+    now
+  ) as Record<string, unknown>;
+  assert.equal(payload.venue_name, "Brice Station Vineyards");
+  assert.equal(payload.town, "Murphys");
+  assert.equal(payload.venue_key, "brice-station");
+  assert.equal(payload.dedup_key, key);
+});
+
+test("buildStrongMatchUpdate: a generic venue never replaces a specific one", async () => {
+  const { buildStrongMatchUpdate } = await load();
+  const now = "2026-09-04T12:27:21.000Z";
+  const merged = buildStrongMatchUpdate(
+    { ...briceRow, artists: null } as never,
+    degradedScrape,
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    now
+  ) as Record<string, unknown>;
+  assert.equal(merged.venue_name, "Brice Station Vineyards");
+});
