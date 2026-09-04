@@ -20,6 +20,8 @@ const PARADE_ORG_SLUGS = new Set<string>(["arnold-parade"]);
 
 const FOURTH_FEATURE_EVENT_IDS = new Set<string>([
   "dddfef2b-df2d-43a8-89a6-2006bfcf20da", // Sierra Nevada Arts & Crafts Festival — Sat Jul 4 2026
+  "551f2b7b-6ae3-4d2a-89bb-5ebfa77098bd", // 4th of July Celebration at the Murphys Historic Hotel — Sat Jul 4 2026
+  "5270c640-aec6-4144-b005-fcaa8767654d", // Murphys 4th of July Parade — Sat Jul 4 2026 (noon, down Main St)
 ]);
 
 // 2.5. AMERICA'S 250TH FEATURE — a patriotic feature that is NOT on the Fourth of
