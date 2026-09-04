@@ -479,3 +479,37 @@ test("buildStrongMatchUpdate: a generic venue never replaces a specific one", as
   ) as Record<string, unknown>;
   assert.equal(merged.venue_name, "Brice Station Vineyards");
 });
+
+test("the venue guard stands down when the degraded scrape asserts a NEW address (NB-1)", async () => {
+  const { placeholderVenueSteal, buildExactMatchUpdate } = await load();
+  // A generic venue beside a DIFFERENT street address is a relocation claim,
+  // not absence of location. Keeping the stored venue+town beside the newly
+  // written address would manufacture the exact venue/town/address
+  // contradiction the guard exists to prevent (adversarial review of #275,
+  // NB-1) — so the whole degraded write proceeds pre-guard style instead.
+  const relocated = {
+    ...(degradedScrape as object),
+    address: "1234 Blagen Loop, Arnold, CA 95223",
+  } as never;
+  assert.equal(placeholderVenueSteal(briceRow, relocated), false);
+  const now = "2026-09-04T12:27:21.000Z";
+  const incomingKey = generateDedupKey("Arnold Angels Music Festival", "2026-10-04", "Arnold");
+  const payload = buildExactMatchUpdate(
+    briceRow as never,
+    relocated,
+    incomingKey,
+    now
+  ) as Record<string, unknown>;
+  assert.equal(payload.venue_name, "Unknown Venue");
+  assert.equal(payload.town, "Arnold");
+  assert.equal(payload.address, "1234 Blagen Loop, Arnold, CA 95223");
+  assert.equal(payload.dedup_key, incomingKey);
+  // Same incoming address as stored is NOT a relocation — guard holds.
+  assert.equal(
+    placeholderVenueSteal(briceRow, {
+      ...(degradedScrape as object),
+      address: briceRow.address,
+    } as never),
+    true
+  );
+});

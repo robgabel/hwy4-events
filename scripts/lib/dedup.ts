@@ -233,17 +233,19 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
   // Two shapes reach it: the swap above (EventON put the street address in the
   // location NAME field), and a venue_name that arrived generic ("Unknown
   // Venue", a bare town) beside a real street address in the address field
-  // proper. The second shape slipped past the original swap-only recovery
-  // (2026-09-04): GoCalaveras stopped naming a location for the Arnold Angels
-  // Music Festival, so the row arrived venue="Unknown Venue" + town guessed
-  // "Arnold" off the charity's name + (via detail-page enrichment, AFTER the
-  // scraper's own detection pass had already run address-less) Brice Station's
-  // street address — and nothing at the write boundary ever re-looked at the
-  // address. A registry address is strong enough to adopt the venue's
-  // canonical name AND town (the registry outranks a town label the extractor
-  // guessed off the event's wording); without the adoption the row can never
-  // self-heal and fails the location sanity check daily (2026-08-18, again
-  // 2026-08-26 onward).
+  // proper. The second arm's honest reach (review of #275, NB-4): the write
+  // paths that never run `applyVenueDetection` at all — red-cross writes its
+  // host org as venue_name beside a street address, mystic-saloon likewise —
+  // plus making this choke point self-sufficient, so a resolvable shape
+  // heals here no matter which scraper produced it or in what order that
+  // scraper's own passes ran. It does NOT fire for the detecting scrapers'
+  // events: their own detection pass already accepts a superset of these
+  // address matches, so anything adoptable arrives non-generic (GoCalaveras
+  // enriches BEFORE it detects — the 2026-09-04 Arnold Angels red runs were
+  // a NO-address degraded shape, fixed by placeholderVenueSteal, not here).
+  // A registry address is strong enough to adopt the venue's canonical name
+  // AND town: the registry outranks a town label the extractor guessed off
+  // the event's wording (2026-08-18).
   //
   // NOT applyVenueDetection: with venue_name generic, the full matcher would
   // fall through to its TEXT layer and adopt a venue merely mentioned in the
@@ -621,15 +623,31 @@ export function placeholderNameSteal(
  * stored generic one. A stored artifact venue ("@Murphys Park featuring …")
  * carries no clean signal either, so it is never "kept" over an incoming
  * generic — the write proceeds unchanged there.
+ *
+ * The guard's premise is ABSENCE of location signal, so it stands down when
+ * the degraded scrape nonetheless asserts a location: an incoming street
+ * address that differs from the stored one (the same keepStr expression the
+ * payload writes) is a relocation claim, and pinning the stored venue+town
+ * beside the newly-written address would manufacture the exact
+ * venue/town/address contradiction this guard exists to prevent (adversarial
+ * review of #275, NB-1). In that shape the whole degraded write proceeds as
+ * before the guard existed — honest, and self-announcing via
+ * UNRESOLVED_VENUE + the location sanity check.
  */
 export function placeholderVenueSteal(
-  existing: { venue_name: string | null },
-  event: { venue_name: string }
+  existing: { venue_name: string | null; address?: string | null },
+  event: { venue_name: string; address?: string | null }
 ): boolean {
   const stored = existing.venue_name?.trim() ?? "";
   if (!stored) return false;
   if (!isGenericVenue(event.venue_name)) return false;
-  return !isGenericVenue(stored) && !isArtifactVenue(stored);
+  if (isGenericVenue(stored) || isArtifactVenue(stored)) return false;
+  // Same expression the payload writes for address: guard only when the
+  // written address would be exactly what is stored.
+  return (
+    keepStr(event.address ?? null, existing.address ?? null) ===
+    (existing.address ?? null)
+  );
 }
 
 export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
@@ -645,6 +663,9 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
     // (placeholderVenueSteal — the town rides with the kept venue), so
     // neither diff is a change. Mirrors the payload exactly, same as keepStr:
     // a wipe-shaped venue diff must not re-mark the row "updated" every run.
+    // Deliberately does NOT read venue_key: a specific-name row whose key is
+    // NULL won't re-key through this path while the guard holds — that heal
+    // belongs to `npm run backfill-venue-keys` (review of #275, NB-3).
     (!placeholderVenueSteal(existing, event) &&
       existing.venue_name !== event.venue_name) ||
     // A locked field can't be written, so a diff there is not a change. For
@@ -743,7 +764,12 @@ export function buildExactMatchUpdate(
     // either steal-guard keeps a stored value, the key is recomputed from
     // what the row will ACTUALLY carry (kept name and/or kept town) — never
     // the incoming shape's hash beside kept fields (the name↔key-mismatch
-    // rule from review finding N5, extended to town).
+    // rule from review finding N5, extended to town). Known theoretical
+    // caveat (review of #275, NB-2): a SID-LESS source whose degraded scrape
+    // kept a town different from its own label would miss the exact-key
+    // lookup next run; no live source has that shape (every generic-venue
+    // writer stamps a source_event_id), and reconcile + the audit catch the
+    // resulting dup if one ever appears.
     dedup_key:
       keepName || keepVenue
         ? generateDedupKey(writtenName, event.date, writtenTown)

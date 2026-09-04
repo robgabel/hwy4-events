@@ -106,12 +106,14 @@ test("a properly-named venue with its own address is untouched", async () => {
 
 test("a generic venue beside a street address in the ADDRESS field adopts venue AND town", async () => {
   const { normalizeEventLocation } = await load();
-  // The 2026-09-04 shape: GoCalaveras stopped naming a location for this
-  // event, so venue_name arrives as the "Unknown Venue" placeholder and the
-  // street address arrives in the address field proper (via detail-page
-  // enrichment, which runs AFTER the scraper's own detection pass). The
-  // original recovery only fired on the swap shape, so nothing at the write
-  // boundary ever re-looked at the address. Same registry lock as above.
+  // Generic venue_name beside a street address in the address field proper.
+  // The original recovery only fired on the swap shape, so a source that
+  // never runs applyVenueDetection (red-cross, mystic-saloon) — or any
+  // resolvable-but-unresolved shape reaching the write boundary — got no
+  // address-layer look here at all. The detecting scrapers' events arrive
+  // non-generic whenever this could fire (their own detection accepts a
+  // superset of address matches), so this arm is the non-detecting sources'
+  // recovery plus choke-point self-sufficiency. Same registry lock as above.
   const ev = {
     name: "Arnold Angels Music Festival",
     description: "Tickets are on sale now for the Arnold Angels Music Festival.",
