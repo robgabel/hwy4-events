@@ -562,6 +562,54 @@ function sameExactWindow(a: EventIdentity, b: EventIdentity): boolean {
   return true;
 }
 
+/** Minimum description length for the shared-press-release signal. Short blurbs
+ *  ("Live music in the beer garden") repeat across genuinely different events;
+ *  only a substantial body of copied text carries identity. */
+const PRESS_RELEASE_MIN_CHARS = 200;
+const PRESS_RELEASE_SIMILARITY = 0.92;
+
+/** Two sources copied the same organizer press release verbatim (2026-09-04,
+ *  the Calaveras wine-trail dupe).
+ *
+ *  A region-wide event has no single venue to agree on: the "Red, White & Rosé
+ *  Tasting Experience" runs across 13 tasting rooms on one ticket, so
+ *  GoCalaveras filed it under the alliance's ticket office ("Calaveras
+ *  Winegrape Alliance Information Center") while Visit Murphys filed it under a
+ *  stretch of road ("Hwy 4 and Main Street Murphys"), and they disagreed on the
+ *  start time by an hour (10:00 vs 11:00) because neither is a real door time.
+ *  Every venue-gated signal was therefore unreachable and `timesAnchor` failed
+ *  on the differing start, so the pair was invisible to all four dedup layers
+ *  at once even though the two descriptions were byte-identical after their
+ *  opening clause (similarity 0.949 over ~470 chars).
+ *
+ *  Deliberately gated on the venues NOT agreeing, which reads backwards next to
+ *  every other signal here and is the whole point. When two sources cannot even
+ *  agree what to call the place, the clock is not evidence and the copied text
+ *  is. When they DO agree on the venue, the clock is meaningful and must match:
+ *  Murphys Creek Theatre runs "An Act of God" at 14:00 and again at 19:30 on
+ *  2026-12-19, two real performances sharing one synopsis, and this path must
+ *  never merge them. The existing same-venue signals keep them split.
+ *
+ *  Naming different acts still disqualifies, for the reason spelled out on
+ *  `sameExactWindow`: two rows that each name an act and disagree about who is
+ *  playing are asserting two different shows. */
+function sharedPressRelease(a: EventIdentity, b: EventIdentity): boolean {
+  const da = (a.description ?? "").trim();
+  const db = (b.description ?? "").trim();
+  if (
+    da.length < PRESS_RELEASE_MIN_CHARS ||
+    db.length < PRESS_RELEASE_MIN_CHARS
+  ) {
+    return false;
+  }
+  const namesAct = (e: EventIdentity) =>
+    (e.artists ?? []).some((x) => (x ?? "").trim());
+  if (namesAct(a) && namesAct(b) && !artistsOverlap(a.artists, b.artists)) {
+    return false;
+  }
+  return textSimilarity(da, db) >= PRESS_RELEASE_SIMILARITY;
+}
+
 /** Are two rows the same real event? The one definition, imported by both the
  *  read-time collapse and the write-time merge.
  *
@@ -632,6 +680,20 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
     normalizeTown(a.town) !== normalizeTown(b.town)
   ) {
     return false;
+  }
+
+  // A distributed event listed by two sources under two different pseudo-venues:
+  // the copied press release is the only signal either source preserved. Sits
+  // ahead of the venue veto and the clock because both are exactly what this
+  // shape destroys; the same-town requirement above still applies, since the
+  // town veto fires on this branch (venues do not agree).
+  if (
+    !venuesAgree &&
+    !isUmbrella(a) &&
+    !isUmbrella(b) &&
+    sharedPressRelease(a, b)
+  ) {
+    return true;
   }
 
   if (bothVenuesKnown && !venuesAgree) return false;

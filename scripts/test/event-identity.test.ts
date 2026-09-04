@@ -1040,3 +1040,93 @@ test("an exact window is disqualified when the two rows name different acts", ()
   const openMicNoActs = ev({ ...openMic, artists: null });
   assert.equal(isSameEvent(salsa, openMicNoActs), true);
 });
+
+// ---------------------------------------------------------------------------
+// Shared press release across two pseudo-venues (2026-09-04, the Calaveras
+// wine-trail dupe). A region-wide event has no single venue to agree on: the
+// "Red, White & Rose Tasting Experience" runs across 13 tasting rooms on one
+// ticket, so GoCalaveras filed it under the alliance's ticket office and Visit
+// Murphys under a stretch of road, and the two disagreed on the start by an
+// hour because neither is a real door time. Both venue agreement and the clock
+// were destroyed by the event's own shape; the copied press release survived.
+// ---------------------------------------------------------------------------
+const WINE_TRAIL_TAIL =
+  " Labor Day Weekend for a Tasting Experience along the Hwy 4 Wine Trail and downtown Murphys. A ticket grants you a tasting of two wines at each of the 12 participating locations, giving you the perfect opportunity to explore Calaveras Wine Country. Like what you taste? Each location will have their full tasting menu available, with their tasting fee waived with a purchase. Tickets and more information available at https://www.calaveraswines.org/wineweekend";
+
+const wineTrailGoCal = ev({
+  name: "Calaveras Wine Country Wine Trail",
+  date: "2026-09-05",
+  start_time: "10:00:00",
+  end_time: "17:00:00",
+  venue_name: "Calaveras Winegrape Alliance Information Center",
+  address: "106 Main Street",
+  description: "Come to Calaveras County, CA this" + WINE_TRAIL_TAIL,
+});
+const wineTrailVisitMurphys = ev({
+  name: "Red, White and Rose Tasting Experience",
+  date: "2026-09-05",
+  start_time: "11:00:00",
+  end_time: "17:00:00",
+  venue_name: "Hwy 4 and Main Street Murphys",
+  description: "Join us this" + WINE_TRAIL_TAIL,
+});
+
+test("shared press release merges across two pseudo-venues and a differing start", () => {
+  assert.equal(isSameEvent(wineTrailGoCal, wineTrailVisitMurphys), true);
+});
+
+test("a matinee and an evening showing at ONE venue never merge on a shared synopsis", () => {
+  // The guard that makes the signal safe: it requires the venues NOT to agree.
+  // Murphys Creek Theatre runs "An Act of God" at 14:00 and again at 19:30 on
+  // 2026-12-19 — two real performances sharing one synopsis. When the venue IS
+  // agreed the clock is meaningful, so the existing same-venue paths decide.
+  const synopsis =
+    "An Act of God. The Almighty and two archangels answer humanity's most vexing questions in this comedy adapted from the bestselling book. Murphys Creek Theatre presents a limited holiday run at the Black Bart Playhouse, with performances Thursday through Sunday.";
+  const evening = ev({
+    name: "AN ACT OF GOD",
+    date: "2026-12-19",
+    start_time: "19:30:00",
+    end_time: "21:00:00",
+    venue_name: "Murphys Creek Theatre",
+    venue_key: "murphys-creek-theatre",
+    description: synopsis,
+  });
+  const matinee = ev({
+    ...evening,
+    name: "An Act of God @ Murphys Creek Theater",
+    start_time: "14:00:00",
+    end_time: null,
+  });
+  assert.equal(isSameEvent(evening, matinee), false);
+});
+
+test("the press-release signal keeps every other guard", () => {
+  // Different towns: the town veto fires on this branch (venues disagree).
+  assert.equal(
+    isSameEvent(wineTrailGoCal, ev({ ...wineTrailVisitMurphys, town: "Arnold" })),
+    false
+  );
+  // Two rows each naming a different act assert two different shows.
+  assert.equal(
+    isSameEvent(
+      ev({ ...wineTrailGoCal, artists: ["Nicholas Lefler"] }),
+      ev({ ...wineTrailVisitMurphys, artists: ["DE Cutler"] })
+    ),
+    false
+  );
+  // A marked festival umbrella never merges.
+  assert.equal(
+    isSameEvent(ev({ ...wineTrailGoCal, series_umbrella: true }), wineTrailVisitMurphys),
+    false
+  );
+  // Short boilerplate is below the length floor: "live music tonight" repeats
+  // across genuinely different events and carries no identity.
+  const blurb = "Live music in the beer garden this Saturday afternoon.";
+  assert.equal(
+    isSameEvent(
+      ev({ ...wineTrailGoCal, description: blurb }),
+      ev({ ...wineTrailVisitMurphys, description: blurb + "!" })
+    ),
+    false
+  );
+});
