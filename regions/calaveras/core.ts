@@ -154,11 +154,15 @@ export const CALAVERAS_CORE: RegionCore = {
     // Moved from lib/geo.ts — generous box around the Hwy 4 / Calaveras corridor.
     visitorBox: { latMin: 37.9, latMax: 38.6, lngMin: -120.75, lngMax: -119.95 },
     // Moved from lib/geo.ts — corridor + immediate Calaveras towns (lowercased).
+    // Widened 2026-09-04 to the rest of Calaveras County: Valley Springs alone
+    // had 299 sessions since June labeled "visitor" (it sits just west of the
+    // box), against 329 sessions labeled "local" in total.
     localIpCities: [
       "arnold",
       "murphys",
       "angels camp",
       "angels",
+      "city of angels",
       "avery",
       "copperopolis",
       "dorrington",
@@ -170,7 +174,31 @@ export const CALAVERAS_CORE: RegionCore = {
       "bear valley",
       "mountain ranch",
       "san andreas",
+      "altaville",
+      "valley springs",
+      "mokelumne hill",
+      "wallace",
+      "burson",
+      "jenny lind",
+      "milton",
+      "campo seco",
+      "paloma",
+      "rail road flat",
+      "glencoe",
+      "west point",
+      "wilseyville",
+      "sheep ranch",
     ],
+    // Regional ISP hubs (lowercased). Verified 2026-09-04: a Comcast connection
+    // in Arnold geolocates to Lodi. Each of these mixes hub-routed corridor
+    // residents with genuine Central Valley visitors, so lib/geo.ts counts them
+    // as "hub", apart from both. Session counts since 2026-06-08 (view, non-bot):
+    // Sacramento 1,365 · Stockton 1,054 · Modesto 109 · Lodi 108 · Sonora 29
+    // (Sonora read "local" via the box until this list took precedence).
+    // Deliberately NOT listed, pending evidence: Tracy (230) and Elk Grove (193)
+    // run high per capita but have no verified hub-routing story; adding one is
+    // a one-line change here. San Jose (791) is real visitor traffic.
+    hubIpCities: ["sacramento", "stockton", "lodi", "modesto", "sonora"],
     // Moved from app/api/sync-venue-facts/route.ts — corridor center
     // (Arnold-ish) + radius to bias Places Text Search.
     placesBias: { lat: 38.1846, lng: -120.3517, radiusMeters: 45000.0 },

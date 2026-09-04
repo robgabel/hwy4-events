@@ -13,6 +13,7 @@
     "seed-venues": "tsx seed-venues.ts",
     "draft-venue-blurbs": "tsx draft-venue-blurbs.ts",
     "warm-maps": "tsx warm-map-cache.ts",
+    "reclassify-visitor-class": "tsx reclassify-visitor-class.ts",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { REGION } from "./region";
+import type { VisitorClass } from "./geo";
 
 // Single source of truth for newsletter signup trends (PRD-growth-agent.md R1a).
 // Derives the daily series + running total + composition straight from
@@ -22,7 +23,7 @@ export type NewsletterStats = {
   net_30d: number;
   confirm_rate_30d: number | null; // confirmed / created over last 30d (the opt-in leak)
   pending_unconfirmed: number; // signed up in 30d, never confirmed, not unsubscribed
-  by_class: Record<"local" | "visitor" | "unknown", number>; // active list composition
+  by_class: Record<VisitorClass, number>; // active list composition (local / hub / visitor / unknown)
   by_source: Record<string, number>; // active subs by signup placement (R1b)
   days: NewsletterDay[]; // chronological, oldest -> newest, length = `days` arg
 };
@@ -94,7 +95,7 @@ export async function getNewsletterStats(
     byDay.set(addDays(windowStart, i), { signups: 0, unsubs: 0 });
   }
 
-  const by_class: NewsletterStats["by_class"] = { local: 0, visitor: 0, unknown: 0 };
+  const by_class: NewsletterStats["by_class"] = { local: 0, hub: 0, visitor: 0, unknown: 0 };
   const by_source: Record<string, number> = {};
   let total_active = 0;
   let net_7d = 0;

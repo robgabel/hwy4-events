@@ -235,7 +235,7 @@ create table newsletter_subscribers (
   unsubscribed_at timestamptz,
   last_confirmation_sent_at timestamptz,
   signup_source text,
-  visitor_class text check (visitor_class in ('local', 'visitor', 'unknown'))
+  visitor_class text check (visitor_class in ('local', 'hub', 'visitor', 'unknown'))
 );
 create index idx_subscribers_active on newsletter_subscribers (confirmed)
   where confirmed = true and unsubscribed_at is null;
@@ -327,7 +327,7 @@ create table site_events (
   created_at timestamptz not null default now(),
   kind text not null check (kind in ('view', 'outbound')),
   visitor_class text not null default 'unknown'
-    check (visitor_class in ('local', 'visitor', 'unknown')),
+    check (visitor_class in ('local', 'hub', 'visitor', 'unknown')),
   region text,
   city text,
   country text,

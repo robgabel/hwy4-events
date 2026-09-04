@@ -111,6 +111,21 @@ test("region geo invariants: unique town names, sane box, bias inside box", () =
   }
 });
 
+test("IP city lists are lowercased, trimmed, and hub is disjoint from local", () => {
+  for (const [slug, core] of Object.entries(REGIONS)) {
+    const local = core.geo.localIpCities;
+    const hub = core.geo.hubIpCities ?? [];
+    for (const c of [...local, ...hub]) {
+      assert.equal(c, c.toLowerCase().trim(), `${slug}: "${c}" must be lowercased + trimmed`);
+    }
+    assert.equal(new Set(local).size, local.length, `${slug}: duplicate localIpCities`);
+    assert.equal(new Set(hub).size, hub.length, `${slug}: duplicate hubIpCities`);
+    for (const c of hub) {
+      assert.ok(!local.includes(c), `${slug}: "${c}" is both a hub and a local city`);
+    }
+  }
+});
+
 // Spot-pins of extracted-verbatim Calaveras values. These are the values the
 // engine hardcoded before the region extraction; if one changes, the live
 // site changes — do that knowingly, in its own commit.
@@ -124,7 +139,10 @@ test("calaveras spot-pins match the pre-extraction engine literals", () => {
   assert.equal(REGION.geo.towns[0].name, "Copperopolis");
   assert.equal(REGION.geo.towns[8].name, "Bear Valley");
   assert.deepEqual(REGION.geo.townAddressAliases, ["Hathaway Pines"]);
-  assert.equal(REGION.geo.localIpCities.length, 15);
+  // 15 at extraction; widened to the rest of Calaveras County 2026-09-04 (the
+  // Valley Springs fix, see lib/geo.ts + scripts/test/geo.test.ts).
+  assert.equal(REGION.geo.localIpCities.length, 30);
+  assert.deepEqual(REGION.geo.hubIpCities, ["sacramento", "stockton", "lodi", "modesto", "sonora"]);
   assert.equal(REGION.sourceHostLabels["gocalaveras.com"], "GoCalaveras");
   assert.equal(REGION_OPS.emails.newsletterFrom, "newsletter@hwy4events.com");
   assert.equal(REGION_OPS.seo.gscPropertyDefault, "sc-domain:hwy4events.com");
