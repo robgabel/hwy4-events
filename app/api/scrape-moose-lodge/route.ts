@@ -473,7 +473,9 @@ export async function GET(request: Request) {
       // Upsert: existing dedup_key → update; otherwise insert
       const { data: existing } = await supabase
         .from("hwy4_events")
-        .select("id, notability_locked, times_locked")
+        .select(
+          "id, notability_locked, times_locked, visibility_locked, description_locked, price_locked"
+        )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
 
@@ -490,6 +492,29 @@ export async function GET(request: Request) {
           delete updateRow.start_time;
           delete updateRow.end_time;
         }
+        // HWY-24. The lodge's calendar is read by an LLM, so `visibility` is a
+        // model verdict re-derived every run: a members-only dinner or a
+        // volunteer work call that the model reads as public gets re-published
+        // to the open web, overwriting a human's correction. This is the
+        // privacy-shaped half of the lock family.
+        if (existing.visibility_locked) {
+          delete updateRow.visibility;
+        }
+        // The route writes `description` and `price` too, so it owes these two
+        // locks the same respect the shared upsert path gives them. Without
+        // this, a hand-corrected description or admission price on a lodge row
+        // silently reverted every Monday.
+        if (existing.description_locked) {
+          delete updateRow.description;
+        }
+        if (existing.price_locked) {
+          delete updateRow.price;
+        }
+        // Curation fields, never re-asserted by a scrape. `row` sets both false
+        // for the INSERT case, and leaving them in the UPDATE would clear a
+        // curator's Rob's Pick (and any weekly-collapse marker) on the next run.
+        delete updateRow.robs_pick;
+        delete updateRow.is_weekly;
         const { error } = await supabase
           .from("hwy4_events")
           .update(updateRow)
