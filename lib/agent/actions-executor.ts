@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgentActionRow } from "@/lib/agent/policy";
+import {
+  lockColumnsFor,
+  lockedViolations,
+  validateQaFixPayload,
+  type QaFixEventPayload,
+} from "@/lib/agent/qa-fix-event";
 
 // The action executor (PRD-agent-cockpit.md, Stage 1). Performs the same write a
 // human would do by hand, AFTER capturing before_snapshot for reversibility. The
@@ -42,6 +48,8 @@ export async function executeAction(
       return execCreateVenueRow(supabase, action.payload as CreateVenueRowPayload);
     case "flag_spam_submission":
       return execFlagSpam(supabase, action.payload as { submission_id?: string });
+    case "qa_fix_event":
+      return execQaFixEvent(supabase, action.payload as QaFixEventPayload);
     default:
       return { ok: false, error: `Unknown action type: ${action.type}` };
   }
@@ -80,9 +88,60 @@ export async function revertAction(
         .eq("id", action.target_id);
       return error ? { ok: false, error: error.message } : { ok: true };
     }
+    case "qa_fix_event": {
+      // before_snapshot holds exactly the columns the fix touched — writing it
+      // back restores the pre-fix values without disturbing anything else.
+      const snap = action.before_snapshot ?? null;
+      if (!snap || Object.keys(snap).length === 0) {
+        return { ok: false, error: "No before_snapshot recorded — cannot revert." };
+      }
+      const { error } = await supabase
+        .from("hwy4_events")
+        .update(snap)
+        .eq("id", action.target_id);
+      return error ? { ok: false, error: error.message } : { ok: true };
+    }
     default:
       return { ok: false, error: `Cannot revert unknown type: ${action.type}` };
   }
+}
+
+// Apply a persona-QA field fix to one hwy4_events row (lib/agent/qa-fix-event.ts
+// owns the column whitelist + lock rules). Snapshot-first so revert is exact.
+async function execQaFixEvent(
+  supabase: SupabaseClient,
+  p: QaFixEventPayload
+): Promise<ExecuteResult> {
+  const v = validateQaFixPayload(p);
+  if (!v.ok) return { ok: false, error: v.error };
+
+  const selectCols = ["id", ...v.columns, ...lockColumnsFor(v.columns)].join(", ");
+  const { data: before, error: readError } = await supabase
+    .from("hwy4_events")
+    .select(selectCols)
+    .eq("id", v.eventId)
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!before) return { ok: false, error: `Event ${v.eventId} not found.` };
+
+  const row = before as unknown as Record<string, unknown>;
+  const locked = lockedViolations(row, v.columns);
+  if (locked.length) {
+    return {
+      ok: false,
+      error: `Field(s) human-locked, fix by hand instead: ${locked.join(", ")}.`,
+    };
+  }
+
+  const { error } = await supabase.from("hwy4_events").update(v.updates).eq("id", v.eventId);
+  if (error) return { ok: false, error: error.message };
+
+  // Snapshot only the touched columns (not the lock flags — revert must not
+  // write them back).
+  const beforeSnapshot: Record<string, unknown> = {};
+  for (const c of v.columns) beforeSnapshot[c] = row[c] ?? null;
+
+  return { ok: true, targetTable: "hwy4_events", targetId: v.eventId, beforeSnapshot };
 }
 
 async function execCreateOrgRow(
