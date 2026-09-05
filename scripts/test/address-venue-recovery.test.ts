@@ -155,3 +155,77 @@ test("a generic venue with NO street address adopts nothing off text mentions", 
   assert.equal(ev.venue_name, "Unknown Venue");
   assert.equal(ev.town, "Arnold");
 });
+
+// ---------------------------------------------------------------------------
+// Registry-address correction (2026-09-05, the Mystic Saloon red run): a
+// name-matched registry venue whose scraped address shares the registry's
+// street number but asserts a DIFFERENT corridor town is carrying the
+// source's postal-city guess — the curated registry string wins, and the
+// venue's town rides with it.
+// ---------------------------------------------------------------------------
+
+test("a registry venue's scraped address with the same street number but a conflicting town adopts the registry address AND town", async () => {
+  const { normalizeEventLocation } = await load();
+  // Deliberate registry lock on mystic-saloon (4529 Highway 4, Avery, CA
+  // 95224) — the live shape: GoCalaveras says "4529 CA-4, Murphys, CA 95247".
+  const ev = {
+    name: "Live Music @ Howard's Mystic Saloon",
+    description: null,
+    date: "2026-09-05",
+    town: "Avery",
+    venue_name: "Howard's Mystic Saloon",
+    address: "4529 CA-4, Murphys, CA 95247",
+    start_time: "18:00",
+    end_time: null,
+    price: null,
+    event_url: "https://www.gocalaveras.com/events/live-music-howards-mystic-saloon/",
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "4529 Highway 4, Avery, CA 95224");
+  assert.equal(ev.town, "Avery");
+  assert.equal(ev.venue_name, "Howard's Mystic Saloon");
+});
+
+test("a DIFFERENT street number under a registry venue's name is left alone", async () => {
+  const { normalizeEventLocation } = await load();
+  // A real discrepancy (the event claims another location) stays visible for
+  // a human — never silently rewritten.
+  const ev = {
+    name: "Offsite Party",
+    description: null,
+    date: "2026-09-05",
+    town: "Avery",
+    venue_name: "Howard's Mystic Saloon",
+    address: "123 Main St, Murphys, CA 95247",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "other",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "123 Main St, Murphys, CA 95247");
+  assert.equal(ev.town, "Avery");
+});
+
+test("an address whose town AGREES with the registry is untouched however it's formatted", async () => {
+  const { normalizeEventLocation } = await load();
+  // The Brice comma-variant every GoCalaveras row carries: same number, same
+  // town, different punctuation — must NOT rewrite (zero steady-state churn).
+  const ev = {
+    name: "Hilltop Concert",
+    description: null,
+    date: "2026-10-04",
+    town: "Murphys",
+    venue_name: "Brice Station Vineyards",
+    address: "3353 East Highway 4, Murphys CA 95247",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "3353 East Highway 4, Murphys CA 95247");
+});
