@@ -1,0 +1,52 @@
+name: QA schema drift
+
+# lib/agent/qa-fix-event.ts whitelists the hwy4_events columns the persona-QA
+# agent may propose fixing. It is a plain string array, so the unit tests can
+# check its shape but never its truth — a column dropped by a migration leaves
+# the whitelist green and wrong.
+#
+# That is not hypothetical: HWY-19 dropped `importance` on 2026-08-18 while
+# PR #221 sat open, and the stale whitelist merged seven weeks later with a
+# fully green suite. An approved fix touching it would have failed on UPDATE.
+#
+# The Tests workflow has no Supabase credentials (by design — the unit suite is
+# pure and offline), so this is a separate daily job that does have them.
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # 7 AM UTC — before the 8 AM scrape and the daily QA run
+  pull_request:
+    paths:
+      - 'lib/agent/qa-fix-event.ts'
+      - 'scripts/check-qa-schema-drift.ts'
+      - '.github/workflows/qa-schema-drift.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Same two-install dance as test.yml: scripts/ imports root lib/ modules.
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install scripts dependencies
+        run: npm install
+        working-directory: scripts
+
+      - name: Check QA whitelist against the live schema
+        run: npx tsx check-qa-schema-drift.ts
+        working-directory: scripts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Drift posts a loud alert as well as failing the job (HWY-18).
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
