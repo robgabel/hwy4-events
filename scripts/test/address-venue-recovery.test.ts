@@ -155,3 +155,166 @@ test("a generic venue with NO street address adopts nothing off text mentions", 
   assert.equal(ev.venue_name, "Unknown Venue");
   assert.equal(ev.town, "Arnold");
 });
+
+// ---------------------------------------------------------------------------
+// Registry-address correction (2026-09-05, the Mystic Saloon red run): a
+// name-matched registry venue whose scraped address shares the registry's
+// street number but asserts a DIFFERENT corridor town is carrying the
+// source's postal-city guess — the curated registry string wins, and the
+// venue's town rides with it.
+// ---------------------------------------------------------------------------
+
+test("a registry venue's scraped address with the same street number but a conflicting town adopts the registry address AND town", async () => {
+  const { normalizeEventLocation } = await load();
+  // Deliberate registry lock on mystic-saloon (4529 Highway 4, Avery, CA
+  // 95224) — the live shape: GoCalaveras says "4529 CA-4, Murphys, CA 95247".
+  const ev = {
+    name: "Live Music @ Howard's Mystic Saloon",
+    description: null,
+    date: "2026-09-05",
+    town: "Avery",
+    venue_name: "Howard's Mystic Saloon",
+    address: "4529 CA-4, Murphys, CA 95247",
+    start_time: "18:00",
+    end_time: null,
+    price: null,
+    event_url: "https://www.gocalaveras.com/events/live-music-howards-mystic-saloon/",
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "4529 Highway 4, Avery, CA 95224");
+  assert.equal(ev.town, "Avery");
+  assert.equal(ev.venue_name, "Howard's Mystic Saloon");
+});
+
+test("a DIFFERENT street number under a registry venue's name is left alone", async () => {
+  const { normalizeEventLocation } = await load();
+  // A real discrepancy (the event claims another location) stays visible for
+  // a human — never silently rewritten.
+  const ev = {
+    name: "Offsite Party",
+    description: null,
+    date: "2026-09-05",
+    town: "Avery",
+    venue_name: "Howard's Mystic Saloon",
+    address: "123 Main St, Murphys, CA 95247",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "other",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "123 Main St, Murphys, CA 95247");
+  assert.equal(ev.town, "Avery");
+});
+
+test("an address whose town AGREES with the registry is untouched however it's formatted", async () => {
+  const { normalizeEventLocation } = await load();
+  // The Brice comma-variant every GoCalaveras row carries: same number, same
+  // town, different punctuation — must NOT rewrite (zero steady-state churn).
+  const ev = {
+    name: "Hilltop Concert",
+    description: null,
+    date: "2026-10-04",
+    town: "Murphys",
+    venue_name: "Brice Station Vineyards",
+    address: "3353 East Highway 4, Murphys CA 95247",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "3353 East Highway 4, Murphys CA 95247");
+});
+
+test("the town RIDES with the adopted registry address (mutation lock M4)", async () => {
+  const { normalizeEventLocation } = await load();
+  // Same live shape but with the town label ALSO wrong on the way in — the
+  // prior fixture's input town was already Avery, so deleting the town
+  // adoption passed it trivially (review of #278, mutant M4).
+  const ev = {
+    name: "Live Music @ Howard's Mystic Saloon",
+    description: null,
+    date: "2026-09-05",
+    town: "Murphys",
+    venue_name: "Howard's Mystic Saloon",
+    address: "4529 CA-4, Murphys, CA 95247",
+    start_time: "18:00",
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "4529 Highway 4, Avery, CA 95224");
+  assert.equal(ev.town, "Avery");
+});
+
+test("an address that names NO town is untouched (mutation lock M3)", async () => {
+  const { normalizeEventLocation } = await load();
+  // "names none" half of the contract: without the non-null town guard the
+  // arm would rewrite this real live shape (Copperopolis Town Square, whose
+  // address states no city). Registry lock on copperopolis-town-square.
+  const ev = {
+    name: "Saturday Night Music",
+    description: null,
+    date: "2026-09-12",
+    town: "Copperopolis",
+    venue_name: "Copperopolis Town Square",
+    address: "100 Town Square Road",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "100 Town Square Road");
+  assert.equal(ev.town, "Copperopolis");
+});
+
+test("the correction is exact-NAME-anchored — a superstring of an alias does not fire (mutation lock M6)", async () => {
+  const { normalizeEventLocation } = await load();
+  const ev = {
+    name: "Live Music",
+    description: null,
+    date: "2026-09-05",
+    town: "Avery",
+    venue_name: "Howard's Mystic Saloon Bar",
+    address: "4529 CA-4, Murphys, CA 95247",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "4529 CA-4, Murphys, CA 95247");
+  assert.equal(ev.town, "Avery");
+});
+
+test("a letter-suffixed street number is NOT the same number (448 vs 448B)", async () => {
+  const { normalizeEventLocation } = await load();
+  // leadingStreetNumber keeps the suffix: the registry holds two different
+  // venues at 448 and 448B one street apart, so dropping it would anchor
+  // them together (review of #278). A registry venue at 448B must not adopt
+  // over an event address at bare 448 in another town.
+  const ev = {
+    name: "Live Music Upstairs",
+    description: null,
+    date: "2026-09-12",
+    town: "Murphys",
+    venue_name: "Boyle MacDonald Wines",
+    address: "448 Main St, Arnold, CA 95223",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "448 Main St, Arnold, CA 95223");
+});

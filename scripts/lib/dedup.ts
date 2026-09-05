@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./supabase-admin.js";
 import type { ExtractedEvent } from "./extract.js";
-import { KNOWN_VENUES } from "./venues.js";
+import { KNOWN_VENUES, type KnownVenue } from "./venues.js";
+import { TOWNS } from "../../lib/towns.js";
 import { isGenericVenue, matchVenue, resolveVenueKey } from "./venue-matcher.js";
 import { isOutOfCorridor } from "./corridor.js";
 import { capSeriesHorizon } from "./ingest-horizon.js";
@@ -103,17 +104,38 @@ function looksLikeStreetAddress(s: string | null | undefined): boolean {
 }
 
 /**
- * Look up a venue's registered address by matching venue_name or any alias
- * against KNOWN_VENUES.
+ * Look up the registry venue a venue_name names (canonical or alias, exact
+ * lowercase match — deliberately NAME-anchored, no address/text layers, so it
+ * only answers "does this string itself name a registered venue").
  */
-function findRegisteredAddress(venueName: string | null | undefined): string | null {
+function findRegisteredVenue(venueName: string | null | undefined): KnownVenue | null {
   if (!venueName) return null;
   const target = venueName.toLowerCase().trim();
   for (const v of Object.values(KNOWN_VENUES)) {
-    if (v.canonical.toLowerCase() === target) return v.address ?? null;
+    if (v.canonical.toLowerCase() === target) return v;
     for (const a of v.aliases) {
-      if (a === target) return v.address ?? null;
+      if (a === target) return v;
     }
+  }
+  return null;
+}
+
+/** Leading street number (≥2 digits, same floor as `sameStreetNumber` in
+ *  lib/event-identity.ts — a 1-digit number is too weak an anchor). Keeps a
+ *  letter suffix as part of the token: 448 and 448B are DIFFERENT addresses
+ *  (both live in the registry, one street apart), so dropping the suffix
+ *  would anchor them together (review of #278). Compared case-insensitively. */
+function leadingStreetNumber(addr: string): string | null {
+  const m = addr.trim().match(/^(\d{2,}[A-Za-z]?)\s/);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/** First corridor town named inside a string (the location sanity check's own
+ *  test), or null. */
+function corridorTownIn(s: string): string | null {
+  const lower = s.toLowerCase();
+  for (const t of TOWNS) {
+    if (lower.includes(t.toLowerCase())) return t;
   }
   return null;
 }
@@ -270,10 +292,40 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
   // Registry fill-in. Fill when the address is missing OR imprecise — a
   // town-only string like "Murphys, CA" / "Avery, CA 95224" carries no street
   // number and pins the map to the town centroid, so a registry street address
-  // is strictly better. Precise (house-numbered) addresses are left untouched.
+  // is strictly better. Precise (house-numbered) addresses are left untouched —
+  // with ONE correction (2026-09-05, the Mystic Saloon red run): when the
+  // venue_name itself NAMES a registry venue and the scraped address shares
+  // that venue's street number but asserts a DIFFERENT corridor town, the
+  // scraped string is the source's postal-city guess over the curated
+  // location. GoCalaveras listed "Live Music @ Howard's Mystic Saloon" at
+  // "4529 CA-4, Murphys, CA 95247"; the registry (a human) says 4529 Highway
+  // 4, Avery, CA 95224 — same door, wrong town+ZIP — and venue detection had
+  // correctly set town=Avery, so the row failed the location sanity check as
+  // a town/address conflict every scrape re-asserted. Same street number =
+  // same physical spot (the sameStreetNumber philosophy), so the registry
+  // string wins and the venue's town rides with it. A DIFFERENT street
+  // number is left alone (that's a real discrepancy for a human), and an
+  // address whose named town AGREES with the registry (or names none) is
+  // untouched however it's formatted — so this rewrites nothing at steady
+  // state and cannot churn rows over comma placement.
   if (!looksLikeStreetAddress(event.address)) {
-    const registered = findRegisteredAddress(event.venue_name);
-    if (registered) event.address = registered;
+    const registered = findRegisteredVenue(event.venue_name);
+    if (registered?.address) event.address = registered.address;
+  } else {
+    const registered = findRegisteredVenue(event.venue_name);
+    if (registered?.address && registered.town) {
+      const evNum = leadingStreetNumber(event.address as string);
+      const addrTown = corridorTownIn(event.address as string);
+      if (
+        evNum &&
+        evNum === leadingStreetNumber(registered.address) &&
+        addrTown &&
+        addrTown !== registered.town
+      ) {
+        event.address = registered.address;
+        event.town = registered.town;
+      }
+    }
   }
   // Strip calendar-widget junk (Add to calendar / Google Calendar / iCal / …)
   // AND reseller junk (markdown artifacts, a doubled town name, a fake-local
@@ -765,11 +817,13 @@ export function buildExactMatchUpdate(
     // what the row will ACTUALLY carry (kept name and/or kept town) — never
     // the incoming shape's hash beside kept fields (the name↔key-mismatch
     // rule from review finding N5, extended to town). Known theoretical
-    // caveat (review of #275, NB-2): a SID-LESS source whose degraded scrape
-    // kept a town different from its own label would miss the exact-key
-    // lookup next run; no live source has that shape (every generic-venue
-    // writer stamps a source_event_id), and reconcile + the audit catch the
-    // resulting dup if one ever appears.
+    // caveat (review of #275 NB-2, re-scoped by #278): a SID-LESS source
+    // whose write moves the town — the steal guard keeping a stored town, or
+    // the registry-address correction in normalizeEventLocation adopting the
+    // registry's — would miss the exact-key lookup next run. No live source
+    // has either shape (every generic-venue writer stamps a source_event_id,
+    // and the sid-less seed sources all agree with their venues' registry
+    // towns); worst case is a one-day transient dup that reconcile heals.
     dedup_key:
       keepName || keepVenue
         ? generateDedupKey(writtenName, event.date, writtenTown)
