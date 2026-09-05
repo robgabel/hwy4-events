@@ -1,26 +1,62 @@
 import { supabaseAdmin } from "./supabase-admin.js";
 import { getFacebookStatus } from "./facebook.js";
 import { isGenericVenue } from "./venue-matcher.js";
+import {
+  classifySource,
+  nightlyOrgSlugs,
+  type SourceVerdict,
+} from "./source-ownership.js";
 
 /**
- * org_slugs that still own historical rows but have NO scraper behind them, so
- * "not scraped in N days" is not a fault to fix — there is nothing to run.
+ * PostgREST caps an unbounded select at 1,000 rows, so reading a whole column
+ * to derive its distinct values silently truncates the moment the table grows
+ * past that — and it had. On 2026-09-05 hwy4_events held 1,844 rows, and this
+ * report saw exactly the 13 org_slugs that fit in the first page: every source
+ * sorting after "gocalaveras" was invisible, visit-murphys (108 upcoming rows,
+ * the corridor's biggest feed), red-cross, sequoia-woods, murphys-irish-pub,
+ * mystic-saloon and moose-lodge among them. The report whose entire job is to
+ * notice a silently-failing scraper could not have noticed those six fail.
  *
- * The health list is derived from every org_slug that has ever written an event,
- * so a retired source warns forever otherwise: these three were generating 4 of
- * the report's 11 daily warnings while nothing was failing. A report that cries
- * wolf daily is a report nobody reads.
+ * It hid live findings too: hinterhaus-distilling and murphys-library had both
+ * drained to zero future events with nothing saying so.
  *
- * fb-group-*: a June 2026 one-off run wrote 4 rows and no scraper for them was
- * ever committed. Corridor Facebook groups are now read by hwy4-fb-groups, which
- * lands pending event_submissions rather than events, so it owns no org_slug and
- * these will never be written again.
+ * A sensor that can fail silently is not a sensor (HWY-18), so this pages to
+ * exhaustion and throws on a query error rather than degrading to an empty
+ * list — which the old code did too, since it never checked `error` and an
+ * empty result prints "No sources found in database." and returns clean.
  */
-const RETIRED_SOURCES = new Set([
-  "fb-group-uh4ccc",
-  "fb-group-388511408445423",
-  "fb-group-upperhwy4",
-]);
+const ORG_SLUG_PAGE = 1000;
+/** Bounds the loop below at ~1M rows so a misbehaving API can't spin forever. */
+const ORG_SLUG_MAX_PAGES = 1000;
+
+async function listOrgSlugsWithEvents(): Promise<string[]> {
+  const slugs = new Set<string>();
+  let from = 0;
+  for (let page = 0; page < ORG_SLUG_MAX_PAGES; page++) {
+    // The order is what makes range() paging correct: without it Postgres may
+    // return rows in any order and pages can overlap or skip.
+    const { data, error } = await supabaseAdmin
+      .from("hwy4_events")
+      .select("org_slug")
+      .not("org_slug", "is", null)
+      .order("org_slug", { ascending: true })
+      .range(from, from + ORG_SLUG_PAGE - 1);
+    if (error) {
+      throw new Error(`Health report could not list sources: ${error.message}`);
+    }
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (row.org_slug) slugs.add(row.org_slug);
+    }
+    // Advance by what actually came back, not by the page size we asked for.
+    // The server's own row cap (Supabase's db-max-rows) can be lower than the
+    // window we request, and a short page is then NOT the end of the data —
+    // treating it as one would rebuild the exact truncation this replaces.
+    if (rows.length === 0) break;
+    from += rows.length;
+  }
+  return [...slugs];
+}
 
 interface SourceHealth {
   org_slug: string;
@@ -31,7 +67,16 @@ interface SourceHealth {
 
 /**
  * Run post-scrape health checks and print a summary report.
- * Flags sources with zero future events or stale scrape timestamps.
+ *
+ * Lists EVERY source — each org_slug that owns rows, plus every slug the
+ * nightly dispatch can write even if it has never produced one — and asks
+ * classifySource() what, if anything, a human should do about each. Warnings
+ * are therefore per-owner rather than one staleness rule for all; see
+ * scripts/lib/source-ownership.ts for why one rule could not work.
+ *
+ * scrape.ts catches a throw from here and logs it without failing the step:
+ * the scrape itself already succeeded by this point, and the location sanity
+ * check is the gate that turns a run red.
  */
 export async function runHealthCheck(
   scrapedSources?: string[]
@@ -41,20 +86,22 @@ export async function runHealthCheck(
   const today = new Date().toISOString().slice(0, 10);
   const now = Date.now();
 
-  // Get all org_slugs that have ever had events
-  const { data: allOrgs } = await supabaseAdmin
-    .from("hwy4_events")
-    .select("org_slug")
-    .not("org_slug", "is", null);
-
-  const orgSlugs = [...new Set((allOrgs || []).map((r) => r.org_slug))];
+  // Every slug that owns rows, UNION every slug the nightly dispatch can
+  // write. The union is what surfaces a scraper that has never produced a
+  // single row — the loudest possible failure, and the one the old
+  // derive-from-existing-rows list could not represent at all.
+  const ran = nightlyOrgSlugs(scrapedSources ?? []);
+  const orgSlugs = [
+    ...new Set([...(await listOrgSlugsWithEvents()), ...ran]),
+  ];
+  const ranThisRun = new Set(ran);
 
   if (orgSlugs.length === 0) {
     console.log("No sources found in database.");
     return;
   }
 
-  const healthResults: SourceHealth[] = [];
+  const healthResults: (SourceHealth & { verdict: SourceVerdict })[] = [];
   const warnings: string[] = [];
 
   for (const slug of orgSlugs) {
@@ -80,70 +127,43 @@ export async function runHealthCheck(
       ? Math.round((now - new Date(latestScraped).getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
+    const verdict = classifySource({
+      orgSlug: slug,
+      futureEventCount: futureCount ?? 0,
+      daysSinceScrape: daysSince,
+      // Compared against the org_slugs the dispatch keys actually write, not
+      // the keys themselves — hwy4-fb-discover writes fb-discover-arnold.
+      ranThisRun: ranThisRun.has(slug),
+    });
+
     healthResults.push({
       org_slug: slug,
       future_event_count: futureCount ?? 0,
       latest_scraped_at: latestScraped,
       days_since_scrape: daysSince,
+      verdict,
     });
+    warnings.push(...verdict.warnings);
   }
 
   // Print table
   console.log(
-    "Source".padEnd(30) +
-    "Future Events".padEnd(16) +
-    "Last Scraped".padEnd(24) +
+    "Source".padEnd(32) +
+    "Future".padEnd(9) +
+    "Owner".padEnd(15) +
+    "Last Write".padEnd(14) +
     "Status"
   );
-  console.log("-".repeat(80));
+  console.log("-".repeat(90));
 
   for (const h of healthResults.sort((a, b) => a.org_slug.localeCompare(b.org_slug))) {
-    const scrapedStr = h.latest_scraped_at
-      ? `${h.days_since_scrape}d ago`
-      : "never";
-
-    let status = "OK";
-
-    if (RETIRED_SOURCES.has(h.org_slug)) {
-      // Listed for the record, but never a warning: nothing runs for it.
-      console.log(
-        h.org_slug.padEnd(30) +
-        String(h.future_event_count).padEnd(16) +
-        scrapedStr.padEnd(24) +
-        "RETIRED (no scraper)"
-      );
-      continue;
-    }
-
-    // Zero future events for a source that was just scraped
-    if (h.future_event_count === 0 && scrapedSources?.includes(h.org_slug)) {
-      status = "WARN: 0 future events";
-      warnings.push(
-        `${h.org_slug}: Scraper ran but produced 0 future events. ` +
-        `Check if the source has changed or is offline.`
-      );
-    } else if (h.future_event_count === 0) {
-      status = "WARN: 0 future events";
-      warnings.push(`${h.org_slug}: No future events in database.`);
-    }
-
-    // Staleness check: >7 days since last scrape
-    if (h.days_since_scrape !== null && h.days_since_scrape > 7) {
-      status = `STALE: ${h.days_since_scrape}d`;
-      warnings.push(
-        `${h.org_slug}: Not scraped in ${h.days_since_scrape} days. ` +
-        `Scraper may be silently failing.`
-      );
-    } else if (h.days_since_scrape === null) {
-      status = "STALE: never scraped";
-      warnings.push(`${h.org_slug}: Has events but no last_scraped_at timestamp.`);
-    }
-
+    const scrapedStr = h.latest_scraped_at ? `${h.days_since_scrape}d ago` : "never";
     console.log(
-      h.org_slug.padEnd(30) +
-      String(h.future_event_count).padEnd(16) +
-      scrapedStr.padEnd(24) +
-      status
+      h.org_slug.padEnd(32) +
+      String(h.future_event_count).padEnd(9) +
+      h.verdict.owner.padEnd(15) +
+      scrapedStr.padEnd(14) +
+      h.verdict.status
     );
   }
 
@@ -186,12 +206,23 @@ export async function runHealthCheck(
  * of registry work is obvious. Print-only — does not fail the build.
  */
 async function reportDataQualityIndex(today: string): Promise<void> {
-  const { data: rows } = await supabaseAdmin
+  const { data: rows, count } = await supabaseAdmin
     .from("hwy4_events")
-    .select("venue_name, address, source_name, town, name, date")
+    .select("venue_name, address, source_name, town, name, date", { count: "exact" })
     .gte("date", today);
 
   if (!rows || rows.length === 0) return;
+
+  // Same PostgREST 1,000-row ceiling that hid ten sources from the report
+  // above. The upcoming set is ~330 today so this does not bite, but an
+  // under-count here would read as "the pile shrank" — the most flattering
+  // possible way for a quality metric to break. Say so instead.
+  if (count !== null && count > rows.length) {
+    console.warn(
+      `  ⚠ Data quality index truncated: counted ${rows.length} of ${count} ` +
+        `future events (PostgREST row cap). Figures below are an UNDER-count.`
+    );
+  }
 
   const unresolved = rows.filter((r) => isGenericVenue(r.venue_name ?? ""));
   const noAddress = rows.filter(
