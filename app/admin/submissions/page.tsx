@@ -13,6 +13,7 @@ import {
 } from "./actions";
 import type { SubmissionReply } from "@/lib/agent/submission-reply";
 import EditableReplyPanel from "@/components/admin/EditableReplyPanel";
+import { formatPhone, telHref } from "@/lib/submitter-contact";
 import { readFlash } from "@/lib/admin/flash";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,7 @@ type Submission = {
   poster_url: string | null;
   source: string | null;
   raw_email: RawEmail | null;
+  submitter_phone: string | null;
   submitter_name: string | null;
   submitter_email: string | null;
   created_at: string;
@@ -108,7 +110,7 @@ async function loadData(): Promise<{ submissions: Submission[]; matched: Map<str
   const { data } = await supabase
     .from("event_submissions")
     .select(
-      "id, event_name, event_date, start_time, venue_name, town, description, category, event_url, poster_url, source, raw_email, submitter_name, submitter_email, created_at, ai_verdict, ai_confidence, ai_headline, ai_matched_event_id, ai_analysis, ai_analyzed_at, ai_error, ai_reply"
+      "id, event_name, event_date, start_time, venue_name, town, description, category, event_url, poster_url, source, raw_email, submitter_name, submitter_email, submitter_phone, created_at, ai_verdict, ai_confidence, ai_headline, ai_matched_event_id, ai_analysis, ai_analyzed_at, ai_error, ai_reply"
     )
     .eq("status", "pending")
     .order("event_date", { ascending: true });
@@ -577,6 +579,23 @@ function SubmissionCard({
               {" ("}
               <a href={`mailto:${sub.submitter_email}?subject=${encodeURIComponent(`Your Hwy4Events submission: ${sub.event_name}`)}`} style={{ color: "#5a8fa8" }}>
                 {sub.submitter_email}
+              </a>
+              {")"}
+            </>
+          ) : sub.submitter_phone ? (
+            // Phone-only submitter: the agent's reply draft and its Gmail
+            // compose link are useless here, so give the two things that do
+            // work. Without this the contact would be invisible on the card and
+            // the submission unfollowable, which is the whole reason the phone
+            // option exists.
+            <>
+              {" ("}
+              <a href={`tel:${telHref(sub.submitter_phone)}`} style={{ color: "#5a8fa8" }}>
+                {formatPhone(sub.submitter_phone)}
+              </a>
+              {" · "}
+              <a href={`sms:${telHref(sub.submitter_phone)}`} style={{ color: "#5a8fa8" }}>
+                text
               </a>
               {")"}
             </>

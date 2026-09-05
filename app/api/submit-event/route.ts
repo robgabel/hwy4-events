@@ -3,6 +3,7 @@ import { NextResponse, after } from "next/server";
 import { TOWNS } from "@/lib/types";
 import { triageSubmissionById } from "@/lib/agent/submission-triage";
 import { normalizeUrl } from "@/lib/url";
+import { resolveContact, isContactError, rateLimitKey } from "@/lib/submitter-contact";
 
 // Allow the after() hook (web search + Sonnet) to run in the background of this
 // invocation after the fast response. If it overruns, the cron backstop catches it.
@@ -74,7 +75,11 @@ export async function POST(request: Request) {
   // URL" when a bare website was entered).
   const event_url = normalizeUrl(str("event_url"));
   const submitter_name = str("submitter_name");
-  const submitter_email = str("submitter_email");
+  // The form now asks for ONE contact method (email or phone) rather than an
+  // email only. `submitter_email` is still accepted so an older cached form, or
+  // any other client posting the historical shape, keeps working.
+  const contact_method = str("contact_method") || "email";
+  const contact_value = str("contact_value") || str("submitter_email");
   const flyer = formData.get("flyer");
 
   // Validate required fields
@@ -88,20 +93,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Town is required" }, { status: 400 });
   }
 
-  // Email is required so we can follow up if we have a question about the event
-  // before publishing it. Validate presence and a basic shape server-side — the
-  // form's `required` attribute is a convenience, not a guarantee.
-  if (!submitter_email?.trim()) {
+  // A name and one working contact method are required so a submission can
+  // actually be followed up on. Both are validated server-side — the form's
+  // `required` attributes are a convenience, not a guarantee.
+  if (!submitter_name) {
     return NextResponse.json(
-      { error: "Email is required so we can reach you with any questions" },
+      { error: "Your name is required so we know who sent this in" },
       { status: 400 }
     );
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(submitter_email.trim())) {
-    return NextResponse.json(
-      { error: "Please enter a valid email address" },
-      { status: 400 }
-    );
+
+  // Email OR phone, never both: which column is filled IS the stated preference.
+  const contact = resolveContact({ method: contact_method, value: contact_value });
+  if (isContactError(contact)) {
+    return NextResponse.json({ error: contact.error }, { status: 400 });
   }
 
   // Validate town
@@ -121,19 +126,23 @@ export async function POST(request: Request) {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  // Per-email daily cap: past the honeypot, a single address can still loop the
+  // Per-submitter daily cap: past the honeypot, one submitter can still loop the
   // form and drive one web-search + model triage per submission. Cap how many a
-  // given email can file in 24h. Fails OPEN — a transient count error must never
-  // block a genuine neighbor — but a scripted address hits the wall fast.
-  const SUBMISSIONS_PER_EMAIL_PER_DAY = 10;
+  // given contact can file in 24h. Fails OPEN — a transient count error must
+  // never block a genuine neighbor — but a scripted submitter hits the wall fast.
+  //
+  // Keyed on whichever contact they gave. Keying on the email column alone would
+  // leave the phone path completely uncapped.
+  const SUBMISSIONS_PER_SUBMITTER_PER_DAY = 10;
   {
+    const limitKey = rateLimitKey(contact);
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { count, error: countErr } = await supabase
       .from("event_submissions")
       .select("id", { count: "exact", head: true })
-      .eq("submitter_email", submitter_email)
+      .eq(limitKey.column, limitKey.value)
       .gte("created_at", since);
-    if (!countErr && (count ?? 0) >= SUBMISSIONS_PER_EMAIL_PER_DAY) {
+    if (!countErr && (count ?? 0) >= SUBMISSIONS_PER_SUBMITTER_PER_DAY) {
       return NextResponse.json(
         { error: "You've submitted several events today — thanks! Please try again tomorrow." },
         { status: 429 }
@@ -186,7 +195,8 @@ export async function POST(request: Request) {
       event_url: event_url || null,
       poster_url: posterUrl,
       submitter_name: submitter_name || null,
-      submitter_email: submitter_email || null,
+      submitter_email: contact.email,
+      submitter_phone: contact.phone,
     })
     .select("id")
     .single();

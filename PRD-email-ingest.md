@@ -95,7 +95,21 @@ Merge the PR to `main`; Vercel auto-deploys. Until deployed, `https://hwy4events
 - `RESEND_API_KEY` — confirm set (newsletter uses it; the fetch-back needs it). Already present: `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SLACK_WEBHOOK_URL`.
 
 ### Step 5 — smoke-test
-Resend Webhooks → **Send test event**. An unsigned/forged request `401`s; a properly signed `email.received` from a non-allowlisted sender `200`s with `{"ignored":"sender not allowlisted"}` and writes nothing. (Forge a signed request with the exported `signWebhook`.)
+**There is no "Send test event" in Resend's webhook UI** (verified 2026-09-05: the `⋯` menu offers only Edit / Disable / Rotate signing secret / Duplicate / Delete). An earlier draft of this runbook said otherwise. Smoke-test with an unsigned POST instead — it distinguishes all three failure modes without needing the secret:
+
+```sh
+curl -i -X POST https://hwy4events.com/api/inbound-email \
+  -H "Content-Type: application/json" -d '{}'
+```
+
+| Response | Meaning |
+|---|---|
+| `404` | not deployed yet — merge + let Vercel build |
+| `503 {"error":"Inbound email not configured"}` | `RESEND_INBOUND_WEBHOOK_SECRET` is unset (or the deploy predates it) |
+| `500` | a secret is set but `RESEND_API_KEY` / `ANTHROPIC_API_KEY` / Supabase env is missing |
+| **`401 {"error":"Invalid signature"}`** | **the good case** — route live, secret loaded, unsigned request correctly refused |
+
+To exercise the signed path too, forge a request with the exported `signWebhook` from `lib/inbound-email.ts`; otherwise go straight to Step 6, which covers it with a real delivery.
 
 ### Step 6 — real end-to-end test
 1. From an allowlisted address, email a flyer (image + a date in the body) to the `.resend.app` address.

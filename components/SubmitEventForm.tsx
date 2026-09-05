@@ -17,7 +17,8 @@ interface FormData {
   category: string;
   event_url: string;
   submitter_name: string;
-  submitter_email: string;
+  contact_method: "email" | "phone";
+  contact_value: string;
 }
 
 const INITIAL_FORM: FormData = {
@@ -30,7 +31,8 @@ const INITIAL_FORM: FormData = {
   category: "",
   event_url: "",
   submitter_name: "",
-  submitter_email: "",
+  contact_method: "email",
+  contact_value: "",
 };
 
 export default function SubmitEventForm() {
@@ -271,26 +273,55 @@ export default function SubmitEventForm() {
         </div>
 
         <div>
-          <label className={labelClass}>Your Name</label>
+          <label className={labelClass}>
+            Your Name <span className="text-sunset">*</span>
+          </label>
           <input
             type="text"
+            required
             value={form.submitter_name}
             onChange={(e) => update("submitter_name", e.target.value)}
-            placeholder="Optional"
+            placeholder="Jane Alvarez"
             className={inputClass}
           />
         </div>
 
         <div>
           <label className={labelClass}>
-            Your Email <span className="text-sunset">*</span>
+            Best way to reach you <span className="text-sunset">*</span>
           </label>
+          <div className="mt-1 mb-2 flex gap-4">
+            {(["email", "phone"] as const).map((m) => (
+              <label
+                key={m}
+                className="flex cursor-pointer items-center gap-2 text-sm text-forest"
+              >
+                <input
+                  type="radio"
+                  name="contact_method"
+                  value={m}
+                  checked={form.contact_method === m}
+                  onChange={() => {
+                    // Clear the value on switch: an email sitting in a tel field
+                    // (or the reverse) would fail validation with the previous
+                    // method's text still showing, which reads as a broken form.
+                    setForm((prev) => ({ ...prev, contact_method: m, contact_value: "" }));
+                    setError(null);
+                  }}
+                  className="cursor-pointer accent-pine"
+                />
+                {m === "email" ? "Email" : "Phone"}
+              </label>
+            ))}
+          </div>
           <input
-            type="email"
+            type={form.contact_method === "email" ? "email" : "tel"}
             required
-            value={form.submitter_email}
-            onChange={(e) => update("submitter_email", e.target.value)}
-            placeholder="you@example.com"
+            value={form.contact_value}
+            onChange={(e) => update("contact_value", e.target.value)}
+            placeholder={
+              form.contact_method === "email" ? "you@example.com" : "(209) 555-1234"
+            }
             className={inputClass}
           />
           <p className="mt-1 text-xs text-stone-light">
