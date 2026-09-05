@@ -7,6 +7,7 @@ import { getPublishedTownSlugs } from "@/app/towns/town-content";
 import { TEMPORAL_CONFIG } from "@/lib/date-windows";
 import { INTENT_CONFIG } from "@/lib/intent-pages";
 import { HOLIDAY_GUIDES } from "@/lib/holiday-pages";
+import { MARKET_GUIDES } from "@/lib/market-pages";
 import { renderUrlset, type SitemapUrl } from "@/lib/sitemap";
 import { getUpcomingEvents } from "@/lib/events-data";
 import { getSupabase } from "@/lib/supabase";
@@ -62,6 +63,14 @@ export async function GET() {
     // Evergreen holiday guides (HWY-6): year-less URLs that inherit each
     // year's expired July-4th event pages via lib/seasonal-redirects.ts.
     ...HOLIDAY_GUIDES.map((g) => ({
+      loc: `${SITE_URL}${g.path}`,
+      lastmod: todayISO,
+      changefreq: "weekly" as const,
+      priority: 0.8,
+    })),
+    // Evergreen farmers-market guides (HWY-31): year-less URLs that consolidate
+    // the equity a weekly market's dated event-instance pages kept splitting.
+    ...MARKET_GUIDES.map((g) => ({
       loc: `${SITE_URL}${g.path}`,
       lastmod: todayISO,
       changefreq: "weekly" as const,

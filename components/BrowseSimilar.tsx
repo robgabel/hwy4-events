@@ -5,6 +5,7 @@ import { townSlug } from "@/lib/slugs";
 import { getTownContent } from "@/app/towns/town-content";
 import { festivalGuideForEvent } from "@/lib/event-guides";
 import { holidayGuideForEvent } from "@/lib/holiday-pages";
+import { marketGuideForEvent } from "@/lib/market-pages";
 import { pacificToday } from "@/lib/date-windows";
 
 /**
@@ -26,6 +27,11 @@ export default function BrowseSimilar({ event }: { event: Hwy4Event }) {
   // July guide (the inbound link that keeps /arnold-4th-of-july etc. crawled).
   const holiday = holidayGuideForEvent(event);
   if (holiday) chips.unshift({ href: holiday.path, label: holiday.label });
+  // A farmers-market instance links to its evergreen guide. This is the link
+  // that consolidates the equity those dated instance pages were splitting
+  // seven ways, and it keeps the guide crawled all season (HWY-31).
+  const market = marketGuideForEvent(event);
+  if (market) chips.unshift({ href: market.path, label: market.label });
   if (isFreeEvent(event)) chips.push({ href: "/free", label: "Free events" });
   if (isDateNightEvent(event)) {
     chips.push({ href: "/date-night", label: "Date night" });

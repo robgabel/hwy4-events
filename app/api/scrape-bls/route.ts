@@ -110,13 +110,22 @@ function slugify(text: string): string {
     .substring(0, 60);
 }
 
+// HWY-25. This route raw-INSERTs rather than going through `upsertEvents`, so
+// it never gets `normalizeEventLocation`'s registry pass — whatever string this
+// returns is the venue_name that lands in the row, verbatim and forever. It
+// must therefore be a CANONICAL name from scripts/lib/venues.ts, not an alias:
+// "BLS Amphitheater" and "BLS Pool" are alias spellings, and rows carrying them
+// never resolve to a venue_key, so they get no venue hub page, no Places facts
+// and no street address. scripts/test/scraper-venue-literals.test.ts pins every
+// name returned here to the registry.
 function resolveVenue(hint: string | null): string {
   if (!hint) return "Snowflake Lodge";
   const lower = hint.toLowerCase();
   if (lower.includes("bistro")) return "Blue Lake Bistro";
-  if (lower.includes("amphitheater") || lower.includes("amphitheatre")) return "BLS Amphitheater";
+  if (lower.includes("amphitheater") || lower.includes("amphitheatre"))
+    return "Blue Lake Springs Amphitheater";
   if (lower.includes("lake") || lower.includes("beach")) return "Lodge Lake";
-  if (lower.includes("pool")) return "BLS Pool";
+  if (lower.includes("pool")) return "Blue Lake Springs Pool";
   if (lower.includes("lodge") || lower.includes("snowflake")) return "Snowflake Lodge";
   return "Snowflake Lodge";
 }
