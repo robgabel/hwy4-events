@@ -1,5 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
+import {
+  classifyStatus,
+  emptyTally,
+  retryDelayMs,
+  shouldTripCircuit,
+  summarizeEnrichment,
+  tallyOutcome,
+  type EnrichOutcome,
+} from "../lib/enrich-report.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { supabaseAdmin } from "../lib/supabase-admin.js";
 import { applyVenueDetection } from "../lib/venue-matcher.js";
@@ -372,6 +381,15 @@ async function fetchMonth(
   });
 
   if (!resp.ok) {
+    // Name throttling explicitly (HWY-32). The detail-page enrichment was being
+    // 429'd wholesale while these month calls kept succeeding, and telling those
+    // two apart in a log is the difference between "the feed is down" and "we
+    // are being rate-limited on detail pages only".
+    if (resp.status === 429) {
+      throw new Error(
+        `AJAX request RATE-LIMITED (429) for ${requestedLabel}. The month feed itself is being throttled, not just detail pages.`
+      );
+    }
     throw new Error(`AJAX request failed: ${resp.status}`);
   }
 
@@ -757,17 +775,41 @@ function findCorridorTownInString(s: string | null | undefined): string | null {
 export async function fetchEventDetails(
   eventUrl: string
 ): Promise<EnrichedDetails | null> {
+  return (await fetchEventDetailsResult(eventUrl)).details;
+}
+
+/** The same fetch, but reporting WHY it produced nothing (HWY-32). The plain
+ *  `fetchEventDetails` above keeps the old signature for
+ *  scripts/backfill-gocalaveras-details.ts; the scraper uses this one so a
+ *  429 wall can be counted and reported instead of silently reading as a
+ *  successful enrich. `retryAfterMs` is passed back so the caller can honor
+ *  the server's own backoff request. */
+export async function fetchEventDetailsResult(
+  eventUrl: string
+): Promise<{ details: EnrichedDetails | null; outcome: EnrichOutcome; retryAfterMs?: number }> {
   let html: string;
   try {
     const resp = await fetch(eventUrl, { headers: BROWSER_HEADERS });
     if (!resp.ok) {
+      const outcome = classifyStatus(resp.status);
       console.warn(`  enrich: ${eventUrl} returned ${resp.status}`);
-      return null;
+      return {
+        details: null,
+        outcome,
+        retryAfterMs:
+          outcome === "rate_limited"
+            ? retryDelayMs(
+                resp.headers.get("retry-after"),
+                ENRICH_RETRY_FALLBACK_MS,
+                ENRICH_RETRY_MAX_WAIT_MS
+              )
+            : undefined,
+      };
     }
     html = await resp.text();
   } catch (err) {
     console.warn(`  enrich fetch failed for ${eventUrl}:`, err);
-    return null;
+    return { details: null, outcome: "network_error" };
   }
 
   // Description: <div class='eventon_desc_in' itemprop='description'>…</div>
@@ -827,74 +869,140 @@ export async function fetchEventDetails(
       findCorridorTownInString(locAddr) ?? findCorridorTownInString(orgAddr);
   }
 
+  // A 200 that parsed. Whether it actually GAINED the event anything is decided
+  // by the caller (enrichEventDetails), which is what separates "enriched" from
+  // "empty" in the tally.
   return {
-    description,
-    locationName: locName,
-    locationAddress: locAddr,
-    organizerAddress: orgAddr,
-    imageUrl,
-    mergedAddress,
-    mergedTown,
+    details: {
+      description,
+      locationName: locName,
+      locationAddress: locAddr,
+      organizerAddress: orgAddr,
+      imageUrl,
+      mergedAddress,
+      mergedTown,
+    },
+    outcome: "enriched",
   };
 }
 
-/** Enrich a single event in place from its detail page. */
-async function enrichEventDetails(event: ExtractedEvent): Promise<void> {
-  if (!event.event_url || !event.event_url.includes("gocalaveras.com")) return;
-  const details = await fetchEventDetails(event.event_url);
-  if (!details) return;
+/** Enrich a single event in place from its detail page, reporting what happened
+ *  so the run can be counted honestly (HWY-32). */
+async function enrichEventDetails(
+  event: ExtractedEvent
+): Promise<{ outcome: EnrichOutcome; retryAfterMs?: number }> {
+  if (!event.event_url || !event.event_url.includes("gocalaveras.com")) {
+    return { outcome: "empty" };
+  }
+  const res = await fetchEventDetailsResult(event.event_url);
+  const details = res.details;
+  if (!details) return { outcome: res.outcome, retryAfterMs: res.retryAfterMs };
+
+  // "Enriched" means the page actually gave us something. A 200 that yields no
+  // usable field is `empty`, not a success — otherwise a markup change would
+  // read as a clean run forever.
+  let gained = false;
 
   if (details.description && details.description.length > (event.description?.length || 0)) {
     event.description = details.description;
+    gained = true;
   }
   if (details.locationName && event.venue_name === "Unknown Venue") {
     event.venue_name = details.locationName;
+    gained = true;
   }
   if (details.mergedAddress) {
     event.address = details.mergedAddress;
+    gained = true;
   }
   // mergedTown comes from a parsed "street, city, ST zip" — high-confidence,
   // so override even when current town is set (the original scraper's
   // fallback comma-split sometimes picks the wrong town).
   if (details.mergedTown) {
     event.town = details.mergedTown;
+    gained = true;
   }
   if (details.imageUrl) {
     event.image_url = details.imageUrl;
+    gained = true;
   }
+
+  return { outcome: gained ? "enriched" : "empty" };
 }
 
 // Detail-page enrichment with bounded concurrency. enrichEvents runs on EVERY
 // parsed event in a month (the whole county, before the corridor filter — see
-// fetchMonth), so a 6-month run is hundreds of detail fetches; the old strictly
-// sequential loop (one fetch + a 350ms sleep each) spent ~1-2 min in pure
-// throttle wait. Fetching ENRICH_CONCURRENCY pages at once, with a short pause
-// between batches, caps simultaneous load on gocalaveras.com (same ceiling as
-// the URL validator) while cutting wall-clock ~5x. Mirrors the polite-batch
-// pattern in lib/validate-urls.ts.
-const ENRICH_CONCURRENCY = 5; // concurrent detail-page fetches
-const ENRICH_BATCH_DELAY_MS = 350; // pause between batches (politeness throttle)
+// fetchMonth), so a 6-month run is hundreds of detail fetches; a strictly
+// sequential loop spent 1-2 min in pure throttle wait. Fetching
+// ENRICH_CONCURRENCY pages at once, with a pause between batches, caps
+// simultaneous load on gocalaveras.com while keeping wall-clock sane. Mirrors
+// the polite-batch pattern in lib/validate-urls.ts.
+//
+// Retuned 2026-09-05 (HWY-32) after a run where every request came back 429.
+// Concurrency down 5 -> 3 and the pause up 350 -> 500ms, plus Retry-After, one
+// gentle retry, and a circuit breaker. The breaker is what keeps the politeness
+// affordable: when the site is refusing everything, continuing costs the
+// Action's 20-minute budget and buys nothing, so we stop early and say so.
+// Enrichment re-runs daily, so partial coverage is fine; a silent shortfall is not.
+const ENRICH_CONCURRENCY = 3; // concurrent detail-page fetches
+const ENRICH_BATCH_DELAY_MS = 500; // pause between batches (politeness throttle)
+const ENRICH_RETRY_FALLBACK_MS = 1500; // wait before the single retry when no Retry-After
+const ENRICH_RETRY_MAX_WAIT_MS = 5000; // cap, so one hostile header can't park the scrape
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Enrich a batch of events from their detail pages with bounded concurrency. */
 async function enrichEvents(events: ExtractedEvent[]): Promise<void> {
   const toEnrich = events.filter((e) => e.event_url);
   if (toEnrich.length === 0) return;
 
+  const tally = emptyTally();
+  let consecutive429 = 0;
+  let broken = false;
+
   for (let i = 0; i < toEnrich.length; i += ENRICH_CONCURRENCY) {
+    if (broken) {
+      // Breaker already tripped: count the rest as skipped without firing a
+      // single further request.
+      tally.skipped += toEnrich.length - i;
+      break;
+    }
+
     const batch = toEnrich.slice(i, i + ENRICH_CONCURRENCY);
     // enrichEventDetails mutates each event in place and never throws (its fetch
     // + parse are internally guarded), so Promise.all won't reject on a bad page.
-    await Promise.all(batch.map((e) => enrichEventDetails(e)));
+    const results = await Promise.all(batch.map((e) => enrichEventDetails(e)));
+
+    // One gentle retry for the throttled ones, honoring Retry-After. Serial and
+    // bounded on purpose: retrying a rate-limited host in parallel is what got
+    // us throttled in the first place.
+    for (let j = 0; j < results.length; j++) {
+      if (results[j].outcome !== "rate_limited") continue;
+      await sleep(results[j].retryAfterMs ?? ENRICH_RETRY_FALLBACK_MS);
+      results[j] = await enrichEventDetails(batch[j]);
+    }
+
+    for (const r of results) {
+      tallyOutcome(tally, r.outcome);
+      if (r.outcome === "rate_limited") {
+        consecutive429++;
+        if (shouldTripCircuit(consecutive429)) broken = true;
+      } else {
+        consecutive429 = 0;
+      }
+    }
 
     // Pause between batches to stay polite (skip after the last batch).
-    if (i + ENRICH_CONCURRENCY < toEnrich.length) {
-      await new Promise((r) => setTimeout(r, ENRICH_BATCH_DELAY_MS));
+    if (!broken && i + ENRICH_CONCURRENCY < toEnrich.length) {
+      await sleep(ENRICH_BATCH_DELAY_MS);
     }
   }
 
-  console.log(
-    `  Enriched ${toEnrich.length}/${events.length} events from detail pages`
-  );
+  // The honest summary. Before HWY-32 this line printed the ATTEMPT count, so a
+  // run in which every request was rejected still reported "130/130".
+  const { line, warning } = summarizeEnrichment(tally, toEnrich.length);
+  console.log(line);
+  if (warning) console.warn(`  ⚠ ${warning}`);
 }
 
 // ---------- LLM-based category classification ----------
