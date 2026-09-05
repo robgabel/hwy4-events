@@ -143,7 +143,9 @@ export type GrowthContext = {
     pending_unconfirmed: number; // signed up but never clicked confirm — the leak
     confirm_rate_30d: number | null;
     // Who the list is (R1c): active subscribers by visitor class at signup.
-    by_class: { local: number; visitor: number; unknown: number };
+    // hub = a regional ISP hub city at signup: hub-routed locals + genuine
+    // visitors, unsplittable, so it is never folded into either side.
+    by_class: { local: number; hub: number; visitor: number; unknown: number };
     // Where signups came from (R1b): active subscribers by placement code.
     by_source: Record<string, number>;
     // Daily confirmed signups + running total, last ~30d (R1a). Trend, not buckets.
@@ -161,6 +163,10 @@ export type GrowthContext = {
     local_sessions_7d: number;
     local_sessions_prev_7d: number;
     visitor_sessions_7d: number;
+    // Sessions geolocated to a regional ISP hub city (lib/geo.ts "hub"): a mix
+    // of hub-routed residents and genuine regional visitors that nothing in the
+    // IP can split. Counted apart from both; never add it to either side.
+    hub_sessions_7d: number;
     engaged_local_sessions_7d: number; // local sessions with 2+ views (depth)
   };
   referrals: {
@@ -168,6 +174,7 @@ export type GrowthContext = {
     total_30d: number;
     by_type: Record<string, number>; // click_type -> count, last 30d
     visitor_share_30d: number | null; // fraction of referral clicks from visitors (the secondary North Star)
+    hub_share_30d: number | null; // fraction from hub-city sessions (unsplittable; reported, never folded into visitor_share)
     top_events: { event_id: string; clicks: number }[];
   };
   channels: {

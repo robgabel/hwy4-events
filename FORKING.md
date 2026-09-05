@@ -120,9 +120,15 @@ This is the heart of the fork. The region lives in a handful of files:
    `NON_CORRIDOR_CITIES` with nearby cities your scrapers will inevitably
    pick up but you don't cover (for Eugene: Corvallis, Albany, Salem,
    Roseburg, Florence...). Events matching these get dropped at write time.
-3. **`lib/geo.ts` — the visitor-vs-local classifier.** Update the `BOX`
-   lat/lng bounding rectangle and the local city names so the Growth tab's
-   visitor/local split means something in your geography.
+3. **`regions/<slug>/core.ts` `geo` — the visitor-vs-local classifier's
+   data** (`lib/geo.ts` reads it). Set `visitorBox` (a generous lat/lng
+   rectangle), `localIpCities` (the towns you serve, lowercased) and
+   `hubIpCities` (the regional ISP hub cities your rural readers geolocate
+   to; those sessions are counted `hub`, apart from local and visitor,
+   because nothing in the IP splits a hub-routed local from a real visitor)
+   so the Growth tab's split means something in your geography. The dry-run
+   of `scripts/reclassify-visitor-class.ts` lists the top IP cities per class,
+   which is how you find your hubs.
 4. **`scripts/lib/venues.ts` — the venue registry.** Empty it of Calaveras
    venues and add your anchor venues as you discover them (canonical name,
    aliases, town, street address). This is the single source of truth that
