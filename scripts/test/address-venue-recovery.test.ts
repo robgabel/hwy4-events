@@ -229,3 +229,92 @@ test("an address whose town AGREES with the registry is untouched however it's f
   normalizeEventLocation(ev);
   assert.equal(ev.address, "3353 East Highway 4, Murphys CA 95247");
 });
+
+test("the town RIDES with the adopted registry address (mutation lock M4)", async () => {
+  const { normalizeEventLocation } = await load();
+  // Same live shape but with the town label ALSO wrong on the way in — the
+  // prior fixture's input town was already Avery, so deleting the town
+  // adoption passed it trivially (review of #278, mutant M4).
+  const ev = {
+    name: "Live Music @ Howard's Mystic Saloon",
+    description: null,
+    date: "2026-09-05",
+    town: "Murphys",
+    venue_name: "Howard's Mystic Saloon",
+    address: "4529 CA-4, Murphys, CA 95247",
+    start_time: "18:00",
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "4529 Highway 4, Avery, CA 95224");
+  assert.equal(ev.town, "Avery");
+});
+
+test("an address that names NO town is untouched (mutation lock M3)", async () => {
+  const { normalizeEventLocation } = await load();
+  // "names none" half of the contract: without the non-null town guard the
+  // arm would rewrite this real live shape (Copperopolis Town Square, whose
+  // address states no city). Registry lock on copperopolis-town-square.
+  const ev = {
+    name: "Saturday Night Music",
+    description: null,
+    date: "2026-09-12",
+    town: "Copperopolis",
+    venue_name: "Copperopolis Town Square",
+    address: "100 Town Square Road",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "100 Town Square Road");
+  assert.equal(ev.town, "Copperopolis");
+});
+
+test("the correction is exact-NAME-anchored — a superstring of an alias does not fire (mutation lock M6)", async () => {
+  const { normalizeEventLocation } = await load();
+  const ev = {
+    name: "Live Music",
+    description: null,
+    date: "2026-09-05",
+    town: "Avery",
+    venue_name: "Howard's Mystic Saloon Bar",
+    address: "4529 CA-4, Murphys, CA 95247",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "4529 CA-4, Murphys, CA 95247");
+  assert.equal(ev.town, "Avery");
+});
+
+test("a letter-suffixed street number is NOT the same number (448 vs 448B)", async () => {
+  const { normalizeEventLocation } = await load();
+  // leadingStreetNumber keeps the suffix: the registry holds two different
+  // venues at 448 and 448B one street apart, so dropping it would anchor
+  // them together (review of #278). A registry venue at 448B must not adopt
+  // over an event address at bare 448 in another town.
+  const ev = {
+    name: "Live Music Upstairs",
+    description: null,
+    date: "2026-09-12",
+    town: "Murphys",
+    venue_name: "Boyle MacDonald Wines",
+    address: "448 Main St, Arnold, CA 95223",
+    start_time: null,
+    end_time: null,
+    price: null,
+    event_url: null,
+    category: "live_music",
+  } as never as Parameters<typeof normalizeEventLocation>[0];
+  normalizeEventLocation(ev);
+  assert.equal(ev.address, "448 Main St, Arnold, CA 95223");
+});

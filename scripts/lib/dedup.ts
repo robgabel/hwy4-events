@@ -121,10 +121,13 @@ function findRegisteredVenue(venueName: string | null | undefined): KnownVenue |
 }
 
 /** Leading street number (≥2 digits, same floor as `sameStreetNumber` in
- *  lib/event-identity.ts — a 1-digit number is too weak an anchor). */
+ *  lib/event-identity.ts — a 1-digit number is too weak an anchor). Keeps a
+ *  letter suffix as part of the token: 448 and 448B are DIFFERENT addresses
+ *  (both live in the registry, one street apart), so dropping the suffix
+ *  would anchor them together (review of #278). Compared case-insensitively. */
 function leadingStreetNumber(addr: string): string | null {
-  const m = addr.trim().match(/^(\d{2,})[A-Z]?\s/);
-  return m ? m[1] : null;
+  const m = addr.trim().match(/^(\d{2,}[A-Za-z]?)\s/);
+  return m ? m[1].toUpperCase() : null;
 }
 
 /** First corridor town named inside a string (the location sanity check's own
@@ -814,11 +817,13 @@ export function buildExactMatchUpdate(
     // what the row will ACTUALLY carry (kept name and/or kept town) — never
     // the incoming shape's hash beside kept fields (the name↔key-mismatch
     // rule from review finding N5, extended to town). Known theoretical
-    // caveat (review of #275, NB-2): a SID-LESS source whose degraded scrape
-    // kept a town different from its own label would miss the exact-key
-    // lookup next run; no live source has that shape (every generic-venue
-    // writer stamps a source_event_id), and reconcile + the audit catch the
-    // resulting dup if one ever appears.
+    // caveat (review of #275 NB-2, re-scoped by #278): a SID-LESS source
+    // whose write moves the town — the steal guard keeping a stored town, or
+    // the registry-address correction in normalizeEventLocation adopting the
+    // registry's — would miss the exact-key lookup next run. No live source
+    // has either shape (every generic-venue writer stamps a source_event_id,
+    // and the sid-less seed sources all agree with their venues' registry
+    // towns); worst case is a one-day transient dup that reconcile heals.
     dedup_key:
       keepName || keepVenue
         ? generateDedupKey(writtenName, event.date, writtenTown)
