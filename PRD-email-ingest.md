@@ -1,6 +1,8 @@
 # PRD: Email-to-Event Ingestion
 
-> **Status (2026-07-04):** Built, dormant — code + migration shipped June 2026; goes live at Phase 4 (create the `.resend.app` inbound address + webhook, set `RESEND_INBOUND_WEBHOOK_SECRET` + `INBOUND_EMAIL_ALLOWLIST`, live test).
+> **Status (2026-09-05):** Built, dormant. Code + migration shipped June 2026 and Phase 4 **Step 2 is done** — the managed `.resend.app` receiving address exists (it was free on the current plan, so no fallback needed). Remaining: Steps 3-6 (webhook + signing secret, the two Vercel env vars, smoke test, live test). Zero rows have ever arrived: every `event_submissions` row is still `source='form'`, because both gates fail closed.
+>
+> **The receiving address is deliberately NOT written down in this repo** — it is public, and Resend stores every message it receives even when the allowlist drops it, so a committed address just invites junk into the Receiving log. It lives in the Resend dashboard and (implicitly) in the Vercel env.
 
 **Status:** Built 2026-06 as a thin **front door** on top of the shipped Agent Cockpit Stage 1 submission engine. Phase 4 (Resend go-live) pending.
 
@@ -78,7 +80,7 @@ Merge the PR to `main`; Vercel auto-deploys. Until deployed, `https://hwy4events
 ### Step 2 — get the free `.resend.app` receiving address
 1. Resend dashboard → **Emails** → **Receiving** tab.
 2. Click the **⋯** → **Receiving address**.
-3. Copy `<something>@<your-id>.resend.app` — what curators forward flyers to.
+3. Copy `<something>@<your-id>.resend.app` — what curators forward flyers to. **Do not commit it**: this repo is public and Resend stores everything it receives, allowlisted or not.
 - If this shows an **upgrade wall**, stop; the managed domain isn't free on your plan — use a fallback (Cloudflare Email Routing or Gmail/`gws`).
 
 ### Step 3 — create the webhook + copy the signing secret
