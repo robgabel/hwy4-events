@@ -51,15 +51,39 @@ export interface NormalizedEvent {
  *  and any poster image(s). Mirrors the scrape-bls/moose-lodge prompts: strict
  *  JSON, the 8 categories, "describe WHAT not WHERE", and an explicit escape
  *  hatch (empty array) when the email isn't a corridor event. */
-export function buildExtractionPrompt(opts: {
-  today: string;
-  subject: string;
-  body: string;
-}): string {
-  const towns = TOWNS.join(", ");
-  return `You are reading an email a local sent to a community events site for the Highway 4 corridor in California (the towns: ${towns}). The email may be a forward, may be terse, and the real details may live only in an attached poster image or PDF. Extract every distinct real-world event you can confirm.
+/** Describes where a block of text came from, so one extraction contract can
+ *  serve several front doors. Defaults to the email wording used by
+ *  app/api/inbound-email/route.ts. */
+export interface ExtractionContext {
+  /** Singular noun for the text, used in the intro and the escape-hatch rule
+   *  ("If the <noun> contains no determinable corridor event…"). */
+  noun: string;
+  /** Opening sentence describing the provenance (before the towns list). */
+  intro: string;
+  /** How the intro continues after the towns list. */
+  introTail: string;
+  /** Label for the optional header line, e.g. "Email subject" / "Group". */
+  headerLabel: string;
+  /** Label for the content block, e.g. "Email body" / "Post text". */
+  bodyLabel: string;
+}
 
-Today is ${opts.today}. Resolve relative dates ("this Saturday", "next Friday") against it. Assume the current year when a flyer omits it.
+export const EMAIL_EXTRACTION_CONTEXT: ExtractionContext = {
+  noun: "email",
+  intro: "You are reading an email a local sent to a community events site for the Highway 4 corridor in California",
+  introTail:
+    "The email may be a forward, may be terse, and the real details may live only in an attached poster image or PDF. Extract every distinct real-world event you can confirm.",
+  headerLabel: "Email subject",
+  bodyLabel: "Email body",
+};
+
+/** The corridor extraction contract: the JSON shape, the eight categories, and
+ *  the never-invent-a-date rules. Defined ONCE and shared by every front door
+ *  that turns free text into a pending submission (inbound email, Facebook
+ *  group posts), so the rules cannot drift between them. */
+export function buildExtractionContract(today: string, noun: string): string {
+  const towns = TOWNS.join(", ");
+  return `Today is ${today}. Resolve relative dates ("this Saturday", "next Friday") against it. Assume the current year when a flyer omits it.
 
 Return ONLY a JSON array (no markdown fences, no prose). One object per event:
 [
@@ -93,11 +117,31 @@ Rules:
 - Do NOT invent a date. If you cannot determine a specific calendar date for an event, omit that event.
 - Do NOT merge two different shows into one "X & Y" row; emit them separately.
 - "confidence" is your own certainty the event is real and the fields are right.
-- If the email contains no determinable corridor event, return exactly [].
+- If the ${noun} contains no determinable corridor event, return exactly [].`;
+}
 
-Email subject: ${opts.subject || "(none)"}
+/** The extraction instructions handed to Claude alongside the source text and
+ *  any poster image(s). Mirrors the scrape-bls/moose-lodge prompts: strict
+ *  JSON, the 8 categories, "describe WHAT not WHERE", and an explicit escape
+ *  hatch (empty array) when the text isn't a corridor event.
+ *
+ *  `context` defaults to the email wording; pass another to reuse the identical
+ *  contract for a different front door. */
+export function buildExtractionPrompt(opts: {
+  today: string;
+  subject: string;
+  body: string;
+  context?: ExtractionContext;
+}): string {
+  const towns = TOWNS.join(", ");
+  const ctx = opts.context ?? EMAIL_EXTRACTION_CONTEXT;
+  return `${ctx.intro} (the towns: ${towns}). ${ctx.introTail}
 
-Email body:
+${buildExtractionContract(opts.today, ctx.noun)}
+
+${ctx.headerLabel}: ${opts.subject || "(none)"}
+
+${ctx.bodyLabel}:
 ${opts.body || "(empty)"}`;
 }
 

@@ -4,6 +4,7 @@ import { decodeEventFields } from "./extract.js";
 import { applyVenueDetection } from "./venue-matcher.js";
 import { TOWNS, TOWN_ADDRESS_ALIASES } from "../../lib/towns.js";
 import { runApifyActorSync } from "./apify-client.js";
+import type { TownLocationConfig } from "./fb-town-config.js";
 import {
   classifyEventCategory,
   classifyEventCategoryDetailed,
@@ -37,18 +38,7 @@ const VALID_CATEGORIES = [
 ] as const;
 type Category = (typeof VALID_CATEGORIES)[number];
 
-export interface TownLocationConfig {
-  /** Slug used for org_slug column (e.g. "fb-discover-arnold"). */
-  orgSlug: string;
-  /** Display label used for source_name (e.g. "Arnold"). */
-  label: string;
-  /** Canonical town value used as fallback when FB address doesn't disambiguate. */
-  defaultTown: string;
-  /** Facebook place ID for this town. */
-  locationId: string;
-  /** Slug used in the /events/explore/<slug>/<id> URL (e.g. "arnold-ca"). */
-  exploreSlug: string;
-}
+export type { TownLocationConfig } from "./fb-town-config.js";
 
 /**
  * Raw Apify event shape (subset we care about).

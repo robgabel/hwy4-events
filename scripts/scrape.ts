@@ -2,6 +2,7 @@ import { scrapeBistroEspresso } from "./scrapers/bistro-espresso.js";
 import { scrapeGoCalaveras } from "./scrapers/gocalaveras.js";
 import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
+import { scrapeHwy4FbGroups } from "./scrapers/hwy4-fb-groups.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeArnoldRimTrail } from "./scrapers/arnold-rim-trail.js";
 import { scrapeBriceStation } from "./scrapers/brice-station.js";
@@ -20,6 +21,10 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  *   - gocalaveras: EventON AJAX with nonce extraction
  *   - mystic-saloon: Facebook primary + multi-URL website fallback
  *   - hwy4-fb-discover: Apify Facebook events scraper
+ *   - hwy4-fb-groups: Apify Facebook GROUP posts. The one scraper here that
+ *     writes NO hwy4_events rows — a group post states no date, no venue and no
+ *     stable per-event id, so it lands as a pending event_submissions row for a
+ *     human to publish instead (see scripts/lib/facebook-groups.ts)
  *   - visit-murphys: Tribe (The Events Calendar) WordPress REST API
  *   - brice-station: the venue's own Shopify ticket store, read as structured
  *     product JSON rather than LLM-extracted from the rendered grid
@@ -44,6 +49,7 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   "gocalaveras": scrapeGoCalaveras,
   "mystic-saloon": scrapeMysticSaloon,
   "hwy4-fb-discover": scrapeHwy4FbDiscover,
+  "hwy4-fb-groups": scrapeHwy4FbGroups,
   "visit-murphys": scrapeVisitMurphys,
   "red-cross": scrapeRedCross,
   "sequoia-woods": scrapeSequoiaWoods,

@@ -4,6 +4,7 @@ import {
 } from "../lib/facebook-events.js";
 import { upsertEvents, type UpsertResult } from "../lib/dedup.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
+import { isConfiguredTown } from "../lib/fb-town-config.js";
 
 /**
  * Hwy 4 Facebook Events Discover scraper.
@@ -24,18 +25,50 @@ const TOWN_CONFIGS: TownLocationConfig[] = [
     exploreSlug: "arnold-ca",
     locationId: "105475469485316",
   },
-  // To enable more towns, look up the FB location_id and explore slug:
-  // 1. Open https://www.facebook.com/events/ in a browser
-  // 2. Search for the town name and click the location filter
-  // 3. Copy the URL — slug is the "/explore/<slug>/" segment, ID is the numeric tail
-  // 4. Insert the matching org row so events FK-resolve:
-  //    INSERT INTO hwy4_orgs (slug, display_name) VALUES ('fb-discover-<town>', 'Facebook Events (<Town>)');
-  // 5. Verify before committing: cd scripts && npm run scrape -- --source hwy4-fb-discover
-  // { orgSlug: "fb-discover-murphys",     label: "Murphys",     defaultTown: "Murphys",     exploreSlug: "murphys-ca",     locationId: "..." },
-  // { orgSlug: "fb-discover-angels-camp", label: "Angels Camp", defaultTown: "Angels Camp", exploreSlug: "angels-camp-ca", locationId: "..." },
-  // { orgSlug: "fb-discover-bear-valley", label: "Bear Valley", defaultTown: "Bear Valley", exploreSlug: "bear-valley-ca", locationId: "..." },
-  // { orgSlug: "fb-discover-copperopolis",label: "Copperopolis",defaultTown: "Copperopolis",exploreSlug: "copperopolis-ca",locationId: "..." },
+  // ── Awaiting a location ID ────────────────────────────────────────────────
+  // These five are wired and ready; each needs only Facebook's numeric place ID,
+  // which is visible only to a logged-in browser (see docs/HANDOFF-fb-location-ids.md).
+  // An entry with an empty locationId is SKIPPED, so pasting the ID between the
+  // quotes is the entire job — no uncommenting, no other edit. Their hwy4_orgs
+  // rows already exist, so a newly-filled town writes on the next scrape.
+  {
+    orgSlug: "fb-discover-murphys",
+    label: "Murphys",
+    defaultTown: "Murphys",
+    exploreSlug: "murphys-ca",
+    locationId: "",
+  },
+  {
+    orgSlug: "fb-discover-angels-camp",
+    label: "Angels Camp",
+    defaultTown: "Angels Camp",
+    exploreSlug: "angels-camp-ca",
+    locationId: "",
+  },
+  {
+    orgSlug: "fb-discover-bear-valley",
+    label: "Bear Valley",
+    defaultTown: "Bear Valley",
+    exploreSlug: "bear-valley-ca",
+    locationId: "",
+  },
+  {
+    orgSlug: "fb-discover-copperopolis",
+    label: "Copperopolis",
+    defaultTown: "Copperopolis",
+    exploreSlug: "copperopolis-ca",
+    locationId: "",
+  },
+  {
+    orgSlug: "fb-discover-avery",
+    label: "Avery",
+    defaultTown: "Avery",
+    exploreSlug: "avery-ca",
+    locationId: "",
+  },
 ];
+
+
 
 const SOURCE_NAME_PREFIX = "Facebook Events Discover";
 
@@ -56,7 +89,15 @@ export async function scrapeHwy4FbDiscover(): Promise<void> {
     unpinned: 0,
   };
 
-  for (const config of TOWN_CONFIGS) {
+  const active = TOWN_CONFIGS.filter(isConfiguredTown);
+  const pending = TOWN_CONFIGS.filter((c) => !isConfiguredTown(c));
+  if (pending.length > 0) {
+    console.log(
+      `  ${pending.length} town(s) awaiting a location ID, skipped: ${pending.map((c) => c.label).join(", ")}`
+    );
+  }
+
+  for (const config of active) {
     console.log(`\n--- ${config.label} ---`);
 
     let events;

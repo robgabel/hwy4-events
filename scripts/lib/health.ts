@@ -2,6 +2,26 @@ import { supabaseAdmin } from "./supabase-admin.js";
 import { getFacebookStatus } from "./facebook.js";
 import { isGenericVenue } from "./venue-matcher.js";
 
+/**
+ * org_slugs that still own historical rows but have NO scraper behind them, so
+ * "not scraped in N days" is not a fault to fix — there is nothing to run.
+ *
+ * The health list is derived from every org_slug that has ever written an event,
+ * so a retired source warns forever otherwise: these three were generating 4 of
+ * the report's 11 daily warnings while nothing was failing. A report that cries
+ * wolf daily is a report nobody reads.
+ *
+ * fb-group-*: a June 2026 one-off run wrote 4 rows and no scraper for them was
+ * ever committed. Corridor Facebook groups are now read by hwy4-fb-groups, which
+ * lands pending event_submissions rather than events, so it owns no org_slug and
+ * these will never be written again.
+ */
+const RETIRED_SOURCES = new Set([
+  "fb-group-uh4ccc",
+  "fb-group-388511408445423",
+  "fb-group-upperhwy4",
+]);
+
 interface SourceHealth {
   org_slug: string;
   future_event_count: number;
@@ -83,6 +103,17 @@ export async function runHealthCheck(
       : "never";
 
     let status = "OK";
+
+    if (RETIRED_SOURCES.has(h.org_slug)) {
+      // Listed for the record, but never a warning: nothing runs for it.
+      console.log(
+        h.org_slug.padEnd(30) +
+        String(h.future_event_count).padEnd(16) +
+        scrapedStr.padEnd(24) +
+        "RETIRED (no scraper)"
+      );
+      continue;
+    }
 
     // Zero future events for a source that was just scraped
     if (h.future_event_count === 0 && scrapedSources?.includes(h.org_slug)) {
