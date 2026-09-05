@@ -27,6 +27,7 @@ import { getForecast, type TownForecasts } from "@/lib/weather";
 import { linkifyPhones } from "@/lib/linkify";
 import { festivalGuidesForTown } from "@/lib/event-guides";
 import { holidayGuideForTown } from "@/lib/holiday-pages";
+import { marketGuideForTown } from "@/lib/market-pages";
 import { pacificToday } from "@/lib/date-windows";
 
 export const revalidate = 3600;
@@ -116,9 +117,14 @@ export default async function TownPage({ params }: PageProps) {
   // (e.g. /arnold-4th-of-july). These are the town-page inbound links that keep
   // those landing pages from being orphans; empty for towns without one.
   const holidayGuide = holidayGuideForTown(slug);
+  // The evergreen farmers-market guide is year-round too, for the same reason
+  // (HWY-31): it is the durable answer to "murphys farmers market", including
+  // off-season, so the town page links it whether or not the market is running.
+  const marketGuide = marketGuideForTown(slug);
   const guides: { path: string; heading: string; blurb: string }[] = [
     ...festivalGuidesForTown(slug, pacificToday().iso),
     ...(holidayGuide ? [holidayGuide] : []),
+    ...(marketGuide ? [marketGuide] : []),
   ];
 
   return (
