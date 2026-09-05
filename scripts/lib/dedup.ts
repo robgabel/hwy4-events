@@ -407,6 +407,36 @@ export interface UpsertResult {
 
 export type { UnpinnedPolicy };
 
+/** How one per-row UPDATE gets counted. Both exact-match paths (serial and
+ *  batched) and both merge paths route their result through here, so the two
+ *  cannot drift on error handling again.
+ *
+ *  HWY-33: the serial path never destructured Supabase's `error` and bumped
+ *  `result.updated` unconditionally, so a failed row update was reported as a
+ *  success — a scrape could log "12 updated" having written nothing. That is
+ *  the same drift family as the inline `rowChanged` copy fixed 2026-08-16, and
+ *  the same rule as the scrape_runs writer: a sensor that can fail silently is
+ *  not a sensor.
+ *
+ *  Deliberately does NOT add an error counter to UpsertResult — it matches the
+ *  batched path's existing contract exactly (log per row, simply do not count
+ *  it), so `scrape_runs.source_results` keeps its shape. A failed update now
+ *  shows up as a row that is neither updated nor unchanged, and the caller
+ *  logs the per-source total. Returns true when the write landed. */
+export function countUpdateResult(
+  result: UpsertResult,
+  bucket: "updated" | "unchanged" | "skippedFuzzy",
+  error: { message: string } | null | undefined,
+  eventName: string
+): boolean {
+  if (error) {
+    console.error(`Update failed for "${eventName}":`, error.message);
+    return false;
+  }
+  result[bucket]++;
+  return true;
+}
+
 // generateDedupKey now lives in lib/event-identity.ts (the one identity-key
 // definition, shared with the /admin/submissions publish action). Imported and
 // re-exported above.
@@ -1070,18 +1100,16 @@ async function upsertEventsBatched(
         )
       );
       let errCount = 0;
-      for (const { error } of updates) {
-        if (error) errCount++;
+      for (let i = 0; i < matchUpdates.length; i++) {
+        const m = matchUpdates[i];
+        if (countUpdateResult(result, "skippedFuzzy", updates[i].error, m.eventName)) {
+          console.log(`  Merged duplicate: "${m.eventName}" → existing "${m.existingName}"`);
+        } else {
+          errCount++;
+        }
       }
       if (errCount > 0) {
         console.error(`Bulk merge: ${errCount}/${matchUpdates.length} failed`);
-      }
-      result.skippedFuzzy += matchUpdates.length - errCount;
-      for (let i = 0; i < matchUpdates.length; i++) {
-        if (!updates[i].error) {
-          const m = matchUpdates[i];
-          console.log(`  Merged duplicate: "${m.eventName}" → existing "${m.existingName}"`);
-        }
       }
     }
   }
@@ -1103,14 +1131,13 @@ async function upsertEventsBatched(
     );
     let updateErrCount = 0;
     for (let i = 0; i < matched.length; i++) {
-      if (updates[i].error) {
-        updateErrCount++;
-        console.error(`Update failed for "${matched[i].event.name}":`, updates[i].error?.message);
-      } else if (matched[i].changed) {
-        result.updated++;
-      } else {
-        result.unchanged++;
-      }
+      const ok = countUpdateResult(
+        result,
+        matched[i].changed ? "updated" : "unchanged",
+        updates[i].error,
+        matched[i].event.name
+      );
+      if (!ok) updateErrCount++;
     }
     if (updateErrCount > 0) {
       console.warn(`${updateErrCount}/${matched.length} matched-row updates failed`);
@@ -1215,6 +1242,10 @@ export async function upsertEvents(
     skippedFuzzy: 0,
     unpinned: 0,
   };
+  // Per-row UPDATE failures on this path. Counted so the run reports them once
+  // at the end instead of only per row (HWY-33) — they are deliberately not a
+  // field on UpsertResult; see countUpdateResult.
+  let updateErrors = 0;
 
   events = dropOutOfCorridor(events, orgSlug);
   events = dropFarFutureSeries(events, sourceName);
@@ -1284,16 +1315,16 @@ export async function upsertEvents(
       const changed = rowChanged(existing, event);
 
       if (changed) {
-        await supabaseAdmin
+        const { error } = await supabaseAdmin
           .from("hwy4_events")
           .update(buildExactMatchUpdate(existing, event, dedupKey, now))
           .eq("id", existing.id);
-        result.updated++;
+        if (!countUpdateResult(result, "updated", error, event.name)) updateErrors++;
       } else {
         // Just touch last_scraped_at — but also opportunistically backfill
         // source_event_id on pre-existing rows that pre-date this column
         // being populated.
-        await supabaseAdmin
+        const { error } = await supabaseAdmin
           .from("hwy4_events")
           .update({
             last_scraped_at: now,
@@ -1302,7 +1333,7 @@ export async function upsertEvents(
             }),
           })
           .eq("id", existing.id);
-        result.unchanged++;
+        if (!countUpdateResult(result, "unchanged", error, event.name)) updateErrors++;
       }
     } else {
       // Cross-source / re-titled-event match: same date + town + exact start
@@ -1326,12 +1357,15 @@ export async function upsertEvents(
       if (strongMatch) {
         // Merge into the existing row so the survivor keeps the best of both,
         // and re-key it to the incoming dedup_key.
-        await supabaseAdmin
+        const { error } = await supabaseAdmin
           .from("hwy4_events")
           .update(buildStrongMatchUpdate(strongMatch as MergeableRow, event, dedupKey, now))
           .eq("id", strongMatch.id);
-        result.skippedFuzzy++;
-        console.log(`  Merged duplicate: "${event.name}" → existing "${strongMatch.name}"`);
+        if (countUpdateResult(result, "skippedFuzzy", error, event.name)) {
+          console.log(`  Merged duplicate: "${event.name}" → existing "${strongMatch.name}"`);
+        } else {
+          updateErrors++;
+        }
         continue;
       }
 
@@ -1370,6 +1404,10 @@ export async function upsertEvents(
         result.inserted++;
       }
     }
+  }
+
+  if (updateErrors > 0) {
+    console.warn(`${updateErrors} row update(s) failed for ${sourceName} (not counted as updated)`);
   }
 
   recordSourceResult(orgSlug, result);
