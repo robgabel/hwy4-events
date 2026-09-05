@@ -112,6 +112,9 @@ export async function gatherGrowthContext(
   const localStats7 = sessionStat(sess.local7);
   const localStatsPrev7 = sessionStat(sess.localPrev7);
   const visitorStats7 = sessionStat(sess.visitor7);
+  // Regional ISP hub sessions (lib/geo.ts "hub"): reported on their own, never
+  // folded into local or visitor. Zero until 20260904_visitor_class_hub.sql runs.
+  const hubStats7 = sessionStat(sess.hub7);
   const sessionsBySrc7d = numMap(sess.sessionsBySrc7d);
 
   // ── referrals (see growth_outbound_stats) ─────────────────────────────────
@@ -119,6 +122,7 @@ export async function gatherGrowthContext(
   const out7Count = num(out.total7);
   const out30Count = num(out.total30);
   const visitorClicks = num(out.visitorClicks30);
+  const hubClicks = num(out.hubClicks30);
   const byType = numMap(out.byType);
   const referralsBySrc30d = numMap(out.bySrc);
   const topReferralEvents = (Array.isArray(out.topEvents) ? out.topEvents : []).map((e) => {
@@ -223,6 +227,7 @@ export async function gatherGrowthContext(
       local_sessions_7d: localStats7.distinct,
       local_sessions_prev_7d: localStatsPrev7.distinct,
       visitor_sessions_7d: visitorStats7.distinct,
+      hub_sessions_7d: hubStats7.distinct,
       engaged_local_sessions_7d: localStats7.engaged,
     },
     referrals: {
@@ -230,6 +235,7 @@ export async function gatherGrowthContext(
       total_30d: out30Count,
       by_type: byType,
       visitor_share_30d: out30Count > 0 ? visitorClicks / out30Count : null,
+      hub_share_30d: out30Count > 0 ? hubClicks / out30Count : null,
       top_events: topReferralEvents,
     },
     channels: {

@@ -77,7 +77,10 @@ Source map for the metric families in play:
   split by `click_type` and `visitor_class`; join `event_id` → `hwy4_events` when
   the metric scopes to a category (e.g. live-music pages).
 - **Sessions** — distinct `session_id` on `kind='view'`, `is_bot = false`, split by
-  `visitor_class` for the local/visitor cut.
+  `visitor_class` for the local/visitor cut. `hub` is a third located class (a
+  regional ISP hub city that mixes hub-routed locals with real visitors): report
+  it on its own, never fold it into either side. Rows before 2026-09-04 carry it
+  only if `scripts/reclassify-visitor-class.ts --apply` was run.
 - **Search demand** — `seo_snapshots` (`dimension='date'` is the durable spine).
 
 ### 3. Render a verdict

@@ -106,9 +106,23 @@ async function loadNewsletterClicks(): Promise<NewsletterClicks | null> {
   };
 }
 
+// One class tally. "hub" = a regional ISP hub city (lib/geo.ts): hub-routed
+// locals + genuine regional visitors, unsplittable, so it is shown on its own
+// and sits outside every local/visitor share ratio.
+type ClassTally = { local: number; hub: number; visitor: number; unknown: number; total: number };
+const zeroTally = (): ClassTally => ({ local: 0, hub: 0, visitor: 0, unknown: 0, total: 0 });
+// Coerce an RPC tally; a missing key (the RPC predates a class) reads as 0, never NaN.
+const asTally = (t: Partial<ClassTally> | null | undefined): ClassTally => ({
+  local: t?.local ?? 0,
+  hub: t?.hub ?? 0,
+  visitor: t?.visitor ?? 0,
+  unknown: t?.unknown ?? 0,
+  total: t?.total ?? 0,
+});
+
 type Gate0 = {
-  views: { local: number; visitor: number; unknown: number; total: number };
-  views7: { local: number; visitor: number; unknown: number; total: number };
+  views: ClassTally;
+  views7: ClassTally;
   outboundTotal: number;
   outboundByType: { type: string; count: number }[];
   topEvents: { name: string; clicks: number }[];
@@ -125,8 +139,8 @@ type Gate0 = {
 // signal only (is_bot = false). The two things Cloudflare RUM can't answer.
 async function loadGate0(days: number): Promise<Gate0> {
   const empty: Gate0 = {
-    views: { local: 0, visitor: 0, unknown: 0, total: 0 },
-    views7: { local: 0, visitor: 0, unknown: 0, total: 0 },
+    views: zeroTally(),
+    views7: zeroTally(),
     outboundTotal: 0,
     outboundByType: [],
     topEvents: [],
@@ -168,23 +182,21 @@ async function loadGate0(days: number): Promise<Gate0> {
   // window held >1,000 views (and the 7d slice, filtered from the truncated set,
   // was undercounted worse). gate0_stats returns a single jsonb value — immune to
   // the row cap and exact at any volume. See migration 20260621_gate0_stats_rpc.sql.
-  type Tally = { local: number; visitor: number; unknown: number; total: number };
-  const zero: Tally = { local: 0, visitor: 0, unknown: 0, total: 0 };
   const { data: statsRaw } = await supabase.rpc("gate0_stats", {
     p_since: since,
     p_since7: since7,
   });
   const stats = (statsRaw ?? {}) as {
-    views?: Tally;
-    views7?: Tally;
+    views?: Partial<ClassTally>;
+    views7?: Partial<ClassTally>;
     bySrc?: { src: string; count: number }[];
     outboundTotal?: number;
     outboundByType?: { type: string; count: number }[];
     topEvents?: { event_id: string; count: number }[];
   };
 
-  const views = stats.views ?? zero;
-  const views7 = stats.views7 ?? zero;
+  const views = asTally(stats.views);
+  const views7 = asTally(stats.views7);
   const outboundTotal = stats.outboundTotal ?? 0;
   const outboundByType = (stats.outboundByType ?? []).filter((t) => t.type);
   const bySrc = stats.bySrc ?? [];
@@ -584,13 +596,17 @@ function DailyTrafficChart({ buckets }: { buckets: Bucket<DailyRow>[] }) {
   );
 }
 
-// Local / Visitor / Unknown breakout: a stacked share bar plus labeled, counted
-// rows. One component so the site-visitor split (Gate 0) and the newsletter-list
-// split read identically. "Visitor" means remote (out-of-corridor) traffic.
-function VisitorBreakdown({ local, visitor, unknown }: { local: number; visitor: number; unknown: number }) {
-  const total = Math.max(1, local + visitor + unknown);
+// Local / Hub / Visitor / Unknown breakout: a stacked share bar plus labeled,
+// counted rows. One component so the site-visitor split (Gate 0) and the
+// newsletter-list split read identically. "Visitor" means remote
+// (out-of-corridor) traffic; "Regional hub" is an ISP hub city that mixes
+// hub-routed locals with real visitors and can't be called either.
+const HUB_COLOR = "#8a9a5b";
+function VisitorBreakdown({ local, hub, visitor, unknown }: { local: number; hub: number; visitor: number; unknown: number }) {
+  const total = Math.max(1, local + hub + visitor + unknown);
   const segs = [
     { key: "local", label: "Local", value: local, color: "#1B3A2D" },
+    { key: "hub", label: "Regional hub (unsplittable)", value: hub, color: HUB_COLOR },
     { key: "visitor", label: "Visitor (remote)", value: visitor, color: "#5a8fa8" },
     { key: "unknown", label: "Unknown", value: unknown, color: "#c9c2b6" },
   ];
@@ -634,8 +650,11 @@ function Gate0Section({ data }: { data: Gate0 }) {
   }
   const v = data.views;
   const v7 = data.views7;
-  const known30 = v.local + v.visitor;
-  const known7 = v7.local + v7.visitor;
+  // "Callable" = local + visitor. Hub-city sessions are located but can't be
+  // called either (lib/geo.ts), so they sit outside every share ratio.
+  const callable30 = v.local + v.visitor;
+  const callable7 = v7.local + v7.visitor;
+  const located30 = callable30 + v.hub;
   const clickMax = Math.max(1, ...data.topEvents.map((e) => e.clicks));
   const srcMax = Math.max(1, ...data.bySrc.map((s) => s.count));
   const { windowDays, windowDays7, requestedDays } = data;
@@ -646,10 +665,11 @@ function Gate0Section({ data }: { data: Gate0 }) {
     <>
       <SectionHeader>Visitor vs local · {windowDays}d</SectionHeader>
       <section style={cardStyle}>
-        <VisitorBreakdown local={v.local} visitor={v.visitor} unknown={v.unknown} />
+        <VisitorBreakdown local={v.local} hub={v.hub} visitor={v.visitor} unknown={v.unknown} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 16 }}>
-          <Stat label={`Located views · ${windowDays}d`} value={nf(known30)} sub={`${nf(v.local)} local · ${nf(v.visitor)} remote`} />
-          <Stat label={`Visitor share · ${windowDays7}d`} value={`${pct(v7.visitor, known7)}%`} sub={`${nf(v7.visitor)} of ${nf(known7)} located`} />
+          <Stat label={`Located views · ${windowDays}d`} value={nf(located30)} sub={`${nf(v.local)} local · ${nf(v.hub)} hub · ${nf(v.visitor)} remote`} />
+          <Stat label={`Visitor share · ${windowDays7}d`} value={`${pct(v7.visitor, callable7)}%`} sub={`${nf(v7.visitor)} of ${nf(callable7)} callable · hub excluded`} />
+          <Stat label={`Regional hub · ${windowDays}d`} value={nf(v.hub)} sub="can't be called either" />
           <Stat label={`Total views · ${windowDays}d`} value={nf(v.total)} sub={`incl. ${nf(v.unknown)} unknown geo`} />
         </div>
         <p style={{ color: "#999", fontSize: 13, lineHeight: 1.5, margin: "12px 0 0", borderTop: "1px solid #f0ede8", paddingTop: 10 }}>
@@ -660,9 +680,12 @@ function Gate0Section({ data }: { data: Gate0 }) {
               the full {requestedDays} days the range asks for.{" "}
             </>
           ) : null}
-          Directional. Location is coarse IP geolocation (Vercel edge), which often places corridor
-          residents in a regional hub, so locals are undercounted. Read the trend, not the absolute.
-          Bots that don&rsquo;t run JS never appear here.
+          Directional. Location is coarse IP geolocation (Vercel edge). Rural ISPs route many
+          residents through a regional hub city, and a hub IP is a mix of hub-routed locals and
+          genuine regional visitors that nothing in the IP can split, so those sessions are counted
+          as <strong>Regional hub</strong>, apart from both, and sit outside every share ratio.
+          Locals are still undercounted (a hub-routed resident is invisible as a local). Read the
+          trend, not the absolute. Bots that don&rsquo;t run JS never appear here.
         </p>
       </section>
 
@@ -781,10 +804,13 @@ function SignupsVsVisitorsPanel({
   const latestRoll = rolling[rolling.length - 1] ?? 0;
 
   const vw = gate0.views;
-  const located = vw.local + vw.visitor;
-  const splitTotal = Math.max(1, vw.local + vw.visitor + vw.unknown);
+  // Local share is taken over the callable sessions (local + visitor); hub-city
+  // sessions can't be called either, so they are shown but never in the ratio.
+  const callable = vw.local + vw.visitor;
+  const splitTotal = Math.max(1, vw.local + vw.hub + vw.visitor + vw.unknown);
   const split = [
     { key: "local", label: "Local", value: vw.local, color: "#1B3A2D" },
+    { key: "hub", label: "Regional hub", value: vw.hub, color: HUB_COLOR },
     { key: "visitor", label: "Visitor", value: vw.visitor, color: "#5a8fa8" },
     { key: "unknown", label: "Unknown", value: vw.unknown, color: "#c9c2b6" },
   ];
@@ -834,7 +860,7 @@ function SignupsVsVisitorsPanel({
         <Stat label={`Visits · ${label} (UTC)`} value={nf(totalVisits)} />
         <Stat label={`Signups · ${label} (UTC)`} value={nf(totalSignups)} />
         <Stat label={`Visit→signup · ${label}`} value={convStr(conv)} sub={`${nf(totalSignups)} ÷ ${nf(totalVisits)}`} />
-        <Stat label="Local share of visits" value={located ? `${pct(vw.local, located)}%` : "—"} sub={`${gate0.windowDays}d · directional`} />
+        <Stat label="Local share of visits" value={callable ? `${pct(vw.local, callable)}%` : "—"} sub={`${gate0.windowDays}d · of callable, hub excluded · directional`} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
@@ -933,10 +959,11 @@ function NewsletterSignupsPanel({ stats, days }: { stats: NewsletterStats; days:
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
         <section style={cardStyle}>
           <p style={{ ...labelStyle, margin: "0 0 10px" }}>Who the list is</p>
-          <VisitorBreakdown local={comp.local} visitor={comp.visitor} unknown={comp.unknown} />
+          <VisitorBreakdown local={comp.local} hub={comp.hub} visitor={comp.visitor} unknown={comp.unknown} />
           <p style={{ color: "#999", fontSize: 12, lineHeight: 1.5, margin: "10px 0 0" }}>
             Classified at signup from coarse IP geo. Directional: a visitor signing up from inside a
-            rental reads as local.
+            rental reads as local, and a signup routed through a regional ISP hub city reads as
+            hub, which can&rsquo;t be called either.
           </p>
         </section>
 

@@ -105,3 +105,23 @@ Every region-parameterization PR is data movement, never behavior change:
 - **Out of scope for the program**: `lib/tables.ts` (separate hygiene PR),
   watcher-cron collapse and BLS/Moose orchestrator moves (INFRA items 6–7),
   the Supabase project move (INFRA item 11), any table/type/column rename.
+
+## Interface changelog
+
+Additive-only, per the flow rules. Each entry names what a fork does on merge.
+
+- **2026-09-04 — `RegionGeo.hubIpCities?: readonly string[]` (optional).**
+  Lowercased regional ISP hub cities for the Gate 0 classifier (`lib/geo.ts`):
+  an in-state IP city in this list is classified `hub`, a mix of hub-routed
+  residents and genuine regional visitors that is counted apart from both
+  `local` and `visitor` (and is checked before the bounding box, because a hub
+  city inside the box still carries the hub's coordinates). Omit the field and
+  behavior is unchanged: every located non-local request stays `visitor`.
+  Ships with migration `20260904_visitor_class_hub.sql` (a widened CHECK on
+  `site_events` / `newsletter_subscribers` plus the three `*_stats` RPCs
+  counting `hub`), which the engine's write routes need **before** they deploy.
+  **Fork action:** run `cd scripts && npx tsx reclassify-visitor-class.ts`
+  (dry-run) and read the top IP cities in your `visitor` bucket; list the ones
+  that are ISP hubs for your rural readers, and widen `localIpCities` to the
+  towns you actually serve. Calaveras shipped Sacramento, Stockton, Lodi,
+  Modesto and Sonora after Rob's own Arnold connection resolved to Lodi.

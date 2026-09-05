@@ -51,6 +51,15 @@ export interface RegionGeo {
   /** Local city names (lowercased) matched against the IP city — the region's
    *  towns plus immediate neighbors that read as "local". */
   localIpCities: readonly string[];
+  /** Regional ISP hub cities (lowercased), matched against the IP city when the
+   *  country + state match. Rural ISPs route many of the region's residents
+   *  through a regional hub, so an IP that says one of these is a MIX of
+   *  hub-routed locals and genuine regional visitors that nothing in the IP can
+   *  split; lib/geo.ts classifies it "hub", counted apart from both. Checked
+   *  before the box (a hub city inside the box still carries the hub's
+   *  coordinates, not the reader's). Optional: omit it and every located
+   *  non-local request reads "visitor" (the pre-2026-09 behavior). */
+  hubIpCities?: readonly string[];
   /** Center + radius (meters) used to bias Google Places Text Search when
    *  resolving venues (/api/sync-venue-facts). */
   placesBias: { lat: number; lng: number; radiusMeters: number };
