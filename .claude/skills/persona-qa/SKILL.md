@@ -88,7 +88,7 @@ Run against Supabase (read-only queries; sample where noted):
    times on upcoming events.
 3. **Missing essentials on near-term events** (`date` within 14 days,
    public): NULL/empty `venue_name`, `town`, or a description under ~40 chars
-   on `importance`-flagged rows.
+   on `robs_pick` rows.
 4. **Duplicate suspicion**: same `town` + `date` + similar name across rows —
    then check `lib/dedupe-events.ts` buckets + the umbrella-row rules before
    calling it a bug.
@@ -108,7 +108,7 @@ For each verified anomaly, decide:
 The row is wrong; a field-level UPDATE fixes it; you can cite evidence.
 Whitelisted columns only (see `lib/agent/qa-fix-event.ts`): name, date,
 start/end time, venue_name, town, address, category, price, cost_tier,
-event_url, description, image_url, artists, status, visibility, importance.
+event_url, description, image_url, artists, status, visibility.
 Never identity/provenance columns; human-locked fields will be refused by the
 executor — don't propose them.
 

@@ -27,7 +27,6 @@ export const QA_FIXABLE_COLUMNS = [
   "artists",
   "status",
   "visibility",
-  "importance",
 ] as const;
 
 export type QaFixableColumn = (typeof QA_FIXABLE_COLUMNS)[number];
@@ -39,7 +38,6 @@ export const LOCK_GUARDS: Partial<Record<QaFixableColumn, string>> = {
   description: "description_locked",
   price: "price_locked",
   image_url: "poster_locked",
-  importance: "notability_locked",
 };
 
 export type QaFixEventPayload = {

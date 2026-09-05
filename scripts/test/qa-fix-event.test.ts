@@ -59,13 +59,12 @@ test("identity and provenance columns are not fixable", () => {
   }
 });
 
-test("lock guards map the four lockable fields to their flags", () => {
+test("lock guards map the lockable fields to their flags", () => {
   assert.deepEqual(lockColumnsFor(["description", "price"]).sort(), [
     "description_locked",
     "price_locked",
   ]);
   assert.deepEqual(lockColumnsFor(["image_url"]), ["poster_locked"]);
-  assert.deepEqual(lockColumnsFor(["importance"]), ["notability_locked"]);
   assert.deepEqual(lockColumnsFor(["start_time", "town"]), []);
 });
 
