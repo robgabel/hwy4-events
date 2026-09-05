@@ -466,6 +466,21 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Arnold",
     address: "335 Blue Lake Springs Dr, Arnold, CA 95223",
   },
+  "blue-lake-bistro": {
+    // The members' restaurant in the Snowflake Lodge complex, and the fourth
+    // name /api/scrape-bls can emit. Registered 2026-09-05 (HWY-25) so every
+    // venue that raw-insert writer produces resolves to the registry; without
+    // an entry the rows carried a name nothing could key on. Shares the complex
+    // address with the lodge / lake / pool / amphitheater entries, and like
+    // them it has no distinct Google Places listing of its own.
+    canonical: "Blue Lake Bistro",
+    aliases: [
+      "blue lake bistro",
+      "bls bistro",
+    ],
+    town: "Arnold",
+    address: "335 Blue Lake Springs Dr, Arnold, CA 95223",
+  },
   "bls-pool": {
     canonical: "Blue Lake Springs Pool",
     aliases: [
