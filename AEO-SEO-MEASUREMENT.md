@@ -173,6 +173,106 @@ AEO prompt audit (cited? / rank / accurate?):
 Notes / actions for next month:
 ```
 
+### 2026-07 (logged retroactively 2026-09-05)
+
+Method note: reconstructed from the data the collectors banked at the time
+(`seo_snapshots` daily spine + by-query/by-page snapshots captured 2026-08-01;
+`analytics_daily.ai_referrals`). Figures are the CALENDAR month, not the
+template's as-of-the-1st trailing window. The prompt audit was not run in July
+and cannot be run retroactively.
+
+SEO (calendar July):
+- Impressions: 22,872 (vs June: 14,174)
+- Clicks: 1,270 (vs June: 765); CTR 5.6%
+- Avg position (impression-weighted): 7.5
+- Indexed pages: not collected (GSC Indexing report is not in the collector)
+- Events rich result: not checked retroactively
+- Top 3 queries (28d window as of Aug 1): "murphys 4th of july" (16 clicks, pos 1.9); "arnold 4th of july parade 2026" (11, pos 1.9); "arnold ca 4th of july parade 2026" (10, pos 1.9)
+- Top 3 pages: the Murphys Hotel July-4 event (97 clicks), the Arnold Independence Day Parade (73), the Murphys 4th of July Parade (65)
+
+AEO referrals (calendar July):
+- chatgpt: 2  |  perplexity: 0  |  gemini: 2  |  copilot: 0  |  bing: 0
+
+AEO prompt audit: NOT RUN (missed at the time; unrecoverable).
+
+Notes: the month was the July-4th story. Clicks were heavily front-loaded
+(roughly 693 of the 1,270 landed July 1-4), all on the dated 2026 event slugs.
+This is exactly the equity the year-less holiday guides + seasonal redirects
+(HWY-6) exist to retain into 2027.
+
+### 2026-08 (logged retroactively 2026-09-05)
+
+Same method note as 2026-07 (by-query/by-page snapshots captured 2026-09-01).
+Prompt audit not run in August; unrecoverable.
+
+SEO (calendar August):
+- Impressions: 15,443 (vs July: 22,872)
+- Clicks: 658 (vs July: 1,270); CTR 4.3%
+- Avg position (impression-weighted): 8.5
+- Indexed pages: not collected
+- Events rich result: not checked retroactively
+- Top 3 queries (28d window as of Sep 1): "arnold car show 2026" (14 clicks, pos 1.6); "brice station concerts 2026" (12, pos 5.5); "arnold car show" (9, pos 2.1)
+- Top 3 pages: Car Show & Chili Cookoff Aug 15 (106 clicks); /venues/brice-station (42); 21st Arnold Classic Car Show (35)
+
+AEO referrals (calendar August):
+- chatgpt: 3  |  perplexity: 0  |  gemini: 0  |  copilot: 0  |  bing: 0
+
+AEO prompt audit: NOT RUN (missed at the time; unrecoverable).
+
+Notes: the drop from July is the holiday hangover, not decay; the ex-holiday
+baseline is in line with June. Two structural wins visible: event-shaped
+queries land at position 1-2 (the car shows), and /venues/brice-station is a
+top-3 page, which is the venue-hub strategy (HWY-9) earning search traffic
+exactly as designed. "brice station concerts 2026" sits at position ~5 with a
+live hub page: striking distance.
+
+### 2026-09 (logged 2026-09-05)
+
+SEO (Google Search Console, trailing 28 days, Aug 8 - Sep 4):
+- Impressions: 13,724 (vs prior 28d as of Aug 1: 16,101)
+- Clicks: 600 (vs 577); CTR 4.4%
+- Avg position (impression-weighted): 8.6
+- Indexed pages: not collected (candidate collector improvement)
+- Events rich result: not checked this pass
+- Top 3 queries (latest capture): "brice station concerts 2026" (13 clicks, pos 4.6); "arnold car show 2026" (13, pos 1.8); "arnold car show" (9, pos 2.0)
+- Top 3 pages: Car Show & Chili Cookoff (102); /venues/brice-station (45); 21st Arnold Classic Car Show (32)
+
+AEO referrals (Sep 1-4 so far):
+- chatgpt: 2  |  perplexity: 0  |  gemini: 0  |  copilot: 0  |  bing: 0
+
+AEO prompt audit (engine: Claude with web search, run 2026-09-05. ChatGPT,
+Perplexity, and Google AI Overviews need a human at those UIs and were not
+run this pass; treat this as a one-engine sample):
+- Q1 weekend Murphys: CITED, rank ~5 of 8 sources (/towns/murphys); the
+  engine's answer visibly drew on our own copy (Irish Pub "busiest live music
+  room", Wednesday open mic). Accurate.
+- Q2 Arnold weekend: NOT cited (Eventbrite, Yelp, travel blogs own the
+  results).
+- Q3 Bear Valley month: NOT cited, and a real hazard: the engine mixed Big
+  Bear Lake (SoCal) events into the answer. One correct local detail
+  (Hermitfest West, Sep 6) matches our data but arrived unattributed.
+- Q6 live music Murphys: NOT cited in sources, though the answer prose again
+  mirrors our copy; the engine pointed readers at visitmurphys and
+  gocalaveras.
+- Q12 corridor calendar: CITED x3 (/date-night, /this-week, homepage) and
+  effectively rank 1: the answer recommends Hwy4Events.com by name, with the
+  Thursday newsletter and Angels Camp-to-Bear Valley span stated correctly.
+
+Notes / actions for next month:
+- Disambiguate Bear Valley vs Big Bear Lake explicitly in /towns/bear-valley
+  copy and any Bear Valley guide Q&A (the Q3 conflation is winnable AEO
+  ground; nobody else local is fighting it).
+- "brice station concerts 2026" at position ~4.6 with a live venue hub is the
+  top striking-distance target; the hub already exists, consider an FAQ/Q&A
+  block on it.
+- The Arnold weekend query (Q2) is the biggest citation gap; our /towns/arnold
+  page ranks for none of the generic-intent phrasing.
+- Answer engines quote our copy without linking (Q1, Q6): the named-entity
+  voice strategy is being read; citation follows authority, so the backlink
+  work in BUSINESS-PLAN stays the lever.
+- Candidate automation: the collector could pull GSC's Indexing coverage so
+  "indexed pages" stops reading "not collected" in this log.
+
 ---
 
 ## Part 5 — Automation (built)
@@ -204,6 +304,7 @@ logging the entry, not by closing the issue.
 - [x] Confirm Cloudflare Web Analytics is recording (2026-05-28 — live, site created 2026-05-26)
 - [x] Monthly prompt-audit reminder built (`/api/aeo-audit-reminder`, cron `0 16 1 * *`, 2026-05-28)
 - [x] Confirmed `SLACK_WEBHOOK_URL` posts to #hwy4 (smoke-tested 2026-05-28, message delivered)
-- [ ] First monthly log entry — the planned ~mid-June 2026 entry was missed; the
-  doc-freshness workflow now files a GitHub issue any month whose entry is missing after
-  the 7th. July's entry clears it.
+- [x] First monthly log entries — logged 2026-09-05 as a catch-up: 2026-07 and
+  2026-08 reconstructed from the collectors' banked data (their prompt audits were
+  missed at the time and are marked NOT RUN), 2026-09 logged on schedule with a
+  one-engine prompt audit. June 2026 predates reliable data and stays unlogged.
