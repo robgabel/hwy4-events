@@ -14,6 +14,7 @@ import {
   matchOrgForEvent,
   promotableVenueUrl,
   isMultiTenantVenue,
+  isUnstableHost,
   type LinkEvent,
   type LinkOrg,
 } from "../../lib/event-link.js";
@@ -138,11 +139,17 @@ test("community submission with a GoCalaveras url stays buttonless (no aggregato
   assert.equal(r.href, null);
 });
 
-test("community exclusion is narrow: a durable (facebook) url still links out", () => {
+test("community exclusion is narrow: a durable url still links out", () => {
+  // Was written with a facebook.com URL, back when social hosts were durable.
+  // Facebook is now non-durable (see the social-silo tests at the bottom), and
+  // a non-durable URL is exactly what community_sourced suppresses — which
+  // would have made this test pass for the wrong reason. Re-pointed at a real
+  // organizer host so it still tests what it was written to test: that the
+  // community exclusion is narrow, not that facebook is trusted.
   const r = resolveEventLink(
     ev({
       name: "Show",
-      event_url: "https://www.facebook.com/events/123",
+      event_url: "https://visitmurphys.com/events/show",
       community_sourced: true,
     })
   );
@@ -159,10 +166,22 @@ test("stable-host event_url (Visit Murphys) renders as a durable source link", (
   assert.equal(r.durable, true);
 });
 
-test("facebook event links are treated as a durable source (not aggregator-suppressed)", () => {
+test("facebook event links render, but as a NON-durable source", () => {
+  // Reversed 2026-09-05. This test previously asserted durable:true, which was
+  // a defensible line while facebook.com event_urls were four legacy rows: a
+  // Facebook PAGE is not event-specific (promotableVenueUrl has always refused
+  // one) but an event PERMALINK is, and it is the organizer's own listing.
+  //
+  // hwy4-fb-pages changed the stakes rather than the argument: it merges FB
+  // permalinks onto rows routinely, so "durable" would start feeding
+  // facebook.com into schema.org offer.url as a matter of course. The site's
+  // whole AEO/SEO thesis is to BE the canonical answer for these events, so
+  // handing structured-data offers to a login-walled silo works against it.
+  // The link still renders — as the quieter "Listed on Facebook" line.
   const r = resolveEventLink(ev({ name: "Show", event_url: "https://www.facebook.com/events/123" }));
   assert.equal(r.kind, "source");
-  assert.equal(r.durable, true);
+  assert.equal(r.durable, false);
+  assert.equal(r.href, "https://www.facebook.com/events/123");
 });
 
 test("priority: organizer beats venue beats source", () => {
@@ -313,5 +332,39 @@ test("GoCalaveras event at a multi-tenant park keeps the non-durable aggregator 
     { venueUrl: promotableVenueUrl("Murphys Community Park", "https://murphyspark.com/") }
   );
   assert.equal(r.kind, "source");
+  assert.equal(r.durable, false);
+});
+
+// ── Facebook is a silo, not a destination (hwy4-fb-pages, 2026-09-05) ────────
+// hwy4-fb-pages merges a venue's own Facebook event permalink onto rows as a
+// matter of routine. Without this, the same host that promotableVenueUrl has
+// always refused to promote would become a high-contrast "Visit Event Page"
+// button and a schema.org offer.url purely because it arrived in event_url
+// instead of hwy4_venues.website.
+
+test("isUnstableHost: social permalinks are never trusted", () => {
+  assert.equal(isUnstableHost("https://www.facebook.com/events/1801994517316530/"), true);
+  assert.equal(isUnstableHost("https://facebook.com/events/123/"), true);
+  assert.equal(isUnstableHost("https://www.instagram.com/p/abc/"), true);
+  assert.equal(isUnstableHost("https://x.com/someone/status/1"), true);
+  // A real organizer site is still trusted.
+  assert.equal(isUnstableHost("https://bricestation.com/collections/events"), false);
+});
+
+test("resolveEventLink: the live Copperopolis Town Square shape stays non-durable", () => {
+  // The exact row hwy4-fb-pages produced on 2026-09-05: a GoCalaveras row whose
+  // event_url the FB page merge replaced with the venue's own FB permalink.
+  const r = resolveEventLink(
+    ev({
+      name: "Music In The Square- The Yacht Rockers",
+      venue_name: "Copperopolis Town Square",
+      org_slug: "gocalaveras",
+      event_url: "https://www.facebook.com/events/1801994517316530/",
+    })
+  );
+  assert.equal(r.href, "https://www.facebook.com/events/1801994517316530/");
+  assert.equal(r.kind, "source");
+  // durable:false keeps it out of JSON-LD offer.url and out of the outline
+  // "Visit …" button; it renders as "Listed on Facebook" instead.
   assert.equal(r.durable, false);
 });
