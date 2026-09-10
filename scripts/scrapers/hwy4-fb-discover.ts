@@ -25,46 +25,55 @@ const TOWN_CONFIGS: TownLocationConfig[] = [
     exploreSlug: "arnold-ca",
     locationId: "105475469485316",
   },
-  // ── Awaiting a location ID ────────────────────────────────────────────────
-  // These five are wired and ready; each needs only Facebook's numeric place ID,
-  // which is visible only to a logged-in browser (see docs/HANDOFF-fb-location-ids.md).
-  // An entry with an empty locationId is SKIPPED, so pasting the ID between the
-  // quotes is the entire job — no uncommenting, no other edit. Their hwy4_orgs
-  // rows already exist, so a newly-filled town writes on the next scrape.
+  // ── Filled 2026-09-05 ─────────────────────────────────────────────────────
+  // Each place ID was read off Facebook's public, LOGGED-OUT place page
+  // (facebook.com/places/x/<id>/), whose title and venue list are rendered from
+  // the ID alone — a deliberately mismatched name slug still titled the page
+  // "Arnold", so the ID is what identifies the place and the slug is decorative
+  // there. Every ID below was confirmed by corridor landmarks on its own page:
+  // Murphys (Firewood, Murphys Pride on Main St), Angels Camp (Crusco's,
+  // Greenhorn Creek), Bear Valley (Creekside Bistro, Sourgrass — the Alpine
+  // County one on Hwy 4, NOT Mariposa's or Bear Valley Springs), Copperopolis
+  // (Music In The Square, 100 Town Square), Avery (4529 Hwy 4).
+  //
+  // `exploreSlug` follows the one convention Arnold proves (<town>-ca) and was
+  // NOT independently verified: /events/explore/ needs a logged-in session.
+  // If a town's first live run returns events from somewhere else, the slug is
+  // the suspect — blank its locationId and it goes dormant again.
   {
     orgSlug: "fb-discover-murphys",
     label: "Murphys",
     defaultTown: "Murphys",
     exploreSlug: "murphys-ca",
-    locationId: "",
+    locationId: "109648499061365",
   },
   {
     orgSlug: "fb-discover-angels-camp",
     label: "Angels Camp",
     defaultTown: "Angels Camp",
     exploreSlug: "angels-camp-ca",
-    locationId: "",
+    locationId: "112419192105459",
   },
   {
     orgSlug: "fb-discover-bear-valley",
     label: "Bear Valley",
     defaultTown: "Bear Valley",
     exploreSlug: "bear-valley-ca",
-    locationId: "",
+    locationId: "104088062962459",
   },
   {
     orgSlug: "fb-discover-copperopolis",
     label: "Copperopolis",
     defaultTown: "Copperopolis",
     exploreSlug: "copperopolis-ca",
-    locationId: "",
+    locationId: "106218426077047",
   },
   {
     orgSlug: "fb-discover-avery",
     label: "Avery",
     defaultTown: "Avery",
     exploreSlug: "avery-ca",
-    locationId: "",
+    locationId: "107705869252736",
   },
 ];
 

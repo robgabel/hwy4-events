@@ -104,11 +104,39 @@ function hostOf(url: string): string | null {
   }
 }
 
-/** True if the URL's host is a churning/bot-walled aggregator we mark non-durable
- *  and never server-validate (also true for an unparseable URL). */
+/** Social platforms. Never a durable destination, for two separate reasons that
+ *  happen to point the same way: a social *page* is not event-specific (the
+ *  original use, in promotableVenueUrl), and a social *permalink* is a
+ *  login-walled third-party silo we do not control and cannot server-validate.
+ *
+ *  Deliberately NOT region data. UNSTABLE_SOURCE_HOSTS lists the region's
+ *  AGGREGATORS (GoCalaveras is a Calaveras business); Facebook is the same
+ *  everywhere, so a 30A or Los Gatos deployment must inherit this rather than
+ *  remember to re-list it. */
+const SOCIAL_HOSTS: ReadonlySet<string> = new Set([
+  "facebook.com",
+  "instagram.com",
+  "twitter.com",
+  "x.com",
+]);
+
+/** True if the URL's host is one we render but never *trust*: a churning /
+ *  bot-walled aggregator, a social silo, or an unparseable URL. Such a link is
+ *  marked non-durable, kept out of JSON-LD, and skipped by validateEventUrls.
+ *
+ *  Facebook joined this gate when hwy4-fb-pages started writing facebook.com
+ *  event permalinks onto rows as a matter of routine (before that the catalog
+ *  held four, from a one-off run). A Facebook event permalink IS event-specific
+ *  and reasonably stable, so it is worth rendering — but promotableVenueUrl has
+ *  always refused to promote a Facebook page to a durable CTA, and it would be
+ *  incoherent for the same host to become a high-contrast "Visit Event Page"
+ *  button and a schema.org offer.url purely because the link arrived in a
+ *  different column. It renders as the quieter "Listed on facebook.com" line
+ *  instead, which is what an aggregator-grade link is for. */
 export function isUnstableHost(url: string): boolean {
   const h = hostOf(url);
   if (!h) return true; // unparseable → don't trust it
+  if (SOCIAL_HOSTS.has(h)) return true;
   return UNSTABLE_SOURCE_HOSTS.has(h) || UNSTABLE_SOURCE_HOSTS.has(`www.${h}`);
 }
 
@@ -144,13 +172,6 @@ export function isMultiTenantVenue(venueName: string | null | undefined): boolea
   return !!venueName && MULTI_TENANT_VENUE.test(venueName);
 }
 
-const SOCIAL_HOSTS: ReadonlySet<string> = new Set([
-  "facebook.com",
-  "instagram.com",
-  "twitter.com",
-  "x.com",
-]);
-
 /** A venue website we're willing to promote to a durable CTA (resolver
  *  priority #2 — "venue canonical"). Null for multi-tenant venues, social pages
  *  (not event-specific), aggregator/unstable hosts, and missing/unparseable
@@ -167,9 +188,8 @@ export function promotableVenueUrl(
   if (!website) return null;
   if (!isHttpUrl(website)) return null; // javascript:/data:/junk can never be a CTA
   if (isMultiTenantVenue(venueName)) return null;
-  if (isUnstableHost(website)) return null; // GoCalaveras et al. (also catches unparseable)
-  const h = hostOf(website);
-  if (!h || SOCIAL_HOSTS.has(h)) return null;
+  // isUnstableHost now covers aggregators, social hosts, and unparseable URLs.
+  if (isUnstableHost(website)) return null;
   return website;
 }
 

@@ -5,6 +5,7 @@ import { applyVenueDetection } from "./venue-matcher.js";
 import { TOWNS, TOWN_ADDRESS_ALIASES } from "../../lib/towns.js";
 import { runApifyActorSync } from "./apify-client.js";
 import type { TownLocationConfig } from "./fb-town-config.js";
+import { eventsTabUrl, type FacebookPageConfig } from "./fb-page-config.js";
 import {
   classifyEventCategory,
   classifyEventCategoryDetailed,
@@ -39,6 +40,21 @@ const VALID_CATEGORIES = [
 type Category = (typeof VALID_CATEGORIES)[number];
 
 export type { TownLocationConfig } from "./fb-town-config.js";
+export type { FacebookPageConfig } from "./fb-page-config.js";
+
+/**
+ * The only things mapping an Apify event actually needs to know about its
+ * source. Both TownLocationConfig and FacebookPageConfig satisfy it
+ * structurally, which is the whole reason a venue's /events tab needs no
+ * second mapper: the actor returns one schema and we read it one way.
+ */
+interface EventSourceContext {
+  orgSlug: string;
+  label: string;
+  defaultTown: string;
+  /** Set only for a single-venue source. See FacebookPageConfig. */
+  defaultVenue?: string;
+}
 
 /**
  * Raw Apify event shape (subset we care about).
@@ -104,10 +120,9 @@ function buildExploreUrl(config: TownLocationConfig): string {
  * Run the Apify facebook-events-scraper actor for one town.
  */
 async function callApify(
-  config: TownLocationConfig,
+  startUrl: string,
   maxEvents: number
 ): Promise<ApifyEvent[]> {
-  const startUrl = buildExploreUrl(config);
   console.log(`  Apify input: ${startUrl}`);
   return runApifyActorSync<ApifyEvent>({
     actor: APIFY_ACTOR,
@@ -267,7 +282,7 @@ function inferPrice(e: ApifyEvent): string | null {
  */
 function mapApifyEvent(
   e: ApifyEvent,
-  config: TownLocationConfig
+  config: EventSourceContext
 ): ExtractedEvent | null {
   const name = pickString(e.name);
   if (!name) return null;
@@ -284,7 +299,13 @@ function mapApifyEvent(
   const description = pickString(e.description)?.slice(0, 1000) || null;
   const address = resolveAddress(e);
   const town = resolveTown(e, config.defaultTown);
-  const venueName = resolveVenueName(e, `${config.label} Community`);
+  // A single-venue page knows its own venue; a town feed or a group does not,
+  // so it falls back to the honest "<label> Community" rather than naming a
+  // room nobody claimed.
+  const venueName = resolveVenueName(
+    e,
+    config.defaultVenue ?? `${config.label} Community`
+  );
 
   const eventUrl =
     pickString(e.url) ||
@@ -381,28 +402,28 @@ ${JSON.stringify(items, null, 2)}`;
 }
 
 /**
- * Fetch and parse events for one town via Apify FB events discover.
+ * Run one Facebook events source: fetch via Apify, map, canonicalize, classify.
  *
- * @param config       Town config (slug, label, defaultTown, locationId)
- * @param maxEvents    Apify maxEvents cap (default 50)
- * @returns            ExtractedEvent[] ready to feed into upsertEvents
+ * Shared by the town explore feeds and the per-page /events tabs. They differ
+ * only in the URL handed to the actor and in whether a venue is known up front
+ * — the response schema is identical, so there is exactly one mapper and one
+ * place where a Facebook field name can be wrong.
  */
-export async function fetchFacebookDiscoverEvents(
-  config: TownLocationConfig,
-  maxEvents: number = 50
+async function runEventSource(
+  ctx: EventSourceContext,
+  startUrl: string,
+  maxEvents: number
 ): Promise<ExtractedEvent[]> {
-  console.log(`  Fetching FB events for ${config.label} (location_id=${config.locationId})`);
-
   let raw: ApifyEvent[];
   try {
-    raw = await callApify(config, maxEvents);
+    raw = await callApify(startUrl, maxEvents);
   } catch (err: any) {
     const errorMsg = err?.message || String(err);
     if (err?.response?.data) {
       console.warn(`  Apify error response:`, JSON.stringify(err.response.data).slice(0, 500));
     }
-    console.warn(`  Apify scrape failed for ${config.label}: ${errorMsg}`);
-    fbDiscoverStatus[config.orgSlug] = { failed: true, error: errorMsg, count: 0 };
+    console.warn(`  Apify scrape failed for ${ctx.label}: ${errorMsg}`);
+    fbDiscoverStatus[ctx.orgSlug] = { failed: true, error: errorMsg, count: 0 };
     return [];
   }
 
@@ -410,13 +431,13 @@ export async function fetchFacebookDiscoverEvents(
 
   const mapped: ExtractedEvent[] = [];
   for (const e of raw) {
-    const m = mapApifyEvent(e, config);
+    const m = mapApifyEvent(e, ctx);
     if (m) mapped.push(m);
   }
   console.log(`  Mapped ${mapped.length} events (dropped ${raw.length - mapped.length} for missing name/date)`);
 
   if (mapped.length === 0) {
-    fbDiscoverStatus[config.orgSlug] = { failed: false, count: 0 };
+    fbDiscoverStatus[ctx.orgSlug] = { failed: false, count: 0 };
     return [];
   }
 
@@ -431,6 +452,41 @@ export async function fetchFacebookDiscoverEvents(
   // Batch-classify categories with one Haiku call
   const classified = await classifyCategoriesBatch(decoded);
 
-  fbDiscoverStatus[config.orgSlug] = { failed: false, count: classified.length };
+  fbDiscoverStatus[ctx.orgSlug] = { failed: false, count: classified.length };
   return classified;
+}
+
+/**
+ * Fetch and parse events for one town via Apify FB events discover.
+ *
+ * @param config       Town config (slug, label, defaultTown, locationId)
+ * @param maxEvents    Apify maxEvents cap (default 50)
+ * @returns            ExtractedEvent[] ready to feed into upsertEvents
+ */
+export async function fetchFacebookDiscoverEvents(
+  config: TownLocationConfig,
+  maxEvents: number = 50
+): Promise<ExtractedEvent[]> {
+  console.log(`  Fetching FB events for ${config.label} (location_id=${config.locationId})`);
+  return runEventSource(config, buildExploreUrl(config), maxEvents);
+}
+
+/**
+ * Fetch and parse events from one Facebook Page's or group's own /events tab.
+ *
+ * Complements the town feeds rather than duplicating them: a venue's tab lists
+ * every event it created, including the ones it never geo-tagged (which explore
+ * therefore cannot see) and the named-act listings explore replaces with a
+ * generic series title. See fb-page-config.ts for the measurement.
+ *
+ * The default cap is lower than the town default because a single page's tab is
+ * a short list; 40 covers a year of a weekly series.
+ */
+export async function fetchFacebookPageEvents(
+  config: FacebookPageConfig,
+  maxEvents: number = 40
+): Promise<ExtractedEvent[]> {
+  const url = eventsTabUrl(config);
+  console.log(`  Fetching FB page events for ${config.label} (${url})`);
+  return runEventSource(config, url, maxEvents);
 }

@@ -1,140 +1,104 @@
-# Handoff: Facebook location IDs + group vetting (needs a logged-in browser)
+# Record: Facebook location IDs + group vetting
 
-> **Status (2026-09-05):** Everything except this document is shipped. Five FB
-> Discover towns are wired and waiting on one string each; the group ingest is
-> live with one group configured. Both steps below need a logged-in Facebook
-> session, which a cloud agent has no path to. `facebook.com` is refused at the
-> egress proxy (`connect_rejected … 403 to CONNECT`) and Firecrawl declines the
-> domain outright, so this is genuinely a human-with-a-browser job, not a
-> tooling gap to route around.
+> **Status (2026-09-05): DONE.** All five location IDs are filled and verified,
+> and the `uh4ccc` group was confirmed public (independently, by Rob in a
+> logged-out window and by an automated logged-out fetch). Current truth about
+> both sources lives in CLAUDE.md and in the two scraper files. Nothing below is
+> outstanding work; it is kept as the record of how the IDs were obtained, since
+> the next town added will need the same method.
 
-Total time: about 15 minutes. Nothing here touches production data until you
-commit; both steps are reversible by reverting one line.
+## How the five IDs were obtained (without a logged-in session)
 
----
+The original plan was to read each ID off `facebook.com/events/explore/` in a
+logged-in browser. That turned out to be unnecessary. Facebook's **public place
+pages** render logged out and are keyed by the same numeric ID:
 
-## Step 1: five location IDs (about 10 minutes)
+```
+https://www.facebook.com/places/x/<id>/
+```
 
-Facebook's events explore page is keyed by a numeric **place ID** that is only
-rendered for a logged-in session. We have Arnold. We need five more.
+The page title and its venue/event list are rendered **from the ID alone** — a
+deliberately mismatched name slug (Arnold's ID under a `Murphys` path) still
+titled the page "Things to do in Arnold, California". So that URL is a
+verification oracle for a candidate ID, with no session and no cookies.
 
-**For each town below:**
+Candidate IDs came from web search (`facebook.com/places "Things to do in
+<Town>, California"`), then each was confirmed by corridor landmarks on its own
+place page:
 
-1. Open <https://www.facebook.com/events/> while logged in.
-2. In the location filter, type the town name and pick it from the dropdown.
-3. The URL becomes `https://www.facebook.com/events/explore/<slug>/<numeric-id>`.
-4. Copy the **numeric tail** and the **slug**.
-
-Then paste each ID into `scripts/scrapers/hwy4-fb-discover.ts`, between the
-quotes that are already there:
-
-| Town | Entry to fill | Expected slug |
+| Town | ID | Confirmed by |
 |---|---|---|
-| Murphys | `fb-discover-murphys` | `murphys-ca` |
-| Angels Camp | `fb-discover-angels-camp` | `angels-camp-ca` |
-| Bear Valley | `fb-discover-bear-valley` | `bear-valley-ca` |
-| Copperopolis | `fb-discover-copperopolis` | `copperopolis-ca` |
-| Avery | `fb-discover-avery` | `avery-ca` |
+| Arnold | `105475469485316` | (was already live) |
+| Murphys | `109648499061365` | Firewood, Grounds, Murphys Pride on Main St |
+| Angels Camp | `112419192105459` | Crusco's, Camps at Greenhorn Creek |
+| Bear Valley | `104088062962459` | Creekside Bistro, Sourgrass, "1 Bear Valley Rd" |
+| Copperopolis | `106218426077047` | Louie's Pizza, Music In The Square, 100 Town Square |
+| Avery | `107705869252736` | Heart & Soul country kitchen, 4529 Hwy 4 |
 
-**If the real slug differs from the expected one, use the real one** and fix the
-`exploreSlug` field too. The slug is part of the URL that actually gets scraped;
-a wrong one silently returns the wrong location's events.
+**Bear Valley was the one worth care.** Web search does not surface it under the
+obvious query, and there are at least two other Bear Valleys in California
+(Mariposa County, and Bear Valley Springs in Kern). The ID above was accepted
+only after its place page showed Alpine-County-on-Hwy-4 landmarks.
 
-That is the whole edit. The entries already exist with `locationId: ""`, their
-`hwy4_orgs` rows are already inserted, and `isConfiguredTown` skips any entry
-whose ID is not all digits, so a half-finished paste is inert rather than
-dangerous. (An empty ID would otherwise build an explore URL that resolves to
-Facebook's **global** events page and pour non-corridor events into the corridor
-filter on every run. That guard is test-locked.)
+## Live verification (read-only, no writes)
 
-**Verify before committing:**
+Each config was then run through `fetchFacebookDiscoverEvents` directly —
+bypassing `upsertEvents`, so nothing was written — to prove the **slug + ID pair
+actually resolves to that town** rather than to Facebook's global events page:
 
-```sh
-cd scripts && npm run scrape -- --source hwy4-fb-discover
-```
+| Town | Events returned | Towns present |
+|---|---|---|
+| Arnold | 3 | `{Arnold: 3}` |
+| Murphys | 4 | `{Murphys: 4}` |
+| Angels Camp | 3 | `{Angels Camp: 3}` |
+| Bear Valley | 2 | `{Bear Valley: 2}` |
+| Copperopolis | 9 | `{Copperopolis: 9}` |
+| Avery | 1 raw, 0 mapped | — |
 
-Read the per-town extraction lines. You want corridor towns and plausible dates.
-If a town returns events from somewhere else entirely, its slug or ID is wrong;
-blank the `locationId` again and it goes dormant.
+No cross-town contamination anywhere, which is what the global-events-page
+failure mode would have looked like. **Avery is the weak one**: it returned a
+single raw item that was dropped for a missing name/date, so its explore URL is
+confirmed only by the place-page oracle, not by a mapped event. It is a hamlet,
+so a thin month is expected; if Avery is still returning nothing in a few weeks,
+re-check its slug before assuming there is simply nothing on.
 
----
+## Group ingest
 
-## Step 2: vet the Facebook groups (about 5 minutes)
+`uh4ccc` ("The Original Upper Hwy 4 Corridor Calaveras County Group") is
+**Public**, 10.1K members — posts are readable with no account.
 
-The group ingest (`scripts/scrapers/hwy4-fb-groups.ts`) is live with one group
-configured, `uh4ccc`. Two things to confirm.
+> **Still do not supply session cookies to read a private group.** The Apify
+> group actors accept a `cookieString` from a logged-in member, which puts a
+> personal Facebook session in a GitHub Actions secret with an account ban
+> attached. Long-tail listings are not worth a Facebook account. Public only.
 
-**a) Is it public?** Open <https://www.facebook.com/groups/uh4ccc> in a
-**logged-out** window (private/incognito). If you can read posts, it is public
-and the actor works with no credentials. If it demands a login, remove it from
-`GROUP_CONFIGS`.
+The pinned actor (`apify~facebook-groups-scraper`) and its field names were
+originally written from documentation, because `apify.com` was egress-blocked
+from the container that wrote them. **A live dry run confirmed the shape**: of
+60 returned items, 59 mapped cleanly. `url` carries the permalink,
+`facebookUrl` the group, plus `time` and `user`. No mapper change was needed.
 
-> **Do not supply session cookies to make a private group work.** The Apify
-> group actors accept a `cookieString` from a logged-in member, which means your
-> personal Facebook session sitting in a GitHub Actions secret, with an
-> account-ban attached if Meta notices. Long-tail listings are not worth your
-> Facebook account. Public groups only.
+That run also gives the first real read on queue volume: 59 posts inside the
+14-day floor → 13 looked like event announcements → 12 extractions (the per-run
+cap, 1 deferred) → **6 events**, all plausible: Community Yard Sale, Labor Day
+Concert, SIR Branch 152 BBQ Picnic, Labor Day Weekend Arts & Crafts Festival,
+and two named live-music sets.
 
-**b) Add any other public corridor groups** to `GROUP_CONFIGS` in that file:
+## What to watch in week one
 
-```ts
-{ slug: "arnold-ca", url: "https://www.facebook.com/groups/<slug>", label: "Arnold Community" },
-```
-
-No `hwy4_orgs` row is needed. These land as `event_submissions`, not events, so
-there is no foreign key to satisfy.
-
-**Then dry-run it:**
-
-```sh
-cd scripts && npm run scrape -- --source hwy4-fb-groups --dry-run
-```
-
-`--dry-run` writes no submissions and no cursor, and **prints the first raw
-Apify item**. Check that against `mapGroupPost` in
-`scripts/lib/facebook-groups.ts`: we read post text from `text` / `postText` /
-`message` / `content` / `caption` and the permalink from `url` / `postUrl` /
-`facebookUrl` / `permalink` / `link`. The Apify store has several competing
-group actors with different field names and no stable schema, and `apify.com` is
-also egress-blocked from the cloud container, so the pinned actor
-(`apify~facebook-groups-scraper`) and its field shape are the one part of this
-that was written from documentation rather than from a live response.
-
-If the shape differs, add the actual key names to those arrays. An item we
-cannot map is skipped, never guessed at, so a mismatch degrades to "found
-nothing" rather than to fiction.
-
----
-
-## What happens after you commit
-
-The daily scrape Action picks both up automatically. Group posts flow:
-
-```
-public group post
-  → strict candidate filter (needs a day anchor AND an event signal)
-  → one Sonnet call per post
-  → PENDING event_submissions row, pinned to the post permalink
-  → /api/agent/triage-submissions (18:30 UTC) attaches a verdict
-  → you click Publish / Merge / Dismiss at /admin/submissions
-```
-
-**No group post ever writes to `hwy4_events`.** That is the design, not a
-limitation: three of the four rows the June 2026 one-off run wrote directly into
-events carried neither `source_event_id` nor `event_url`, which is the
-unverifiable / uncorrectable / unretractable shape of the 36 Murphys Irish Pub
-phantoms. The human click is the pin.
-
-Cost control is two-layered: the candidate filter decides what is worth a model
-call, and a per-group high-water cursor in `site_config`
-(`fb_group_cursor_<slug>`) stops us re-reading the same post daily. There is a
-hard ceiling of 12 extractions per group per run.
-
-**Watch the first week.** The number to care about is the ratio of queued
-submissions to ones you actually publish. If the queue fills with chatter you
-dismiss, tighten `EVENT_SIGNALS` / `QUESTION_ONLY` in
+The number that matters is **queued submissions ÷ ones actually published**. If
+the queue fills with chatter, tighten `EVENT_SIGNALS` / `QUESTION_ONLY` in
 `scripts/lib/facebook-groups.ts` rather than living with it. A review queue that
 stops being opened is how this becomes the fourth dead Facebook source.
 
 **To back either out:** blank the `locationId`s, or empty `GROUP_CONFIGS`. Both
 go dormant with no other change and no data to clean up.
+
+## Adding another town later
+
+1. Web-search `facebook.com/places "Things to do in <Town>, California"`.
+2. Confirm the ID at `https://www.facebook.com/places/x/<id>/` — the title must
+   name the town, and the venues must be ones you recognize.
+3. Add the entry with `exploreSlug: "<town>-ca"` and run the read-only fetch
+   before the first real scrape. A wrong slug returns another location's events,
+   which the town histogram above makes obvious.

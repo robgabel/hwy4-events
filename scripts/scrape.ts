@@ -3,6 +3,7 @@ import { scrapeGoCalaveras } from "./scrapers/gocalaveras.js";
 import { scrapeMysticSaloon } from "./scrapers/mystic-saloon.js";
 import { scrapeHwy4FbDiscover } from "./scrapers/hwy4-fb-discover.js";
 import { scrapeHwy4FbGroups } from "./scrapers/hwy4-fb-groups.js";
+import { scrapeHwy4FbPages } from "./scrapers/hwy4-fb-pages.js";
 import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeArnoldRimTrail } from "./scrapers/arnold-rim-trail.js";
 import { scrapeBriceStation } from "./scrapers/brice-station.js";
@@ -35,6 +36,10 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  *     many hosts per search across multiple corridor ZIP anchors
  *   - sequoia-woods: Firecrawl JSON extraction of the country club's month-grid
  *     calendar, classifying each event public vs members-only (private)
+ *   - hwy4-fb-pages: venues' own Facebook /events tabs — the same Apify events
+ *     actor hwy4-fb-discover points at a town, aimed at one page instead,
+ *     because a page's tab and a town's explore feed return different event
+ *     objects for the same night (see scripts/lib/fb-page-config.ts)
  *   - murphys-irish-pub: the pub's own Wix site read via per-event pages
  *     (schema.org JSON-LD + dated occurrence slugs) after the generic LLM
  *     runner invented dates off the dateless homepage widget
@@ -62,6 +67,13 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   // are real, so both writers coexist and the pub's own site writes last.
   "brice-station": scrapeBriceStation,
   "murphys-irish-pub": scrapeMurphysIrishPub,
+  // hwy4-fb-pages reads venues' own Facebook /events tabs. Same reasoning as
+  // the two above: organizer-owned but not blocklisted (aggregators carry real
+  // events these venues never posted), so it runs last and writes last. It is
+  // also the source that carries the ACT NAME where the town explore feed
+  // carries a generic series title, and last-writer-wins is the cheap way to
+  // make sure the specific title is the one that lands.
+  "hwy4-fb-pages": scrapeHwy4FbPages,
 };
 
 const SCRAPERS: Record<string, () => Promise<void>> = {

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "./supabase-admin.js";
-import { getFacebookStatus } from "./facebook.js";
+import { getFacebookDiscoverStatus } from "./facebook-events.js";
 import { isGenericVenue } from "./venue-matcher.js";
 
 /**
@@ -147,20 +147,26 @@ export async function runHealthCheck(
     );
   }
 
-  // Facebook scraper status
-  const fbStatus = getFacebookStatus();
-  const fbPages = Object.entries(fbStatus);
-  if (fbPages.length > 0) {
+  // Facebook scraper status — every Apify events source (town explore feeds,
+  // venue /events tabs, mystic-saloon) reports here, keyed by org_slug.
+  //
+  // This used to read lib/facebook.ts, the batch post-scraper, which is gone.
+  // getFacebookDiscoverStatus had been exported and read by NOBODY since it was
+  // written, so a town feed could fail silently while the health report happily
+  // printed the one page scraper's status. Both now land in the same place.
+  const fbStatus = getFacebookDiscoverStatus();
+  const fbSources = Object.entries(fbStatus);
+  if (fbSources.length > 0) {
     console.log("\n--- Facebook Scraper Status ---");
-    for (const [url, status] of fbPages) {
+    for (const [orgSlug, status] of fbSources) {
       if (status.failed) {
-        console.log(`  FAILED: ${url} — ${status.error}`);
+        console.log(`  FAILED: ${orgSlug} — ${status.error}`);
         warnings.push(
-          `Facebook scraper failed for ${url}: ${status.error}. ` +
-          `Website fallback was used. If this persists, facebook-event-scraper may need updating.`
+          `Facebook scraper failed for ${orgSlug}: ${status.error}. ` +
+          `If this persists, apify~facebook-events-scraper may need updating.`
         );
       } else {
-        console.log(`  OK: ${url}`);
+        console.log(`  OK: ${orgSlug} (${status.count} event(s))`);
       }
     }
   }
