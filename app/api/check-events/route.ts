@@ -328,17 +328,19 @@ export async function GET(request: Request) {
   // the cron ran but the CF read returned nothing. Guarded so it never breaks the
   // audit. See PRD-cloudflare-analytics.md.
   let analyticsStaleReason: string | null = null;
-  let analyticsLatest: { date: string; pageviews: number } | null = null;
+  let analyticsLatest: { date: string; pageviews: number | null } | null = null;
   try {
     const { data: latestRows, error: aErr } = await supabase
       .from("analytics_daily")
-      .select("date, pageviews")
+      .select("date, pageviews, rejected")
       .order("date", { ascending: false })
       .limit(1);
     if (aErr) {
       console.error("[check-events] analytics_daily freshness query failed:", aErr.message);
     } else {
-      const latest = latestRows?.[0] as { date: string; pageviews: number } | undefined;
+      const latest = latestRows?.[0] as
+        | { date: string; pageviews: number | null; rejected?: boolean }
+        | undefined;
       if (!latest) {
         analyticsStaleReason = "no rows in analytics_daily — the snapshot cron has never written";
       } else {
@@ -348,6 +350,9 @@ export async function GET(request: Request) {
         );
         if (daysBehind >= 2) {
           analyticsStaleReason = `latest snapshot is ${latest.date} (${daysBehind} days behind) — the daily snapshot-analytics cron may be failing`;
+        } else if (latest.rejected) {
+          // Cron ran and correctly refused a capped/mismatched RUM day. The gap
+          // is visible; this is not a silent miss, so do not alarm as 0 pageviews.
         } else if ((latest.pageviews ?? 0) === 0) {
           analyticsStaleReason = `latest snapshot (${latest.date}) captured 0 pageviews — the CF read may be silently failing`;
         }

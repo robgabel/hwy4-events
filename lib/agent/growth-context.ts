@@ -9,6 +9,11 @@ import {
   sitemapVenueKeys,
   venueGateCounts,
 } from "@/lib/venue-pages";
+import {
+  isUnusableAnalyticsDay,
+  sumCfTrafficWindows,
+  utcAddDays,
+} from "@/lib/cloudflare-analytics";
 
 // Gathers the growth signal pack handed to the Head-of-Growth reasoner
 // (PRD-growth-agent.md). Every number here is real and queried; the model may
@@ -73,7 +78,12 @@ export async function gatherGrowthContext(
     supabase.rpc("growth_session_stats", { p_d7: d7, p_d14: d14 }),
     // 30d of outbound business clicks, the referral signal (DB-aggregated).
     supabase.rpc("growth_outbound_stats", { p_d7: d7, p_d30: d30 }),
-    supabase.from("analytics_daily").select("date, pageviews, top_pages, ai_referrals").order("date", { ascending: false }).limit(14),
+    supabase
+      .from("analytics_daily")
+      .select("date, pageviews, visits, rejected, top_pages, ai_referrals")
+      .gte("date", utcAddDays(today, -14))
+      .lte("date", today)
+      .order("date", { ascending: false }),
     supabase.from("hwy4_orgs").select("id", { count: "exact", head: true }).not("canonical_url", "is", null),
     // 7d of share hits by src (DB-aggregated).
     supabase.rpc("growth_share_stats", { p_d7: d7 }),
@@ -130,21 +140,46 @@ export async function gatherGrowthContext(
     return { event_id: String(o.event_id ?? ""), clicks: num(o.count) };
   });
 
-  // ── traffic (analytics_daily, newest first) ─────────────────────────────
+  // ── traffic (analytics_daily, calendar 7d windows, skip capped RUM days) ─
+  // Newest-14-rows was a lie on 2026-09-04: a 10,000-cap Sep 1 row sat in the
+  // first 7 and the memo claimed a Labor Day spike. Sum complete UTC days
+  // ending yesterday; skip rejected / null / >=10k days.
   const aRows = rows(analytics);
-  const pv7 = aRows.slice(0, 7).reduce((s, r) => s + num(r.pageviews), 0);
-  const pvPrev7 = aRows.slice(7, 14).reduce((s, r) => s + num(r.pageviews), 0);
-  const latestA = aRows[0];
-  const topPages = Array.isArray(latestA?.top_pages)
-    ? (latestA!.top_pages as Row[]).slice(0, 8).map((p) => ({ key: String(p.key ?? ""), pageviews: num(p.pageviews) }))
+  const cfWindows = sumCfTrafficWindows(
+    aRows.map((r) => ({
+      date: String(r.date ?? ""),
+      pageviews: r.pageviews as number | null,
+      visits: r.visits as number | null,
+      rejected: Boolean(r.rejected),
+      top_pages: r.top_pages,
+      ai_referrals: (r.ai_referrals as Record<string, unknown> | null) ?? null,
+    })),
+    today
+  );
+  const pv7 = cfWindows.pageviews_7d;
+  const pvPrev7 = cfWindows.pageviews_prev_7d;
+  const cfDropped = cfWindows.excluded_dates.length > 0;
+  const sessions7d = Object.values(sessionsBySrc7d).reduce((s, n) => s + n, 0);
+  const usableA = aRows.filter((r) =>
+    !isUnusableAnalyticsDay({
+      date: String(r.date ?? ""),
+      pageviews: r.pageviews as number | null,
+      visits: r.visits as number | null,
+      rejected: Boolean(r.rejected),
+    })
+  );
+  const latestUsable = usableA[0];
+  const topPages = Array.isArray(latestUsable?.top_pages)
+    ? (latestUsable!.top_pages as Row[]).slice(0, 8).map((p) => ({ key: String(p.key ?? ""), pageviews: num(p.pageviews) }))
     : [];
-  // Sum ai_referrals across the whole fetched window (14d), not just the
-  // latest day. Answer-engine referrals arrive ~1 visit every few days, so any
-  // single day's row is almost always all zeros — which made this block read 0
-  // while channels.sessions_by_src_7d showed real ref:chatgpt.com sessions
-  // (HWY-4). Summing keeps the two views in directional agreement.
+  // Sum ai_referrals across usable days in the fetched calendar window, not
+  // just the latest day. Answer-engine referrals arrive ~1 visit every few
+  // days, so any single day's row is almost always all zeros — which made this
+  // block read 0 while channels.sessions_by_src_7d showed real ref:chatgpt.com
+  // sessions (HWY-4). Skip capped/rejected days so a 10k RUM row can't inflate
+  // this either.
   const aiReferrals: Record<string, number> = {};
-  for (const r of aRows) {
+  for (const r of usableA) {
     if (r.ai_referrals && typeof r.ai_referrals === "object") {
       for (const [k, v] of Object.entries(r.ai_referrals as Record<string, unknown>)) {
         aiReferrals[k] = (aiReferrals[k] ?? 0) + num(v);
@@ -245,6 +280,11 @@ export async function gatherGrowthContext(
     traffic: {
       pageviews_7d: pv7,
       pageviews_prev_7d: pvPrev7,
+      days_included: cfWindows.days_included,
+      days_included_prev: cfWindows.days_included_prev,
+      excluded_dates: cfWindows.excluded_dates,
+      source: cfDropped ? "site_events" : "cloudflare",
+      sessions_7d: sessions7d,
       top_pages: topPages,
       ai_referrals: aiReferrals,
     },

@@ -303,8 +303,10 @@ create index idx_event_merge_log_merged_at on event_merge_log (merged_at desc);
 
 create table analytics_daily (
   date date not null primary key,
-  pageviews integer not null default 0,
-  visits integer not null default 0,
+  pageviews integer,
+  visits integer,
+  rejected boolean not null default false,
+  reject_reason text,
   top_pages jsonb not null default '[]'::jsonb,
   referrers jsonb not null default '[]'::jsonb,
   countries jsonb not null default '[]'::jsonb,
