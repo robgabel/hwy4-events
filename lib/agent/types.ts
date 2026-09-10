@@ -112,7 +112,7 @@ export type GrowthVitals = {
   local_sessions_7d: number; // WRR proxy (distinct local view sessions, last 7d)
   local_sessions_prev_7d: number;
   business_referrals_7d: number; // outbound business clicks, last 7d
-  pageviews_7d: number;
+  pageviews_7d: number; // Cloudflare 7d sum of usable days only (never a capped RUM day)
 };
 
 // A logged growth experiment (growth_experiments). The agent reads these as
@@ -187,9 +187,22 @@ export type GrowthContext = {
   traffic: {
     pageviews_7d: number;
     pageviews_prev_7d: number;
+    // Usable Cloudflare days inside each calendar window (complete UTC days
+    // ending yesterday). days_included < 7 means the CF week is incomplete.
+    days_included: number;
+    days_included_prev: number;
+    // Dates we had an analytics_daily row for but refused to count (rejected
+    // flag, null totals, or still-stored >=10,000 cap). Non-empty means the
+    // memo must not narrate a pageview spike from the Cloudflare totals.
+    excluded_dates: string[];
+    // "cloudflare" when both 7d windows have no excluded days; "site_events"
+    // when any CF day was dropped — prefer sessions_7d as the traffic read.
+    source: "cloudflare" | "site_events";
+    // First-party distinct view sessions last 7d (sum of channels.sessions_by_src_7d).
+    sessions_7d: number;
     top_pages: { key: string; pageviews: number }[];
-    // Answer-engine referral visits summed over the last 14 days of
-    // analytics_daily (NOT a single day — see gatherGrowthContext / HWY-4).
+    // Answer-engine referral visits summed over usable days in the 14d calendar
+    // window (NOT a single day — see gatherGrowthContext / HWY-4).
     ai_referrals: Record<string, number>;
   };
   // The /venues/[slug] hub rollout (HWY-9) and its crawl-exposure dial

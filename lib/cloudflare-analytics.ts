@@ -274,3 +274,213 @@ export function utcDayRange(day: string): DateRange {
   }
   return { since: `${day}T00:00:00Z`, until: `${day}T23:59:59Z` };
 }
+
+export function utcAddDays(isoDate: string, days: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+    throw new Error(`utcAddDays expects YYYY-MM-DD, got "${isoDate}"`);
+  }
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// --- RUM spike guard ------------------------------------------------------
+//
+// rumPageloadEventsAdaptiveGroups can return a CAPPED day (~10,000 pageviews
+// and ~10,000 visits) that is not real traffic. On 2026-09-01 that number
+// landed in analytics_daily and the Friday growth memo narrated a Labor Day
+// spike; the same day's referrer rows summed to tens of visits and first-party
+// site_events had ~62 views. Blank beats a fake day: never invent a replacement
+// count (unsampled RUM for old days is already gone).
+
+/** Adaptive-groups ceiling we actually hit. A day at or above this is unusable. */
+export const ADAPTIVE_GROUPS_CEILING = 10_000;
+
+/**
+ * Totals this many times the same snapshot's referrer-row visit sum are not a
+ * real day (the Sep 1 cap: 10,000 visits vs tens of referrer visits). Requires
+ * a positive referrer sum so a failed dimension fetch on a quiet day is not
+ * itself a reject.
+ */
+export const REFERRER_MISMATCH_RATIO = 10;
+
+export type RumRejectReason = "adaptive_groups_ceiling" | "referrer_mismatch";
+
+export type RumSnapshotJudgment =
+  | { reject: false }
+  | { reject: true; reason: RumRejectReason };
+
+export function referrerVisitSum(
+  referrers: Array<{ visits?: number | null }> | null | undefined
+): number {
+  if (!referrers) return 0;
+  let n = 0;
+  for (const r of referrers) n += Number(r.visits) || 0;
+  return n;
+}
+
+/**
+ * Ingest-time verdict for one Cloudflare RUM day. Pure: the snapshot route
+ * calls this before upsert, and the growth-context read path reuses the same
+ * ceiling via `isUnusableAnalyticsDay`.
+ */
+export function judgeRumSnapshot(input: {
+  pageviews: number;
+  visits: number;
+  referrers?: Array<{ visits?: number | null }> | null;
+}): RumSnapshotJudgment {
+  const pageviews = Number(input.pageviews) || 0;
+  const visits = Number(input.visits) || 0;
+  if (pageviews >= ADAPTIVE_GROUPS_CEILING || visits >= ADAPTIVE_GROUPS_CEILING) {
+    return { reject: true, reason: "adaptive_groups_ceiling" };
+  }
+  const refVisits = referrerVisitSum(input.referrers);
+  const claimed = Math.max(pageviews, visits);
+  if (refVisits > 0 && claimed >= refVisits * REFERRER_MISMATCH_RATIO) {
+    return { reject: true, reason: "referrer_mismatch" };
+  }
+  return { reject: false };
+}
+
+export type AnalyticsDailyWrite = {
+  date: string;
+  pageviews: number | null;
+  visits: number | null;
+  top_pages: CountRow[];
+  referrers: CountRow[];
+  countries: CountRow[];
+  devices: CountRow[];
+  browsers: CountRow[];
+  ai_referrals: Record<string, number>;
+  rejected: boolean;
+  reject_reason: RumRejectReason | null;
+};
+
+/** Shape the snapshot cron upserts. Rejected days keep the row (gap visible) with null totals. */
+export function buildAnalyticsDailyRow(
+  day: string,
+  snapshot: AnalyticsSnapshot
+): AnalyticsDailyWrite {
+  const verdict = judgeRumSnapshot({
+    pageviews: snapshot.totals.pageviews,
+    visits: snapshot.totals.visits,
+    referrers: snapshot.referrers,
+  });
+  const dimensions = {
+    date: day,
+    top_pages: snapshot.topPages,
+    referrers: snapshot.referrers,
+    countries: snapshot.countries,
+    devices: snapshot.devices,
+    browsers: snapshot.browsers,
+    ai_referrals: snapshot.aiReferrals,
+  };
+  if (verdict.reject) {
+    return {
+      ...dimensions,
+      pageviews: null,
+      visits: null,
+      rejected: true,
+      reject_reason: verdict.reason,
+    };
+  }
+  return {
+    ...dimensions,
+    pageviews: snapshot.totals.pageviews,
+    visits: snapshot.totals.visits,
+    rejected: false,
+    reject_reason: null,
+  };
+}
+
+export type AnalyticsDayRead = {
+  date: string;
+  pageviews?: number | null;
+  visits?: number | null;
+  rejected?: boolean | null;
+  top_pages?: unknown;
+  ai_referrals?: Record<string, unknown> | null;
+};
+
+/** Read-path skip: rejected flag, null totals, or a still-stored ceiling day. */
+export function isUnusableAnalyticsDay(row: AnalyticsDayRead): boolean {
+  if (row.rejected) return true;
+  if (row.pageviews == null || row.visits == null) return true;
+  if (row.pageviews >= ADAPTIVE_GROUPS_CEILING || row.visits >= ADAPTIVE_GROUPS_CEILING) {
+    return true;
+  }
+  return false;
+}
+
+export type CfTrafficWindows = {
+  pageviews_7d: number;
+  pageviews_prev_7d: number;
+  days_included: number;
+  days_included_prev: number;
+  excluded_dates: string[];
+  window_start: string;
+  window_end: string;
+  prev_window_start: string;
+  prev_window_end: string;
+};
+
+/**
+ * Sum Cloudflare pageviews over calendar 7-day windows, not "the newest 14
+ * rows". Windows are complete UTC days ending yesterday (the snapshot cron
+ * writes the previous UTC day). Rejected / null / ceiling days are skipped
+ * and listed on `excluded_dates`.
+ */
+export function sumCfTrafficWindows(
+  rows: AnalyticsDayRead[],
+  today: string
+): CfTrafficWindows {
+  const windowEnd = utcAddDays(today, -1);
+  const windowStart = utcAddDays(windowEnd, -6);
+  const prevWindowEnd = utcAddDays(windowStart, -1);
+  const prevWindowStart = utcAddDays(prevWindowEnd, -6);
+
+  const byDate = new Map<string, AnalyticsDayRead>();
+  for (const r of rows) {
+    const d = String(r.date ?? "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) byDate.set(d, r);
+  }
+
+  const excluded: string[] = [];
+  let pageviews7 = 0;
+  let days7 = 0;
+  let pageviewsPrev = 0;
+  let daysPrev = 0;
+
+  for (let d = windowStart; d <= windowEnd; d = utcAddDays(d, 1)) {
+    const row = byDate.get(d);
+    if (!row) continue;
+    if (isUnusableAnalyticsDay(row)) {
+      excluded.push(d);
+      continue;
+    }
+    pageviews7 += row.pageviews ?? 0;
+    days7++;
+  }
+  for (let d = prevWindowStart; d <= prevWindowEnd; d = utcAddDays(d, 1)) {
+    const row = byDate.get(d);
+    if (!row) continue;
+    if (isUnusableAnalyticsDay(row)) {
+      excluded.push(d);
+      continue;
+    }
+    pageviewsPrev += row.pageviews ?? 0;
+    daysPrev++;
+  }
+
+  return {
+    pageviews_7d: pageviews7,
+    pageviews_prev_7d: pageviewsPrev,
+    days_included: days7,
+    days_included_prev: daysPrev,
+    excluded_dates: excluded.sort(),
+    window_start: windowStart,
+    window_end: windowEnd,
+    prev_window_start: prevWindowStart,
+    prev_window_end: prevWindowEnd,
+  };
+}

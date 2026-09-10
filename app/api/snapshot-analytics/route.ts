@@ -1,7 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
-import { getAnalyticsSnapshot, utcDayRange } from "@/lib/cloudflare-analytics";
+import {
+  buildAnalyticsDailyRow,
+  getAnalyticsSnapshot,
+  utcDayRange,
+} from "@/lib/cloudflare-analytics";
 
 export const maxDuration = 30;
 
@@ -13,7 +17,9 @@ export const maxDuration = 30;
  * what the API returns); this builds an unbounded, full-fidelity local history and
  * powers the admin Growth view + AEO referral tracking.
  * Runs once daily via vercel.json cron, capturing the previous full UTC day.
- * Idempotent: upserts on `date`. Gated by CRON_SECRET. See PRD-cloudflare-analytics.md.
+ * Idempotent: upserts on `date`. A capped/mismatched RUM day is still written
+ * (so the gap is visible) with rejected=true and null totals — never stored as
+ * a 10,000-visit spike. Gated by CRON_SECRET. See PRD-cloudflare-analytics.md.
  */
 export async function GET(request: Request) {
   const cronDenied = requireCronAuth(request);
@@ -35,19 +41,17 @@ export async function GET(request: Request) {
 
   try {
     const snapshot = await getAnalyticsSnapshot(utcDayRange(day));
+    const row = buildAnalyticsDailyRow(day, snapshot);
+    if (row.rejected) {
+      console.warn(
+        `[snapshot-analytics] rejected ${day}: ${row.reject_reason} (cf pageviews=${snapshot.totals.pageviews} visits=${snapshot.totals.visits}; totals stored as null)`
+      );
+    }
 
     const supabase = createClient(supabaseUrl, serviceKey);
     const { error } = await supabase.from("analytics_daily").upsert(
       {
-        date: day,
-        pageviews: snapshot.totals.pageviews,
-        visits: snapshot.totals.visits,
-        top_pages: snapshot.topPages,
-        referrers: snapshot.referrers,
-        countries: snapshot.countries,
-        devices: snapshot.devices,
-        browsers: snapshot.browsers,
-        ai_referrals: snapshot.aiReferrals,
+        ...row,
         synced_at: new Date().toISOString(),
       },
       { onConflict: "date" }
@@ -64,7 +68,11 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       date: day,
-      totals: snapshot.totals,
+      rejected: row.rejected,
+      reject_reason: row.reject_reason,
+      totals: row.rejected
+        ? { pageviews: null, visits: null }
+        : snapshot.totals,
       ai_referrals: snapshot.aiReferrals,
     });
   } catch (err) {

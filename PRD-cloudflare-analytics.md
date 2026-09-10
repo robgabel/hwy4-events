@@ -1,6 +1,6 @@
 # PRD: Cloudflare Analytics Read API
 
-> **Status (2026-07-04):** Frozen record — Phases 1–3 shipped 2026-06-03 (read client, nightly `analytics_daily` snapshot, `/admin/analytics` Growth tab). Current behavior lives in CLAUDE.md (cron table + env vars).
+> **Status (2026-09-10):** Frozen record — Phases 1–3 shipped 2026-06-03. **RUM spike guard** (ingest reject of ≥10k / referrer-mismatch days, calendar 7d sums, admin chart gaps) lives in CLAUDE.md + `lib/cloudflare-analytics.ts`. Do not treat a 10,000/10,000 `analytics_daily` row as real traffic.
 
 **Status:** Shipped 2026-06-03. Phases 1–3 live in production — read path (`/api/analytics`), nightly persistence (`/api/snapshot-analytics` → `analytics_daily`, 30-day history backfilled), and the admin **Growth tab** (`/admin/analytics`) surfacing traffic + answer-engine (AEO) referral counts. Remaining: fold GSC/search into the Growth tab once `seo_snapshots` has data.
 **Created:** 2026-06-01

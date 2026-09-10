@@ -10,7 +10,7 @@ import {
   type Bucket,
   type RangeOption,
 } from "@/lib/analytics-range";
-import type { CountRow } from "@/lib/cloudflare-analytics";
+import { isUnusableAnalyticsDay, type CountRow } from "@/lib/cloudflare-analytics";
 import { getNewsletterStats, type NewsletterStats } from "@/lib/newsletter-stats";
 import { getSeoOverview, type SeoOverview } from "@/lib/seo-data";
 
@@ -23,8 +23,10 @@ export const dynamic = "force-dynamic";
 
 type DailyRow = {
   date: string;
-  pageviews: number;
-  visits: number;
+  pageviews: number | null;
+  visits: number | null;
+  rejected: boolean;
+  reject_reason: string | null;
   top_pages: CountRow[];
   referrers: CountRow[];
   countries: CountRow[];
@@ -44,10 +46,18 @@ async function loadDaily(days: number): Promise<DailyRow[]> {
   if (!supabase) return [];
   const { data } = await supabase
     .from("analytics_daily")
-    .select("date, pageviews, visits, top_pages, referrers, countries, devices, ai_referrals, synced_at")
+    .select("date, pageviews, visits, rejected, reject_reason, top_pages, referrers, countries, devices, ai_referrals, synced_at")
     .order("date", { ascending: false })
     .limit(days);
-  return (data as DailyRow[] | null) ?? [];
+  return ((data as DailyRow[] | null) ?? []).map((r) => {
+    const unusable = isUnusableAnalyticsDay(r);
+    return {
+      ...r,
+      rejected: Boolean(r.rejected) || unusable,
+      pageviews: unusable ? null : r.pageviews,
+      visits: unusable ? null : r.visits,
+    };
+  });
 }
 
 type NewsletterClicks = {
@@ -236,7 +246,7 @@ async function loadGate0(days: number): Promise<Gate0> {
 // --- aggregation (rows are newest-first) ---------------------------------
 
 function sumLast(rows: DailyRow[], n: number) {
-  const slice = rows.slice(0, n);
+  const slice = rows.slice(0, n).filter((r) => !r.rejected);
   return {
     pageviews: slice.reduce((a, r) => a + (r.pageviews || 0), 0),
     visits: slice.reduce((a, r) => a + (r.visits || 0), 0),
@@ -250,6 +260,7 @@ function aggregate(
 ): CountRow[] {
   const map = new Map<string, { pageviews: number; visits: number }>();
   for (const r of rows) {
+    if (r.rejected) continue;
     for (const item of r[field] ?? []) {
       const cur = map.get(item.key) ?? { pageviews: 0, visits: 0 };
       cur.pageviews += item.pageviews || 0;
@@ -273,7 +284,10 @@ const AI_LABELS: Record<string, string> = {
 
 function aggregateAi(rows: DailyRow[]): Array<{ key: string; label: string; visits: number }> {
   const out: Record<string, number> = { chatgpt: 0, perplexity: 0, gemini: 0, copilot: 0, claude: 0 };
-  for (const r of rows) for (const k of Object.keys(out)) out[k] += r.ai_referrals?.[k] ?? 0;
+  for (const r of rows) {
+    if (r.rejected) continue;
+    for (const k of Object.keys(out)) out[k] += r.ai_referrals?.[k] ?? 0;
+  }
   return Object.entries(out).map(([key, visits]) => ({ key, label: AI_LABELS[key] ?? key, visits }));
 }
 
@@ -312,7 +326,7 @@ async function loadSignupsVsVisitors(rows: DailyRow[], days: number): Promise<Sv
   const supabase = getAdminClientOrNull();
   if (!supabase) return [];
   const stats = await getNewsletterStats(supabase, days, "UTC");
-  const visitsByDate = new Map(rows.map((r) => [r.date, r.visits]));
+  const visitsByDate = new Map(rows.filter((r) => !r.rejected).map((r) => [r.date, r.visits ?? 0]));
   return stats.days.map((d) => ({
     date: d.date,
     signups: d.signups,
@@ -343,7 +357,8 @@ export default async function GrowthPage({
   const svv = await loadSignupsVsVisitors(rows, days);
   const seo = await loadSeo();
   const nlMax = newsletterClicks ? Math.max(1, ...newsletterClicks.perEvent.map((e) => e.clicks)) : 1;
-  const hasData = rows.some((r) => r.pageviews > 0);
+  const hasData = rows.some((r) => (r.pageviews ?? 0) > 0 || r.rejected);
+  const rejectedDates = rows.filter((r) => r.rejected).map((r) => r.date);
 
   // Traffic history is shallower than a long range asks for (the Cloudflare
   // snapshot began 2026-05-28), so every heading below says how many days it
@@ -455,6 +470,14 @@ export default async function GrowthPage({
             Visitors {trend[0]?.count > 1 ? "per week" : "per day"} · last {trafficLabel}
           </SectionHeader>
           <DailyTrafficChart buckets={trend} />
+          {rejectedDates.length > 0 && (
+            <p style={{ color: "#8a7b66", fontSize: 13, lineHeight: 1.5, margin: "8px 0 0" }}>
+              Cloudflare RUM rejected {rejectedDates.length === 1 ? "this day" : "these days"} as unusable
+              (adaptive-groups cap or totals/referrer mismatch), so {rejectedDates.length === 1 ? "it is" : "they are"} a
+              gap, not a {rejectedDates.length === 1 ? "bar" : "bars"}: {rejectedDates.map(fmtDay).join(", ")}. No
+              replacement count was invented.
+            </p>
+          )}
 
           <SectionHeader>Answer-engine referrals · {trafficLabel}</SectionHeader>
           <section style={cardStyle}>
@@ -537,14 +560,20 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 // whole weeks. A bucket of one day renders exactly as the old per-day chart did.
 function DailyTrafficChart({ buckets }: { buckets: Bucket<DailyRow>[] }) {
   if (buckets.length === 0) return null;
-  const totals = buckets.map((b) => ({
-    key: b.start,
-    label: bucketLabel(b, shortDay),
-    span: b.start === b.end ? fmtDay(b.start) : `${fmtDay(b.start)} – ${fmtDay(b.end)}`,
-    days: b.count,
-    visits: b.rows.reduce((a, r) => a + (r.visits || 0), 0),
-    pageviews: b.rows.reduce((a, r) => a + (r.pageviews || 0), 0),
-  }));
+  const totals = buckets.map((b) => {
+    const usable = b.rows.filter((r) => !r.rejected);
+    const rejected = b.rows.filter((r) => r.rejected);
+    return {
+      key: b.start,
+      label: bucketLabel(b, shortDay),
+      span: b.start === b.end ? fmtDay(b.start) : `${fmtDay(b.start)} – ${fmtDay(b.end)}`,
+      days: b.count,
+      visits: usable.reduce((a, r) => a + (r.visits || 0), 0),
+      pageviews: usable.reduce((a, r) => a + (r.pageviews || 0), 0),
+      gap: rejected.length > 0,
+      gapDays: rejected.length,
+    };
+  });
   const weekly = buckets[0].count > 1;
   const max = Math.max(1, ...totals.map((t) => Math.max(t.pageviews, t.visits)));
   const peak = Math.max(0, ...totals.map((t) => t.visits));
@@ -562,23 +591,53 @@ function DailyTrafficChart({ buckets }: { buckets: Bucket<DailyRow>[] }) {
           <span style={{ display: "inline-block", width: 11, height: 11, background: "#e7dcc2", borderRadius: 2, marginRight: 6, verticalAlign: "middle" }} />
           Pageviews
         </span>
+        {totals.some((t) => t.gap) && (
+          <span>
+            <span style={{ display: "inline-block", width: 11, height: 11, background: "repeating-linear-gradient(135deg, #e7e0d5 0 2px, #f7f3ec 2px 4px)", border: "1px solid #d4ccc0", borderRadius: 2, marginRight: 6, verticalAlign: "middle" }} />
+            RUM gap (rejected)
+          </span>
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "stretch", gap: "1.6%", height: 156 }}>
         {totals.map((t) => {
           const vh = Math.round((t.visits / max) * 100);
           const ph = Math.round((t.pageviews / max) * 100);
+          const allGap = t.gap && t.visits === 0 && t.pageviews === 0;
           return (
             <div
               key={t.key}
-              title={`${t.span}: ${nf(t.visits)} visitors · ${nf(t.pageviews)} pageviews${t.days > 1 ? ` (${t.days} days)` : ""}`}
+              title={
+                t.gap
+                  ? `${t.span}: RUM snapshot rejected (${t.gapDays} day${t.gapDays === 1 ? "" : "s"}) — gap, not a ${nf(10000)} bar`
+                  : `${t.span}: ${nf(t.visits)} visitors · ${nf(t.pageviews)} pageviews${t.days > 1 ? ` (${t.days} days)` : ""}`
+              }
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%" }}
             >
               {showValues && (
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#1B3A2D", lineHeight: 1, marginBottom: 4 }}>{nf(t.visits)}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: allGap ? "#c4b8a8" : "#1B3A2D", lineHeight: 1, marginBottom: 4 }}>
+                  {allGap ? "—" : nf(t.visits)}
+                </span>
               )}
               <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 0 }}>
-                <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${ph}%`, background: "#e7dcc2", borderRadius: "3px 3px 0 0" }} />
-                <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${vh}%`, minHeight: t.visits > 0 ? 3 : 0, background: "#1B3A2D", borderRadius: "3px 3px 0 0" }} />
+                {allGap ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: "15%",
+                      width: "70%",
+                      height: "100%",
+                      background: "repeating-linear-gradient(135deg, #f0ebe3 0 6px, #e7e0d5 6px 12px)",
+                      borderRadius: "3px 3px 0 0",
+                      opacity: 0.7,
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${ph}%`, background: "#e7dcc2", borderRadius: "3px 3px 0 0" }} />
+                    <div style={{ position: "absolute", bottom: 0, left: "15%", width: "70%", height: `${vh}%`, minHeight: t.visits > 0 ? 3 : 0, background: "#1B3A2D", borderRadius: "3px 3px 0 0" }} />
+                  </>
+                )}
               </div>
               <span style={{ fontSize: 10, color: "#aaa", lineHeight: 1, marginTop: 5, whiteSpace: "nowrap" }}>{t.label}</span>
             </div>
@@ -591,6 +650,9 @@ function DailyTrafficChart({ buckets }: { buckets: Bucket<DailyRow>[] }) {
         <strong>pageviews</strong>. Peak {weekly ? "week" : "day"}: {nf(peak)} visitors. Hover a bar for
         both counts{weekly ? " and the dates it spans" : ""}.
         {weekly ? " The oldest bar may be a part-week." : ""}
+        {totals.some((t) => t.gap)
+          ? " A hatched column is a rejected RUM day (capped or mismatched), shown as a gap, not as traffic."
+          : ""}
       </p>
     </section>
   );

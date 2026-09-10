@@ -5,6 +5,19 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-09-10 — Cloudflare RUM adaptive-groups cap is not a traffic spike
+
+On 2026-09-01 `analytics_daily` stored 10,000 pageviews / 10,000 visits. That day's referrer rows summed to tens of visits and first-party `site_events` had ~62 views / 47 sessions. The Friday growth memo (2026-09-04) then claimed a Labor Day spike: `gatherGrowthContext` summed the newest 14 `analytics_daily` rows (first 7 vs next 7) with no calendar window and no sanity check, so `pageviews_7d` became ~11,057.
+
+- **A capped sensor reading is not a measurement.** `rumPageloadEventsAdaptiveGroups` can return the adaptive-groups ceiling (~10k/10k) when the sample is unusable. Storing that as a real day is how a dashboard (and an LLM reasoner) invent a spike. Blank beats wrong: write the date with `rejected` + null totals, do not invent a replacement from Cloudflare (unsampled RUM for old days is already gone).
+- **Newest-N rows is not a 7-day window.** A missing day, a rejected day, or a backfill row shifts which dates land in "the last 7." Sum calendar days ending yesterday; skip rejected / null / ≥10k days; expose `excluded_dates` + `days_included` so the growth-memo prompt cannot narrate a spike from an incomplete CF week. When days were dropped, prefer first-party `site_events` session stats as the traffic read.
+- **The admin chart must show a gap, not a 10k bar.** A 10k column next to ~100-visit days is the same lie in pixels. Hatched/empty column, caption naming the rejected dates.
+- **A 0-pageviews freshness alarm is not the same as a rejected day.** The cron ran and correctly refused garbage; do not Slack-alert that as "the CF read silently failed."
+
+Locked by `scripts/test/cloudflare-analytics-guard.test.ts`. Migration `20260910_analytics_daily_rum_reject.sql` (idempotent; hwy4 `analytics_daily` only).
+
+---
+
 ## 2026-08-09 — Pub phantom lineup + club ghost bookings (organizer sources need retraction)
 
 Rob's screenshot showed three different acts all "at 6 PM Thursday" at Murphys Irish Pub; 36 of the venue's 50 upcoming rows were phantoms, and Sequoia Woods had the same surface symptom from a different disease. Fixes: `scripts/scrapers/murphys-irish-pub.ts` (structured Wix read), `scripts/lib/stale-sweep.ts` (retraction), `venue_slot_collisions` audit check, migration `20260809_scrape_runs_reshape.sql`.
