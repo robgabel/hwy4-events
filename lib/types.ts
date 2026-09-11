@@ -50,6 +50,11 @@ export interface Hwy4Event {
   description_locked?: boolean;
   // When true, image_url is human-pinned; no scraper may overwrite it.
   poster_locked?: boolean;
+  // Stored family-friendly tag for the Kids chip (HWY-34). Written from
+  // resolveFamilyFriendly on INSERT / unlocked UPDATE. See lib/family-friendly.ts.
+  family_friendly?: boolean;
+  // When true, family_friendly is human-set; no scraper may overwrite it.
+  family_friendly_locked?: boolean;
   // True => a mundane recurring venue operation (Thursday dinner, Sunday brunch),
   // hidden from every public list. Only the sequoia-woods/moose-lodge write paths
   // set it. See lib/notability.ts + the read-time filters in lib/events-data.ts.
@@ -176,6 +181,7 @@ export type EventListItem = Pick<
   | "is_weekly"
   | "verification_status"
   | "community_sourced"
+  | "family_friendly"
 >;
 
 export interface CollapsedEvent extends EventListItem {

@@ -139,6 +139,7 @@ test("/api/scrape-moose-lodge honors every lock on the field it writes", () => {
     notability_locked: ["is_routine", "routine_reason"],
     description_locked: ["description"],
     price_locked: ["price"],
+    family_friendly_locked: ["family_friendly"],
   };
 
   for (const [lock, fields] of Object.entries(locks)) {

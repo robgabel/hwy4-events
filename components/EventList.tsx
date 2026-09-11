@@ -25,6 +25,7 @@ import {
 import { collapseEventList, isHighlightEvent } from "@/lib/collapse-events";
 import { pacificToday, pacificDateGroupKind } from "@/lib/date-windows";
 import { nowPacificMinutes, hasEventEnded, hasEventStarted } from "@/lib/event-time";
+import { matchesKidsFilter } from "@/lib/family-friendly";
 
 // Lazy-load non-critical components so they don't block hydration
 const FilterBar = dynamic(() => import("./FilterBar"), { ssr: true });
@@ -238,8 +239,9 @@ export default function EventList({
   const [viewMode, setViewMode] = useState<ViewMode>("everything");
   const [weekendOnly, setWeekendOnly] = useState(false);
   const [freeOnly, setFreeOnly] = useState(false);
-  // Category quick filter (Kids / Live Music). Mutually exclusive — an event
-  // can't be both, so picking one clears the other.
+  // Quick chips Kids / Live Music. The chips themselves are mutually exclusive
+  // (tapping one clears the other). An event can still be live_music AND
+  // family-friendly — Kids uses matchesKidsFilter; Live Music stays category.
   const [categoryQuick, setCategoryQuick] = useState<EventCategory | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const [filterHeight, setFilterHeight] = useState(0);
@@ -381,7 +383,11 @@ export default function EventList({
         if (e.date < weekendRange.start || e.date > weekendRange.end) return false;
       }
       if (freeOnly && e.cost_tier !== "free") return false;
-      if (categoryQuick && e.category !== categoryQuick) return false;
+      if (categoryQuick === "kids") {
+        if (!matchesKidsFilter(e)) return false;
+      } else if (categoryQuick && e.category !== categoryQuick) {
+        return false;
+      }
       return true;
     });
   }, [initialEvents, selectedCategories, selectedTowns, showWeekly, enabledOrgs, weekendOnly, weekendRange, freeOnly, categoryQuick]);

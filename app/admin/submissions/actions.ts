@@ -18,6 +18,7 @@ import {
   type SubmissionForReply,
 } from "@/lib/agent/submission-reply";
 import { getAdminClient } from "@/lib/admin/db";
+import { resolveFamilyFriendly } from "@/lib/family-friendly";
 import { failRedirect, flashRedirect, field, requireField, safeReturnTo } from "@/lib/admin/flash";
 
 const ADMIN_PATH = "/admin/submissions";
@@ -261,6 +262,7 @@ export async function publishSubmission(formData: FormData) {
     is_weekly: false,
     dedup_key: generateDedupKey(name, date, town),
     last_scraped_at: new Date().toISOString(),
+    family_friendly: resolveFamilyFriendly({ name, description, category }),
   };
 
   const { data: inserted, error: insertErr } = await supabase

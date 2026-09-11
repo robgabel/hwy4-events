@@ -17,6 +17,7 @@ import {
 } from "../../lib/event-identity.js";
 import { sanitizeDescriptionDetailed } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
+import { resolveFamilyFriendly } from "../../lib/family-friendly.js";
 import { isHttpUrl } from "../../lib/url.js";
 import { recordSourceResult } from "./scrape-run-log.js";
 
@@ -492,7 +493,31 @@ type MergeableRow = MatchableRow & {
   poster_locked?: boolean | null;
   notability_locked?: boolean | null;
   times_locked?: boolean | null;
+  category?: string | null;
+  family_friendly_locked?: boolean | null;
 };
+
+function familyFriendlyPatch(
+  existing: {
+    family_friendly_locked?: boolean | null;
+    category?: string | null;
+  },
+  event: ExtractedEvent,
+  written: { name: string; description: string | null }
+): { family_friendly: boolean } | Record<string, never> {
+  if (existing.family_friendly_locked) return {};
+  const category =
+    event.category && event.category !== "other"
+      ? event.category
+      : (existing.category ?? event.category ?? "other");
+  return {
+    family_friendly: resolveFamilyFriendly({
+      name: written.name,
+      description: written.description,
+      category,
+    }),
+  };
+}
 
 const isArtifactVenue = (v: string | null | undefined): boolean =>
   !v || v.trim().startsWith("@") || /\bfeaturing\b/i.test(v);
@@ -541,17 +566,19 @@ export function buildStrongMatchUpdate(
   // pre-existing name↔key mismatch, review finding N5).
   const keepName =
     placeholderNameSteal(existing, event) || !(event.name && event.name.trim());
+  const writtenName = keepName ? existing.name : pick(event.name, existing.name);
+  const writtenDescription = existing.description_locked
+    ? existing.description
+    : pick(event.description, existing.description);
 
   return {
-    name: keepName ? existing.name : pick(event.name, existing.name),
+    name: writtenName,
     dedup_key: keepName
       ? generateDedupKey(existing.name, event.date, event.town)
       : dedupKey,
     venue_name: pickVenue(event.venue_name, existing.venue_name),
     // description + price are human-set when locked — leave them out entirely.
-    ...(existing.description_locked
-      ? {}
-      : { description: pick(event.description, existing.description) }),
+    ...(existing.description_locked ? {} : { description: writtenDescription }),
     // Times are human-set when locked — leave them out entirely.
     ...(existing.times_locked
       ? {}
@@ -571,6 +598,12 @@ export function buildStrongMatchUpdate(
     ...(event.category && event.category !== "other"
       ? { category: event.category }
       : {}),
+    // Family-friendly is human-set when locked; otherwise recompute from the
+    // name+description+category this payload will actually store.
+    ...familyFriendlyPatch(existing, event, {
+      name: writtenName,
+      description: writtenDescription,
+    }),
     artists: artistSet.size > 0 ? [...artistSet] : null,
     ...(event.source_event_id && { source_event_id: event.source_event_id }),
     last_scraped_at: now,
@@ -581,7 +614,7 @@ export function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked";
+  "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked";
 
 type ExistingRow = {
   id: string;
@@ -609,6 +642,8 @@ type ExistingRow = {
   is_routine?: boolean | null;
   notability_locked?: boolean | null;
   times_locked?: boolean | null;
+  family_friendly?: boolean | null;
+  family_friendly_locked?: boolean | null;
 };
 
 // HWY-29 (the "merge treadmill"): on an exact-key re-scrape, never write a
@@ -777,7 +812,21 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
       keepStr(event.image_url ?? null, existing.image_url) !== (existing.image_url ?? null)) ||
     // Re-classification: a routine flag that flips counts as a change (unless the
     // human locked it). Keeps a re-scrape self-healing.
-    (!existing.notability_locked && !!existing.is_routine !== !!(event.is_routine ?? false))
+    (!existing.notability_locked && !!existing.is_routine !== !!(event.is_routine ?? false)) ||
+    // Family-friendly self-heal: an unlocked flag that would differ from the
+    // stored boolean is a change (so a "kids welcome" row backfills on the
+    // next scrape). Locked diffs are not a change.
+    (!existing.family_friendly_locked &&
+      resolveFamilyFriendly({
+        name: placeholderNameSteal(existing, event) ? existing.name : event.name,
+        description: existing.description_locked
+          ? existing.description
+          : keepStr(event.description, existing.description),
+        category:
+          event.category && event.category !== "other"
+            ? event.category
+            : (existing.category ?? event.category ?? "other"),
+      }) !== !!existing.family_friendly)
   );
 }
 
@@ -808,6 +857,9 @@ export function buildExactMatchUpdate(
   const keepVenue = placeholderVenueSteal(existing, event);
   const writtenName = keepName ? existing.name : event.name;
   const writtenTown = keepVenue ? existing.town : event.town;
+  const writtenDescription = existing.description_locked
+    ? existing.description
+    : keepStr(event.description, existing.description);
   return {
     name: writtenName,
     // Propagate a rescheduled date (dedup_key below stays consistent with it).
@@ -819,9 +871,7 @@ export function buildExactMatchUpdate(
     // Locked fields are human-set — never overwrite them. Unlocked display
     // fields are null-guarded (HWY-29): a scraped blank keeps the stored
     // value rather than wiping reconcile's back-fill.
-    ...(existing.description_locked
-      ? {}
-      : { description: keepStr(event.description, existing.description) }),
+    ...(existing.description_locked ? {} : { description: writtenDescription }),
     ...(existing.times_locked
       ? {}
       : {
@@ -841,6 +891,10 @@ export function buildExactMatchUpdate(
     ...(existing.notability_locked
       ? {}
       : { is_routine: event.is_routine ?? false, routine_reason: event.routine_reason ?? null }),
+    ...familyFriendlyPatch(existing, event, {
+      name: writtenName,
+      description: writtenDescription,
+    }),
     // Keep dedup_key in sync with the (possibly-changed) date/town so key
     // lookups still find this row if source_event_id ever disappears. When
     // either steal-guard keeps a stored value, the key is recomputed from
@@ -1056,7 +1110,7 @@ async function upsertEventsBatched(
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
       .select(
-        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked"
+        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked"
       )
       .in("date", unmatchedDates);
 
@@ -1190,6 +1244,11 @@ async function upsertEventsBatched(
       source_event_id: event.source_event_id ?? null,
       is_routine: event.is_routine ?? false,
       routine_reason: event.routine_reason ?? null,
+      family_friendly: resolveFamilyFriendly({
+        name: event.name,
+        description: event.description,
+        category: event.category,
+      }),
       last_scraped_at: now,
     }));
     const { data, error } = await supabaseAdmin
@@ -1281,13 +1340,15 @@ export async function upsertEvents(
       is_routine?: boolean | null;
       notability_locked?: boolean | null;
       times_locked?: boolean | null;
+      family_friendly?: boolean | null;
+      family_friendly_locked?: boolean | null;
     } | null = null;
 
     if (event.source_event_id) {
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked"
+          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -1298,7 +1359,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked"
+          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -1344,7 +1405,7 @@ export async function upsertEvents(
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked"
+          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked"
         )
         .eq("date", event.date);
 
@@ -1395,6 +1456,11 @@ export async function upsertEvents(
         source_event_id: event.source_event_id ?? null,
         is_routine: event.is_routine ?? false,
         routine_reason: event.routine_reason ?? null,
+        family_friendly: resolveFamilyFriendly({
+          name: event.name,
+          description: event.description,
+          category: event.category,
+        }),
         last_scraped_at: now,
       });
 
