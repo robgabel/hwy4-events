@@ -4,6 +4,7 @@ import {
   type UpsertResult,
 } from "../lib/dedup.js";
 import type { ExtractedEvent } from "../lib/extract.js";
+import { resolveFamilyFriendly } from "../../lib/family-friendly.js";
 
 const SITE_ORIGIN = "https://www.thebistroespresso.com";
 const EVENTS_URL = `${SITE_ORIGIN}/events/`;
@@ -266,10 +267,16 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
   const now = new Date().toISOString();
   const dedupKey = generateDedupKey(event.name, event.date, event.town);
 
+  const familyFlag = resolveFamilyFriendly({
+    name: event.name,
+    description: event.description,
+    category: event.category,
+  });
+
   const { data: byKey } = await supabaseAdmin
     .from("hwy4_events")
     .select(
-      "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url"
+      "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, family_friendly, family_friendly_locked"
     )
     .eq("dedup_key", dedupKey)
     .maybeSingle();
@@ -286,7 +293,8 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
       byKey.price !== event.price ||
       byKey.address !== event.address ||
       byKey.town !== event.town ||
-      byKey.image_url !== (event.image_url ?? null);
+      byKey.image_url !== (event.image_url ?? null) ||
+      (!byKey.family_friendly_locked && byKey.family_friendly !== familyFlag);
     if (changed) {
       await supabaseAdmin
         .from("hwy4_events")
@@ -300,6 +308,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
           town: event.town,
           image_url: event.image_url ?? null,
           last_scraped_at: now,
+          ...(byKey.family_friendly_locked ? {} : { family_friendly: familyFlag }),
         })
         .eq("id", byKey.id);
       return "updated";
@@ -315,7 +324,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
   const { data: sameNight } = await supabaseAdmin
     .from("hwy4_events")
     .select(
-      "id, name, venue_name, description, start_time, end_time, event_url, image_url, source_name"
+      "id, name, venue_name, description, start_time, end_time, event_url, image_url, source_name, family_friendly_locked"
     )
     .eq("date", event.date)
     .eq("town", event.town)
@@ -348,6 +357,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
         org_slug: ORG_SLUG,
         dedup_key: dedupKey,
         last_scraped_at: now,
+        ...(existing.family_friendly_locked ? {} : { family_friendly: familyFlag }),
       })
       .eq("id", existing.id);
     console.log(
@@ -378,6 +388,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
     org_slug: ORG_SLUG,
     dedup_key: dedupKey,
     last_scraped_at: now,
+    family_friendly: familyFlag,
   });
 
   if (error) {

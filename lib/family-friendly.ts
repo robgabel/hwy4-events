@@ -1,14 +1,21 @@
-// Read-time family-friendly tag, orthogonal to `hwy4_events.category`.
+// Family-friendly tag, orthogonal to `hwy4_events.category`.
 //
 // Category describes WHAT the event is (live_music, festival, civic, …) and is
 // single-valued, so a free outdoor concert that says "Dogs and kids welcome"
 // correctly stays live_music. Jen's homepage Kids chip used to key off
 // category==='kids' alone, which hid every family-signalled event that had
-// already won a more specific type. This lens is the tag that category could
-// not be: explicit hospitality/audience language promotes; age-gate language
-// vetoes even a "kids welcome" mention. Never-guess: bare "family"/"kids" is
-// not enough (Willie Nelson & Family, Children's Advocacy Center, "friends,
-// family and supporters"). No column, no backfill, no recategorization.
+// already won a more specific type.
+//
+// Durable columns on hwy4_events (HWY-34, 2026-09-11):
+//   family_friendly        — stored boolean, default false
+//   family_friendly_locked — human pin; scrapers must not overwrite
+//
+// `isFamilyFriendly` is the pure never-guess predicate over name+description
+// (age-gate first, then explicit hospitality phrases). Bare "family"/"kids"
+// is not enough (Willie Nelson & Family, Children's Advocacy Center,
+// "friends, family and supporters"). Write paths stamp `family_friendly`
+// from `resolveFamilyFriendly` on INSERT and on unlocked UPDATE. The Kids
+// chip reads the stored field (plus category==='kids' as belt-and-braces).
 //
 // Consumer: EventList's Kids quick chip (`matchesKidsFilter`). Event Type
 // checkboxes stay category-pure so Mia's Live Music filter is unchanged.
@@ -21,10 +28,12 @@ import type { EventCategory } from "./types";
 export type FamilyFriendlyFields = {
   name: string;
   description?: string | null;
+  category?: string | null;
 };
 
-export type KidsFilterFields = FamilyFriendlyFields & {
+export type KidsFilterFields = {
   category: EventCategory;
+  family_friendly?: boolean | null;
 };
 
 // Admission-shaped age gates only. "For those 21 and over, bloody marys" at a
@@ -56,11 +65,22 @@ export function isFamilyFriendly(e: FamilyFriendlyFields): boolean {
 }
 
 /**
- * Homepage Kids chip: primary-kids rows always pass (their category already
- * won that slot); everything else must earn the derived tag. Age-gate exclude
- * applies only to the tag, never to a stored `kids` category.
+ * Value to stamp on `hwy4_events.family_friendly` for an unlocked row.
+ * Kids-category rows are true even without a hospitality phrase (their
+ * category already won that slot). Never guesses past `isFamilyFriendly`.
+ */
+export function resolveFamilyFriendly(e: FamilyFriendlyFields): boolean {
+  if (e.category === "kids") return true;
+  return isFamilyFriendly(e);
+}
+
+/**
+ * Homepage Kids chip. Reads the stored flag; `category==='kids'` is
+ * belt-and-braces for a kids row that somehow still has the default false
+ * (pre-backfill, or a locked-false human override of a kids listing — the
+ * category still wins so the chip doesn't hide Storytime).
  */
 export function matchesKidsFilter(e: KidsFilterFields): boolean {
   if (e.category === "kids") return true;
-  return isFamilyFriendly(e);
+  return e.family_friendly === true;
 }

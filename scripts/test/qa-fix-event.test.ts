@@ -69,6 +69,8 @@ test("lock guards map the lockable fields to their flags", () => {
     "price_locked",
   ]);
   assert.deepEqual(lockColumnsFor(["image_url"]), ["poster_locked"]);
+  assert.deepEqual(lockColumnsFor(["family_friendly"]), ["family_friendly_locked"]);
+  assert.deepEqual(lockColumnsFor(["visibility"]), ["visibility_locked"]);
   // town/venue_name carry no lock flag; start_time does (times_locked) and is
   // asserted in the times_locked test below.
   assert.deepEqual(lockColumnsFor(["town", "venue_name"]), []);
@@ -97,6 +99,8 @@ const LIVE_COLUMNS = [
   "poster_locked",
   "notability_locked",
   "times_locked",
+  "visibility_locked",
+  "family_friendly_locked",
   "id",
   "dedup_key",
   "robs_pick",
@@ -126,11 +130,11 @@ test("times_locked guards BOTH clock fields, as the scrapers treat it", () => {
 test("a NEW lock flag on the table fails until it is guarded or acknowledged", () => {
   // The HWY-24 visibility_locked case: the schema grows a protection and the QA
   // agent silently does not honor it. Drift in the direction the old check missed.
-  const drift = findQaSchemaDrift([...LIVE_COLUMNS, "visibility_locked"]);
+  const drift = findQaSchemaDrift([...LIVE_COLUMNS, "brand_new_locked"]);
   assert.deepEqual(drift.missingFixable, []);
-  assert.deepEqual(drift.unguardedLocks, ["visibility_locked"]);
+  assert.deepEqual(drift.unguardedLocks, ["brand_new_locked"]);
   assert.equal(hasQaSchemaDrift(drift), true);
-  assert.match(describeQaSchemaDrift(drift), /visibility_locked/);
+  assert.match(describeQaSchemaDrift(drift), /brand_new_locked/);
 });
 
 test("an acknowledged lock is not reported as unguarded", () => {
@@ -172,7 +176,7 @@ test("the whitelist never admits an identity, provenance, or lock column", () =>
     "org_slug", "venue_key", "created_at", "updated_at", "community_sourced",
     "robs_pick", "series_umbrella", "is_routine",
     "description_locked", "price_locked", "poster_locked", "notability_locked",
-    "times_locked", "places_locked",
+    "times_locked", "visibility_locked", "family_friendly_locked", "places_locked",
   ];
   for (const col of forbidden) {
     assert.ok(

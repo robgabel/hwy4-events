@@ -1,9 +1,12 @@
-// Regression lock for the read-time family-friendly tag (lib/family-friendly.ts).
+// Regression lock for the read-time family-friendly tag (lib/family-friendly.ts)
+// and the stored hwy4_events.family_friendly column (HWY-34).
 //
-// Two things are load-bearing: the promote case (Jen's Kids chip must surface
-// events that advertise kids/families while keeping their real category) and
-// the age-gate exclude (a "kids welcome" mention must never promote a 21+ /
-// age-gated event). Bare "family"/"kids" tokens are not a signal.
+// Three things are load-bearing: the promote case (Jen's Kids chip must
+// surface events that advertise kids/families while keeping their real
+// category), the age-gate exclude (a "kids welcome" mention must never
+// promote a 21+ / age-gated event), and the Kids chip reading the *stored*
+// boolean rather than re-deriving from (possibly truncated) list copy.
+// Bare "family"/"kids" tokens are not a signal.
 //
 // Run: `cd scripts && npm test`  (node --test + tsx, zero extra deps)
 
@@ -12,6 +15,7 @@ import assert from "node:assert/strict";
 import {
   isFamilyFriendly,
   matchesKidsFilter,
+  resolveFamilyFriendly,
 } from "../../lib/family-friendly.js";
 import type { EventCategory } from "../../lib/types.js";
 
@@ -31,7 +35,7 @@ test("promote: explicit kids-welcome / family-friendly language, category intact
   );
   assert.equal(cameo.category, "live_music");
   assert.ok(isFamilyFriendly(cameo));
-  assert.ok(matchesKidsFilter(cameo));
+  assert.equal(resolveFamilyFriendly(cameo), true);
 
   const hermitfest = event(
     "Hermitfest West – Music Festival",
@@ -39,7 +43,7 @@ test("promote: explicit kids-welcome / family-friendly language, category intact
     "live_music"
   );
   assert.ok(isFamilyFriendly(hermitfest));
-  assert.ok(matchesKidsFilter(hermitfest));
+  assert.equal(resolveFamilyFriendly(hermitfest), true);
 
   const oktoberfest = event(
     "Oktoberfest @ Murphys Creek Park",
@@ -55,7 +59,7 @@ test("promote: explicit kids-welcome / family-friendly language, category intact
   );
   assert.equal(grapeStomp.category, "wine");
   assert.ok(isFamilyFriendly(grapeStomp));
-  assert.ok(matchesKidsFilter(grapeStomp));
+  assert.equal(resolveFamilyFriendly(grapeStomp), true);
 
   const band = event(
     "Calaveras Community Band Labor Day Concert",
@@ -81,7 +85,7 @@ test("promote: kids-under pricing is a family signal, even when adults can buy d
     "civic"
   );
   assert.ok(isFamilyFriendly(pancakes));
-  assert.ok(matchesKidsFilter(pancakes));
+  assert.equal(resolveFamilyFriendly(pancakes), true);
   assert.equal(pancakes.category, "civic");
 });
 
@@ -176,15 +180,42 @@ test("exclude: bare family/kids tokens are not a signal (never-guess)", () => {
   );
 });
 
-test("Kids filter: category=kids always matches; others need the tag", () => {
+test("Kids filter: category=kids always matches; others need the stored field", () => {
   const storytime = event("Storytime with Miss Debbie", null, "kids");
   assert.ok(matchesKidsFilter(storytime));
-  assert.ok(!isFamilyFriendly(storytime)); // no hospitality phrase, but category already kids
+  assert.ok(!isFamilyFriendly(storytime)); // no hospitality phrase
+  assert.equal(resolveFamilyFriendly(storytime), true); // category stamps the column
 
   const jamboree = event("29th Annual Logging Jamboree", "A day in the woods.", "kids");
   assert.ok(matchesKidsFilter(jamboree));
+  assert.equal(resolveFamilyFriendly(jamboree), true);
 
   const concert = event("Patio jazz", "An evening set on the patio.", "live_music");
   assert.ok(!matchesKidsFilter(concert));
   assert.ok(!isFamilyFriendly(concert));
+});
+
+test("Kids filter reads the stored family_friendly field, not the keyword lens", () => {
+  // A live_music row the write path stamped true — chip matches without
+  // re-running isFamilyFriendly on (possibly truncated) list copy.
+  assert.ok(
+    matchesKidsFilter({ category: "live_music", family_friendly: true })
+  );
+  // Stored false + no kids category does not match, even if a description
+  // would promote. That's the point of stored-over-derived: a human lock,
+  // or a truncated list description, must not re-derive at read time.
+  assert.ok(
+    !matchesKidsFilter({ category: "live_music", family_friendly: false })
+  );
+  // Missing flag (pre-projection / unset) is not true.
+  assert.ok(!matchesKidsFilter({ category: "live_music" }));
+  // Age-gated copy never stamps true; the chip follows the stored false.
+  assert.ok(
+    !matchesKidsFilter({ category: "wine", family_friendly: false })
+  );
+  // A kids-category row still matches even if the stored flag is false
+  // (belt-and-braces: Storytime must never vanish from Kids).
+  assert.ok(
+    matchesKidsFilter({ category: "kids", family_friendly: false })
+  );
 });

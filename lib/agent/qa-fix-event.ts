@@ -27,6 +27,7 @@ export const QA_FIXABLE_COLUMNS = [
   "artists",
   "status",
   "visibility",
+  "family_friendly",
 ] as const;
 
 export type QaFixableColumn = (typeof QA_FIXABLE_COLUMNS)[number];
@@ -45,6 +46,8 @@ export const LOCK_GUARDS: Partial<Record<QaFixableColumn, string>> = {
   // could still overwrite a hand-pinned showtime.
   start_time: "times_locked",
   end_time: "times_locked",
+  visibility: "visibility_locked",
+  family_friendly: "family_friendly_locked",
 };
 
 // Lock flags on hwy4_events that deliberately guard nothing in QA_FIXABLE_COLUMNS.

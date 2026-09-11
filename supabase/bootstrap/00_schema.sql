@@ -136,6 +136,10 @@ create table hwy4_events (
   price_locked boolean not null default false,
   description_locked boolean not null default false,
   poster_locked boolean not null default false,
+  -- Family-friendly tag for the Kids chip (HWY-34). Written from
+  -- resolveFamilyFriendly; locked rows are a human pin. See lib/family-friendly.ts.
+  family_friendly boolean not null default false,
+  family_friendly_locked boolean not null default false,
   -- Notability: hide a venue's mundane recurring operations (see lib/notability.ts).
   -- Only the sequoia-woods / moose-lodge writers set is_routine.
   is_routine boolean not null default false,

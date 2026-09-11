@@ -67,6 +67,7 @@ test("human-touched rows are never sweepable", () => {
   assert.equal(isProtectedRow(row({ series_umbrella: true })), "series_umbrella");
   assert.equal(isProtectedRow(row({ times_locked: true })), "locked");
   assert.equal(isProtectedRow(row({ poster_locked: true })), "locked");
+  assert.equal(isProtectedRow(row({ family_friendly_locked: true })), "locked");
   assert.equal(isProtectedRow(row({})), null);
 });
 

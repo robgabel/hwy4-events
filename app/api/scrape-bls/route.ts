@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { requireCronAuth, requireRegion } from "@/lib/cron-auth";
+import { resolveFamilyFriendly } from "@/lib/family-friendly";
 
 export const maxDuration = 120; // Vision API calls can be slow
 
@@ -341,6 +342,11 @@ export async function GET(request: Request) {
         image_url: url,
         robs_pick: false,
         is_weekly: false,
+        family_friendly: resolveFamilyFriendly({
+          name: event.name,
+          description: event.description,
+          category: normalizeCategory(event.category_hint),
+        }),
       });
 
       if (error) {

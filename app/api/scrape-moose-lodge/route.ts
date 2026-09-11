@@ -7,6 +7,7 @@ import {
   classifyNotabilityDetailed,
   reconcileNotability,
 } from "@/lib/notability";
+import { resolveFamilyFriendly } from "@/lib/family-friendly";
 
 /**
  * Scrape the Ebbetts Pass Moose Lodge monthly calendar PDF and upsert events
@@ -468,13 +469,18 @@ export async function GET(request: Request) {
         last_scraped_at: new Date().toISOString(),
         is_weekly: false,
         robs_pick: false,
+        family_friendly: resolveFamilyFriendly({
+          name: evt.name.trim(),
+          description: evt.description || null,
+          category: normalizeCategory(evt.category),
+        }),
       };
 
       // Upsert: existing dedup_key → update; otherwise insert
       const { data: existing } = await supabase
         .from("hwy4_events")
         .select(
-          "id, notability_locked, times_locked, visibility_locked, description_locked, price_locked"
+          "id, notability_locked, times_locked, visibility_locked, description_locked, price_locked, family_friendly_locked, description"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -509,6 +515,16 @@ export async function GET(request: Request) {
         }
         if (existing.price_locked) {
           delete updateRow.price;
+        }
+        if (existing.family_friendly_locked) {
+          delete updateRow.family_friendly;
+        } else if (existing.description_locked) {
+          // Recompute from the description that will actually stay stored.
+          updateRow.family_friendly = resolveFamilyFriendly({
+            name: row.name,
+            description: existing.description,
+            category: row.category,
+          });
         }
         // Curation fields, never re-asserted by a scrape. `row` sets both false
         // for the INSERT case, and leaving them in the UPDATE would clear a
