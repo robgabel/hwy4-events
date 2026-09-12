@@ -20,6 +20,8 @@ import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecastsByTown } from "@/lib/weather";
 import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content";
 import { TEMPORAL_CONFIG, type WindowKey } from "@/lib/date-windows";
+import { stayHref, type StayRange } from "@/lib/stay-range";
+import CopyPageLink from "@/components/CopyPageLink";
 
 // Event fetching moved to lib/events-data.ts (getEventsInRange) — an in-memory
 // filter over the site-wide cached upcoming-events set, so this view adds no
@@ -45,11 +47,34 @@ function publishedTownLinks() {
 
 export default async function TemporalEventsView({
   windowKey,
+  stay = null,
 }: {
   windowKey: WindowKey;
+  /** Valid guest-stay overlay (HWY-40). Null = the page's usual window. */
+  stay?: StayRange | null;
 }) {
   const cfg = TEMPORAL_CONFIG[windowKey];
-  const range = cfg.getRange();
+  const range = stay ?? cfg.getRange();
+  const isStay = stay != null;
+  const h1 = isStay ? "What's on during your stay on Hwy 4" : cfg.h1;
+  const lead = isStay
+    ? "Every public event along the Highway 4 corridor for these dates, from Angels Camp to Bear Valley."
+    : cfg.lead;
+  const pagePath = isStay && stay ? stayHref(stay) : cfg.path;
+  const pageUrl = `${SITE_URL}${pagePath}`;
+  const copyUrl = (() => {
+    try {
+      const u = new URL(pageUrl);
+      u.searchParams.set("src", "share");
+      return u.toString();
+    } catch {
+      return pageUrl;
+    }
+  })();
+  const jsonName = isStay ? `What's on Hwy 4 during your stay` : cfg.metaTitle;
+  const jsonDescription = isStay
+    ? "Public events along the Highway 4 corridor for this stay."
+    : cfg.metaDescription;
   const [events, forecastsByTown, artists] = await Promise.all([
     getEventsInRange(range.start, range.end),
     getForecastsByTown(),
@@ -72,22 +97,22 @@ export default async function TemporalEventsView({
       <JsonLd
         data={buildBreadcrumbs([
           { name: "Hwy 4 Events", url: SITE_URL },
-          { name: cfg.label, url: `${SITE_URL}${cfg.path}` },
+          { name: isStay ? "Your stay" : cfg.label, url: pageUrl },
         ])}
       />
       <JsonLd
         data={buildWebPage({
-          url: `${SITE_URL}${cfg.path}`,
-          name: cfg.metaTitle,
-          description: cfg.metaDescription,
+          url: pageUrl,
+          name: jsonName,
+          description: jsonDescription,
           dateModified: new Date().toISOString().split("T")[0],
         })}
       />
       {events.length > 0 && (
         <JsonLd
           data={buildItemList(events, {
-            name: cfg.metaTitle,
-            description: cfg.metaDescription,
+            name: jsonName,
+            description: jsonDescription,
             limit: 100,
             artists,
           })}
@@ -103,7 +128,7 @@ export default async function TemporalEventsView({
             </Link>
           </li>
           <li aria-hidden="true">/</li>
-          <li className="text-stone-light">{cfg.label}</li>
+          <li className="text-stone-light">{isStay ? "Your stay" : cfg.label}</li>
         </ol>
       </nav>
 
@@ -119,14 +144,26 @@ export default async function TemporalEventsView({
         />
         <div>
           <h1 className="font-display mb-2 text-center text-3xl font-bold text-forest sm:text-left">
-            {cfg.h1}
+            {h1}
           </h1>
           <p className="text-center text-lg leading-relaxed text-stone sm:text-left">
-            {cfg.lead}
+            {lead}
           </p>
           <p className="mt-2 text-center text-xs uppercase tracking-wide text-stone-light sm:text-left">
             {rangeLabel}
           </p>
+          {windowKey === "weekend" && (
+            <div className="mt-4 flex flex-col items-center gap-2 sm:items-start">
+              <CopyPageLink url={copyUrl} />
+              <p className="text-center text-xs text-stone-light sm:text-left">
+                Paste this into a welcome message. Hosts can pick other dates at{" "}
+                <Link href="/hosts" className="text-pine hover:underline">
+                  /hosts
+                </Link>
+                .
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -165,7 +202,10 @@ export default async function TemporalEventsView({
         </div>
       ) : (
         <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">
-          Nothing on the calendar for this window yet. Check the{" "}
+          {isStay
+            ? "Nothing on the calendar for these dates yet. The list only shows events already listed, so a quiet stretch is honest."
+            : "Nothing on the calendar for this window yet."}{" "}
+          Check the{" "}
           <Link href="/" className="font-medium text-pine hover:underline">
             full corridor list
           </Link>

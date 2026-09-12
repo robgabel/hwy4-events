@@ -20,7 +20,7 @@ const TOWNS = [
 
 function blurbFor(town: string): string {
   const place = town === "the corridor" ? "Highway 4" : town;
-  return `Before you head up, one local tip: hwy4events.com has everything happening around ${place} this weekend, from live music and festivals to wine events and farmers markets. Give it a look the morning you arrive so you don't miss the good stuff. Enjoy your stay!`;
+  return `Before you head up, one local tip: hwy4events.com/this-weekend has everything happening around ${place} this weekend, from live music and festivals to wine events and farmers markets. Give it a look the morning you arrive so you don't miss the good stuff. Enjoy your stay!`;
 }
 
 export default function HostKit() {

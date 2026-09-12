@@ -134,11 +134,11 @@ export const TEMPORAL_CONFIG: Record<WindowKey, TemporalConfig> = {
     key: "weekend",
     path: "/this-weekend",
     label: "This Weekend",
-    h1: "What's happening this weekend on the 4?",
-    lead: "Every event along the Highway 4 corridor this weekend, from Angels Camp at the bottom of the hill to Bear Valley at the summit.",
-    metaTitle: "This Weekend on Highway 4 (Calaveras County Events)",
+    h1: "What's on this weekend on Hwy 4",
+    lead: "The live weekend lineup along the Highway 4 corridor, from Angels Camp at the bottom of the hill to Bear Valley at the summit. One page you can send a guest.",
+    metaTitle: "What's on this weekend on Hwy 4",
     metaDescription:
-      "Every event this weekend along the Highway 4 corridor, from Angels Camp to Bear Valley. Live music, festivals, lodge nights, and more. Updated daily.",
+      "The live weekend lineup along the Highway 4 corridor, Angels Camp to Bear Valley. Live music, festivals, hikes, and community events. Updated daily.",
     getRange: thisWeekendRange,
   },
   week: {

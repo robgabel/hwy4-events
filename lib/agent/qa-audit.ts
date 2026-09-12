@@ -116,6 +116,7 @@ const STATIC_TARGETS: QaTarget[] = [
   { path: "/live-music", kind: "page", keyScope: "/live-music", label: "The /live-music page" },
   { path: "/about", kind: "page", keyScope: "/about", label: "The /about page" },
   { path: "/submit", kind: "page", keyScope: "/submit", label: "The /submit page" },
+  { path: "/hosts", kind: "page", keyScope: "/hosts", label: "The /hosts page" },
   { path: "/sitemap.xml", kind: "sitemap", keyScope: "/sitemap.xml", label: "The sitemap index" },
   { path: "/sitemap-core.xml", kind: "sitemap", keyScope: "/sitemap-core.xml", label: "The core sitemap" },
   { path: "/sitemap-events.xml", kind: "sitemap", keyScope: "/sitemap-events.xml", label: "The events sitemap" },
