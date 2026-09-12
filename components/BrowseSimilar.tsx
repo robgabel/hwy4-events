@@ -6,6 +6,7 @@ import { getTownContent } from "@/app/towns/town-content";
 import { festivalGuideForEvent } from "@/lib/event-guides";
 import { holidayGuideForEvent } from "@/lib/holiday-pages";
 import { marketGuideForEvent } from "@/lib/market-pages";
+import { meetMeGuideForEvent } from "@/lib/meet-me-pages";
 import { pacificToday } from "@/lib/date-windows";
 
 /**
@@ -32,6 +33,10 @@ export default function BrowseSimilar({ event }: { event: Hwy4Event }) {
   // seven ways, and it keeps the guide crawled all season (HWY-31).
   const market = marketGuideForEvent(event);
   if (market) chips.unshift({ href: market.path, label: market.label });
+  // A Meet Me in Murphys listing links to its evergreen guide (HWY-38),
+  // so a future confirmed date consolidates onto the year-less URL.
+  const meetMe = meetMeGuideForEvent(event);
+  if (meetMe) chips.unshift({ href: meetMe.path, label: meetMe.label });
   if (isFreeEvent(event)) chips.push({ href: "/free", label: "Free events" });
   if (isDateNightEvent(event)) {
     chips.push({ href: "/date-night", label: "Date night" });

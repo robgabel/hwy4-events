@@ -8,6 +8,7 @@ import { TEMPORAL_CONFIG } from "@/lib/date-windows";
 import { INTENT_CONFIG } from "@/lib/intent-pages";
 import { HOLIDAY_GUIDES } from "@/lib/holiday-pages";
 import { MARKET_GUIDES } from "@/lib/market-pages";
+import { MEET_ME_GUIDES } from "@/lib/meet-me-pages";
 import { renderUrlset, type SitemapUrl } from "@/lib/sitemap";
 import { getUpcomingEvents } from "@/lib/events-data";
 import { getSupabase } from "@/lib/supabase";
@@ -71,6 +72,15 @@ export async function GET() {
     // Evergreen farmers-market guides (HWY-31): year-less URLs that consolidate
     // the equity a weekly market's dated event-instance pages kept splitting.
     ...MARKET_GUIDES.map((g) => ({
+      loc: `${SITE_URL}${g.path}`,
+      lastmod: todayISO,
+      changefreq: "weekly" as const,
+      priority: 0.8,
+    })),
+    // Meet Me in Murphys (HWY-38): year-less query target for the
+    // striking-distance GSC pair. Daily lastmod so a newly confirmed date
+    // is honest; empty list is still the durable landing spot.
+    ...MEET_ME_GUIDES.map((g) => ({
       loc: `${SITE_URL}${g.path}`,
       lastmod: todayISO,
       changefreq: "weekly" as const,

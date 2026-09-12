@@ -13,7 +13,10 @@ touching any content surface.
 > `withVoice()` into briefing, weekend briefing, newsletter, extract, venue blurbs, town
 > content), **WS-4** voice lint (`scripts/voice-lint.ts`, hard-fails in `npm test`, warns
 > in CI), **WS-5** the FAQ rewrite, **WS-6** briefing shape rotation
-> (`content/briefing-shapes.md`). **Still true:** Town/FAQ/About copy is **static source
+> (`content/briefing-shapes.md`). **HWY-38 (2026-09-12):** evergreen
+> `/meet-me-in-murphys` guide copy lives in [`lib/meet-me-pages.ts`](../lib/meet-me-pages.ts)
+> (human-written, never LLM; facts from the one cancelled 2026 listing).
+> **Still true:** Town/FAQ/About copy is **static source
 > code**, not a CMS; the agent prompts in `lib/agent/*` and the vision/PDF scrapers
 > (`scrape-bls`, `scrape-moose-lodge`) still carry inline prompts. **Not built:** WS-7
 > (`pick_reason`) and the `needs_review`/`confidence` columns.

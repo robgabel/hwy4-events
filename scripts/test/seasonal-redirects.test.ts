@@ -15,9 +15,13 @@ import {
   seasonalRedirectFor,
 } from "../../lib/seasonal-redirects.js";
 import { HOLIDAY_GUIDES } from "../../lib/holiday-pages.js";
+import { MEET_ME_GUIDES } from "../../lib/meet-me-pages.js";
 
 test("every entry targets a live guide path and carries a parseable date", () => {
-  const guidePaths = new Set(HOLIDAY_GUIDES.map((g) => g.path));
+  const guidePaths = new Set([
+    ...HOLIDAY_GUIDES.map((g) => g.path),
+    ...MEET_ME_GUIDES.map((g) => g.path),
+  ]);
   const seen = new Set<string>();
   for (const r of SEASONAL_REDIRECTS) {
     assert.ok(guidePaths.has(r.to), `${r.fromSlug} -> unknown target ${r.to}`);
@@ -55,6 +59,12 @@ test("guard: never redirects a live page", () => {
   assert.equal(seasonalRedirectFor(slug, "2026-07-04"), null);
   // The day after, it fires
   assert.equal(seasonalRedirectFor(slug, "2026-07-05"), "/arnold-4th-of-july");
+});
+
+test("the cancelled 2026 Meet Me in Murphys slug redirects once the date is past", () => {
+  const slug = "meet-me-in-murphys-summer-concert-2026-09-05-murphys";
+  assert.equal(seasonalRedirectFor(slug, "2026-09-05"), null);
+  assert.equal(seasonalRedirectFor(slug, "2026-09-06"), "/meet-me-in-murphys");
 });
 
 test("unknown slugs pass through untouched", () => {

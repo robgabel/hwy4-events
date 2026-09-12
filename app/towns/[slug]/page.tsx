@@ -30,6 +30,7 @@ import { linkifyPhones } from "@/lib/linkify";
 import { festivalGuidesForTown } from "@/lib/event-guides";
 import { holidayGuideForTown } from "@/lib/holiday-pages";
 import { marketGuideForTown } from "@/lib/market-pages";
+import { meetMeGuideForTown } from "@/lib/meet-me-pages";
 import { pacificToday } from "@/lib/date-windows";
 
 export const revalidate = 3600;
@@ -125,10 +126,14 @@ export default async function TownPage({ params }: PageProps) {
   // (HWY-31): it is the durable answer to "murphys farmers market", including
   // off-season, so the town page links it whether or not the market is running.
   const marketGuide = marketGuideForTown(slug);
+  // Meet Me in Murphys (HWY-38): year-round, same reason as the market
+  // guide. The 2026 dated URL cancelled; this is the durable query target.
+  const meetMeGuide = meetMeGuideForTown(slug);
   const guides: { path: string; heading: string; blurb: string }[] = [
     ...festivalGuidesForTown(slug, pacificToday().iso),
     ...(holidayGuide ? [holidayGuide] : []),
     ...(marketGuide ? [marketGuide] : []),
+    ...(meetMeGuide ? [meetMeGuide] : []),
   ];
 
   return (

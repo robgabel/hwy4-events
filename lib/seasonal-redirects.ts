@@ -47,6 +47,12 @@ export const SEASONAL_REDIRECTS: SeasonalRedirect[] = [
     fromSlug: "4th-of-july-celebration-2026-07-04-murphys",
     to: "/murphys-4th-of-july",
   },
+  // Meet Me in Murphys 2026 (HWY-38): the dated instance cancelled and
+  // 404s. The year-less guide inherits whatever equity that slug still has.
+  {
+    fromSlug: "meet-me-in-murphys-summer-concert-2026-09-05-murphys",
+    to: "/meet-me-in-murphys",
+  },
 ];
 
 /**
