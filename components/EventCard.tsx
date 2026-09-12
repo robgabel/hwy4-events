@@ -1,4 +1,5 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
+import { artistChipLabel, artistKey } from "@/lib/artists";
 import { REGION } from "@/lib/region";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
 import { isPatrioticCard, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
@@ -119,10 +120,13 @@ export default function EventCard({
   event,
   isUpNext = false,
   forecastsByTown = null,
+  artistGenres = {},
 }: {
   event: CollapsedEvent;
   isUpNext?: boolean;
   forecastsByTown?: TownForecasts | null;
+  /** Published genre by artist_key. Only consulted for live_music cards. */
+  artistGenres?: Record<string, string>;
 }) {
   // Marquee patriotic events get a fully bespoke card.
   if (isPatrioticCard(event)) {
@@ -419,14 +423,20 @@ export default function EventCard({
         {/* Artists */}
         {event.artists && event.artists.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {event.artists.map((artist) => (
-              <span
-                key={artist}
-                className="rounded-md bg-sunset/8 px-2 py-0.5 text-xs font-medium text-earth"
-              >
-                {artist}
-              </span>
-            ))}
+            {event.artists.map((artist) => {
+              const genre =
+                event.category === "live_music"
+                  ? artistGenres[artistKey(artist)]
+                  : undefined;
+              return (
+                <span
+                  key={artist}
+                  className="rounded-md bg-sunset/8 px-2 py-0.5 text-xs font-medium text-earth"
+                >
+                  {artistChipLabel(artist, genre)}
+                </span>
+              );
+            })}
           </div>
         )}
 

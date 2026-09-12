@@ -5,6 +5,8 @@ import { format, parseISO } from "date-fns";
 import { SITE_URL } from "@/lib/constants";
 import { Hwy4Event } from "@/lib/types";
 import { getEventsInRange } from "@/lib/events-data";
+import { getPublishedArtists } from "@/lib/artists-data";
+import { artistGenreMap } from "@/lib/artists";
 import { townSlug } from "@/lib/slugs";
 import { CORRIDOR_TOWNS } from "@/lib/towns";
 import {
@@ -48,10 +50,12 @@ export default async function TemporalEventsView({
 }) {
   const cfg = TEMPORAL_CONFIG[windowKey];
   const range = cfg.getRange();
-  const [events, forecastsByTown] = await Promise.all([
+  const [events, forecastsByTown, artists] = await Promise.all([
     getEventsInRange(range.start, range.end),
     getForecastsByTown(),
+    getPublishedArtists(),
   ]);
+  const artistGenres = artistGenreMap(artists);
   const grouped = groupByDate(events);
   const townLinks = publishedTownLinks();
 
@@ -85,6 +89,7 @@ export default async function TemporalEventsView({
             name: cfg.metaTitle,
             description: cfg.metaDescription,
             limit: 100,
+            artists,
           })}
         />
       )}
@@ -151,6 +156,7 @@ export default async function TemporalEventsView({
                     newsletterAfterIndex={newsletterAfterIndex}
                     newsletterSource={`temporal_${windowKey}`}
                     forecastsByTown={forecastsByTown}
+                    artistGenres={artistGenres}
                   />
                 </section>
               );

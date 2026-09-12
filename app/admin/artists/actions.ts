@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getAdminClient } from "@/lib/admin/db";
 import { failRedirect, field, flashRedirect, requireField } from "@/lib/admin/flash";
+import { ARTISTS_CACHE_TAG } from "@/lib/artists-data";
 
 const ADMIN_PATH = "/admin/artists";
 
@@ -53,7 +54,10 @@ export async function saveArtist(formData: FormData) {
     .eq("artist_key", artistKey);
   if (error) failRedirect(ADMIN_PATH, error.message);
 
+  revalidateTag(ARTISTS_CACHE_TAG, "max");
   revalidatePath(ADMIN_PATH);
+  revalidatePath("/");
+  revalidatePath("/events", "layout");
   flashRedirect(
     ADMIN_PATH,
     blurb || genre ? `Saved ${artistKey}.` : `Saved links for ${artistKey}.`
@@ -80,7 +84,10 @@ export async function clearArtist(formData: FormData) {
     })
     .eq("artist_key", artistKey);
   if (error) failRedirect(ADMIN_PATH, error.message);
+  revalidateTag(ARTISTS_CACHE_TAG, "max");
   revalidatePath(ADMIN_PATH);
+  revalidatePath("/");
+  revalidatePath("/events", "layout");
   flashRedirect(ADMIN_PATH, `Cleared ${artistKey}.`);
 }
 

@@ -116,6 +116,10 @@ export interface Hwy4Venue {
   places_synced_at: string | null;
 }
 
+/** Published artist fields shown on live-music detail pages. Draft columns
+ *  (`blurb_draft*`) are intentionally absent — see lib/artists.ts. */
+export type { ArtistLinks, PublicArtist as Hwy4Artist } from "./artists";
+
 export interface Hwy4Org {
   id: string;
   slug: string;

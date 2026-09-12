@@ -5,6 +5,8 @@ import { format, parseISO } from "date-fns";
 import { SITE_URL } from "@/lib/constants";
 import { Hwy4Event } from "@/lib/types";
 import { getUpcomingEvents } from "@/lib/events-data";
+import { getPublishedArtists } from "@/lib/artists-data";
+import { artistGenreMap } from "@/lib/artists";
 import {
   JsonLd,
   buildBreadcrumbs,
@@ -31,10 +33,12 @@ import {
 
 export default async function MarketPageView({ guide }: { guide: MarketGuide }) {
   const today = pacificToday().iso;
-  const [upcoming, forecastsByTown] = await Promise.all([
+  const [upcoming, forecastsByTown, artists] = await Promise.all([
     getUpcomingEvents(),
     getForecastsByTown(),
+    getPublishedArtists(),
   ]);
+  const artistGenres = artistGenreMap(artists);
 
   const dates = upcoming
     .filter((e) => e.visibility === "public" && isMarketEvent(guide, e))
@@ -71,6 +75,7 @@ export default async function MarketPageView({ guide }: { guide: MarketGuide }) 
             name: guide.metaTitle,
             description: guide.metaDescription,
             limit: 100,
+            artists,
           })}
         />
       )}
@@ -193,6 +198,7 @@ export default async function MarketPageView({ guide }: { guide: MarketGuide }) 
             events={dates}
             newsletterSource={`market_${guide.key}`}
             forecastsByTown={forecastsByTown}
+            artistGenres={artistGenres}
           />
         ) : (
           <p className="rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">

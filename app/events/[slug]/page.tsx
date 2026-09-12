@@ -11,6 +11,15 @@ import WeatherChip from "@/components/WeatherChip";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
 import { buildEventOffer } from "@/lib/schema";
+import {
+  artistChipLabel,
+  artistGenreMap,
+  artistKey,
+  buildPerformers,
+  matchPublishedArtists,
+  type PublicArtist,
+} from "@/lib/artists";
+import { getPublishedArtists } from "@/lib/artists-data";
 import { findEventBySlug, findEventFallback, canonicalEventPath } from "@/lib/events";
 import { seasonalRedirectFor } from "@/lib/seasonal-redirects";
 import { pacificToday } from "@/lib/date-windows";
@@ -21,6 +30,7 @@ import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import VenueInfo from "@/components/VenueInfo";
+import ArtistInfo from "@/components/ArtistInfo";
 import ConfidenceNote from "@/components/ConfidenceNote";
 import { eventConfidence } from "@/lib/confidence";
 import LinkifiedText from "@/components/LinkifiedText";
@@ -140,13 +150,19 @@ export async function generateMetadata({
 function EventJsonLd({
   event,
   offerUrl,
+  artists = [],
 }: {
   event: Hwy4Event;
   slug: string;
   offerUrl: string;
+  artists?: PublicArtist[];
 }) {
   const displayAddress = resolveDisplayAddress(event.address, event.town);
   const offer = buildEventOffer(event, offerUrl);
+  const performers = buildPerformers(
+    event.artists,
+    event.category === "live_music" ? artists : []
+  );
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -173,13 +189,7 @@ function EventJsonLd({
       event.status === "tentative"
         ? "https://schema.org/EventPostponed"
         : "https://schema.org/EventScheduled",
-    ...(event.artists &&
-      event.artists.length > 0 && {
-        performer: event.artists.map((artist) => ({
-          "@type": "Person",
-          name: artist,
-        })),
-      }),
+    ...(performers && { performer: performers }),
     organizer: {
       "@type": "Organization",
       name: SITE_NAME,
@@ -218,6 +228,10 @@ export default async function EventPage({ params }: PageProps) {
   // single-operator venues — promotableVenueUrl screens out multi-tenant parks
   // and bad Google Places auto-matches.
   const venue = event.venue_key ? await findVenue(event.venue_key) : null;
+  const publishedArtists =
+    event.category === "live_music" ? await getPublishedArtists() : [];
+  const matchedArtists = matchPublishedArtists(event.artists, publishedArtists);
+  const genreByKey = artistGenreMap(publishedArtists);
   const orgs = await getCanonicalOrgs();
   const link = resolveEventLinkFromOrgs(event, orgs, {
     venueUrl: promotableVenueUrl(venue?.canonical, venue?.website),
@@ -269,7 +283,12 @@ export default async function EventPage({ params }: PageProps) {
   if (isParadeEvent(event)) {
     return (
       <>
-        <EventJsonLd event={event} slug={slug} offerUrl={offerUrl} />
+        <EventJsonLd
+          event={event}
+          slug={slug}
+          offerUrl={offerUrl}
+          artists={publishedArtists}
+        />
         <PatrioticEventDetail
           event={event}
           slug={slug}
@@ -299,7 +318,12 @@ export default async function EventPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
-      <EventJsonLd event={event} slug={slug} offerUrl={offerUrl} />
+      <EventJsonLd
+        event={event}
+        slug={slug}
+        offerUrl={offerUrl}
+        artists={publishedArtists}
+      />
       <Suspense fallback={null}>
         <ShareTracker slug={slug} />
       </Suspense>
@@ -573,7 +597,9 @@ export default async function EventPage({ params }: PageProps) {
                   key={artist}
                   className="rounded-md bg-sunset/8 px-3 py-1 text-sm font-medium text-earth"
                 >
-                  {artist}
+                  {event.category === "live_music"
+                    ? artistChipLabel(artist, genreByKey[artistKey(artist)])
+                    : artist}
                 </li>
               ))}
             </ul>
@@ -605,6 +631,10 @@ export default async function EventPage({ params }: PageProps) {
             mapZoom={mapZoom}
           />
         </section>
+
+        {matchedArtists.map((artist) => (
+          <ArtistInfo key={artist.artist_key} artist={artist} />
+        ))}
 
         {venue && <VenueInfo venue={venue} linkToVenuePage />}
 

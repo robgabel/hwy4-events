@@ -10,6 +10,8 @@ import { TOWN_INFO } from "@/lib/towns";
 import { townSlug } from "@/lib/slugs";
 import { getTownContent } from "@/app/towns/town-content";
 import { getUpcomingEvents } from "@/lib/events-data";
+import { getPublishedArtists } from "@/lib/artists-data";
+import { artistGenreMap } from "@/lib/artists";
 import { venueMetaTitle, venueMetaDescription, venueListSection } from "@/lib/venue-pages";
 import {
   JsonLd,
@@ -89,6 +91,8 @@ export default async function VenuePage({ params }: PageProps) {
   if (!venue) notFound();
 
   const events = await venueEvents(slug);
+  const artists = await getPublishedArtists();
+  const artistGenres = artistGenreMap(artists);
   const town = TOWN_INFO[venue.town];
   const townPageSlug = townSlug(venue.town);
   const hasTownPage = Boolean(getTownContent(townPageSlug));
@@ -124,6 +128,7 @@ export default async function VenuePage({ params }: PageProps) {
             name: `Upcoming events at ${venue.canonical}`,
             description: `Upcoming events at ${venue.canonical} in ${venue.town}, CA, from the Highway 4 corridor calendar.`,
             limit: 25,
+            artists,
           })}
         />
       )}
@@ -209,6 +214,7 @@ export default async function VenuePage({ params }: PageProps) {
             newsletterAfterIndex={4}
             newsletterSource={`venue_${slug}`}
             forecastsByTown={forecastsByTown}
+            artistGenres={artistGenres}
           />
         ) : (
           <p className="rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-sm text-stone">

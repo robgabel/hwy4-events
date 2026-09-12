@@ -16,6 +16,7 @@ import { TownInfo } from "./towns";
 import { serializeJsonLd } from "./json-ld";
 import { REGION } from "./region";
 import { REGION_OPS } from "./region-ops";
+import { buildPerformers, type PublicArtist } from "./artists";
 
 // ----- shared component -----
 
@@ -226,7 +227,11 @@ export function buildEventOffer(event: Hwy4Event, url: string) {
   return null;
 }
 
-export function buildEvent(event: Hwy4Event, slug?: string) {
+export function buildEvent(
+  event: Hwy4Event,
+  slug?: string,
+  artists: PublicArtist[] = []
+) {
   const eventSlug =
     slug ?? generateEventSlug(event.name, event.date, event.town);
   const displayAddress = resolveDisplayAddress(event.address, event.town);
@@ -234,6 +239,10 @@ export function buildEvent(event: Hwy4Event, slug?: string) {
   // `event_url` (which for aggregator sources is a churning permalink). The
   // detail page passes a resolved organizer/venue URL when it has one.
   const offer = buildEventOffer(event, `${SITE_URL}/events/${eventSlug}`);
+  const performers = buildPerformers(
+    event.artists,
+    event.category === "live_music" ? artists : []
+  );
 
   return {
     "@context": "https://schema.org",
@@ -261,13 +270,7 @@ export function buildEvent(event: Hwy4Event, slug?: string) {
       event.status === "tentative"
         ? "https://schema.org/EventPostponed"
         : "https://schema.org/EventScheduled",
-    ...(event.artists &&
-      event.artists.length > 0 && {
-        performer: event.artists.map((artist) => ({
-          "@type": "Person",
-          name: artist,
-        })),
-      }),
+    ...(performers && { performer: performers }),
     organizer: {
       "@type": "Organization",
       name: SITE_NAME,
@@ -280,9 +283,11 @@ export function buildItemList(events: Hwy4Event[], opts?: {
   name?: string;
   description?: string;
   limit?: number;
+  artists?: PublicArtist[];
 }) {
   const limit = opts?.limit ?? 50;
   const publicEvents = events.filter((e) => e.visibility === "public");
+  const artists = opts?.artists ?? [];
 
   return {
     "@context": "https://schema.org",
@@ -298,7 +303,7 @@ export function buildItemList(events: Hwy4Event[], opts?: {
         event.date,
         event.town
       )}`,
-      item: buildEvent(event),
+      item: buildEvent(event, undefined, artists),
     })),
   };
 }
