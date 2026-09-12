@@ -1,6 +1,6 @@
 # PRD — Live Music Experience
 
-> **Status (2026-07-04):** Live roadmap — Phases 0/1A/1B shipped (venues registered, venue-gap proposer, blurb-draft queue). Phases 2–3 remain; execution guide: HANDOFF-live-music-phases.md.
+> **Status (2026-09-12):** Phases 0/1A/1B shipped. Phase 2 artist render shipped (HWY-36). Phase 3B `/live-music` hub shipped (HWY-37). `/artists/[slug]` remains out of scope. Execution guide: HANDOFF-live-music-phases.md.
 
 **Status:** Phase 0 shipped 2026-06-21 · Phases 1–3 roadmap
 **Origin:** `/brain shiva-rajaraman` session (2026-06-21), prompted by venues (Indian Rock, Camp Connell) "lacking venue details."
@@ -50,7 +50,7 @@ Answer, at a glance: *who's playing, what's the place like, what's the weather a
 ## Phase 3 — Bets (validate with behavior first)
 
 - **Artist link layer** — for live music the deepest blank is "who is this band, what do they sound like?" Accurate fill (Tier-A discipline): **link** the artist to their own site / Spotify / Bandcamp when discoverable, never *describe* their sound from thin air. Same `resolveEventLink` philosophy. Bonus: linking out helps the band → earns their cooperation (schedules, posters).
-- **`/live-music` hub / "Tonight's music"** — 259 events is 2× the homepage horizon; a dedicated surface for Mia + Miguel. Phase-appropriate: ship 0–2, watch behavior, then build if the usage asks for it. Conviction, not a committee feature.
+- **`/live-music` hub / "Tonight's music"** — ✅ **SHIPPED 2026-09-12 (HWY-37).** Dedicated surface for Mia + Miguel: Tonight / This weekend / Upcoming lenses over `getUpcomingEvents`, published genre chips via HWY-36. `/artists/[slug]` still out of scope.
 
 ## Open items
 

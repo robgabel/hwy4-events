@@ -193,6 +193,10 @@ export default function RootLayout({
               <Link href="/date-night" className="text-pine hover:underline">
                 Date Night
               </Link>
+              <span className="mx-1.5 text-stone-light/50">·</span>
+              <Link href="/live-music" className="text-pine hover:underline">
+                Live Music
+              </Link>
             </nav>
 
             {/* Town directory: only rendered for towns with published landing

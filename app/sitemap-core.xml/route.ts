@@ -60,6 +60,13 @@ export async function GET() {
       changefreq: "daily" as const,
       priority: 0.8,
     })),
+    // Live-music hub (HWY-37): Tonight / This weekend / Upcoming lenses.
+    {
+      loc: `${SITE_URL}/live-music`,
+      lastmod: todayISO,
+      changefreq: "daily",
+      priority: 0.8,
+    },
     // Evergreen holiday guides (HWY-6): year-less URLs that inherit each
     // year's expired July-4th event pages via lib/seasonal-redirects.ts.
     ...HOLIDAY_GUIDES.map((g) => ({

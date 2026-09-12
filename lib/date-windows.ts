@@ -86,8 +86,8 @@ export function pacificDateGroupKind(
  * Mirrors components/EventList.tsx::getThisWeekendRange so the dedicated
  * page and the homepage quick-filter agree.
  */
-export function thisWeekendRange(): DateWindow {
-  const { iso, dow } = pacificToday();
+export function thisWeekendRange(today = pacificToday()): DateWindow {
+  const { iso, dow } = today;
   if (dow === 5) return { start: iso, end: addDays(iso, 2) }; // Fri
   if (dow === 6) return { start: addDays(iso, -1), end: addDays(iso, 1) }; // Sat
   if (dow === 0) return { start: addDays(iso, -2), end: iso }; // Sun

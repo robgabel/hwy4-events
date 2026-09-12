@@ -125,6 +125,16 @@ There is **no column tagging which shape produced a given row** (source type is 
   2026-07-04): `"numerous festivals"`, `"the most complete and up-to-date listing
   available"`, the `"Yes!"` opener, and the submit-answer site contradiction are gone.
 
+## 8. Intent + live-music landing copy
+
+- **Intent pages** (`/things-to-do`, `/free`, `/date-night`): fixed editorial + Q&A
+  in [`lib/intent-pages.ts`](../lib/intent-pages.ts), locked by
+  `scripts/test/intent-pages.test.ts`. Never LLM-generated.
+- **Live-music hub** (`/live-music`, HWY-37): same contract in
+  [`lib/live-music.ts`](../lib/live-music.ts), locked by
+  `scripts/test/live-music.test.ts`. FAQ live-music answer + CTA live in
+  [`lib/faqs.ts`](../lib/faqs.ts).
+
 ---
 
 ## Cross-cutting facts for implementation
