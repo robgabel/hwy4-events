@@ -16,6 +16,9 @@ touching any content surface.
 > (`content/briefing-shapes.md`). **HWY-38 (2026-09-12):** evergreen
 > `/meet-me-in-murphys` guide copy lives in [`lib/meet-me-pages.ts`](../lib/meet-me-pages.ts)
 > (human-written, never LLM; facts from the one cancelled 2026 listing).
+> **HWY-39 (2026-09-12):** persona SEO hub copy lives in
+> [`lib/persona-hubs.ts`](../lib/persona-hubs.ts) (Arnold car show / Hermitfest /
+> Brice Station concerts; human-written, never LLM; facts from live listings only).
 > **Still true:** Town/FAQ/About copy is **static source
 > code**, not a CMS; the agent prompts in `lib/agent/*` and the vision/PDF scrapers
 > (`scrape-bls`, `scrape-moose-lodge`) still carry inline prompts. **Not built:** WS-7

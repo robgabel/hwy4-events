@@ -16,11 +16,13 @@ import {
 } from "../../lib/seasonal-redirects.js";
 import { HOLIDAY_GUIDES } from "../../lib/holiday-pages.js";
 import { MEET_ME_GUIDES } from "../../lib/meet-me-pages.js";
+import { PERSONA_HUBS } from "../../lib/persona-hubs.js";
 
 test("every entry targets a live guide path and carries a parseable date", () => {
   const guidePaths = new Set([
     ...HOLIDAY_GUIDES.map((g) => g.path),
     ...MEET_ME_GUIDES.map((g) => g.path),
+    ...PERSONA_HUBS.map((g) => g.path),
   ]);
   const seen = new Set<string>();
   for (const r of SEASONAL_REDIRECTS) {

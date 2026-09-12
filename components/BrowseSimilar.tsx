@@ -7,6 +7,7 @@ import { festivalGuideForEvent } from "@/lib/event-guides";
 import { holidayGuideForEvent } from "@/lib/holiday-pages";
 import { marketGuideForEvent } from "@/lib/market-pages";
 import { meetMeGuideForEvent } from "@/lib/meet-me-pages";
+import { personaHubForEvent } from "@/lib/persona-hubs";
 import { pacificToday } from "@/lib/date-windows";
 
 /**
@@ -40,6 +41,10 @@ export default function BrowseSimilar({ event }: { event: Hwy4Event }) {
   // so a future confirmed date consolidates onto the year-less URL.
   const meetMe = meetMeGuideForEvent(event);
   if (meetMe) chips.unshift({ href: meetMe.path, label: meetMe.label });
+  // Persona SEO hubs (HWY-39): a matching listing links to its year-less
+  // guide so dated instance equity consolidates onto one URL.
+  const personaHub = personaHubForEvent(event);
+  if (personaHub) chips.unshift({ href: personaHub.path, label: personaHub.label });
   if (isFreeEvent(event)) chips.push({ href: "/free", label: "Free events" });
   if (isDateNightEvent(event)) {
     chips.push({ href: "/date-night", label: "Date night" });
