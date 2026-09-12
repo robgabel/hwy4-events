@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import { Hwy4Org } from "@/lib/types";
 import { getHomepageEvents, toListEvents } from "@/lib/events-data";
+import { getPublishedArtists } from "@/lib/artists-data";
+import { artistGenreMap } from "@/lib/artists";
 import { repairEventLinks, logLinkRepairs } from "@/lib/briefing-links";
 import { JsonLd, buildItemList } from "@/lib/schema";
 import Header from "@/components/Header";
@@ -100,7 +102,7 @@ async function getOrgs(): Promise<Hwy4Org[]> {
 }
 
 export default async function Home() {
-  const [events, orgs, greeting, briefing, weekendBriefing, forecastsByTown] =
+  const [events, orgs, greeting, briefing, weekendBriefing, forecastsByTown, artists] =
     await Promise.all([
       getHomepageEvents(),
       getOrgs(),
@@ -108,7 +110,9 @@ export default async function Home() {
       getBriefing(),
       getWeekendBriefing(),
       getForecastsByTown(),
+      getPublishedArtists(),
     ]);
+  const artistGenres = artistGenreMap(artists);
 
   // Self-heal briefing links at render: a link that was valid at generation
   // time dies when its event is renamed or merged away later that day (the
@@ -129,7 +133,7 @@ export default async function Home() {
   return (
     <main>
       <Header greeting={greeting} />
-      <JsonLd data={buildItemList(events)} />
+      <JsonLd data={buildItemList(events, { artists })} />
       <div className="mx-auto max-w-5xl px-4 py-8">
         <section aria-label="What events are happening along Highway 4?">
           <div className="mb-6 text-center text-stone">
@@ -171,6 +175,7 @@ export default async function Home() {
             initialEvents={toListEvents(events)}
             orgs={orgs}
             forecastsByTown={forecastsByTown}
+            artistGenres={artistGenres}
           />
         </section>
       </div>

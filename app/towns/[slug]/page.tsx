@@ -8,6 +8,8 @@ import { CORRIDOR_TOWNS, TOWN_INFO, TownInfo } from "@/lib/towns";
 import { townSlug } from "@/lib/slugs";
 import { getSupabase } from "@/lib/supabase";
 import { getEventsInTown } from "@/lib/events-data";
+import { getPublishedArtists } from "@/lib/artists-data";
+import { artistGenreMap } from "@/lib/artists";
 import {
   JsonLd,
   buildBreadcrumbs,
@@ -102,11 +104,13 @@ export default async function TownPage({ params }: PageProps) {
   const town: TownInfo | undefined = TOWN_INFO[content.townName];
   if (!town) notFound();
 
-  const [events, venues, townForecast] = await Promise.all([
+  const [events, venues, townForecast, artists] = await Promise.all([
     getEventsInTown(content.townName),
     getVenuesInTown(content.townName),
     getForecast(town.lat, town.lng),
+    getPublishedArtists(),
   ]);
+  const artistGenres = artistGenreMap(artists);
   // Every event on this page is in one town, so a one-entry map is all the
   // cards need (and keeps the client payload to a single town's forecast).
   const forecastsByTown: TownForecasts = { [town.name]: townForecast };
@@ -152,6 +156,7 @@ export default async function TownPage({ params }: PageProps) {
           data={buildItemList(events, {
             name: `Upcoming events in ${town.name}, CA`,
             description: `Live music, festivals, and community events in ${town.name} along Highway 4.`,
+            artists,
           })}
         />
       )}
@@ -264,7 +269,7 @@ export default async function TownPage({ params }: PageProps) {
         </h2>
         {events.length > 0 ? (
           <>
-            <SimpleEventList events={events.slice(0, 10)} newsletterAfterIndex={4} newsletterSource={`town_${slug}`} forecastsByTown={forecastsByTown} />
+            <SimpleEventList events={events.slice(0, 10)} newsletterAfterIndex={4} newsletterSource={`town_${slug}`} forecastsByTown={forecastsByTown} artistGenres={artistGenres} />
             {events.length > 10 && (
               <p className="mt-4 text-sm text-stone">
                 <Link

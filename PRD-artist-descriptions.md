@@ -1,6 +1,6 @@
 # PRD — Artist / Band Descriptions
 
-> **Status (2026-07-20):** **Phase 1 built** (data + drafter + review, no public render). Shipped: migration `20260720_artists.sql` (`hwy4_artists`), `lib/agent/research-artist.ts` + `lib/agent/draft-artist-blurbs.ts` (conservative — errs on nothing, always links out), daily cron `/api/agent/draft-artist-blurbs`, the `/admin/artists` review tab (Pulse). **Manual step to activate:** apply the migration (Supabase MCP was disconnected at build time). Phases 2 (public render) + 3 (`/artists/[slug]` hubs) remain. Extends `PRD-live-music-experience.md` Phase 3 and **revises its stance** — see §3.
+> **Status (2026-09-12):** **Phase 2 built** (public render on live-music event pages). Phase 1 (data + drafter + review) remains. Shipped this phase: `lib/artists.ts` + `components/ArtistInfo.tsx`, genre on the EventCard chip, JSON-LD `MusicGroup` when a published row matches. Phase 3 (`/artists/[slug]` hubs) remains. Extends `PRD-live-music-experience.md` Phase 3 and **revises its stance** — see §3.
 
 ## 1. Thesis
 

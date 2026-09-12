@@ -220,10 +220,12 @@ export default function EventList({
   initialEvents,
   orgs,
   forecastsByTown = null,
+  artistGenres = {},
 }: {
   initialEvents: EventListItem[];
   orgs: Hwy4Org[];
   forecastsByTown?: TownForecasts | null;
+  artistGenres?: Record<string, string>;
 }) {
   const [selectedCategories, setSelectedCategories] = useState<
     Set<EventCategory>
@@ -732,6 +734,7 @@ export default function EventList({
                             event={event}
                             isUpNext={event.id === upNextId}
                             forecastsByTown={forecastsByTown}
+                            artistGenres={artistGenres}
                           />
                           {/* Inline newsletter signup after the 5th event */}
                           {globalIndex === NEWSLETTER_AFTER_EVENT_INDEX && (

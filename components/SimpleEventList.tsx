@@ -23,19 +23,25 @@ export default function SimpleEventList({
   newsletterAfterIndex,
   newsletterSource,
   forecastsByTown = null,
+  artistGenres = {},
 }: {
   events: Hwy4Event[];
   newsletterAfterIndex?: number;
   /** Attribution code for the inline signup (R1b), e.g. "town_murphys". */
   newsletterSource?: string;
   forecastsByTown?: TownForecasts | null;
+  artistGenres?: Record<string, string>;
 }) {
   if (events.length === 0) return null;
   return (
     <div className="space-y-3">
       {events.map((e, i) => (
         <Fragment key={e.id}>
-          <EventCard event={e as CollapsedEvent} forecastsByTown={forecastsByTown} />
+          <EventCard
+            event={e as CollapsedEvent}
+            forecastsByTown={forecastsByTown}
+            artistGenres={artistGenres}
+          />
           {i === newsletterAfterIndex && (
             <NewsletterSignup variant="inline" source={newsletterSource} />
           )}

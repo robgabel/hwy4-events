@@ -5,6 +5,8 @@ import { format, parseISO } from "date-fns";
 import { SITE_URL } from "@/lib/constants";
 import { Hwy4Event } from "@/lib/types";
 import { getEventsInRange } from "@/lib/events-data";
+import { getPublishedArtists } from "@/lib/artists-data";
+import { artistGenreMap } from "@/lib/artists";
 import { townSlug } from "@/lib/slugs";
 import { CORRIDOR_TOWNS } from "@/lib/towns";
 import {
@@ -52,10 +54,12 @@ export default async function IntentPageView({
   const cfg = INTENT_CONFIG[intentKey];
   const today = pacificToday().iso;
   const end = addDaysIso(today, cfg.windowDays);
-  const [inRange, forecastsByTown] = await Promise.all([
+  const [inRange, forecastsByTown, artists] = await Promise.all([
     getEventsInRange(today, end),
     getForecastsByTown(),
+    getPublishedArtists(),
   ]);
+  const artistGenres = artistGenreMap(artists);
   const events = inRange.filter(cfg.filter);
   const grouped = groupByDate(events);
   const townLinks = publishedTownLinks();
@@ -86,6 +90,7 @@ export default async function IntentPageView({
             name: cfg.metaTitle,
             description: cfg.metaDescription,
             limit: 100,
+            artists,
           })}
         />
       )}
@@ -179,6 +184,7 @@ export default async function IntentPageView({
                     newsletterAfterIndex={newsletterAfterIndex}
                     newsletterSource={`intent_${cfg.key}`}
                     forecastsByTown={forecastsByTown}
+                    artistGenres={artistGenres}
                   />
                 </section>
               );

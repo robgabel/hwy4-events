@@ -6,6 +6,7 @@ import { format, parseISO } from "date-fns";
 import { SITE_URL } from "@/lib/constants";
 import type { Hwy4Event } from "@/lib/types";
 import { getEventsInRange } from "@/lib/events-data";
+import { getPublishedArtists } from "@/lib/artists-data";
 import { generateEventSlug } from "@/lib/slugs";
 import { pacificToday } from "@/lib/date-windows";
 import {
@@ -144,8 +145,12 @@ function showTitle(e: Hwy4Event): string {
 export default async function BvmfPage() {
   const today = pacificToday().iso;
   const rangeStart = today > FEST_START ? today : FEST_START;
-  const inRange =
-    today > FEST_END ? [] : await getEventsInRange(rangeStart, FEST_END);
+  const [inRange, artists] = await Promise.all([
+    today > FEST_END
+      ? Promise.resolve([] as Hwy4Event[])
+      : getEventsInRange(rangeStart, FEST_END),
+    getPublishedArtists(),
+  ]);
   const { shows } = splitFestival(inRange.filter(isFestivalEvent));
   const festivalOver = today > FEST_END;
 
@@ -172,6 +177,7 @@ export default async function BvmfPage() {
             name: H1,
             description: META_DESCRIPTION,
             limit: 20,
+            artists,
           })}
         />
       )}

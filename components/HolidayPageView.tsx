@@ -5,6 +5,8 @@ import { format, parseISO } from "date-fns";
 import { SITE_URL } from "@/lib/constants";
 import { Hwy4Event } from "@/lib/types";
 import { getEventsInRange } from "@/lib/events-data";
+import { getPublishedArtists } from "@/lib/artists-data";
+import { artistGenreMap } from "@/lib/artists";
 import {
   JsonLd,
   buildBreadcrumbs,
@@ -44,10 +46,12 @@ export default async function HolidayPageView({ guide }: { guide: HolidayGuide }
   const win = julyWindow(today);
   // Clamp to today so mid-holiday-week visits don't list already-past days.
   const start = win.start > today ? win.start : today;
-  const [inRange, forecastsByTown] = await Promise.all([
+  const [inRange, forecastsByTown, artists] = await Promise.all([
     getEventsInRange(start, win.end),
     getForecastsByTown(),
+    getPublishedArtists(),
   ]);
+  const artistGenres = artistGenreMap(artists);
   const events = inRange.filter(
     (e) => e.visibility === "public" && e.town === guide.town
   );
@@ -83,6 +87,7 @@ export default async function HolidayPageView({ guide }: { guide: HolidayGuide }
             name: guide.metaTitle,
             description: guide.metaDescription,
             limit: 100,
+            artists,
           })}
         />
       )}
@@ -184,6 +189,7 @@ export default async function HolidayPageView({ guide }: { guide: HolidayGuide }
                   events={dayEvents}
                   newsletterSource={`holiday_${guide.key}`}
                   forecastsByTown={forecastsByTown}
+                  artistGenres={artistGenres}
                 />
               </section>
             ))}
