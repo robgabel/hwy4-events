@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import { firstTouchSrc } from "@/lib/track";
+import {
+  SIGNUP_EXPECTATION,
+  alreadySubscribedCopy,
+  checkEmailCopy,
+  type SubscribeOutcome,
+} from "@/lib/newsletter-confirm";
 
 export default function NewsletterSignup({
   variant = "default",
@@ -21,6 +27,7 @@ export default function NewsletterSignup({
 }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [outcome, setOutcome] = useState<SubscribeOutcome>("check_email");
   const [message, setMessage] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,8 +51,8 @@ export default function NewsletterSignup({
         setMessage(data.error || "Something went wrong.");
         return;
       }
+      setOutcome(data.outcome === "already_subscribed" ? "already_subscribed" : "check_email");
       setStatus("success");
-      setMessage("Check your email to confirm your subscription (it may land in a Promotions filter).");
       setEmail("");
     } catch {
       setStatus("error");
@@ -57,7 +64,7 @@ export default function NewsletterSignup({
     return (
       <div className="mb-6 rounded-xl border-2 border-sunset/50 bg-sunset/10 px-5 py-4 shadow-sm">
         {status === "success" ? (
-          <p className="text-sm text-earth font-medium text-center">{message}</p>
+          <SuccessState outcome={outcome} compact />
         ) : (
           <div className="sm:flex sm:items-center sm:gap-4">
             <div className="mb-3 sm:mb-0 sm:flex-1">
@@ -67,6 +74,7 @@ export default function NewsletterSignup({
               {description && (
                 <p className="mt-1 text-xs leading-relaxed text-stone">{description}</p>
               )}
+              <p className="mt-1 text-xs text-stone">{SIGNUP_EXPECTATION}</p>
             </div>
             <form onSubmit={handleSubmit} className="flex gap-2 sm:flex-shrink-0">
               <input
@@ -104,28 +112,76 @@ export default function NewsletterSignup({
           "Get the Thursday roundup. What's happening this weekend and next week on the 4."}
       </p>
       {status === "success" ? (
-        <p className="text-sm text-pine font-medium">{message}</p>
+        <SuccessState outcome={outcome} />
       ) : (
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="your@email.com"
-            required
-            className="flex-1 rounded-lg border border-stone-light/40 bg-white px-3 py-2 text-sm text-stone-800 placeholder:text-stone-light/60 focus:border-pine focus:outline-none focus:ring-1 focus:ring-pine"
-          />
-          <button
-            type="submit"
-            disabled={status === "loading"}
-            className="cursor-pointer rounded-lg bg-pine px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
-          >
-            {status === "loading" ? "..." : "Subscribe"}
-          </button>
-        </form>
+        <>
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              required
+              className="flex-1 rounded-lg border border-stone-light/40 bg-white px-3 py-2 text-sm text-stone-800 placeholder:text-stone-light/60 focus:border-pine focus:outline-none focus:ring-1 focus:ring-pine"
+            />
+            <button
+              type="submit"
+              disabled={status === "loading"}
+              className="cursor-pointer rounded-lg bg-pine px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-forest disabled:opacity-50"
+            >
+              {status === "loading" ? "..." : "Subscribe"}
+            </button>
+          </form>
+          <p className="mt-2 text-xs text-stone">{SIGNUP_EXPECTATION}</p>
+        </>
       )}
       {status === "error" && (
         <p className="mt-2 text-sm text-red-600">{message}</p>
+      )}
+    </div>
+  );
+}
+
+function SuccessState({
+  outcome,
+  compact = false,
+}: {
+  outcome: SubscribeOutcome;
+  compact?: boolean;
+}) {
+  if (outcome === "already_subscribed") {
+    const copy = alreadySubscribedCopy();
+    return (
+      <div role="status">
+        <p className={`font-medium text-pine ${compact ? "text-sm text-center" : "text-sm"}`}>
+          {copy.heading}
+        </p>
+        <p className={`text-stone ${compact ? "mt-1 text-center text-xs" : "mt-1 text-sm"}`}>
+          {copy.note}
+        </p>
+      </div>
+    );
+  }
+
+  const copy = checkEmailCopy();
+  return (
+    <div role="status">
+      <p className={`font-medium text-pine ${compact ? "text-sm text-center" : "text-sm"}`}>
+        {copy.heading}
+      </p>
+      {compact ? (
+        <p className="mt-1 text-center text-xs text-stone">
+          From {copy.fromLabel}. Subject: {copy.subject}. {copy.note}
+        </p>
+      ) : (
+        <>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-stone">
+            {copy.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <p className="mt-2 text-sm text-stone">{copy.note}</p>
+        </>
       )}
     </div>
   );

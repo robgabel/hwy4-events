@@ -1,6 +1,15 @@
 import { getAdminClientOrNull } from "@/lib/admin/db";
 import { SITE_URL } from "@/lib/constants";
+import { REGION } from "@/lib/region";
 import { readFlash } from "@/lib/admin/flash";
+import {
+  buildConfirmReminderDraft,
+  confirmUrlForToken,
+  gmailComposeUrl,
+  isPendingUnconfirmed,
+  selectReminderCandidates,
+  type PendingUnconfirmed,
+} from "@/lib/newsletter-confirm";
 import { saveDraft, vetoDraft, unvetoDraft, regenerateDraft } from "./actions";
 import { addNote, updateNote, deleteNote } from "./note-actions";
 
@@ -42,6 +51,22 @@ async function loadDrafts(): Promise<Draft[]> {
     .order("target_send_date", { ascending: false })
     .limit(8);
   return (data ?? []) as Draft[];
+}
+
+async function loadPendingUnconfirmed(): Promise<PendingUnconfirmed[]> {
+  const supabase = getAdminClientOrNull();
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("newsletter_subscribers")
+    .select(
+      "email, unsubscribe_token, created_at, last_confirmation_sent_at, confirmed, unsubscribed_at"
+    )
+    .eq("confirmed", false)
+    .is("unsubscribed_at", null)
+    .not("email", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(200);
+  return ((data ?? []) as PendingUnconfirmed[]).filter(isPendingUnconfirmed);
 }
 
 async function loadNotes(): Promise<Note[]> {
@@ -95,7 +120,13 @@ export default async function NewsletterDraftAdminPage({
   const params = await searchParams;
   const { error: errorMsg, flash } = readFlash(params);
 
-  const [drafts, notes] = await Promise.all([loadDrafts(), loadNotes()]);
+  const [drafts, notes, pendingRows] = await Promise.all([
+    loadDrafts(),
+    loadNotes(),
+    loadPendingUnconfirmed(),
+  ]);
+  const reminderList = selectReminderCandidates(pendingRows);
+  const pendingFresh = pendingRows.length - reminderList.length;
   // The current draft is the most recent one that's still actionable (not yet
   // shipped). Once the week's draft sends, there's a gap until Wednesday's
   // prepare cron creates the next one — during that gap we must NOT fall back to
@@ -259,6 +290,12 @@ export default async function NewsletterDraftAdminPage({
         </section>
       )}
 
+      <ConfirmReminderPanel
+        pendingTotal={pendingRows.length}
+        pendingFresh={pendingFresh}
+        rows={reminderList}
+      />
+
       {/* "From Rob" note scheduling (folded in from the old /admin/newsletter-note). */}
       <hr style={{ border: "none", borderTop: "1px solid #E7E0D5", margin: "8px 0 28px" }} />
       <h2 style={{ color: "#1B3A2D", fontSize: 22, margin: "0 0 4px" }}>&ldquo;From Rob&rdquo; note</h2>
@@ -338,6 +375,101 @@ export default async function NewsletterDraftAdminPage({
         )}
       </section>
     </div>
+  );
+}
+
+function fmtStamp(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: REGION.timezone,
+  });
+}
+
+function ConfirmReminderPanel({
+  pendingTotal,
+  pendingFresh,
+  rows,
+}: {
+  pendingTotal: number;
+  pendingFresh: number;
+  rows: PendingUnconfirmed[];
+}) {
+  return (
+    <section style={{ ...cardStyle, marginTop: 8 }}>
+      <h2 style={{ color: "#1B3A2D", fontSize: 22, margin: "0 0 4px" }}>
+        Confirm reminders
+      </h2>
+      <p style={{ color: "#666", fontSize: 16, margin: "0 0 16px" }}>
+        People who signed up and never tapped confirm. The app drafts a
+        reminder; you send it from Gmail. Nothing here emails anyone. Unsubscribed
+        addresses are excluded. Same-day signups wait 24 hours.
+      </p>
+      <p style={{ color: "#333", fontSize: 15, margin: "0 0 16px" }}>
+        <strong>{pendingTotal}</strong> pending
+        {pendingFresh > 0 ? ` · ${pendingFresh} too new to list` : ""}
+        {rows.length > 0 ? ` · ${rows.length} ready` : ""}
+      </p>
+      {rows.length === 0 ? (
+        <p style={{ color: "#666", fontSize: 16, margin: 0 }}>
+          {pendingTotal === 0
+            ? "Nobody waiting. The confirm leak is closed for now."
+            : "Everyone still pending signed up in the last day. Give the first email a chance."}
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {rows.map((row) => {
+            const confirmUrl = confirmUrlForToken(row.unsubscribe_token);
+            const draft = buildConfirmReminderDraft(confirmUrl);
+            const href = gmailComposeUrl(row.email, draft.subject, draft.body);
+            return (
+              <div
+                key={row.unsubscribe_token}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  padding: "12px 14px",
+                  border: "1px solid #E7E0D5",
+                  borderRadius: 8,
+                  background: "#FDF8F3",
+                }}
+              >
+                <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 16,
+                      color: "#1B3A2D",
+                      fontWeight: 600,
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {row.email}
+                  </p>
+                  <p style={{ margin: "4px 0 0", fontSize: 13, color: "#666" }}>
+                    Signed up {fmtStamp(row.created_at)}
+                    {row.last_confirmation_sent_at
+                      ? ` · last confirm email ${fmtStamp(row.last_confirmation_sent_at)}`
+                      : ""}
+                  </p>
+                </div>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ ...primaryBtnStyle, textDecoration: "none", display: "inline-block" }}
+                >
+                  Open in Gmail
+                </a>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 

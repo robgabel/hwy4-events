@@ -1,9 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import { SITE_URL, SITE_NAME } from "@/lib/constants";
 import { newsletterFromHeader } from "@/lib/newsletter";
 import { classifyVisitor, geoFromHeaders } from "@/lib/geo";
+import {
+  buildConfirmationEmailHtml,
+  confirmUrlForToken,
+  subscribeResponse,
+} from "@/lib/newsletter-confirm";
 
 export async function POST(request: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -59,7 +63,7 @@ export async function POST(request: Request) {
 
   if (existing) {
     if (existing.confirmed && !existing.unsubscribed_at) {
-      return NextResponse.json({ ok: true, message: "Already subscribed" });
+      return NextResponse.json(subscribeResponse("already_subscribed"));
     }
     // Re-subscribe: clear unsubscribed_at and resend confirmation if needed
     if (existing.unsubscribed_at) {
@@ -73,22 +77,24 @@ export async function POST(request: Request) {
       ? new Date(existing.last_confirmation_sent_at).getTime()
       : 0;
     if (lastSent && Date.now() - lastSent < RESEND_COOLDOWN_MS) {
-      return NextResponse.json({ ok: true, message: "Confirmation email sent" });
+      return NextResponse.json(subscribeResponse("check_email"));
     }
     // Send confirmation email
     const resend = new Resend(resendApiKey);
-    const confirmUrl = `${SITE_URL}/api/newsletter/confirm?token=${existing.unsubscribe_token}`;
+    const confirm = buildConfirmationEmailHtml(
+      confirmUrlForToken(existing.unsubscribe_token)
+    );
     await resend.emails.send({
       from: newsletterFromHeader(),
       to: email,
-      subject: `Confirm your ${SITE_NAME} newsletter subscription`,
-      html: confirmationEmailHtml(confirmUrl),
+      subject: confirm.subject,
+      html: confirm.html,
     });
     await supabase
       .from("newsletter_subscribers")
       .update({ last_confirmation_sent_at: new Date().toISOString() })
       .eq("id", existing.id);
-    return NextResponse.json({ ok: true, message: "Confirmation email sent" });
+    return NextResponse.json(subscribeResponse("check_email"));
   }
 
   // Insert new subscriber
@@ -113,31 +119,15 @@ export async function POST(request: Request) {
 
   // Send confirmation email
   const resend = new Resend(resendApiKey);
-  const confirmUrl = `${SITE_URL}/api/newsletter/confirm?token=${newSub.unsubscribe_token}`;
+  const confirm = buildConfirmationEmailHtml(
+    confirmUrlForToken(newSub.unsubscribe_token)
+  );
   await resend.emails.send({
     from: newsletterFromHeader(),
     to: email,
-    subject: `Confirm your ${SITE_NAME} newsletter subscription`,
-    html: confirmationEmailHtml(confirmUrl),
+    subject: confirm.subject,
+    html: confirm.html,
   });
 
-  return NextResponse.json({ ok: true, message: "Confirmation email sent" });
-}
-
-function confirmationEmailHtml(confirmUrl: string): string {
-  return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 16px;">
-      <h2 style="color: #2d5016; margin-bottom: 16px;">Confirm your subscription</h2>
-      <p style="color: #444; line-height: 1.6;">
-        Thanks for signing up for the <strong>${SITE_NAME}</strong> weekly newsletter!
-        Click the button below to confirm your email and start getting the Thursday roundup.
-      </p>
-      <a href="${confirmUrl}" style="display: inline-block; background: #2d5016; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0;">
-        Confirm subscription
-      </a>
-      <p style="color: #888; font-size: 13px; margin-top: 24px;">
-        If you didn't sign up for this, you can ignore this email.
-      </p>
-    </div>
-  `;
+  return NextResponse.json(subscribeResponse("check_email"));
 }
