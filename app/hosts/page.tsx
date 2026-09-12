@@ -2,30 +2,48 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SITE_URL } from "@/lib/constants";
 import HostKit from "@/components/HostKit";
+import StayLinkBuilder from "@/components/StayLinkBuilder";
+import { thisWeekendRange } from "@/lib/date-windows";
 
 // Landing page for the vacation-rental-host wedge (Karen persona / the B2B2C
-// channel in BUSINESS-PLAN.md). Hosts hand the QR card + pre-arrival note to
-// already-arriving visitors — the highest-intent "what's on this weekend"
-// readers there are. The kit (card + blurb) lives in components/HostKit.tsx;
-// the printable card image is app/hosts/card/route.tsx.
+// channel in BUSINESS-PLAN.md). HWY-40 added the stay-link builder: a host
+// copies /this-weekend or /this-weekend?from=&to= (tagged src=host) into a
+// welcome message. The QR card + pre-arrival note remain for the cabin.
+// The kit lives in components/HostKit.tsx; the card is app/hosts/card/route.tsx.
 
 export const metadata: Metadata = {
-  title: "For Airbnb & Vacation Rental Hosts | Hwy 4 Events",
+  title: "For Airbnb & Vacation Rental Hosts",
   description:
     "Give your guests a better weekend on Highway 4. A free QR card and pre-arrival note that show visitors what's happening in Murphys, Arnold, and the rest of the corridor while they're here.",
   alternates: { canonical: "/hosts" },
   openGraph: {
-    title: "For Airbnb & Vacation Rental Hosts | Hwy 4 Events",
+    title: "For Airbnb & Vacation Rental Hosts",
     description:
       "A free kit to show your guests what's happening on Highway 4 while they're up. Better stays, better reviews, zero work.",
     type: "website",
     url: `${SITE_URL}/hosts`,
+    images: [
+      {
+        url: "/og/weekend",
+        width: 1200,
+        height: 630,
+        alt: "What's on this weekend on Hwy 4",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "For Airbnb & Vacation Rental Hosts",
+    description:
+      "A free kit to show your guests what's happening on Highway 4 while they're up.",
+    images: ["/og/weekend"],
   },
 };
 
 export const revalidate = 3600;
 
 export default function HostsPage() {
+  const weekend = thisWeekendRange();
   return (
     <main className="mx-auto max-w-3xl px-5 py-10 sm:py-14">
       {/* hero */}
@@ -70,6 +88,21 @@ export default function HostsPage() {
         ))}
       </section>
 
+      {/* stay link — the Karen job */}
+      <section className="mt-12">
+        <h2 className="font-display text-2xl font-bold text-forest">
+          Send guests a link
+        </h2>
+        <p className="mt-2 text-stone">
+          Drop this in your Airbnb welcome message. This weekend is the
+          default. If you know the stay dates, pick them and we build a URL
+          that only shows those days.
+        </p>
+        <div className="mt-6">
+          <StayLinkBuilder defaultFrom={weekend.start} defaultTo={weekend.end} />
+        </div>
+      </section>
+
       {/* the kit */}
       <section className="mt-12">
         <h2 className="font-display text-2xl font-bold text-forest">Your free host kit</h2>
@@ -97,15 +130,15 @@ export default function HostsPage() {
             <span aria-hidden className="text-sunset">●</span>
             <span>
               <strong className="text-forest">In your check-in message.</strong>{" "}
-              Paste the pre-arrival note so guests are looking forward to
-              something before they even leave home.
+              Paste the stay link (or the pre-arrival note) so guests are
+              looking forward to something before they even leave home.
             </span>
           </li>
           <li className="flex gap-3">
             <span aria-hidden className="text-sunset">●</span>
             <span>
               <strong className="text-forest">In your digital guidebook.</strong>{" "}
-              Drop in the link:{" "}
+              Drop in the weekend link or the stay link you copied above:{" "}
               <Link href="/this-weekend" className="font-medium text-pine underline underline-offset-2 hover:text-forest">
                 hwy4events.com/this-weekend
               </Link>

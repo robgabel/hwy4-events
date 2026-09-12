@@ -206,6 +206,9 @@ export default function RootLayout({
             <TownFooterLinks />
 
             <nav className="mt-4 flex flex-wrap justify-center gap-4 text-sm text-stone">
+              <a href="/hosts" className="hover:text-pine hover:underline">
+                For hosts
+              </a>
               <a href="/about" className="hover:text-pine hover:underline">
                 About {SITE_NAME}
               </a>

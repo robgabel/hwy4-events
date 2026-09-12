@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { copyText } from "@/lib/copy-text";
 
 // The interactive half of /hosts: pick a town, preview the printable QR card,
 // grab the print/download link, and copy a paste-ready pre-arrival blurb. The
@@ -20,7 +21,7 @@ const TOWNS = [
 
 function blurbFor(town: string): string {
   const place = town === "the corridor" ? "Highway 4" : town;
-  return `Before you head up, one local tip: hwy4events.com has everything happening around ${place} this weekend, from live music and festivals to wine events and farmers markets. Give it a look the morning you arrive so you don't miss the good stuff. Enjoy your stay!`;
+  return `Before you head up, one local tip: hwy4events.com/this-weekend has everything happening around ${place} this weekend, from live music and festivals to wine events and farmers markets. Give it a look the morning you arrive so you don't miss the good stuff. Enjoy your stay!`;
 }
 
 export default function HostKit() {
@@ -32,12 +33,10 @@ export default function HostKit() {
   const blurb = blurbFor(town);
 
   async function copyBlurb() {
-    try {
-      await navigator.clipboard.writeText(blurb);
+    const ok = await copyText(blurb);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked — the textarea below is still selectable */
     }
   }
 

@@ -107,6 +107,7 @@ export async function GET() {
       changefreq: "daily" as const,
       priority: 0.7,
     })),
+    { loc: `${SITE_URL}/hosts`, changefreq: "monthly", priority: 0.5 },
     { loc: `${SITE_URL}/about`, changefreq: "monthly", priority: 0.7 },
     { loc: `${SITE_URL}/about/rob-gabel`, changefreq: "yearly", priority: 0.5 },
     { loc: `${SITE_URL}/faq`, changefreq: "monthly", priority: 0.6 },
