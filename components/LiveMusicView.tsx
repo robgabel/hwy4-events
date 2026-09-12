@@ -19,15 +19,23 @@ import SimpleEventList from "@/components/SimpleEventList";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecastsByTown } from "@/lib/weather";
 import { getPublishedTownSlugs } from "@/app/towns/town-content";
-import { pacificToday } from "@/lib/date-windows";
-import { addDaysIso } from "@/lib/picks";
-import { INTENT_CONFIG, type IntentKey } from "@/lib/intent-pages";
+import { nowPacificMinutes } from "@/lib/event-time";
+import { addDays, pacificToday, thisWeekendRange } from "@/lib/date-windows";
+import { INTENT_CONFIG } from "@/lib/intent-pages";
+import {
+  LIVE_MUSIC_HORIZON_DAYS,
+  LIVE_MUSIC_LENSES,
+  LIVE_MUSIC_LENS_ORDER,
+  LIVE_MUSIC_PAGE,
+  LIVE_MUSIC_PATH,
+  liveMusicHref,
+  liveMusicWindow,
+  selectLiveMusic,
+  type LiveMusicLens,
+} from "@/lib/live-music";
 
-// The intent-page sibling of TemporalEventsView: same live-calendar spine
-// (shared cached fetch, SimpleEventList, JSON-LD, town cross-links), but the
-// window is intent-shaped (a filter over the corridor set) and the page opens
-// with fixed editorial copy + a short Q&A written for the queries visitors
-// actually type (BUSINESS-PLAN §8: editorial over programmatic).
+// IntentPageView sibling for /live-music: same cached feed + SimpleEventList
+// + JSON-LD spine, plus Tonight / This weekend / Upcoming lenses.
 
 function groupByDate(events: Hwy4Event[]): [string, Hwy4Event[]][] {
   const map = new Map<string, Hwy4Event[]>();
@@ -46,39 +54,53 @@ function publishedTownLinks() {
   );
 }
 
-export default async function IntentPageView({
-  intentKey,
+export default async function LiveMusicView({
+  lens,
 }: {
-  intentKey: IntentKey;
+  lens: LiveMusicLens;
 }) {
-  const cfg = INTENT_CONFIG[intentKey];
-  const today = pacificToday().iso;
-  const end = addDaysIso(today, cfg.windowDays);
+  const page = LIVE_MUSIC_PAGE;
+  const cfg = LIVE_MUSIC_LENSES[lens];
+  const today = pacificToday();
+  const weekend = thisWeekendRange();
+  const window = liveMusicWindow(lens, today);
+  const fetchEnd = addDays(today.iso, LIVE_MUSIC_HORIZON_DAYS);
+  // Fetch the widest hub window once (upcoming), then lens in memory so
+  // tonight/weekend share the same cached getUpcomingEvents scan.
   const [inRange, forecastsByTown, artists] = await Promise.all([
-    getEventsInRange(today, end),
+    getEventsInRange(today.iso, fetchEnd),
     getForecastsByTown(),
     getPublishedArtists(),
   ]);
   const artistGenres = artistGenreMap(artists);
-  const events = inRange.filter(cfg.filter);
+  const events = selectLiveMusic(inRange, lens, {
+    todayIso: today.iso,
+    nowMinutes: nowPacificMinutes(),
+    weekend,
+    horizonEnd: fetchEnd,
+  });
   const grouped = groupByDate(events);
   const townLinks = publishedTownLinks();
 
-  const siblings = Object.values(INTENT_CONFIG).filter(
-    (c) => c.key !== intentKey
-  );
+  const rangeLabel =
+    window.start === window.end
+      ? format(parseISO(window.start), "EEEE, MMMM d")
+      : `${format(parseISO(window.start), "EEEE, MMMM d")} through ${format(
+          parseISO(window.end),
+          "EEEE, MMMM d"
+        )}`;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <JsonLd
         data={buildBreadcrumbs([
           { name: "Hwy 4 Events", url: SITE_URL },
-          { name: cfg.label, url: `${SITE_URL}${cfg.path}` },
+          { name: page.label, url: `${SITE_URL}${LIVE_MUSIC_PATH}` },
         ])}
       />
       <JsonLd
         data={buildWebPage({
-          url: `${SITE_URL}${cfg.path}`,
+          url: `${SITE_URL}${LIVE_MUSIC_PATH}`,
           name: cfg.metaTitle,
           description: cfg.metaDescription,
           dateModified: new Date().toISOString().split("T")[0],
@@ -90,12 +112,10 @@ export default async function IntentPageView({
             name: cfg.metaTitle,
             description: cfg.metaDescription,
             limit: 100,
-            artists,
           })}
         />
       )}
 
-      {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="mb-6 text-sm text-stone">
         <ol className="flex items-center gap-1.5">
           <li>
@@ -104,11 +124,10 @@ export default async function IntentPageView({
             </Link>
           </li>
           <li aria-hidden="true">/</li>
-          <li className="text-stone-light">{cfg.label}</li>
+          <li className="text-stone-light">{page.label}</li>
         </ol>
       </nav>
 
-      {/* Hero */}
       <div className="mb-6 flex flex-col items-center gap-5 sm:flex-row sm:items-start">
         <Image
           src="/millie-happy.svg"
@@ -125,19 +144,48 @@ export default async function IntentPageView({
           <p className="text-center text-lg leading-relaxed text-stone sm:text-left">
             {cfg.lead}
           </p>
+          <p className="mt-2 text-center text-xs uppercase tracking-wide text-stone-light sm:text-left">
+            {rangeLabel}
+          </p>
         </div>
       </div>
 
-      {/* Editorial intro */}
       <div className="mb-6 space-y-3">
-        {cfg.editorial.map((p) => (
+        {page.editorial.map((p) => (
           <p key={p.slice(0, 24)} className="leading-relaxed text-stone">
             {p}
           </p>
         ))}
       </div>
 
-      {/* Cross-links to the other intent + temporal views */}
+      <nav
+        aria-label="When"
+        className="mb-6 inline-flex flex-wrap rounded-full border border-stone-light/40 bg-white text-sm font-semibold"
+      >
+        {LIVE_MUSIC_LENS_ORDER.map((key, i) => {
+          const item = LIVE_MUSIC_LENSES[key];
+          const active = key === lens;
+          return (
+            <Link
+              key={key}
+              href={liveMusicHref(key)}
+              aria-current={active ? "page" : undefined}
+              className={`px-3 py-1.5 transition-colors ${
+                i > 0 ? "border-l border-stone-light/40" : ""
+              } ${
+                active
+                  ? "bg-pine text-white"
+                  : "text-forest hover:text-pine"
+              } ${i === 0 ? "rounded-l-full" : ""} ${
+                i === LIVE_MUSIC_LENS_ORDER.length - 1 ? "rounded-r-full" : ""
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
       <nav aria-label="More ways to browse" className="mb-8 flex flex-wrap gap-2">
         <Link
           href="/this-weekend"
@@ -145,13 +193,7 @@ export default async function IntentPageView({
         >
           This Weekend
         </Link>
-        <Link
-          href="/live-music"
-          className="rounded-full border border-stone-light/30 bg-white px-3 py-1.5 text-sm font-semibold text-forest transition-colors hover:border-pine/30"
-        >
-          Live Music
-        </Link>
-        {siblings.map((s) => (
+        {Object.values(INTENT_CONFIG).map((s) => (
           <Link
             key={s.key}
             href={s.path}
@@ -168,7 +210,6 @@ export default async function IntentPageView({
         </Link>
       </nav>
 
-      {/* Events grouped by day */}
       {grouped.length > 0 ? (
         <div className="mb-10 space-y-8">
           {(() => {
@@ -188,7 +229,7 @@ export default async function IntentPageView({
                   <SimpleEventList
                     events={dayEvents}
                     newsletterAfterIndex={newsletterAfterIndex}
-                    newsletterSource={`intent_${cfg.key}`}
+                    newsletterSource={`live_music_${lens}`}
                     forecastsByTown={forecastsByTown}
                     artistGenres={artistGenres}
                   />
@@ -199,21 +240,43 @@ export default async function IntentPageView({
         </div>
       ) : (
         <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">
-          Nothing in this lane on the calendar right now. Check the{" "}
-          <Link href="/" className="font-medium text-pine hover:underline">
-            full corridor list
-          </Link>
-          , or check back. New events get added daily.
+          {cfg.empty}{" "}
+          {lens === "tonight" ? (
+            <>
+              Check{" "}
+              <Link
+                href={liveMusicHref("weekend")}
+                className="font-medium text-pine hover:underline"
+              >
+                this weekend
+              </Link>
+              {" or "}
+              <Link
+                href={liveMusicHref("upcoming")}
+                className="font-medium text-pine hover:underline"
+              >
+                upcoming shows
+              </Link>
+              .
+            </>
+          ) : (
+            <>
+              Check the{" "}
+              <Link href="/" className="font-medium text-pine hover:underline">
+                full corridor list
+              </Link>
+              , or check back. New events get added daily.
+            </>
+          )}
         </p>
       )}
 
-      {/* Q&A — written to resolve the searches that land here */}
       <section className="mb-10">
         <h2 className="font-display mb-3 text-lg font-semibold text-forest">
           Good to know
         </h2>
         <div className="space-y-4">
-          {cfg.qa.map((item) => (
+          {page.qa.map((item) => (
             <div key={item.q}>
               <h3 className="font-semibold text-forest">{item.q}</h3>
               <p className="mt-1 leading-relaxed text-stone">{item.a}</p>
@@ -222,16 +285,14 @@ export default async function IntentPageView({
         </div>
       </section>
 
-      {/* Newsletter */}
       <section className="mb-10">
         <NewsletterSignup
-          source={`intent_${cfg.key}`}
+          source={`live_music_${lens}`}
           heading="Want a Thursday heads-up?"
           description="One email Thursday morning with what's coming up across the corridor, Angels Camp to Bear Valley. No spam, no ads."
         />
       </section>
 
-      {/* Browse by town */}
       {townLinks.length > 0 && (
         <section className="mb-4">
           <h2 className="font-display mb-3 text-lg font-semibold text-forest">

@@ -23,7 +23,8 @@ export const faqs: SiteFaq[] = [
   {
     question: "Where can I find live music near Angels Camp or Murphys?",
     answer:
-      "Use the Live Music filter on the homepage to see every upcoming show on the corridor. Murphys wineries, Angels Camp, and Arnold venues carry most of the lineup. Each listing links to the venue or organizer for set times.",
+      "The Live Music page lists every upcoming show on the corridor, with Tonight and This Weekend lenses so you don't have to fight the full calendar. Murphys wineries, Angels Camp, and Arnold venues carry most of the lineup.",
+    cta: { href: "/live-music", label: "See live music" },
   },
   {
     question: "What festivals happen in Calaveras County?",

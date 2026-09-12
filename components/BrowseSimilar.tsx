@@ -10,7 +10,7 @@ import { pacificToday } from "@/lib/date-windows";
 
 /**
  * Contextual internal links from an event detail page into the browse
- * surfaces it belongs to (intent pages, this-weekend, the town page).
+ * surfaces it belongs to (intent pages, /live-music, this-weekend, the town page).
  * Cheap internal linking for the pages we most want crawled, and the
  * "what else is nearby" answer for a visitor who landed here from search.
  */
@@ -18,6 +18,9 @@ export default function BrowseSimilar({ event }: { event: Hwy4Event }) {
   const chips: { href: string; label: string }[] = [
     { href: "/this-weekend", label: "This weekend" },
   ];
+  if (event.category === "live_music") {
+    chips.push({ href: "/live-music", label: "Live music" });
+  }
   // A festival guide (e.g. the Bear Valley Music Festival page) leads the chips
   // for its own events: it's the most specific "what else" answer, and this is
   // the internal link that keeps that landing page from being an orphan.

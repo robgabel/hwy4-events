@@ -1,7 +1,7 @@
 // Single source of truth for reading upcoming events.
 //
 // THE EGRESS FIX: every public page (homepage, /this-week, /this-weekend,
-// /this-month, /towns/[slug], sitemap) used to run its OWN full-table scan of
+// /this-month, /towns/[slug], /live-music, sitemap) used to run its OWN full-table scan of
 // `hwy4_events` on every ISR revalidation. With ~30 pages each revalidating
 // hourly and crawlers sweeping them, that was dozens of full-table reads per
 // hour — the source of the Supabase free-tier egress overage.
