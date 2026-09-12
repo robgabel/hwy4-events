@@ -13,6 +13,7 @@ import { getUpcomingEvents } from "@/lib/events-data";
 import { getPublishedArtists } from "@/lib/artists-data";
 import { artistGenreMap } from "@/lib/artists";
 import { venueMetaTitle, venueMetaDescription, venueListSection } from "@/lib/venue-pages";
+import { personaHubForVenueKey } from "@/lib/persona-hubs";
 import {
   JsonLd,
   buildBreadcrumbs,
@@ -110,6 +111,7 @@ export default async function VenuePage({ params }: PageProps) {
   ];
 
   const year = Number(pacificToday().iso.slice(0, 4));
+  const personaHub = personaHubForVenueKey(slug);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -187,6 +189,23 @@ export default async function VenuePage({ params }: PageProps) {
 
       {/* Blurb + Google facts strip + practical badges (shared component). */}
       <VenueInfo venue={venue} />
+
+      {personaHub && (
+        <Link
+          href={personaHub.path}
+          className="mb-8 flex items-center justify-between gap-3 rounded-xl border border-earth/30 bg-warm-white px-5 py-4 transition-colors hover:border-pine/40"
+        >
+          <span>
+            <span className="font-display block font-bold text-forest">
+              {personaHub.heading}
+            </span>
+            <span className="mt-0.5 block text-sm text-stone">{personaHub.blurb}</span>
+          </span>
+          <span aria-hidden className="shrink-0 font-semibold text-pine">
+            Guide &rarr;
+          </span>
+        </Link>
+      )}
 
       {/* Upcoming events. Concert venues get a search-shaped heading + lede
           (HWY-28) so the page matches "<venue> concerts <year>" queries. */}

@@ -9,6 +9,7 @@ import { INTENT_CONFIG } from "@/lib/intent-pages";
 import { HOLIDAY_GUIDES } from "@/lib/holiday-pages";
 import { MARKET_GUIDES } from "@/lib/market-pages";
 import { MEET_ME_GUIDES } from "@/lib/meet-me-pages";
+import { PERSONA_HUBS } from "@/lib/persona-hubs";
 import { renderUrlset, type SitemapUrl } from "@/lib/sitemap";
 import { getUpcomingEvents } from "@/lib/events-data";
 import { getSupabase } from "@/lib/supabase";
@@ -88,6 +89,15 @@ export async function GET() {
     // striking-distance GSC pair. Daily lastmod so a newly confirmed date
     // is honest; empty list is still the durable landing spot.
     ...MEET_ME_GUIDES.map((g) => ({
+      loc: `${SITE_URL}${g.path}`,
+      lastmod: todayISO,
+      changefreq: "weekly" as const,
+      priority: 0.8,
+    })),
+    // Persona SEO hubs (HWY-39): year-less query targets for Arnold car
+    // show / Hermitfest / Brice Station concerts. Daily lastmod so a newly
+    // confirmed date is honest; empty list is still the durable landing spot.
+    ...PERSONA_HUBS.map((g) => ({
       loc: `${SITE_URL}${g.path}`,
       lastmod: todayISO,
       changefreq: "weekly" as const,
