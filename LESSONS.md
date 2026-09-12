@@ -182,6 +182,7 @@ module) and fixed the event-card click affordance. Lessons:
 - **Give the agent memory or it re-guesses.** A read-only memo that invents "experiments" every week is a dashboard, not an agent. The `growth_experiments` table (logged hypotheses + metrics) fed into the signal pack — with a prompt rule to report a read on each *logged* one and never invent — is what makes it accumulate a track record.
 - **Single source of truth for derived stats.** `lib/newsletter-stats.ts` is consumed by both the Growth tab and the memo context, so they can't disagree (same discipline as `isSameEvent`). When adding it, *replace* the ad-hoc queries (dropped 7 head-count calls), don't run both.
 - **Reuse the proven UX pattern.** The growth memo's draft copy reuses the submission-reply loop's copy-button + Gmail-deep-link. Outward actions stay a human click *by construction* — a read-only agent that drafts is the safe default.
+- **A query-param redirect is not a landing page.** `/api/newsletter/confirm` POSTed then 303'd to `/?newsletter=confirmed` (and invalid/error/already-confirmed), but nothing on the homepage read the param, so a successful confirm landed on a silent homepage. Unsubscribe already rendered its own result HTML. Confirm now does the same. If you redirect "for UX," the destination has to render the state or the click was wasted.
 
 ### Process / environment
 
