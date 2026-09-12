@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { copyText } from "@/lib/copy-text";
 
 // The interactive half of /hosts: pick a town, preview the printable QR card,
 // grab the print/download link, and copy a paste-ready pre-arrival blurb. The
@@ -32,12 +33,10 @@ export default function HostKit() {
   const blurb = blurbFor(town);
 
   async function copyBlurb() {
-    try {
-      await navigator.clipboard.writeText(blurb);
+    const ok = await copyText(blurb);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked — the textarea below is still selectable */
     }
   }
 

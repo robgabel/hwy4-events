@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { SITE_URL } from "@/lib/constants";
+import { copyText } from "@/lib/copy-text";
 import {
   STAY_MAX_DAYS,
   parseStayRange,
@@ -28,6 +29,7 @@ export default function StayLinkBuilder({
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
   const [copied, setCopied] = useState<"stay" | "weekend" | null>(null);
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
 
   const stay = useMemo(() => parseStayRange({ from, to }), [from, to]);
   const stayUrl = stay ? withSrc(stayHref(stay), "host") : null;
@@ -42,13 +44,14 @@ export default function StayLinkBuilder({
   }
 
   async function copy(kind: "stay" | "weekend", url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyText(url);
+    if (ok) {
       setCopied(kind);
       setTimeout(() => setCopied(null), 2000);
-    } catch {
-      /* textarea below is still selectable */
+      return;
     }
+    fieldRef.current?.focus();
+    fieldRef.current?.select();
   }
 
   const spanHint =
@@ -96,6 +99,7 @@ export default function StayLinkBuilder({
       )}
 
       <textarea
+        ref={fieldRef}
         readOnly
         value={stayUrl ?? ""}
         rows={2}
