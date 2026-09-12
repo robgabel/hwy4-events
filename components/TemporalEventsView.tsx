@@ -58,7 +58,7 @@ export default async function TemporalEventsView({
   const isStay = stay != null;
   const h1 = isStay ? "What's on during your stay on Hwy 4" : cfg.h1;
   const lead = isStay
-    ? "Every public event along the Highway 4 corridor for these dates, from Angels Camp to Bear Valley."
+    ? "Every event along the Highway 4 corridor for these dates, from Angels Camp to Bear Valley."
     : cfg.lead;
   const pagePath = isStay && stay ? stayHref(stay) : cfg.path;
   const pageUrl = `${SITE_URL}${pagePath}`;
@@ -73,7 +73,7 @@ export default async function TemporalEventsView({
   })();
   const jsonName = isStay ? `What's on Hwy 4 during your stay` : cfg.metaTitle;
   const jsonDescription = isStay
-    ? "Public events along the Highway 4 corridor for this stay."
+    ? "Events along the Highway 4 corridor for this stay."
     : cfg.metaDescription;
   const [events, forecastsByTown, artists] = await Promise.all([
     getEventsInRange(range.start, range.end),

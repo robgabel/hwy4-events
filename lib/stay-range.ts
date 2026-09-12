@@ -116,7 +116,7 @@ export function stayMeta(range: StayRange): {
   const when = formatStayShort(range);
   return {
     title: `What's on Hwy 4, ${when}`,
-    description: `Live events along the Highway 4 corridor ${when}, Angels Camp to Bear Valley. Public listings only, updated daily.`,
+    description: `Live events along the Highway 4 corridor ${when}, Angels Camp to Bear Valley. Updated daily.`,
   };
 }
 

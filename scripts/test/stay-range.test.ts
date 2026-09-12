@@ -85,5 +85,10 @@ test("formatStayShort and stayMeta stay em-dash-free", () => {
   assert.equal(meta.title, "What's on Hwy 4, Mar 14 to 16");
   assert.ok(!meta.title.includes("—") && !meta.description.includes("—"));
   assert.ok(!meta.title.includes("–") && !meta.description.includes("–"));
-  assert.ok(meta.description.startsWith("Live events along the Highway 4 corridor Mar 14 to 16"));
+  assert.ok(
+    meta.description.startsWith(
+      "Live events along the Highway 4 corridor Mar 14 to 16"
+    )
+  );
+  assert.ok(!/public listings only/i.test(meta.description));
 });
