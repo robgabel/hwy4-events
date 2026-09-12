@@ -12,12 +12,12 @@ import { thisWeekendRange } from "@/lib/date-windows";
 // The kit lives in components/HostKit.tsx; the card is app/hosts/card/route.tsx.
 
 export const metadata: Metadata = {
-  title: "For Airbnb & Vacation Rental Hosts | Hwy 4 Events",
+  title: "For Airbnb & Vacation Rental Hosts",
   description:
     "Give your guests a better weekend on Highway 4. A free QR card and pre-arrival note that show visitors what's happening in Murphys, Arnold, and the rest of the corridor while they're here.",
   alternates: { canonical: "/hosts" },
   openGraph: {
-    title: "For Airbnb & Vacation Rental Hosts | Hwy 4 Events",
+    title: "For Airbnb & Vacation Rental Hosts",
     description:
       "A free kit to show your guests what's happening on Highway 4 while they're up. Better stays, better reviews, zero work.",
     type: "website",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "For Airbnb & Vacation Rental Hosts | Hwy 4 Events",
+    title: "For Airbnb & Vacation Rental Hosts",
     description:
       "A free kit to show your guests what's happening on Highway 4 while they're up.",
     images: ["/og/weekend"],
