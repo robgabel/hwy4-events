@@ -7,6 +7,7 @@ import {
   confirmUrlForToken,
   gmailComposeUrl,
   isPendingUnconfirmed,
+  isReminderEligible,
   selectReminderCandidates,
   type PendingUnconfirmed,
 } from "@/lib/newsletter-confirm";
@@ -126,7 +127,8 @@ export default async function NewsletterDraftAdminPage({
     loadPendingUnconfirmed(),
   ]);
   const reminderList = selectReminderCandidates(pendingRows);
-  const pendingFresh = pendingRows.length - reminderList.length;
+  const staleCount = pendingRows.filter((r) => isReminderEligible(r)).length;
+  const pendingFresh = pendingRows.length - staleCount;
   // The current draft is the most recent one that's still actionable (not yet
   // shipped). Once the week's draft sends, there's a gap until Wednesday's
   // prepare cron creates the next one — during that gap we must NOT fall back to
@@ -293,6 +295,7 @@ export default async function NewsletterDraftAdminPage({
       <ConfirmReminderPanel
         pendingTotal={pendingRows.length}
         pendingFresh={pendingFresh}
+        staleCount={staleCount}
         rows={reminderList}
       />
 
@@ -390,10 +393,12 @@ function fmtStamp(iso: string): string {
 function ConfirmReminderPanel({
   pendingTotal,
   pendingFresh,
+  staleCount,
   rows,
 }: {
   pendingTotal: number;
   pendingFresh: number;
+  staleCount: number;
   rows: PendingUnconfirmed[];
 }) {
   return (
@@ -410,6 +415,7 @@ function ConfirmReminderPanel({
         <strong>{pendingTotal}</strong> pending
         {pendingFresh > 0 ? ` · ${pendingFresh} too new to list` : ""}
         {rows.length > 0 ? ` · ${rows.length} ready` : ""}
+        {staleCount > rows.length ? ` · showing ${rows.length} of ${staleCount}` : ""}
       </p>
       {rows.length === 0 ? (
         <p style={{ color: "#666", fontSize: 16, margin: 0 }}>

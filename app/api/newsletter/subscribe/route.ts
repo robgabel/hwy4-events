@@ -48,8 +48,9 @@ export async function POST(request: Request) {
 
   // Rate-limit window: at most one confirmation email per email per 10 minutes.
   // Avoids accidental or malicious loops hammering Resend and burning sender
-  // reputation. Window is enforced silently — caller always sees the same
-  // success message so we don't leak whether the email is in our DB.
+  // reputation. Cooldown still returns check_email (same as a fresh send) so
+  // a probe cannot tell a retry was suppressed. Already-confirmed is a
+  // different outcome; the old API already distinguished that.
   const RESEND_COOLDOWN_MS = 10 * 60 * 1000;
 
   // Check if already subscribed
