@@ -18,7 +18,8 @@ touching any content surface.
 > (human-written, never LLM; facts from the one cancelled 2026 listing).
 > **HWY-39 (2026-09-12):** persona SEO hub copy lives in
 > [`lib/persona-hubs.ts`](../lib/persona-hubs.ts) (Arnold car show / Hermitfest /
-> Brice Station concerts; human-written, never LLM; facts from live listings only).
+> Brice Station concerts; human-written, never LLM; Hermitfest 2026 facts from
+> the official scenic4.org event page, others from live listings only).
 > **Still true:** Town/FAQ/About copy is **static source
 > code**, not a CMS; the agent prompts in `lib/agent/*` and the vision/PDF scrapers
 > (`scrape-bls`, `scrape-moose-lodge`) still carry inline prompts. **Not built:** WS-7

@@ -10,7 +10,8 @@
 //   * the year-less paths (the entire point)
 //   * title/H1 matching the GSC queries
 //   * the event matchers (no cross-town / cross-category bleed)
-//   * honesty: no invented next-year date, price, or lineup
+//   * honesty: no invented next-year date, price, or lineup;
+//     Hermitfest 2026 facts from scenic4.org (Free, official URL, schedule)
 //   * the voice rules on fixed copy (no em dashes, Q&A resolves the question)
 //
 // Run: `cd scripts && npm test`
@@ -82,7 +83,9 @@ test("title and H1 match the GSC queries searchers actually type", () => {
   assert.match(hermit.metaTitle, /2026/);
   assert.match(hermit.lead, /Bear Valley/);
   assert.match(hermit.lead, /September 12 and 13/);
-  assert.match(hermit.lead, /vary/i);
+  assert.match(hermit.lead, /free/i);
+  assert.match(hermit.lead, /noonish/i);
+  assert.match(hermit.lead, /Grizzly Ballfield/);
 
   const brice = personaHubByKey("brice-station-concerts");
   assert.match(brice.h1, /Brice Station Concerts/);
@@ -112,6 +115,8 @@ test("the Q&A covers when, where, and the honest unknowns", () => {
   assert.match(hermitQs, /when is hermitfest 2026/);
   assert.match(hermitQs, /where/);
   assert.match(hermitQs, /time/);
+  assert.match(hermitQs, /free/);
+  assert.match(hermitQs, /schedule/);
 
   const brice = personaHubByKey("brice-station-concerts");
   const briceQs = brice.qa.map((i) => i.q.toLowerCase()).join(" | ");
@@ -150,8 +155,49 @@ test("fixed copy does not invent a next-year date, a price, or a future lineup",
   }
   const arnold = personaHubByKey("arnold-car-show");
   assert.match(allStrings(arnold).join("\n"), /Unknown/);
+});
+
+test("hermitfest 2026 facts come from the official scenic4.org page", () => {
   const hermit = personaHubByKey("hermitfest");
-  assert.match(hermit.lead, /vary/i);
+  const blob = allStrings(hermit).join("\n");
+  const admission = hermit.facts.find((f) => f.label === "Admission")?.value;
+  const hours = hermit.facts.find((f) => f.label === "Hours")?.value ?? "";
+  const where = hermit.facts.find((f) => f.label === "Where")?.value ?? "";
+
+  assert.equal(hermit.officialUrl, "https://scenic4.org/events/hermitfest-west/");
+  assert.equal(admission, "Free");
+  assert.match(hours, /noonish/i);
+  assert.match(hours, /yoga 9 AM/i);
+  assert.match(hours, /2 PM/);
+  const saturdayHours = hours.split(";")[0] ?? "";
+  assert.ok(
+    !/\bto\b/.test(saturdayHours),
+    "hours must not invent a hard Saturday end"
+  );
+  assert.match(where, /Grizzly Ballfield/);
+  assert.match(where, /Bear Valley Ballfield/);
+  assert.match(where, /Alpine County/);
+
+  assert.match(blob, /Deep Thicket Dwellers/);
+  assert.match(blob, /Grover Anderson/);
+  assert.match(blob, /The HighLife Band/);
+  assert.match(blob, /Greg Sutton/);
+  assert.match(blob, /Hermitfest All Stars/);
+  assert.match(blob, /Alex Mannos/);
+  assert.match(blob, /Bear Valley Adventure Company/);
+  assert.match(blob, /Kiana/);
+  assert.match(blob, /Lainy McGreen/);
+  assert.match(blob, /West Muir/);
+  assert.match(blob, /Dominick Restivo/);
+  assert.match(blob, /Desiree & Cyrus/);
+  assert.match(blob, /Ty & Connor/);
+  assert.match(blob, /does not publish a Saturday end time/);
+
+  assert.ok(!/listings disagree/i.test(blob));
+  assert.ok(!/vary by listing/i.test(blob));
+  assert.ok(!/do not have a full lineup/i.test(blob));
+  assert.ok(!/unknown as a whole/i.test(blob));
+  assert.ok(!/lodge special/i.test(blob));
 });
 
 test("fixed copy obeys the voice rules", () => {

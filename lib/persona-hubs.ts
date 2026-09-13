@@ -140,64 +140,60 @@ export const PERSONA_HUBS: PersonaHub[] = [
     venueKeys: ["bear-valley-meadow", "bear-valley-resort"],
     label: "Hermitfest",
     heading: "Looking for Hermitfest?",
-    blurb: "Hermitfest West in Bear Valley: the 2026 dates, and what the listings actually say.",
+    blurb: "Hermitfest West in Bear Valley: the 2026 dates, hours, and official schedule.",
     h1: "Hermitfest",
-    lead: "Hermitfest West is a family-friendly music festival in Bear Valley, CA. For 2026, listings put it in Bear Valley on September 12 and 13. Hours vary by listing, so check the dates below.",
+    lead: "Hermitfest West is a family-friendly music festival at Grizzly Ballfield in Bear Valley, CA. For 2026 it runs September 12 and 13. Admission is free. Saturday music starts noonish; Sunday yoga is at 9 AM, with music to 2 PM.",
     metaTitle: "Hermitfest 2026 | Dates & Location (Bear Valley, CA)",
     metaDescription:
-      "Hermitfest West is a music festival in Bear Valley, CA. 2026 listings put it on September 12 and 13. Dates, location, and what the listings actually say.",
+      "Hermitfest West is free at Grizzly Ballfield in Bear Valley, CA on September 12 and 13, 2026. Saturday from noonish; Sunday yoga 9 AM, music to 2 PM.",
     facts: [
       { label: "2026 dates", value: "September 12 and 13" },
-      { label: "Hours", value: "Vary by listing" },
+      { label: "Hours", value: "Sat from noonish; Sun yoga 9 AM, music to 2 PM" },
       {
         label: "Where",
-        value: "Bear Valley, CA. Two listings put the festival at Bear Valley Meadow / Grizzly Ballfield, 1 Bear Valley Road.",
+        value: "Grizzly Ballfield (Bear Valley Ballfield), Bear Valley, Alpine County, CA",
         wide: true,
       },
-      {
-        label: "Admission",
-        value: "One Saturday listing called a 4:00 PM set free. Other listings do not state a price.",
-        wide: true,
-      },
+      { label: "Admission", value: "Free" },
     ],
     related: [
       { href: "/live-music", label: "Live music" },
       { href: "/venues/bear-valley-meadow", label: "Bear Valley Meadow" },
     ],
-    officialUrl: "https://scenic4.org",
-    officialLabel: "Scenic Byway site",
+    officialUrl: "https://scenic4.org/events/hermitfest-west/",
+    officialLabel: "Official Hermitfest page",
     upcomingHeading: "Upcoming Hermitfest dates",
     emptyUpcoming:
-      "No upcoming Hermitfest dates are on the calendar. The 2026 listings were September 12 and 13 in Bear Valley. If next year's dates are confirmed, they will show here.",
+      "No upcoming Hermitfest dates are on the calendar. The 2026 festival was September 12 and 13 in Bear Valley. If next year's dates are confirmed, they will show here.",
     newsletterHeading: "Want a heads-up when next year's Hermitfest lands?",
     editorial: [
-      "Hermitfest West is the Bear Valley edition of Hermitfest. A GoCalaveras listing describes it as an annual celebration by the Ebbetts Pass National Scenic Byway Association, held the first weekend after Labor Day, with live music plus art and food vendors.",
-      "For 2026, listings put the festival in Bear Valley on September 12 and 13. One listing also mentions a lodge special at Bear Valley Mountain Resort spanning September 11 to 13. Start times do not agree across listings, so this page will not pick one. One Saturday listing names The Highlife Band at 4:00 PM and calls that set free and all ages. Other listings do not state a price or a full lineup.",
+      "Hermitfest West is the Bear Valley edition of Hermitfest, put on by the Ebbetts Pass National Scenic Byway Association. The official page puts the 2026 festival at Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, Alpine County, CA, on Saturday, September 12 and Sunday, September 13. Admission is free.",
+      "Saturday on the official schedule starts noonish with Deep Thicket Dwellers, then Grover Anderson & The Lampoliers at 1:30, The HighLife Band at 3:30, a dinner break at 5:30, Greg Sutton & Friends at 6:30, and The Hermitfest All Stars at 7:30. Sunday lists yoga with Alex Mannos at 9:00, guided bike rides with Bear Valley Adventure Company at 10:00, then music from about 10:10 to 2:00: Kiana at 10:10, Lainy McGreen at 10:45, West Muir at 11:25, Dominick Restivo at 12:05, Desiree & Cyrus at 12:45, and Ty & Connor at 1:25. The official page does not publish a Saturday end time.",
     ],
     qa: [
       {
         q: "When is Hermitfest 2026?",
-        a: "Listings put Hermitfest West in Bear Valley on Saturday, September 12 and Sunday, September 13, 2026. A Bear Valley Mountain Resort listing also mentions September 11 to 13.",
+        a: "Saturday, September 12 and Sunday, September 13, 2026, at Grizzly Ballfield in Bear Valley, CA.",
       },
       {
         q: "Where is Hermitfest held?",
-        a: "Bear Valley, CA. Two listings put the festival at Bear Valley Meadow / Grizzly Ballfield, 1 Bear Valley Road.",
+        a: "Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, Alpine County, CA.",
       },
       {
         q: "What time does Hermitfest start?",
-        a: "The listings disagree. One Saturday listing says 12:00 to 1:30 PM, another Saturday listing says 4:00 PM, and a Sunday listing says 10:00 AM to 2:00 PM. We will not pick one.",
+        a: "Saturday music starts noonish. Sunday yoga is at 9:00 AM, with music from about 10:10 AM to 2:00 PM.",
       },
       {
         q: "Is Hermitfest free?",
-        a: "Unknown as a whole. One Saturday 2026 listing called The Highlife Band set free and all ages. Other listings do not state a price.",
+        a: "Yes, admission is free. The official 2026 page lists it as free.",
       },
       {
-        q: "Which acts are named on the 2026 Hermitfest listings?",
-        a: "One Saturday listing names The Highlife Band at 4:00 PM. We do not have a full lineup.",
+        q: "What is the 2026 Hermitfest schedule?",
+        a: "Saturday starts noonish with Deep Thicket Dwellers, then Grover Anderson & The Lampoliers at 1:30, The HighLife Band at 3:30, a dinner break at 5:30, Greg Sutton & Friends at 6:30, and The Hermitfest All Stars at 7:30. Sunday lists yoga with Alex Mannos at 9:00, guided bike rides with Bear Valley Adventure Company at 10:00, and music from about 10:10 AM to 2:00 PM (Kiana, Lainy McGreen, West Muir, Dominick Restivo, Desiree & Cyrus, and Ty & Connor). The official page does not publish a Saturday end time.",
       },
       {
         q: "What is Hermitfest West?",
-        a: "The Bear Valley edition of Hermitfest. Listings describe a family-friendly outdoor festival with live music, art, and food vendors.",
+        a: "The Bear Valley edition of Hermitfest, an annual outdoor music festival by the Ebbetts Pass National Scenic Byway Association. The official 2026 page lists it as free and family-friendly.",
       },
       {
         q: "Is Hermitfest the same as the Bear Valley Music Festival?",
