@@ -15,7 +15,15 @@ import {
   mapBatchSendResult,
   batchRecipientHash,
   resendErrorMessage,
+  rankSubscribersForSend,
+  withRecentClicks,
+  applyDailySendBudget,
+  shouldMarkDraftSent,
+  pickCampaignDraft,
+  NEWSLETTER_DAILY_SEND_BUDGET,
+  NEWSLETTER_CLICK_RANK_DAYS,
   type SendLogState,
+  type RankableSubscriber,
 } from "../../lib/newsletter-send.js";
 
 const sub = (email: string) => ({ email, unsubscribe_token: `tok-${email}` });
@@ -147,3 +155,190 @@ test("resendErrorMessage normalizes the shapes Resend actually returns", () => {
   assert.equal(resendErrorMessage(null), "unknown Resend error");
   assert.equal(resendErrorMessage({ code: 429 }), '{"code":429}');
 });
+
+function rankable(
+  email: string,
+  over: Partial<RankableSubscriber> = {}
+): RankableSubscriber {
+  return {
+    email,
+    unsubscribe_token: `tok-${email}`,
+    visitor_class: null,
+    confirmed_at: null,
+    created_at: null,
+    recentClick: false,
+    ...over,
+  };
+}
+
+test("rankSubscribersForSend: local/hub, then clickers, then newest confirmed", () => {
+  const visitorOld = rankable("visitor-old@x.com", {
+    visitor_class: "visitor",
+    confirmed_at: "2026-01-01T00:00:00.000Z",
+  });
+  const visitorNew = rankable("visitor-new@x.com", {
+    visitor_class: "visitor",
+    confirmed_at: "2026-09-01T00:00:00.000Z",
+  });
+  const clicker = rankable("clicker@x.com", {
+    visitor_class: "visitor",
+    confirmed_at: "2026-02-01T00:00:00.000Z",
+    recentClick: true,
+  });
+  const hubOld = rankable("hub@x.com", {
+    visitor_class: "hub",
+    confirmed_at: "2026-03-01T00:00:00.000Z",
+  });
+  const localNew = rankable("local@x.com", {
+    visitor_class: "local",
+    confirmed_at: "2026-08-01T00:00:00.000Z",
+  });
+  const unknown = rankable("unknown@x.com", {
+    visitor_class: "unknown",
+    created_at: "2026-07-01T00:00:00.000Z",
+  });
+
+  const ranked = rankSubscribersForSend([
+    visitorOld,
+    clicker,
+    unknown,
+    hubOld,
+    visitorNew,
+    localNew,
+  ]);
+
+  assert.deepEqual(
+    ranked.map((s) => s.email),
+    [
+      "local@x.com", // local, newer than hub
+      "hub@x.com",
+      "clicker@x.com",
+      "visitor-new@x.com",
+      "unknown@x.com", // created_at fallback, newer than visitor-old
+      "visitor-old@x.com",
+    ]
+  );
+});
+
+test("withRecentClicks is case-insensitive and does not invent clickers", () => {
+  const stamped = withRecentClicks(
+    [rankable("A@x.com"), rankable("b@x.com")],
+    ["a@x.com"]
+  );
+  assert.equal(stamped[0].recentClick, true);
+  assert.equal(stamped[1].recentClick, false);
+  const ranked = rankSubscribersForSend(stamped);
+  assert.equal(ranked[0].email, "A@x.com");
+});
+
+test("rankSubscribersForSend is stable on email and does not mutate input", () => {
+  const a = rankable("a@x.com", { visitor_class: "local", confirmed_at: "2026-01-01T00:00:00.000Z" });
+  const b = rankable("b@x.com", { visitor_class: "local", confirmed_at: "2026-01-01T00:00:00.000Z" });
+  const input = [b, a];
+  const ranked = rankSubscribersForSend(input);
+  assert.deepEqual(ranked.map((s) => s.email), ["a@x.com", "b@x.com"]);
+  assert.deepEqual(input.map((s) => s.email), ["b@x.com", "a@x.com"]);
+});
+
+test("applyDailySendBudget stops mid-list and leaves the tail for later", () => {
+  const list = [1, 2, 3, 4, 5];
+  const r = applyDailySendBudget(list, 3);
+  assert.deepEqual(r.thisWave, [1, 2, 3]);
+  assert.deepEqual(r.remainder, [4, 5]);
+  assert.equal(NEWSLETTER_DAILY_SEND_BUDGET, 85);
+  assert.equal(NEWSLETTER_CLICK_RANK_DAYS, 30);
+  const defaulted = applyDailySendBudget(new Array(100).fill("x"));
+  assert.equal(defaulted.thisWave.length, 85);
+  assert.equal(defaulted.remainder.length, 15);
+});
+
+test("daily cap is applied after skipping already-sent (Friday resume)", () => {
+  const ranked = ["sent@x.com", "next@x.com", "later@x.com", "tail@x.com"].map(sub);
+  const prior = new Map<string, SendLogState>([
+    ["sent@x.com", { email: "sent@x.com", status: "sent" }],
+  ]);
+  const selected = selectSubscribersForSend(ranked, prior, new Set());
+  assert.deepEqual(selected.alreadySent.map((s) => s.email), ["sent@x.com"]);
+  const wave = applyDailySendBudget(selected.toSend, 2);
+  assert.deepEqual(wave.thisWave.map((s) => s.email), ["next@x.com", "later@x.com"]);
+  assert.deepEqual(wave.remainder.map((s) => s.email), ["tail@x.com"]);
+});
+
+test("shouldMarkDraftSent is false while remainder or failures remain", () => {
+  assert.equal(shouldMarkDraftSent({ remainder: 25, failures: [] }), false);
+  assert.equal(shouldMarkDraftSent({ remainder: 0, failures: [{ email: "a@x.com" }] }), false);
+  assert.equal(shouldMarkDraftSent({ remainder: 0, failures: [] }), true);
+});
+
+test("pickCampaignDraft: Thursday pending today ships wave 1; Friday resumes leftover", () => {
+  const todayDraft = {
+    status: "pending",
+    target_send_date: "2026-09-17",
+  };
+  const leftover = {
+    status: "pending",
+    target_send_date: "2026-09-10",
+  };
+
+  const thu = pickCampaignDraft({
+    today: "2026-09-17",
+    utcWeekday: 4,
+    todayDraft,
+    incompleteDrafts: [leftover],
+  });
+  assert.equal(thu.action, "send");
+  if (thu.action === "send") {
+    assert.equal(thu.resume, false);
+    assert.equal(thu.draft.target_send_date, "2026-09-17");
+  }
+
+  const fri = pickCampaignDraft({
+    today: "2026-09-18",
+    utcWeekday: 5,
+    todayDraft: null,
+    incompleteDrafts: [leftover],
+  });
+  assert.equal(fri.action, "send");
+  if (fri.action === "send") {
+    assert.equal(fri.resume, true);
+    assert.equal(fri.draft.target_send_date, "2026-09-10");
+  }
+});
+
+test("pickCampaignDraft: Friday with nothing to drain is a quiet skip", () => {
+  const r = pickCampaignDraft({
+    today: "2026-09-18",
+    utcWeekday: 5,
+    todayDraft: null,
+    incompleteDrafts: [],
+  });
+  assert.equal(r.action, "skip");
+  if (r.action === "skip") {
+    assert.equal(r.slack, false);
+    assert.match(r.reason, /No incomplete campaign/);
+  }
+});
+
+test("pickCampaignDraft: Thursday missing draft still warns; a veto holds the whole Thursday run", () => {
+  const missing = pickCampaignDraft({
+    today: "2026-09-17",
+    utcWeekday: 4,
+    todayDraft: null,
+    incompleteDrafts: [],
+  });
+  assert.equal(missing.action, "skip");
+  if (missing.action === "skip") assert.equal(missing.slack, true);
+
+  const vetoed = pickCampaignDraft({
+    today: "2026-09-17",
+    utcWeekday: 4,
+    todayDraft: { status: "vetoed", target_send_date: "2026-09-17" },
+    incompleteDrafts: [{ status: "pending", target_send_date: "2026-09-10" }],
+  });
+  assert.equal(vetoed.action, "skip");
+  if (vetoed.action === "skip") {
+    assert.equal(vetoed.slack, true);
+    assert.match(vetoed.reason, /vetoed/);
+  }
+});
+

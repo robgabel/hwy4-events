@@ -41,6 +41,10 @@
       "schedule": "0 15 * * 4"
     },
     {
+      "path": "/api/newsletter/send?resume=1",
+      "schedule": "0 15 * * 5"
+    },
+    {
       "path": "/api/scrape-bls",
       "schedule": "0 13 * * 1"
     },

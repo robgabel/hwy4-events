@@ -313,7 +313,9 @@ nightly date verification).
    end-to-end without touching real subscribers:
    `curl -H "Authorization: Bearer $CRON_SECRET" "https://YOURDOMAIN/api/newsletter/send?test_email=you@example.com"`.
    The weekly flow is: Wednesday `prepare` drafts → you review/veto at
-   `/admin/newsletter` → Thursday `send` ships unless vetoed.
+   `/admin/newsletter` → Thursday `send` ships wave 1 (daily budget 85)
+   unless vetoed → Friday `send` resumes the same campaign_id until the
+   list is drained.
 
 ### Launch checklist
 

@@ -155,9 +155,10 @@ export default async function NewsletterDraftAdminPage({
       </h1>
       <p style={{ color: "#666", fontSize: 16, margin: "0 0 24px" }}>
         Wednesday&rsquo;s cron drafts the weekly email. It{" "}
-        <strong>auto-sends Thursday morning</strong> unless you <strong>veto</strong>{" "}
-        it here first — you have ~24 hours. Edit freely; edits ship too. Only a
-        veto (or a missing draft) stops the send.
+        <strong>auto-sends Thursday morning</strong> (wave 1, 85/day cap) unless
+        you <strong>veto</strong> it here first. You have ~24 hours. Friday
+        resumes the same draft for anyone still unsent. Edit freely; edits
+        ship too. Only a veto (or a missing draft) stops the send.
       </p>
 
       {errorMsg && <Banner kind="error">{errorMsg}</Banner>}
@@ -200,9 +201,17 @@ export default async function NewsletterDraftAdminPage({
             </span>
           </div>
 
-          {current.status === "pending" && (
+          {current.status === "pending" && (current.sent_count ?? 0) > 0 && (
             <Banner kind="ok">
-              Queued — this will <strong>auto-send</strong> {fmtDate(current.target_send_date)} morning.
+              Wave in progress: {current.sent_count} delivered so far. Friday&rsquo;s
+              resume cron sends the rest (same draft, same body). Veto still holds
+              the remainder.
+            </Banner>
+          )}
+          {current.status === "pending" && !(current.sent_count ?? 0) && (
+            <Banner kind="ok">
+              Queued — this will <strong>auto-send</strong> {fmtDate(current.target_send_date)} morning
+              (wave 1 under the daily cap; Friday sends any remainder).
               Edit below if you like (edits ship), or veto to hold it.
             </Banner>
           )}
@@ -255,7 +264,7 @@ export default async function NewsletterDraftAdminPage({
               </a>
             </div>
             <p style={{ color: "#999", fontSize: 14, margin: "10px 0 0" }}>
-              Note: Thursday&rsquo;s send ships exactly the text above. The
+              Note: Thursday and Friday send exactly the text above. The
               &ldquo;From Rob&rdquo; block is scheduled below.
             </p>
           </form>

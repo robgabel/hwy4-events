@@ -17,7 +17,14 @@ import {
   newsletterFromHeader,
   newsletterReplyTo,
 } from "@/lib/newsletter";
-import { sendCampaign } from "@/lib/newsletter-send";
+import {
+  sendCampaign,
+  rankSubscribersForSend,
+  shouldMarkDraftSent,
+  pickCampaignDraft,
+  NEWSLETTER_DAILY_SEND_BUDGET,
+  type RankableSubscriber,
+} from "@/lib/newsletter-send";
 
 // Bumped from 120s: the retry pass paces its sends, so a larger subscriber
 // list needs more wall-clock headroom.
@@ -28,12 +35,18 @@ export const maxDuration = 300;
 // per-message burst is what tripped the rate limit on 2026-06-18.)
 const SEND_THROTTLE_MS = 500;
 
-// Thursday cron. The weekly newsletter now ships on a 24h veto window: the day
-// before, /api/newsletter/prepare stored a draft; a human had ~24h to edit or
-// VETO it at /admin/newsletter. This route AUTO-SENDS today's draft unless it was
-// vetoed. If NO draft exists (prepare didn't run), it sends nothing and warns on
-// Slack — it never auto-generates-and-blasts unsupervised; it only ships a draft
-// that sat in the veto window.
+// Thursday cron + Friday resume. The weekly newsletter ships on a 24h veto
+// window: the day before, /api/newsletter/prepare stored a draft; a human had
+// ~24h to edit or VETO it at /admin/newsletter. Thursday AUTO-SENDS today's
+// pending draft unless it was vetoed, capped at NEWSLETTER_DAILY_SEND_BUDGET
+// so confirm/test mail still fits under Resend's free-tier day cap. If anyone
+// remains, the draft stays pending. Friday hits this same route and resumes
+// that campaign_id (same subject/HTML, ledger skips already-sent) until the
+// remainder is 0, then marks the draft sent.
+//
+// If NO draft exists (prepare didn't run), Thursday sends nothing and warns
+// on Slack. Friday with nothing to resume is a quiet skip. It never
+// auto-generates-and-blasts unsupervised.
 //
 //   ?preview=1            read-only HTML preview of the current draft (no auth)
 //   ?test_email=you@x.com generate fresh + send only to that address (for testing)
@@ -122,33 +135,48 @@ export async function GET(request: Request) {
       });
     }
 
-    // Real send: AUTO-SEND today's draft unless it was vetoed (or already sent).
+    // Real send: Thursday auto-sends today's pending draft (wave 1, daily
+    // budget). Friday (same path, new cron) resumes any still-pending older
+    // campaign_id. Same subject/HTML; the ledger skips anyone already sent.
     const supabase = getServiceClient();
     const today = todayISO();
-    const { data: draft } = await supabase
-      .from("newsletter_drafts")
-      .select("id, subject, content, status")
-      .eq("target_send_date", today)
-      .maybeSingle();
+    const utcWeekday = new Date().getUTCDay();
 
-    if (!draft || draft.status !== "pending") {
-      const reason = !draft
-        ? `No newsletter draft exists for ${today} (prepare didn't run).`
-        : draft.status === "vetoed"
-        ? `Draft for ${today} was vetoed — held by a human.`
-        : `Draft for ${today} is "${draft.status}", not sendable.`;
-      console.warn(`[newsletter/send] Skipping send — ${reason}`);
+    const [{ data: todayDraft }, { data: incompleteDrafts }] = await Promise.all([
+      supabase
+        .from("newsletter_drafts")
+        .select("id, subject, content, status, target_send_date, sent_count")
+        .eq("target_send_date", today)
+        .maybeSingle(),
+      supabase
+        .from("newsletter_drafts")
+        .select("id, subject, content, status, target_send_date, sent_count")
+        .eq("status", "pending")
+        .lt("target_send_date", today)
+        .order("target_send_date", { ascending: false })
+        .limit(3),
+    ]);
+
+    const pick = pickCampaignDraft({
+      today,
+      utcWeekday,
+      todayDraft: todayDraft ?? null,
+      incompleteDrafts: incompleteDrafts ?? [],
+    });
+
+    if (pick.action === "skip") {
+      console.warn(`[newsletter/send] Skipping send — ${pick.reason}`);
 
       const webhook = process.env.SLACK_WEBHOOK_URL;
-      if (webhook) {
-        const icon = draft?.status === "vetoed" ? "🛑" : "⏸️";
+      if (pick.slack && webhook) {
+        const icon = todayDraft?.status === "vetoed" ? "🛑" : "⏸️";
         try {
           await fetch(webhook, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               text:
-                `*${icon} Weekly newsletter NOT sent (${today})* — ${reason}\n` +
+                `*${icon} Weekly newsletter NOT sent (${today})* — ${pick.reason}\n` +
                 `Nothing shipped. See ${SITE_URL}/admin/newsletter.`,
             }),
           });
@@ -157,14 +185,23 @@ export async function GET(request: Request) {
         }
       }
 
-      return NextResponse.json({ ok: true, sent: 0, skipped: true, reason });
+      return NextResponse.json({ ok: true, sent: 0, skipped: true, reason: pick.reason });
     }
 
-    const [subscribers, robNoteResult, eventsForLinks] = await Promise.all([
+    const draft = pick.draft;
+    const resume = pick.resume;
+
+    const [rawSubscribers, robNoteResult, eventsForLinks] = await Promise.all([
       getActiveSubscribers(),
       getRobNote(),
       getUpcomingEvents(),
     ]);
+    // newsletter_clicks has no recipient column, so the click tier is empty
+    // until a future path can prove an email. Rank still orders local/hub then
+    // newest confirmed, which is the honest Thursday wave-1 list.
+    const subscribers = rankSubscribersForSend(
+      rawSubscribers as RankableSubscriber[]
+    );
     const robNote = robNoteResult.body;
     const tracking = { campaignId: draft.id, slugToEventId: buildSlugToEventId(eventsForLinks) };
 
@@ -177,7 +214,7 @@ export async function GET(request: Request) {
     const resend = new Resend(resendApiKey);
 
     // Build one message per subscriber, each with its own personalized unsubscribe
-    // link.
+    // link. Same subject/HTML as any later resume of this campaign_id.
     const buildMessage = (sub: { email: string; unsubscribe_token: string }) => {
       const unsubscribeUrl = `${SITE_URL}/api/newsletter/unsubscribe?token=${sub.unsubscribe_token}`;
       return {
@@ -189,23 +226,15 @@ export async function GET(request: Request) {
         html: buildEmailHtml(robNote, content, unsubscribeUrl, tracking),
         headers: {
           "List-Unsubscribe": `<${unsubscribeUrl}>`,
-          // RFC 8058 one-click (Gmail/Yahoo bulk-sender requirement): mail
-          // clients POST to the URL above, which the unsubscribe route handles.
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         },
       };
     };
 
-    // The ledger-backed idempotent send (lib/newsletter-send.ts + the
-    // newsletter_send_log table): every recipient the ledger already records as
-    // `sent` for this draft is skipped, each batch is pre-marked `pending` and
-    // then upserted with its per-recipient Resend result, and a throttled retry
-    // pass covers transient failures. Net effect: re-running this route while
-    // the draft is still `pending` RESUMES the send instead of re-blasting —
-    // that is the recovery path for a crash/timeout mid-send. (The pre-ledger
-    // history: 2026-06-04 delivered 30/72 and 2026-06-18 recorded 81/56 because
-    // Resend results went uninspected and a burst tripped the rate limit;
-    // results are now inspected per-recipient AND remembered durably.)
+    // Ledger-backed idempotent send. Recipients already `sent` for this draft
+    // are skipped; the daily budget slices who is attempted THIS run so ~15
+    // headroom remains for confirms/tests. Re-running (Friday cron, or a crash
+    // recovery) resumes instead of re-blasting.
     const summary = await sendCampaign({
       supabase,
       resend,
@@ -213,25 +242,21 @@ export async function GET(request: Request) {
       subscribers,
       buildMessage,
       throttleMs: SEND_THROTTLE_MS,
+      dailyBudget: NEWSLETTER_DAILY_SEND_BUDGET,
     });
-    // The honest delivered count across all runs of this campaign (ledger), not
-    // just this invocation.
     const sent = summary.deliveredTotal;
+    const drained = shouldMarkDraftSent(summary);
 
-    // Never fail silently: if anyone failed, is stuck `pending` from a crashed
-    // run, or the ledger total still trails the active list, log + Slack it.
-    if (
-      summary.failures.length > 0 ||
-      summary.blockedPending.length > 0 ||
-      sent < subscribers.length
-    ) {
+    const webhook = process.env.SLACK_WEBHOOK_URL;
+    const shortfall =
+      summary.failures.length > 0 || summary.blockedPending.length > 0;
+    if (shortfall) {
       console.error(
         `[newsletter/send] delivered ${sent}/${subscribers.length}; ` +
           `${summary.failures.length} failed, ${summary.blockedPending.length} blocked-pending:`,
         summary.failures,
         summary.blockedPending
       );
-      const webhook = process.env.SLACK_WEBHOOK_URL;
       if (webhook) {
         const failSample = summary.failures.slice(0, 25).map((f) => f.email).join(", ");
         const pendSample = summary.blockedPending.slice(0, 25).join(", ");
@@ -241,12 +266,15 @@ export async function GET(request: Request) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               text:
-                `*⚠️ Newsletter ${today}: delivered ${sent}/${subscribers.length}*` +
+                `*⚠️ Newsletter ${draft.target_send_date}: delivered ${sent}/${subscribers.length}*` +
                 (summary.failures.length > 0
                   ? `\n${summary.failures.length} failed: ${failSample}${summary.failures.length > 25 ? " …" : ""}`
                   : "") +
                 (summary.blockedPending.length > 0
                   ? `\n${summary.blockedPending.length} blocked as \`pending\` from a prior run (delivery unknown — check newsletter_send_log): ${pendSample}`
+                  : "") +
+                (summary.remainder > 0
+                  ? `\n${summary.remainder} held for the next resume (daily budget ${NEWSLETTER_DAILY_SEND_BUDGET}).`
                   : "") +
                 `\nRecover with POST /api/newsletter/send {"targets":[…]} — the ledger skips anyone already sent.\nSee ${SITE_URL}/admin/newsletter.`,
             }),
@@ -255,35 +283,61 @@ export async function GET(request: Request) {
           console.error("[newsletter/send] Slack alert failed:", err);
         }
       }
+    } else if (summary.remainder > 0 && webhook) {
+      try {
+        await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text:
+              `*📬 Newsletter ${draft.target_send_date}: wave ${resume ? "2" : "1"} delivered ${sent}/${subscribers.length}.* ` +
+              `${summary.remainder} held for Friday resume (daily budget ${NEWSLETTER_DAILY_SEND_BUDGET}). Same draft, same body.\n` +
+              `See ${SITE_URL}/admin/newsletter.`,
+          }),
+        });
+      } catch (err) {
+        console.error("[newsletter/send] Slack wave note failed:", err);
+      }
     }
 
-    // Mark the draft sent and archive the body for the public "latest newsletter".
     const now = new Date().toISOString();
-    await supabase
-      .from("newsletter_drafts")
-      .update({
-        status: "sent",
-        sent_at: now,
-        sent_count: sent,
-        updated_at: now,
-      })
-      .eq("id", draft.id);
+    if (drained) {
+      await supabase
+        .from("newsletter_drafts")
+        .update({
+          status: "sent",
+          sent_at: now,
+          sent_count: sent,
+          updated_at: now,
+        })
+        .eq("id", draft.id);
+    } else {
+      await supabase
+        .from("newsletter_drafts")
+        .update({
+          sent_count: sent,
+          updated_at: now,
+        })
+        .eq("id", draft.id);
+    }
 
-    // site_config.updated_at defaults to now() only on INSERT; on the upsert's
-    // UPDATE branch it would stay frozen at the row's first-insert time, so set
-    // it explicitly here to keep the archive timestamp honest on every send.
-    await supabase
-      .from("site_config")
-      .upsert(
-        { key: "latest_newsletter", value: content, updated_at: now },
-        { onConflict: "key" }
-      );
-    await supabase
-      .from("site_config")
-      .upsert(
-        { key: "latest_newsletter_date", value: now, updated_at: now },
-        { onConflict: "key" }
-      );
+    // Archive on first successful delivery so Thursday readers see this week's
+    // issue even while Friday still owes the remainder. sent_at stays null
+    // until the draft is actually closed.
+    if (sent > 0) {
+      await supabase
+        .from("site_config")
+        .upsert(
+          { key: "latest_newsletter", value: content, updated_at: now },
+          { onConflict: "key" }
+        );
+      await supabase
+        .from("site_config")
+        .upsert(
+          { key: "latest_newsletter_date", value: now, updated_at: now },
+          { onConflict: "key" }
+        );
+    }
 
     return NextResponse.json({
       ok: true,
@@ -292,6 +346,10 @@ export async function GET(request: Request) {
       total: subscribers.length,
       already_sent: summary.alreadySent,
       suppressed: summary.suppressed,
+      remainder: summary.remainder,
+      drained,
+      resume,
+      daily_budget: NEWSLETTER_DAILY_SEND_BUDGET,
       blocked_pending:
         summary.blockedPending.length > 0 ? summary.blockedPending : undefined,
       subject,
@@ -337,14 +395,29 @@ export async function POST(request: Request) {
   try {
     const supabase = getServiceClient();
 
-    // The issue to re-send = the most recent already-sent draft.
-    const { data: draft } = await supabase
+    const today = todayISO();
+    // Prefer an in-flight campaign (pending with a sent_count) so Thursday
+    // wave-1 failures can be recovered before Friday closes the draft. Else
+    // the most recent already-sent issue, same as before.
+    const { data: inflight } = await supabase
       .from("newsletter_drafts")
       .select("id, subject, content")
-      .eq("status", "sent")
+      .eq("status", "pending")
+      .not("sent_count", "is", null)
+      .lte("target_send_date", today)
       .order("target_send_date", { ascending: false })
       .limit(1)
       .maybeSingle();
+    const { data: sentDraft } = inflight
+      ? { data: null }
+      : await supabase
+          .from("newsletter_drafts")
+          .select("id, subject, content")
+          .eq("status", "sent")
+          .order("target_send_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+    const draft = inflight ?? sentDraft;
     if (!draft) {
       return NextResponse.json({ error: "No sent draft to re-send" }, { status: 400 });
     }

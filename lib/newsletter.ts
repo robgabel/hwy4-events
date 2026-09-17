@@ -1,7 +1,7 @@
 // Shared newsletter generation + rendering helpers.
 //
 // Both /api/newsletter/prepare (Wednesday: generate a draft) and
-// /api/newsletter/send (Thursday: ship the approved draft) import from here, plus
+// /api/newsletter/send (Thursday wave 1 + Friday resume) import from here, plus
 // the /admin/newsletter regenerate action, so the system prompt, event/briefing
 // gathering, generation, subject line, and email HTML have a single definition
 // and can't drift between "what you preview/approve" and "what ships".
@@ -174,7 +174,7 @@ export async function getActiveSubscribers() {
 
   const { data, error } = await supabase
     .from("newsletter_subscribers")
-    .select("email, unsubscribe_token")
+    .select("email, unsubscribe_token, visitor_class, confirmed_at, created_at")
     .eq("confirmed", true)
     .is("unsubscribed_at", null);
 
