@@ -135,7 +135,9 @@ export function buildOccurrences(): SeededEvent[] {
         start_time: "13:00",
         end_time: "14:00",
         image_url: IMG.creek,
-        is_weekly: true,
+        // ~2x/week (Tue+Sat) — low enough to show inline rather than hide behind
+        // the weekly toggle. The high-frequency daily programs stay is_weekly.
+        is_weekly: false,
         description:
           "A hands-on favorite for all ages. Wade into Beaver Creek with a park interpreter to net and identify the critters living in the water, and learn what they say about the health of the watershed. Meet at Beaver Creek, a short walk from the Beaver Creek Picnic Area, and come with sandals. Free with the $10/vehicle park entrance.",
       },
@@ -209,7 +211,8 @@ export function buildOccurrences(): SeededEvent[] {
         start_time: "13:00",
         end_time: "13:45",
         image_url: IMG.stump,
-        is_weekly: true,
+        // Sundays only (~1x/week) — shown inline, not behind the weekly toggle.
+        is_weekly: false,
         description:
           "Short on time? A brief, half-mile introduction to the giant sequoias with a park interpreter. Meet outside the Visitor Center. Free with the $10/vehicle park entrance.",
       },
@@ -225,7 +228,8 @@ export function buildOccurrences(): SeededEvent[] {
         start_time: "09:30",
         end_time: "11:30",
         image_url: IMG.bird,
-        is_weekly: true,
+        // Thursdays (~1x/week) — shown inline.
+        is_weekly: false,
         description:
           "A level, roughly one-mile morning walk around the North Grove, campground, and meadow, looking and listening for birds. No experience or gear required. Meet outside the Visitor Center. Free with the $10/vehicle park entrance.",
       },
@@ -241,7 +245,8 @@ export function buildOccurrences(): SeededEvent[] {
         start_time: "10:00",
         end_time: "11:00",
         image_url: IMG.meadow,
-        is_weekly: true,
+        // Tue+Sat, same cadence as Creek Critters — shown inline.
+        is_weekly: false,
         description:
           "An easy half-mile stroll through the North Grove meadow with a park interpreter, looking at the plants and wildlife that live there. Meet at North Grove Campsite #16, by the black sandwich board. Free with the $10/vehicle park entrance.",
       },

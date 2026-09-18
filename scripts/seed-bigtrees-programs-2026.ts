@@ -15,9 +15,11 @@
 // finalizes the venue's rows that upsertEvents doesn't manage:
 //   - cost_tier 'free' + price_locked: every program is free with park entrance,
 //     so price extraction must never relabel them.
-//   - is_weekly: set per program so the recurring ones collapse behind the
-//     "show weekly" toggle instead of flooding the default list. (Mirrors what
-//     tag-weekly.ts would infer; done here so a fresh re-seed is self-correcting.)
+//   - is_weekly: set per program so the high-cadence recurring ones collapse
+//     behind the "show weekly" toggle instead of flooding the default list.
+//     Low-cadence programs (Creek Critters, Meadow Walk, Bird Walk, Intro to
+//     North Grove) stay false so they show inline. A re-seed must not flip the
+//     live rows back; locked by scripts/test/bigtrees-schedule.test.ts.
 //
 // Run: npx tsx scripts/seed-bigtrees-programs-2026.ts
 //   needs SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
