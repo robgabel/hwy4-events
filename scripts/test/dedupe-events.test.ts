@@ -95,6 +95,42 @@ test("leaves genuinely different shows alone (different venue)", () => {
   assert.equal(dedupeEvents([act, elsewhere]).length, 2);
 });
 
+test("collapses Brice Hilltop series @ 19:00 into Greg Sutton @ 18:00", () => {
+  const hilltop: DedupableEvent = {
+    date: "2026-09-19",
+    town: "Murphys",
+    venue_name: "Brice Station Vineyards",
+    venue_key: "brice-station",
+    start_time: "19:00:00",
+    end_time: "22:00:00",
+    visibility: "public",
+    name: "Brice Station Vineyards – Hilltop Concert Series",
+    artists: ["Earth Tones Trio & Band"],
+    description: "The Earth Tones Trio & Band brings soulful vocals.",
+  };
+  const greg: DedupableEvent = {
+    date: "2026-09-19",
+    town: "Murphys",
+    venue_name: "Brice Station Vineyards",
+    venue_key: "brice-station",
+    start_time: "18:00:00",
+    end_time: null,
+    visibility: "public",
+    name: "Greg Sutton and Friends",
+    artists: ["Greg Sutton and Friends"],
+    description:
+      "Greg Sutton is a Northern California singer-songwriter. This concert begins at 6:00 PM.",
+    event_url: "https://bricestation.com/products/greg-sutton-and-friends-september-19-2026-6pm",
+  };
+  const [card] = dedupeEvents([hilltop, greg]);
+  assert.equal(dedupeEvents([hilltop, greg]).length, 1);
+  assert.equal(card.name, "Greg Sutton and Friends");
+  assert.equal(card.start_time, "18:00:00");
+  // Named-act bio wins; the series leftover blurb must not replace it.
+  assert.ok((card.description ?? "").includes("Greg Sutton is a Northern California"));
+  assert.ok(!(card.description ?? "").includes("Earth Tones"));
+});
+
 // ---------------------------------------------------------------------------
 // HWY-10: read-time collapse of timeless duplicates.
 // ---------------------------------------------------------------------------

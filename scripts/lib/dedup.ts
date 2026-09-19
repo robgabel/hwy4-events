@@ -14,6 +14,8 @@ import {
   normalizeName,
   normalizeTown,
   generateDedupKey,
+  isActlessPlaceholderTitle,
+  mergeArtistLists,
 } from "../../lib/event-identity.js";
 import { sanitizeDescriptionDetailed } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
@@ -36,7 +38,7 @@ function stripTagLike(s: string | null | undefined): string | null {
 }
 
 // Re-exported for scripts that import these from this module.
-export { normalizeName, generateDedupKey };
+export { normalizeName, generateDedupKey, isActlessPlaceholderTitle };
 
 // Notability is written ONLY for these two operational venues — the ones that
 // publish their own restaurant/lodge calendar, so their "Thursday Night Dinner"
@@ -550,12 +552,6 @@ export function buildStrongMatchUpdate(
     return incoming || current || "";
   };
 
-  const artistSet = new Set(
-    [...(existing.artists ?? []), ...(event.artists ?? [])]
-      .map((a) => a?.trim())
-      .filter((a): a is string => !!a)
-  );
-
   // A placeholder title never overwrites a specific one (HWY-29 follow-up):
   // "whoever scraped last takes the name" let the daily aggregator pass rename
   // a properly-titled row to "<venue> presents" within a day of every merge —
@@ -567,9 +563,17 @@ export function buildStrongMatchUpdate(
   const keepName =
     placeholderNameSteal(existing, event) || !(event.name && event.name.trim());
   const writtenName = keepName ? existing.name : pick(event.name, existing.name);
+  // Incoming actless placeholder must not donate its series-default clock,
+  // leftover artists, EventON description, aggregator URL, or EventON sid
+  // onto a specific row (2026-09-19 Brice: Hilltop @ 19:00 with stale Earth
+  // Tones artists vs Greg Sutton @ 18:00 on the venue's own ticket product).
+  const keepSpecific = placeholderNameSteal(existing, event);
   const writtenDescription = existing.description_locked
     ? existing.description
-    : pick(event.description, existing.description);
+    : keepSpecific
+      ? pick(existing.description, event.description)
+      : pick(event.description, existing.description);
+  const writtenArtists = mergeArtistLists(existing, event);
 
   return {
     name: writtenName,
@@ -579,17 +583,32 @@ export function buildStrongMatchUpdate(
     venue_name: pickVenue(event.venue_name, existing.venue_name),
     // description + price are human-set when locked — leave them out entirely.
     ...(existing.description_locked ? {} : { description: writtenDescription }),
-    // Times are human-set when locked — leave them out entirely.
+    // Times are human-set when locked — leave them out entirely. A series
+    // placeholder also must not overwrite a specific row's this-night clock
+    // (or fill a NULL end with the series-default 10:00 PM).
     ...(existing.times_locked
       ? {}
-      : {
-          start_time: pick(event.start_time, existing.start_time),
-          end_time: pick(event.end_time, existing.end_time),
-        }),
+      : keepSpecific
+        ? {
+            start_time: pick(existing.start_time, event.start_time),
+            end_time: existing.end_time ?? null,
+          }
+        : {
+            start_time: pick(event.start_time, existing.start_time),
+            end_time: pick(event.end_time, existing.end_time),
+          }),
     ...(existing.price_locked ? {} : { price: pick(event.price, existing.price) }),
-    event_url: pick(event.event_url, existing.event_url),
+    event_url: keepSpecific
+      ? pick(existing.event_url, event.event_url)
+      : pick(event.event_url, existing.event_url),
     address: pick(event.address, existing.address),
-    ...(existing.poster_locked ? {} : { image_url: pick(event.image_url ?? null, existing.image_url) }),
+    ...(existing.poster_locked
+      ? {}
+      : {
+          image_url: keepSpecific
+            ? pick(existing.image_url, event.image_url ?? null)
+            : pick(event.image_url ?? null, existing.image_url),
+        }),
     // Notability is human-set when locked — otherwise write the freshly-resolved flag.
     ...(existing.notability_locked
       ? {}
@@ -604,8 +623,8 @@ export function buildStrongMatchUpdate(
       name: writtenName,
       description: writtenDescription,
     }),
-    artists: artistSet.size > 0 ? [...artistSet] : null,
-    ...(event.source_event_id && { source_event_id: event.source_event_id }),
+    artists: writtenArtists,
+    ...(event.source_event_id && !keepSpecific && { source_event_id: event.source_event_id }),
     last_scraped_at: now,
     // A merge is by definition a content change. See buildExactMatchUpdate for
     // why `updated_at` is written here and not on every pass.
@@ -662,35 +681,6 @@ export function keepStr(
 }
 
 /**
- * Aggregator placeholder shapes that carry NO act information — the ONLY
- * titles the name-steal guard treats as placeholders. Deliberately NARROWER
- * than `isGenericTitle` (adversarial review of #264, finding B1), because two
- * of its arms mean something different here:
- *
- *  - The TBD/TBA tail is an ORGANIZER RETRACTION, not a lazy title. Sequoia
- *    Woods really does revert "Patio Party #4 … - The Hit Men" to
- *    "… (TBD)" when an act cancels (its sid embeds the slugified name, so the
- *    rename arrives through the fuzzy path). That write states "the act is no
- *    longer booked" and MUST land — blocking it would advertise a withdrawn
- *    act permanently, with `rowChanged` reading the row as "unchanged" so
- *    nothing would ever log.
- *  - The live-music arm of `isGenericTitle` is PREFIX-anchored, so titles
- *    that name the act ("Live Music - Jill Warren" — real sequoia-woods
- *    rows) classify as generic. Here bare live-music only counts when the
- *    whole title is the phrase (an "@ <venue>" tail included: "@" introduces
- *    a place, not an act).
- */
-export function isActlessPlaceholderTitle(name: string): boolean {
-  const n = normalizeName(name);
-  return (
-    /\bpresents?\b\W*$/.test(n) ||
-    /^live (?:music|entertainment|tunes)(?:\s*@.*)?$/.test(n) ||
-    /\b(?:concerts?|music) series$/.test(n) ||
-    /\bsummer concerts?$/.test(n)
-  );
-}
-
-/**
  * The title-level twin of `keepStr` (HWY-29 follow-up): an ACTLESS PLACEHOLDER
  * name never overwrites a specific one, on any write path. GoCalaveras titles
  * every performance of a Murphys Creek Theatre play "Murphys Creek Theatre
@@ -701,6 +691,9 @@ export function isActlessPlaceholderTitle(name: string): boolean {
  * Visit Murphys had named was "Murphys Creek Theatre presents" by the next
  * morning's pass; the next Visit Murphys pass would steal it back — a
  * permanent rename ping-pong).
+ *
+ * `isActlessPlaceholderTitle` lives in `lib/event-identity.ts` (shared with
+ * reconcile's artist-union) and is re-exported from this module.
  *
  * When the name is kept, the caller must keep the `dedup_key` CONSISTENT with
  * it — recompute from the kept name, never store the incoming title's hash
@@ -1102,8 +1095,10 @@ async function upsertEventsBatched(
   }
 
   // Match the unmatched batch against existing same-date rows in one bulk
-  // SELECT. A row is the same event only with the strong anchor (exact start
-  // time + venue/description/artist signal) — never title similarity alone.
+  // SELECT. A row is the same event only with the shared `isSameEvent` rule
+  // (time slot + venue/description/artist/placeholder signal) — never title
+  // similarity alone. The time slot is usually an exact start; a generic
+  // series placeholder vs a named act may disagree by up to 90 minutes.
   let fuzzyMatched: Set<string> = new Set();
   if (unmatched.length > 0) {
     const unmatchedDates = [...new Set(unmatched.map((u) => u.event.date))];
@@ -1397,8 +1392,8 @@ export async function upsertEvents(
         if (!countUpdateResult(result, "unchanged", error, event.name)) updateErrors++;
       }
     } else {
-      // Cross-source / re-titled-event match: same date + town + exact start
-      // time + a strong identity signal (venue / description / artists). This
+      // Cross-source / re-titled-event match: same date + town + the shared
+      // `isSameEvent` rule (time slot + a strong identity signal). This
       // catches the same real event listed under a different title that the
       // title-based dedup_key can't see.
       const canonicalTown = normalizeTown(event.town);

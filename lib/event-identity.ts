@@ -254,6 +254,20 @@ function isUmbrella(e: EventIdentity): boolean {
   return e.series_umbrella === true;
 }
 
+/** Max start-time drift, in minutes, between a venue's series-placeholder
+ *  listing (GoCalaveras's usual 7:00 PM Hilltop slot) and the named-act
+ *  listing for the same night (the organizer moved this show an hour early).
+ *  Gated on exactly one title being generic; two specific titles still need
+ *  equal starts (matinee vs evening of the same play; two named acts an hour
+ *  apart). Two generic titles at different hours stay split too (afternoon
+ *  live music vs the evening set). */
+export const GENERIC_SERIES_START_TOLERANCE_MIN = 90;
+
+function clockMinutes(t: string): number {
+  const [h, m] = t.split(":");
+  return Number(h) * 60 + Number(m || 0);
+}
+
 /** Two rows describe the same time slot: starts must be known and equal, and
  *  end times must agree *only when both are known*. A source that omits the end
  *  time ("7:00 PM") must still anchor to the same source's fuller listing
@@ -282,11 +296,22 @@ function isUmbrella(e: EventIdentity): boolean {
  *  at the same instant on the same date, a conflicting end is scrape noise,
  *  not a different show — one room can't host two events that begin together.
  *  Ends still split rows when the venues DON'T provably agree (one side
- *  unknown), keeping the conservative default. */
+ *  unknown), keeping the conservative default.
+ *
+ *  `seriesStartTolerance` (2026-09-19, the Brice Hilltop pair) softens the
+ *  START-time rule the same way, but only for a generic series placeholder vs
+ *  a named act. GoCalaveras lists every Hilltop night at the series default
+ *  (7:00–10:00 PM, often with a leftover act from a prior EventON occurrence)
+ *  while Brice's own ticket product states this show's real start ("one hour
+ *  earlier than our usual start time"). Exact-start was a hard veto, so every
+ *  layer that shares `isSameEvent` was blind. The caller sets the flag only
+ *  when exactly one title is generic; without that gate this would merge two
+ *  real showtimes. */
 function timesAnchor(
   a: EventIdentity,
   b: EventIdentity,
-  venuesAgree: boolean
+  venuesAgree: boolean,
+  seriesStartTolerance = false
 ): boolean {
   const sa = normalizeTime(a.start_time);
   const sb = normalizeTime(b.start_time);
@@ -296,7 +321,21 @@ function timesAnchor(
     if (isUmbrella(a) || isUmbrella(b)) return false;
     return venuesAgree;
   }
-  if (sa !== sb) return false;
+  if (sa !== sb) {
+    if (
+      !venuesAgree ||
+      !seriesStartTolerance ||
+      Math.abs(clockMinutes(sa) - clockMinutes(sb)) >
+        GENERIC_SERIES_START_TOLERANCE_MIN
+    ) {
+      return false;
+    }
+    // Series placeholder vs named act, starts within the tolerance: the clock
+    // disagreement is the aggregator's series-default vs the organizer's
+    // this-night time. The placeholder's end is equally untrustworthy (the
+    // usual 7–10 window), so do not let a conflicting end split them.
+    return true;
+  }
   const ea = normalizeTime(a.end_time);
   const eb = normalizeTime(b.end_time);
   if (ea && eb && ea !== eb && !venuesAgree) return false;
@@ -513,6 +552,46 @@ export function isGenericTitle(name: string): boolean {
   );
 }
 
+/** Aggregator placeholder shapes that carry NO act information. Deliberately
+ *  NARROWER than `isGenericTitle` (adversarial review of #264, finding B1):
+ *  the TBD/TBA tail is an organizer retraction that must land, and the
+ *  live-music arm of `isGenericTitle` is prefix-anchored so "Live Music -
+ *  Jill Warren" classifies as generic even though it names the act. Used by
+ *  the write-time name-steal guard and by `mergeArtistLists` so a series
+ *  placeholder's leftover artists (EventON recycling last month's act onto
+ *  this occurrence) cannot pollute a named-act survivor. */
+export function isActlessPlaceholderTitle(name: string): boolean {
+  const n = normalizeName(name);
+  return (
+    /\bpresents?\b\W*$/.test(n) ||
+    /^live (?:music|entertainment|tunes)(?:\s*@.*)?$/.test(n) ||
+    /\b(?:concerts?|music) series$/.test(n) ||
+    /\bsummer concerts?$/.test(n)
+  );
+}
+
+/** Union two rows' artist lists, dropping the actless-placeholder side.
+ *  A Hilltop Concert Series row carrying stale "Earth Tones Trio" artists
+ *  must not donate them onto "Greg Sutton and Friends". If every side is a
+ *  placeholder (or none name artists), fall back to a plain union so an
+ *  Ironstone series row that really does carry Kane Brown in `artists` is
+ *  not stripped when merging two series-titled listings. */
+export function mergeArtistLists(
+  ...rows: { name?: string; artists?: string[] | null }[]
+): string[] | null {
+  const take = (e: { name?: string; artists?: string[] | null }) =>
+    isActlessPlaceholderTitle(e.name ?? "") ? [] : (e.artists ?? []);
+  const collected: string[] = [];
+  for (const r of rows) collected.push(...take(r));
+  if (collected.length === 0) {
+    for (const r of rows) collected.push(...(r.artists ?? []));
+  }
+  const set = new Set(
+    collected.map((x) => x?.trim()).filter((x): x is string => !!x)
+  );
+  return set.size > 0 ? [...set] : null;
+}
+
 /** Two rows occupy the exact same window: start AND end both known on both
  *  sides, and both equal. Gated by the caller on venue agreement, this is an
  *  identity signal in its own right — the last resort for a duplicate whose two
@@ -631,7 +710,10 @@ function sharedPressRelease(a: EventIdentity, b: EventIdentity): boolean {
  *   - same venue AND an identical start-AND-end window (`sameExactWindow`).
  *  Two *different specific* titles with distinct descriptions never merge on
  *  venue + date + START time alone — a park runs simultaneous programs. They do
- *  merge when the whole window matches end to end. */
+ *  merge when the whole window matches end to end. A generic series placeholder
+ *  vs a named act at the same venue may disagree on start by up to
+ *  `GENERIC_SERIES_START_TOLERANCE_MIN` (the aggregator's series-default clock
+ *  vs the organizer's this-night time). */
 export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   if (a.date && b.date && a.date !== b.date) return false;
 
@@ -698,7 +780,17 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
 
   if (bothVenuesKnown && !venuesAgree) return false;
 
-  if (!timesAnchor(a, b, venuesAgree)) return false;
+  // Exactly one title is a series/live-music placeholder: allow the
+  // aggregator's series-default start to disagree with the named act's
+  // this-night start (2026-09-19 Brice: 7:00 PM Hilltop vs 6:00 PM Greg
+  // Sutton). XOR — two generic titles at different hours stay split, and
+  // two specific titles still need equal starts.
+  const seriesStartTolerance =
+    !!a.name &&
+    !!b.name &&
+    isGenericTitle(a.name) !== isGenericTitle(b.name);
+
+  if (!timesAnchor(a, b, venuesAgree, seriesStartTolerance)) return false;
 
   if (a.name && b.name && textSimilarity(a.name, b.name) >= 0.85) return true;
   if (artistsOverlap(a.artists, b.artists)) return true;

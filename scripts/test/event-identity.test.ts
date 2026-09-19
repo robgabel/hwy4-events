@@ -12,6 +12,8 @@ import assert from "node:assert/strict";
 import {
   isSameEvent,
   isGenericTitle,
+  isActlessPlaceholderTitle,
+  mergeArtistLists,
   generateDedupKey,
   normalizeForMatch,
   type EventIdentity,
@@ -83,6 +85,136 @@ const cases: { label: string; a: EventIdentity; b: EventIdentity; same: boolean 
       venue_name: "Brice Station Vineyards",
       artists: ["Jimbo Scott & Yesterdays Biscuits"],
       description: "Live music performance featuring Jimbo Scott & Yesterdays Biscuits.",
+    }),
+    same: true,
+  },
+  {
+    // 2026-09-19 Brice: the organizer moved this Hilltop night an hour early
+    // ("begins at 6:00 PM, one hour earlier than our usual start time") and
+    // listed Greg Sutton on the ticket product. GoCalaveras kept the series
+    // default 7:00–10:00 PM and a leftover Earth Tones Trio from a prior
+    // EventON occurrence. Exact-start was a hard veto, so every layer that
+    // shares isSameEvent was blind — even though the Hilltop TITLE is a
+    // generic series placeholder. The stale artists must not veto either
+    // (the generic-title path has no artist-disagreement check; this case
+    // locks that the pair still matches).
+    label: "Brice Hilltop series @ 19:00 vs named act @ 18:00, stale artists — same",
+    a: ev({
+      name: "Brice Station Vineyards – Hilltop Concert Series",
+      date: "2026-09-19",
+      town: "Murphys",
+      venue_name: "Brice Station Vineyards",
+      venue_key: "brice-station",
+      start_time: "19:00:00",
+      end_time: "22:00:00",
+      artists: ["Earth Tones Trio & Band"],
+      description:
+        "Get ready for an evening where genres, generations, and grooves collide! The Earth Tones Trio & Band brings soulful vocals.",
+    }),
+    b: ev({
+      name: "Greg Sutton and Friends",
+      date: "2026-09-19",
+      town: "Murphys",
+      venue_name: "Brice Station Vineyards",
+      venue_key: "brice-station",
+      start_time: "18:00:00",
+      end_time: null,
+      artists: ["Greg Sutton and Friends"],
+      description:
+        "Greg Sutton is a Northern California singer-songwriter. Please note: This concert begins at 6:00 PM, one hour earlier than our usual start time.",
+    }),
+    same: true,
+  },
+  {
+    // Same class, different venue: aggregator "Live Music @ X" at the usual
+    // 7pm vs the venue's named-act listing an hour earlier.
+    label: "generic Live Music @ X @ 19:00 vs named act @ 18:00, same venue — same",
+    a: ev({
+      name: "Live Music @ The Lube Room",
+      date: "2026-09-19",
+      town: "Dorrington",
+      venue_name: "The Lube Room Saloon",
+      start_time: "19:00:00",
+    }),
+    b: ev({
+      name: "Live at The Lube: Hit Replay",
+      date: "2026-09-19",
+      town: "Dorrington",
+      venue_name: "The Lube Room Saloon",
+      start_time: "18:00:00",
+      artists: ["Hit Replay"],
+    }),
+    same: true,
+  },
+  {
+    // Guard: two NAMED acts an hour apart at the same venue are a real
+    // double bill, not a series-placeholder dupe. The start-time tolerance
+    // is XOR on isGenericTitle — both specific → exact start still required.
+    label: "two named acts, same venue, starts 18:00 vs 19:00 — NOT same",
+    a: ev({
+      name: "Greg Sutton and Friends",
+      date: "2026-09-19",
+      venue_name: "Brice Station Vineyards",
+      venue_key: "brice-station",
+      start_time: "18:00:00",
+      artists: ["Greg Sutton and Friends"],
+    }),
+    b: ev({
+      name: "Earth Tones Trio & Band",
+      date: "2026-09-19",
+      venue_name: "Brice Station Vineyards",
+      venue_key: "brice-station",
+      start_time: "19:00:00",
+      artists: ["Earth Tones Trio & Band"],
+    }),
+    same: false,
+  },
+  {
+    // Guard: a 2-hour drift is past the 90-minute series tolerance — could
+    // be an afternoon placeholder and a genuine evening show.
+    label: "generic series vs named act, starts 17:00 vs 19:00 — NOT same",
+    a: ev({
+      name: "Brice Station Vineyards – Hilltop Concert Series",
+      date: "2026-09-19",
+      venue_name: "Brice Station Vineyards",
+      venue_key: "brice-station",
+      start_time: "17:00:00",
+    }),
+    b: ev({
+      name: "Greg Sutton and Friends",
+      date: "2026-09-19",
+      venue_name: "Brice Station Vineyards",
+      venue_key: "brice-station",
+      start_time: "19:00:00",
+      artists: ["Greg Sutton and Friends"],
+    }),
+    same: false,
+  },
+  {
+    // Copperopolis Saturday night: Facebook Discover lists the series
+    // placeholder ("… Summer Concert series") against GoCalaveras's
+    // "Saturday Night Music in Copper Valley Town Square". Same start, so
+    // the existing generic-title path fires once the venues agree (shared
+    // venue_key after the Coppertown Square alias). The live miss was
+    // venue_key NULL on the FB row, not the clock.
+    label: "Copperopolis summer concert series vs Saturday Night Music, same start — same",
+    a: ev({
+      name: "Copperopolis Summer Concert Series",
+      date: "2026-09-26",
+      town: "Copperopolis",
+      venue_name: "Copperopolis Coppertown Square",
+      venue_key: "copperopolis-town-square",
+      start_time: "18:00:00",
+      description: "Bon Jovi Tribute",
+    }),
+    b: ev({
+      name: "Saturday Night Music in Copper Valley Town Square",
+      date: "2026-09-26",
+      town: "Copperopolis",
+      venue_name: "Copperopolis Town Square",
+      venue_key: "copperopolis-town-square",
+      start_time: "18:00:00",
+      end_time: "20:00:00",
     }),
     same: true,
   },
@@ -471,6 +603,30 @@ test("isGenericTitle flags trailing TBD/TBA act placeholders", () => {
   );
   // TBD mid-title is not a placeholder marker.
   assert.equal(isGenericTitle("TBD Brewing Anniversary Party"), false);
+});
+
+test("mergeArtistLists drops leftover acts from a series placeholder", () => {
+  assert.deepEqual(
+    mergeArtistLists(
+      {
+        name: "Brice Station Vineyards – Hilltop Concert Series",
+        artists: ["Earth Tones Trio & Band"],
+      },
+      { name: "Greg Sutton and Friends", artists: ["Greg Sutton and Friends"] }
+    ),
+    ["Greg Sutton and Friends"]
+  );
+  // Both series-titled: keep the union (Ironstone series really does carry
+  // the headliner in artists).
+  assert.deepEqual(
+    mergeArtistLists(
+      { name: "Ironstone Summer Concert Series", artists: ["Kane Brown"] },
+      { name: "Ironstone Summer Concert Series", artists: ["Kane Brown", "Foghat"] }
+    ),
+    ["Kane Brown", "Foghat"]
+  );
+  assert.equal(isActlessPlaceholderTitle("Hilltop Concert Series"), true);
+  assert.equal(isActlessPlaceholderTitle("Live Music - Jill Warren"), false);
 });
 
 test("TBD placeholder merges with the named-act re-listing (same venue+slot)", () => {

@@ -5,6 +5,20 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-09-19 — A series placeholder's usual start is not this night's start
+
+Rob saw two Brice Station cards on 2026-09-19: "Greg Sutton and Friends" at 6:00 PM (the venue's own Shopify ticket product, `times_locked`, "one hour earlier than our usual start time") and "Brice Station Vineyards – Hilltop Concert Series" at 7:00–10:00 PM (GoCalaveras EventON, leftover Earth Tones Trio artists from a June Music-in-the-Parks listing). Same room, same night, one real concert.
+
+- **`isGenericTitle` was not the hole.** The Hilltop title already matches the end-anchored `concert series` arm. The generic-title path in `isSameEvent` would have merged them if the starts had agreed. Exact-start in `timesAnchor` was the veto, so write-time merge, reconcile, and the retired read-time collapse were all blind together — the usual one-predicate failure shape.
+- **EventON recurring series reuse last occurrence's act.** The Earth Tones Trio played Brice on 2026-06-17 under a different series title. GoCalaveras's Hilltop permalink (`…-hilltop-concert-series-6/`) kept that act on the September occurrence. Two named-act artist lists that disagree are a hard non-merge (`sameExactWindow`); a generic title vs a named act must not inherit that veto, and merge-time must not union the leftover artists onto the survivor (`mergeArtistLists`).
+- **Hiding the loser as `visibility=private` is the right immediate remediation and the wrong merge path.** `clusterEvents` buckets on `date|visibility`, so reconcile will not merge a private series row into its public named-act twin. Leave the private row; the public organizer row is the card. After this matcher change, a *future* public pair of this shape heals via reconcile / fuzzy write-time merge. Do not flip `visibility_locked` off to force a merge.
+- **Do not forgive start drift for two specific titles.** Murphys Creek Theatre's "An Act of God" at 14:00 and 19:30 is two real performances. The 90-minute window is XOR on `isGenericTitle`. Two generic titles at 3 PM vs 7 PM stay split too (afternoon live music vs the evening set).
+- **A 30-minute `venue_slot_collisions` window does not see a 60-minute series-default vs this-night pair.** That's by design (the collision check is for stacked named acts the matcher must never merge). This class surfaces as `same_event_duplicates` once the predicate sees it.
+
+Locked by `scripts/test/event-identity.test.ts` (Brice 18:00 vs 19:00, Live Music @ X vs named act, two named acts stay split, 2-hour drift stays split) + `dedupe-events.test.ts` + `null-guard.test.ts`.
+
+---
+
 ## 2026-09-10 — Cloudflare RUM adaptive-groups cap is not a traffic spike
 
 On 2026-09-01 `analytics_daily` stored 10,000 pageviews / 10,000 visits. That day's referrer rows summed to tens of visits and first-party `site_events` had ~62 views / 47 sessions. The Friday growth memo (2026-09-04) then claimed a Labor Day spike: `gatherGrowthContext` summed the newest 14 `analytics_daily` rows (first 7 vs next 7) with no calendar window and no sanity check, so `pageviews_7d` became ~11,057.
