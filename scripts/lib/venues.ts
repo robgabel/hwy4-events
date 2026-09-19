@@ -331,6 +331,40 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Angels Camp",
     address: "753 S Main St, Angels Camp, CA 95222",
   },
+  // One room, three names. The school district's own theater page
+  // (brethartebullfrogs.org/page/theater) heads the facility "Dr. Elliott A.
+  // Smart Performing Arts Center" while labeling its address block "Bret Harte
+  // Theater, 323 S Main St" — and flyers, plus every county polling-place
+  // notice, call it the Bret Harte Theatre. Canonical is the name people
+  // actually search and print.
+  //
+  // The address is 323 S Main St, NOT the high school's 364 Murphys Grade Rd.
+  // The hwy4_venues row carried the campus address until 2026-09-19 (an
+  // unreviewed create_venue_row research guess); the theater's own page and the
+  // polling notices agree on S Main. Getting this wrong points the map
+  // thumbnail and Get Directions at the wrong end of town.
+  //
+  // Aliases stay narrow on purpose: a bare "bret harte" would match the Bret
+  // Harte High School District races named in a candidates-night description
+  // and key unrelated events to this room. Every alias carries theatre/theater
+  // or performing arts center.
+  "bret-harte-performing-arts-center": {
+    canonical: "Bret Harte Theatre",
+    aliases: [
+      "bret harte theatre",
+      "bret harte theater",
+      "bret harte performing arts center",
+      "bret harte union high school theatre",
+      "bret harte union high school theater",
+      "elliott smart theatre",
+      "elliott smart theater",
+      "elliott smart performing arts center",
+      "elliott a. smart performing arts center",
+      "dr. elliott a. smart performing arts center",
+    ],
+    town: "Angels Camp",
+    address: "323 S Main St, Angels Camp, CA 95222",
+  },
   "new-melones-lake-marina": {
     canonical: "New Melones Lake Marina",
     aliases: [

@@ -30,7 +30,49 @@ test("classify: representative cases (output contract is stable)", () => {
   assert.equal(classifyEventCategory("Spring Festival in the park"), "festival");
   assert.equal(classifyEventCategory("Town Council meeting"), "civic");
   assert.equal(classifyEventCategory("Blood drive at the Senior Center"), "civic");
+  assert.equal(classifyEventCategory("Angels Camp Candidates Night"), "civic");
   assert.equal(classifyEventCategory("Sunrise yoga session"), "other");
+});
+
+test("a candidates forum is civic even when held in a theatre", () => {
+  // The live shape: /admin/submissions classifies on name + description, and
+  // this event's venue IS a theatre while its ballot text is full of "board"
+  // and "council". Before the civic_forum rule led the list, "theatre" (a
+  // fine_arts token) claimed the whole event, because fine_arts sits above
+  // civic and the soft civic rule never got a turn.
+  const text =
+    "Angels Camp Candidates Night. The Angels Camp Business Association hosts " +
+    "Candidates Night at the Bret Harte Theatre, also known as the Elliott " +
+    "Smart Theatre. City Council candidates and the high school district " +
+    "governing board candidates answer predetermined questions.";
+  assert.equal(classifyEventCategory(text), "civic");
+  assert.equal(classifyEventCategoryDetailed(text).rule, "civic_forum");
+  // Authoritative, so an LLM guessing "fine_arts" off the venue cannot win.
+  assert.equal(reconcileCategory(classifyEventCategoryDetailed(text), "fine_arts"), "civic");
+});
+
+test("candidate-forum spelling variants all land on civic", () => {
+  for (const name of [
+    "Candidates Night",
+    "Candidate's Night",
+    "Candidates' Night",
+    "Candidate Forum",
+    "Candidates Forum",
+    "Meet the Candidates",
+  ]) {
+    assert.equal(classifyEventCategory(name), "civic", name);
+  }
+});
+
+test("civic_forum does not steal genuine theatre or music events", () => {
+  // The rule leads the list, so it must be narrow enough that an ordinary
+  // play or concert is untouched.
+  assert.equal(classifyEventCategory("Hamlet at the Murphys Playhouse"), "fine_arts");
+  assert.equal(classifyEventCategory("A Night at the Theatre"), "fine_arts");
+  assert.equal(classifyEventCategory("Live music at the theatre"), "live_music");
+  // A bare "Night" must not reach the rule; this was "other" before and after.
+  assert.equal(classifyEventCategory("Opening Night gala"), "other");
+  assert.equal(classifyEventCategory("Candidate information session"), "other");
 });
 
 test("detailed: high-precision keywords are authoritative", () => {

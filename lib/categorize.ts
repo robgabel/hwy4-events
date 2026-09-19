@@ -60,7 +60,22 @@ interface CategoryRule {
 // the unambiguous tokens carry override weight. Verified token-for-token against
 // the pre-2026-06-23 single-regex classifier; the only deliberate category-output
 // change is "blood drive" → civic (was "other"), matching the red-cross scraper.
+// Second deliberate change (2026-09-19): candidate-forum tokens → civic, added
+// with the Angels Camp Candidates Night. See the civic_forum rule below.
 const RULES: CategoryRule[] = [
+  // Runs FIRST, ahead of the performing-arts rule, and that order is the whole
+  // point. A candidates forum is a civic event wherever it is held, but the
+  // corridor holds them in theatres (the Angels Camp Candidates Night sits in
+  // the Bret Harte Theatre), and "theatre" is a fine_arts token several rules
+  // below. `/admin/submissions` classifies on name + description together, so
+  // the venue name alone was enough to route the whole event into Fine Arts.
+  // The soft civic rule at the bottom could not save it either: it fires on
+  // "council" and "board", which a candidates night's ballot text is full of,
+  // but only after fine_arts has already claimed the event. These tokens are
+  // unambiguous, so they lead and are authoritative.
+  { category: "civic", rule: "civic_forum", authoritative: true,
+    pattern: /\b(candidates?'?s? (?:night|forum)|meet the candidates)\b/ },
+
   { category: "live_music", rule: "live_music_strong", authoritative: true,
     pattern: /\b(live music|open mic|karaoke)\b/ },
   { category: "live_music", rule: "live_music", authoritative: false,
