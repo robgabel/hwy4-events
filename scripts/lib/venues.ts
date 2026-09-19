@@ -357,6 +357,13 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
       "town square copperopolis",
       "the town square at copper valley",
       "copper valley town square",
+      // Facebook Events Discover writes "Coppertown Square" (the local
+      // marketing name). Without this alias the row lands venue_key NULL and
+      // cannot agree with GoCalaveras's "Copperopolis Town Square" listing of
+      // the same Saturday-night concert, so the generic "Summer Concert series"
+      // placeholder never merges with the named-slot card.
+      "copperopolis coppertown square",
+      "coppertown square",
     ],
     town: "Copperopolis",
     address: "100 Town Square Rd, Copperopolis, CA 95228",

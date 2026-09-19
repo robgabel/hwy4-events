@@ -195,6 +195,60 @@ test("isActlessPlaceholderTitle: aggregator shapes only — retractions and act-
   assert.equal(isActlessPlaceholderTitle("Live Music - Sequoia Blue"), false);
 });
 
+test("buildStrongMatchUpdate: a series placeholder does not pollute a named-act row", async () => {
+  const { buildStrongMatchUpdate } = await load();
+  const greg = {
+    ...storedRow,
+    name: "Greg Sutton and Friends",
+    date: "2026-09-19",
+    town: "Murphys",
+    venue_name: "Brice Station Vineyards",
+    description:
+      "Greg Sutton is a Northern California singer-songwriter. This concert begins at 6:00 PM.",
+    start_time: "18:00:00",
+    end_time: null,
+    event_url:
+      "https://bricestation.com/products/greg-sutton-and-friends-september-19-2026-6pm",
+    source_event_id: "6569283453028",
+    artists: ["Greg Sutton and Friends"],
+    series_umbrella: false,
+  };
+  const hilltop = {
+    name: "Brice Station Vineyards – Hilltop Concert Series",
+    date: "2026-09-19",
+    town: "Murphys",
+    venue_name: "Brice Station Vineyards",
+    description: "The Earth Tones Trio & Band brings soulful vocals.",
+    start_time: "19:00:00",
+    end_time: "22:00:00",
+    event_url:
+      "https://www.gocalaveras.com/events/brice-station-vineyards-hilltop-concert-series-6/",
+    source_event_id: "191105",
+    artists: ["Earth Tones Trio & Band"],
+    image_url: null,
+    address: null,
+    price: null,
+    category: "live_music",
+  };
+  const merged = buildStrongMatchUpdate(
+    greg as never,
+    hilltop as never,
+    "cccccccccccccccccccccccccccccccc",
+    "2026-09-19T00:00:00Z"
+  ) as Record<string, unknown>;
+  assert.equal(merged.name, "Greg Sutton and Friends");
+  assert.deepEqual(merged.artists, ["Greg Sutton and Friends"]);
+  assert.equal(merged.start_time, "18:00:00");
+  assert.equal(merged.end_time, null);
+  assert.ok(String(merged.description).includes("Greg Sutton is a Northern California"));
+  assert.ok(!String(merged.description).includes("Earth Tones"));
+  assert.equal(
+    merged.event_url,
+    "https://bricestation.com/products/greg-sutton-and-friends-september-19-2026-6pm"
+  );
+  assert.equal(merged.source_event_id, undefined);
+});
+
 test("an organizer's TBD retraction still writes over a cancelled act's name", async () => {
   const { placeholderNameSteal, rowChanged, buildStrongMatchUpdate } = await load();
   const hitMen = {

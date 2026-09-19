@@ -26,7 +26,7 @@ import {
   normalizeVenue,
   type DedupableEvent,
 } from "./dedupe-events";
-import { textSimilarity, GENERIC_VENUES } from "./event-identity";
+import { textSimilarity, GENERIC_VENUES, mergeArtistLists, isActlessPlaceholderTitle } from "./event-identity";
 
 /** The minimal Supabase surface the reconcile uses. Typed structurally rather
  *  than as the concrete `SupabaseClient` on purpose: the Next app and the
@@ -121,17 +121,19 @@ function describeMatch(a: ReconcileRow, b: ReconcileRow): string {
   return "matched";
 }
 
-/** Fields the survivor lacks but a loser has, plus the union of artists. */
+/** Fields the survivor lacks but a loser has, plus the union of artists
+ *  (placeholder-titled losers do not donate leftover acts). */
 function buildFill(survivor: ReconcileRow, losers: ReconcileRow[]): Partial<ReconcileRow> {
   const fill: Partial<ReconcileRow> = {};
-  const artistSet = new Set<string>(
-    (survivor.artists ?? []).map((a) => a?.trim()).filter((a): a is string => !!a)
-  );
+  const mergedArtists = mergeArtistLists(survivor, ...losers) ?? [];
+  const survivorIsSpecific = !isActlessPlaceholderTitle(survivor.name ?? "");
   for (const l of losers) {
-    for (const a of l.artists ?? []) {
-      const t = a?.trim();
-      if (t) artistSet.add(t);
-    }
+    const loserIsPlaceholder = isActlessPlaceholderTitle(l.name ?? "");
+    // A series placeholder's description/end/sid are the aggregator's leftover
+    // occurrence (stale act blurb, usual 7–10 window, EventON id). Don't donate
+    // them onto a named-act survivor. Empty-field fills from a SPECIFIC loser
+    // still happen.
+    if (survivorIsSpecific && loserIsPlaceholder) continue;
     if (!survivor.description && l.description && !fill.description) fill.description = l.description;
     // A cluster's rows could not disagree on start until timeless rows became
     // mergeable (HWY-10), so a survivor that states no clock now inherits one
@@ -145,7 +147,6 @@ function buildFill(survivor: ReconcileRow, losers: ReconcileRow[]): Partial<Reco
     if (!survivor.source_event_id && l.source_event_id && !fill.source_event_id)
       fill.source_event_id = l.source_event_id;
   }
-  const mergedArtists = [...artistSet];
   if (
     mergedArtists.length > 0 &&
     JSON.stringify(mergedArtists) !== JSON.stringify(survivor.artists ?? [])

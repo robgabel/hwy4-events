@@ -153,11 +153,13 @@ export function mergeCluster<T extends DedupableEvent>(cluster: T[]): T {
   const winner = pickSurvivor(cluster);
   if (cluster.length === 1) return winner;
   const merged: T = { ...winner };
-  const len = (v: unknown) => (typeof v === "string" ? v.trim().length : 0);
   // Description: a bare act row often has none; the umbrella sibling carries the
-  // blurb. Take the longest in the cluster so the card isn't empty.
-  for (const e of cluster) {
-    if (len(e.description) > len(merged.description)) merged.description = e.description;
+  // blurb. Fill only when the winner is empty so a named-act bio is never
+  // replaced by a longer stale series blurb (2026-09-19 Brice: Earth Tones
+  // leftover on the Hilltop row vs Greg Sutton's own copy).
+  if (!merged.description) {
+    const donor = cluster.find((e) => (e.description ?? "").trim());
+    if (donor) merged.description = donor.description;
   }
   // Clock: a timeless survivor inherits the sibling's time rather than showing
   // a card with no hour (HWY-10). Mirrors buildFill in lib/reconcile.ts.
