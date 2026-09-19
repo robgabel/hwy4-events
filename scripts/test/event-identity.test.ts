@@ -14,6 +14,7 @@ import {
   isGenericTitle,
   isActlessPlaceholderTitle,
   mergeArtistLists,
+  namedActTakesPrecedence,
   generateDedupKey,
   normalizeForMatch,
   type EventIdentity,
@@ -627,6 +628,70 @@ test("mergeArtistLists drops leftover acts from a series placeholder", () => {
   );
   assert.equal(isActlessPlaceholderTitle("Hilltop Concert Series"), true);
   assert.equal(isActlessPlaceholderTitle("Live Music - Jill Warren"), false);
+});
+
+test("namedActTakesPrecedence defers a series placeholder to the venue's named act", () => {
+  const hilltop: EventIdentity = {
+    name: "Brice Station Vineyards – Hilltop Concert Series",
+    date: "2026-09-19",
+    town: "Murphys",
+    venue_name: "Brice Station Vineyards",
+    venue_key: "brice-station",
+    start_time: "19:00:00",
+    end_time: "22:00:00",
+    artists: ["Earth Tones Trio & Band"],
+  };
+  const greg: EventIdentity = {
+    name: "Greg Sutton and Friends",
+    date: "2026-09-19",
+    town: "Murphys",
+    venue_name: "Brice Station Vineyards",
+    venue_key: "brice-station",
+    start_time: "18:00:00",
+    end_time: null,
+    artists: ["Greg Sutton and Friends"],
+  };
+  assert.equal(namedActTakesPrecedence(hilltop, [greg], "gocalaveras")?.name, greg.name);
+  // Venue's own scraper may write whatever title it wants.
+  assert.equal(namedActTakesPrecedence(hilltop, [greg], "brice-station"), null);
+  // No named-act sibling: the placeholder is still the coverage.
+  assert.equal(namedActTakesPrecedence(hilltop, [hilltop], "gocalaveras"), null);
+  // A named-act incoming never defers (double bills stay two cards).
+  assert.equal(namedActTakesPrecedence(greg, [hilltop], "brice-station"), null);
+});
+
+test("namedActTakesPrecedence defers Live Music @ X to the named act, not a second show", () => {
+  const placeholder: EventIdentity = {
+    name: "Live Music @ The Lube Room",
+    date: "2026-09-19",
+    town: "Dorrington",
+    venue_name: "The Lube Room Saloon",
+    start_time: "19:00:00",
+  };
+  const named: EventIdentity = {
+    name: "Live at The Lube: Hit Replay",
+    date: "2026-09-19",
+    town: "Dorrington",
+    venue_name: "The Lube Room Saloon",
+    start_time: "18:00:00",
+    artists: ["Hit Replay"],
+  };
+  assert.equal(namedActTakesPrecedence(placeholder, [named])?.name, named.name);
+  // Two real showtimes of the same play must not collapse via this gate.
+  const matinee: EventIdentity = {
+    name: "An Act of God",
+    date: "2026-12-19",
+    town: "Murphys",
+    venue_name: "Murphys Creek Theatre",
+    start_time: "14:00:00",
+    end_time: "16:00:00",
+  };
+  const evening: EventIdentity = {
+    ...matinee,
+    start_time: "19:30:00",
+    end_time: "21:30:00",
+  };
+  assert.equal(namedActTakesPrecedence(matinee, [evening]), null);
 });
 
 test("TBD placeholder merges with the named-act re-listing (same venue+slot)", () => {

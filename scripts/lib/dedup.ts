@@ -16,6 +16,8 @@ import {
   generateDedupKey,
   isActlessPlaceholderTitle,
   mergeArtistLists,
+  namedActTakesPrecedence,
+  type EventIdentity,
 } from "../../lib/event-identity.js";
 import { sanitizeDescriptionDetailed } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
@@ -481,6 +483,31 @@ function isStrongEventMatch(
 ): boolean {
   return isSameEvent(event, { ...candidate, name: candidate.name ?? "" });
 }
+
+/** Shape the incoming scrape as an EventIdentity, stamping the registry key
+ *  so `namedActTakesPrecedence` can tell a venue's own writer from an
+ *  aggregator's series placeholder. */
+function asIdentity(event: ExtractedEvent): EventIdentity {
+  return {
+    name: event.name,
+    date: event.date,
+    town: event.town,
+    venue_name: event.venue_name,
+    venue_key: resolveVenueKey(event),
+    address: event.address,
+    start_time: event.start_time,
+    end_time: event.end_time,
+    description: event.description,
+    artists: event.artists,
+  };
+}
+
+function logPlaceholderDeferred(incomingName: string, namedName: string): void {
+  console.log(`  PLACEHOLDER_DEFERRED "${incomingName}" → existing "${namedName}"`);
+}
+
+const PLACEHOLDER_SIBLING_SELECT =
+  "id, name, date, town, start_time, end_time, venue_name, venue_key, description, artists, address, series_umbrella";
 
 type MergeableRow = MatchableRow & {
   name: string;
@@ -1079,7 +1106,7 @@ async function upsertEventsBatched(
   }
 
   // Partition events into matched (will UPDATE) vs unmatched (fuzzy or INSERT)
-  const matched: { event: ExtractedEvent; existing: ExistingRow; dedupKey: string; changed: boolean }[] = [];
+  let matched: { event: ExtractedEvent; existing: ExistingRow; dedupKey: string; changed: boolean }[] = [];
   const unmatched: { event: ExtractedEvent; dedupKey: string }[] = [];
 
   for (const { event, dedupKey } of prepared) {
@@ -1094,29 +1121,62 @@ async function upsertEventsBatched(
     }
   }
 
-  // Match the unmatched batch against existing same-date rows in one bulk
-  // SELECT. A row is the same event only with the shared `isSameEvent` rule
-  // (time slot + venue/description/artist/placeholder signal) — never title
-  // similarity alone. The time slot is usually an exact start; a generic
-  // series placeholder vs a named act may disagree by up to 90 minutes.
-  let fuzzyMatched: Set<string> = new Set();
-  if (unmatched.length > 0) {
-    const unmatchedDates = [...new Set(unmatched.map((u) => u.event.date))];
+  // Same-date siblings: needed for unmatched fuzzy merge AND to stop an
+  // aggregator's exact source_event_id hit from refreshing a series
+  // placeholder when the venue already listed the named act (Brice Hilltop
+  // EventON id 191105 vs Greg Sutton).
+  type Candidate = MergeableRow & { id: string; date: string };
+  const candidatesByDate = new Map<string, Candidate[]>();
+  const siblingDates = [
+    ...new Set([
+      ...unmatched.map((u) => u.event.date),
+      ...matched
+        .filter((m) => isActlessPlaceholderTitle(m.event.name))
+        .map((m) => m.event.date),
+    ]),
+  ];
+  if (siblingDates.length > 0) {
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
       .select(
-        "id, name, town, date, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked"
+        "id, name, town, date, start_time, end_time, venue_name, venue_key, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked"
       )
-      .in("date", unmatchedDates);
-
-    type Candidate = MergeableRow & { id: string; date: string };
-    const candidatesByDate = new Map<string, Candidate[]>();
+      .in("date", siblingDates);
     for (const c of (candidates ?? []) as Candidate[]) {
       const list = candidatesByDate.get(c.date) ?? [];
       list.push(c);
       candidatesByDate.set(c.date, list);
     }
+  }
 
+  if (matched.length > 0) {
+    const kept: typeof matched = [];
+    for (const m of matched) {
+      if (!isActlessPlaceholderTitle(m.event.name)) {
+        kept.push(m);
+        continue;
+      }
+      const named = namedActTakesPrecedence(
+        asIdentity(m.event),
+        (candidatesByDate.get(m.event.date) ?? []).filter((c) => c.id !== m.existing.id),
+        orgSlug
+      );
+      if (named) {
+        logPlaceholderDeferred(m.event.name, named.name);
+        countUpdateResult(result, "skippedFuzzy", null, m.event.name);
+      } else {
+        kept.push(m);
+      }
+    }
+    matched = kept;
+  }
+
+  // Match the unmatched batch against existing same-date rows. A row is the
+  // same event only with the shared `isSameEvent` rule — never title
+  // similarity alone. The time slot is usually an exact start; a generic
+  // series placeholder vs a named act may disagree by up to 90 minutes.
+  let fuzzyMatched: Set<string> = new Set();
+  if (unmatched.length > 0) {
     const matchUpdates: { id: string; payload: object; eventName: string; existingName: string }[] = [];
     const claimed = new Set<string>(); // existing row ids already merged into this batch
     for (const u of unmatched) {
@@ -1364,6 +1424,28 @@ export async function upsertEvents(
     const now = new Date().toISOString();
 
     if (existing) {
+      // Aggregator series placeholder with a stable EventON id: an exact
+      // source_event_id hit would refresh that row as a second card even
+      // after the venue listed the named act. Skip the write.
+      if (isActlessPlaceholderTitle(event.name)) {
+        const { data: siblings } = await supabaseAdmin
+          .from("hwy4_events")
+          .select(PLACEHOLDER_SIBLING_SELECT)
+          .eq("date", event.date);
+        const named = namedActTakesPrecedence(
+          asIdentity(event),
+          ((siblings ?? []) as Array<EventIdentity & { id: string }>).filter(
+            (s) => s.id !== existing.id
+          ),
+          orgSlug
+        );
+        if (named) {
+          logPlaceholderDeferred(event.name, named.name);
+          countUpdateResult(result, "skippedFuzzy", null, event.name);
+          continue;
+        }
+      }
+
       // One definition of "changed" — the exported rowChanged (this block was
       // an inline copy until 2026-08-16, the exact drift shape that let the
       // two exact-match paths disagree about category and the null-guards),

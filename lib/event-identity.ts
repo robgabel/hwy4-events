@@ -592,6 +592,43 @@ export function mergeArtistLists(
   return set.size > 0 ? [...set] : null;
 }
 
+/** An aggregator's series-placeholder listing defers to a named-act row
+ *  already published for that night.
+ *
+ *  Two layers made the 2026-09-19 Brice pair durable: `timesAnchor` missed
+ *  the 18:00 vs 19:00 split (the 90-minute series tolerance above), AND
+ *  GoCalaveras's exact `source_event_id` hit kept refreshing the Hilltop
+ *  EventON row as its own card even after Brice's Shopify product listed
+ *  Greg Sutton. Call this before an exact-key UPDATE of a placeholder: if
+ *  a named-act sibling matches `isSameEvent`, skip the write so the
+ *  organizer card stays the one listing.
+ *
+ *  Returns the named-act resident to defer to, or null (write the
+ *  placeholder — it is still the coverage when the venue has not listed
+ *  this night). The venue's own scraper (`askingOrgSlug === venue_key`)
+ *  is never deferred. Two named acts never defer (incoming is not a
+ *  placeholder). */
+export function namedActTakesPrecedence(
+  incoming: EventIdentity,
+  residents: EventIdentity[],
+  askingOrgSlug?: string | null
+): EventIdentity | null {
+  if (!isActlessPlaceholderTitle(incoming.name ?? "")) return null;
+  if (
+    incoming.venue_key &&
+    askingOrgSlug &&
+    askingOrgSlug === incoming.venue_key
+  ) {
+    return null;
+  }
+  for (const r of residents) {
+    if (!r.name || isActlessPlaceholderTitle(r.name)) continue;
+    if (!isSameEvent(incoming, r)) continue;
+    return r;
+  }
+  return null;
+}
+
 /** Two rows occupy the exact same window: start AND end both known on both
  *  sides, and both equal. Gated by the caller on venue agreement, this is an
  *  identity signal in its own right — the last resort for a duplicate whose two
