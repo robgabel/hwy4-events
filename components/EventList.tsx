@@ -26,6 +26,7 @@ import { collapseEventList, isHighlightEvent } from "@/lib/collapse-events";
 import { pacificToday, pacificDateGroupKind } from "@/lib/date-windows";
 import { nowPacificMinutes, hasEventEnded, hasEventStarted } from "@/lib/event-time";
 import { matchesKidsFilter } from "@/lib/family-friendly";
+import { isListableEvent } from "@/lib/list-visibility";
 
 // Lazy-load non-critical components so they don't block hydration
 const FilterBar = dynamic(() => import("./FilterBar"), { ssr: true });
@@ -371,12 +372,12 @@ export default function EventList({
 
   const filtered = useMemo(() => {
     return initialEvents.filter((e) => {
-      if (e.visibility === "private") {
-        // Members-only (e.g. Blue Lake Springs): shown only when the org is
-        // explicitly enabled in the Clubs filter. The Event Type filter does
-        // not apply — "club" is not a selectable type.
-        if (!e.org_slug || !enabledOrgs.has(e.org_slug)) return false;
-      } else if (!selectedCategories.has(e.category)) {
+      // Members-only rows (Blue Lake Springs, Moose, Sequoia) show only when
+      // that club is checked. Routine rows never show: their detail page 404s.
+      // Same predicate as every other list (lib/list-visibility.ts). The Event
+      // Type filter does not apply to a private row; "club" is not a type.
+      if (!isListableEvent(e, enabledOrgs)) return false;
+      if (e.visibility !== "private" && !selectedCategories.has(e.category)) {
         return false;
       }
       if (!selectedTowns.has(e.town)) return false;

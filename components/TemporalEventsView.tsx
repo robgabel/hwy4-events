@@ -22,6 +22,7 @@ import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content"
 import { TEMPORAL_CONFIG, type WindowKey } from "@/lib/date-windows";
 import { stayHref, type StayRange } from "@/lib/stay-range";
 import CopyPageLink from "@/components/CopyPageLink";
+import { filterListableEvents } from "@/lib/list-visibility";
 
 // Event fetching moved to lib/events-data.ts (getEventsInRange) — an in-memory
 // filter over the site-wide cached upcoming-events set, so this view adds no
@@ -75,11 +76,14 @@ export default async function TemporalEventsView({
   const jsonDescription = isStay
     ? "Events along the Highway 4 corridor for this stay."
     : cfg.metaDescription;
-  const [events, forecastsByTown, artists] = await Promise.all([
+  const [inRange, forecastsByTown, artists] = await Promise.all([
     getEventsInRange(range.start, range.end),
     getForecastsByTown(),
     getPublishedArtists(),
   ]);
+  // Public feed. No Clubs toggle on temporal or stay-range pages, so
+  // members-only rows stay out (same gate as the homepage with nothing checked).
+  const events = filterListableEvents(inRange);
   const artistGenres = artistGenreMap(artists);
   const grouped = groupByDate(events);
   const townLinks = publishedTownLinks();

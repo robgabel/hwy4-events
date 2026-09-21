@@ -8,6 +8,7 @@ import { CORRIDOR_TOWNS, TOWN_INFO, TownInfo } from "@/lib/towns";
 import { townSlug } from "@/lib/slugs";
 import { getSupabase } from "@/lib/supabase";
 import { getEventsInTown } from "@/lib/events-data";
+import { filterListableEvents } from "@/lib/list-visibility";
 import { getPublishedArtists } from "@/lib/artists-data";
 import { artistGenreMap } from "@/lib/artists";
 import {
@@ -106,12 +107,16 @@ export default async function TownPage({ params }: PageProps) {
   const town: TownInfo | undefined = TOWN_INFO[content.townName];
   if (!town) notFound();
 
-  const [events, venues, townForecast, artists] = await Promise.all([
+  const [townEvents, venues, townForecast, artists] = await Promise.all([
     getEventsInTown(content.townName),
     getVenuesInTown(content.townName),
     getForecast(town.lat, town.lng),
     getPublishedArtists(),
   ]);
+  // Public feed. Town pages have no Clubs toggle, so members-only rows stay
+  // hidden. getEventsInTown already applies this gate before its cap; calling
+  // it here keeps the view on the same predicate if that cap changes.
+  const events = filterListableEvents(townEvents);
   const artistGenres = artistGenreMap(artists);
   // Every event on this page is in one town, so a one-entry map is all the
   // cards need (and keeps the client payload to a single town's forecast).
