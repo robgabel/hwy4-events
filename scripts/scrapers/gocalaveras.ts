@@ -19,6 +19,8 @@ import {
   classifyEventCategoryDetailed,
   reconcileCategory,
 } from "../../lib/categorize.js";
+import { HAIKU_MODEL, REASONER_MODEL, THINKING_DISABLED } from "../../lib/agent/models.js";
+import { messageText } from "../../lib/agent/message-text.js";
 import {
   detectShortcodeCap,
   goCalaverasPresenceKeys,
@@ -1054,13 +1056,12 @@ Return ONLY the JSON array, no other text.`;
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: HAIKU_MODEL,
       max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     });
 
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "";
+    const text = messageText(message.content);
     const jsonStr = text
       .replace(/^```(?:json)?\n?/, "")
       .replace(/\n?```$/, "");
@@ -1171,13 +1172,17 @@ Return ONLY the JSON array, e.g. [0, 3, 5] — no other text.`;
       // duplicate. A false positive silently deletes a real event; a false
       // negative ships a visible dupe. Correctness-critical, so use the
       // stronger model even though this runs on every GoCalaveras scrape.
-      model: "claude-sonnet-4-6",
+      model: REASONER_MODEL,
+      // Thinking off. The reply is a bare index array (`[0, 3]`). A thinking
+      // block would share this cap and, if the parser ever read content[0],
+      // a false parse could drop or keep the wrong rows. messageText still
+      // joins text blocks so a thinking block first cannot hide the array.
       max_tokens: 1024,
+      thinking: THINKING_DISABLED,
       messages: [{ role: "user", content: prompt }],
     });
 
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "";
+    const text = messageText(message.content);
     const jsonStr = text
       .replace(/^```(?:json)?\n?/, "")
       .replace(/\n?```$/, "");

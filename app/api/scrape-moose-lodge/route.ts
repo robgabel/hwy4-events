@@ -8,6 +8,8 @@ import {
   reconcileNotability,
 } from "@/lib/notability";
 import { resolveFamilyFriendly } from "@/lib/family-friendly";
+import { HAIKU_MODEL } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 /**
  * Scrape the Ebbetts Pass Moose Lodge monthly calendar PDF and upsert events
@@ -358,7 +360,7 @@ export async function GET(request: Request) {
 
     // 4. Claude extraction
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: HAIKU_MODEL,
       max_tokens: 4096,
       messages: [
         {
@@ -374,11 +376,11 @@ export async function GET(request: Request) {
       ],
     });
 
-    const block = message.content[0];
-    if (block.type !== "text") {
+    const rawText = messageText(message.content).trim();
+    if (!rawText) {
       return NextResponse.json({ error: "Claude returned non-text content" }, { status: 502 });
     }
-    let rawJson = block.text.trim();
+    let rawJson = rawText;
     if (rawJson.startsWith("```")) {
       rawJson = rawJson.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     }

@@ -14,8 +14,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { TriageAnalysis } from "@/lib/agent/submission-triage";
 import { SITE_URL } from "../constants";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
+import { messageText } from "./message-text";
 
-const REPLY_MODEL = "claude-sonnet-4-6";
+const REPLY_MODEL = REASONER_MODEL;
 
 export type ReplyOutcome = "approved" | "questions" | "declined";
 
@@ -142,7 +144,10 @@ export async function generateReply(
   const anthropic = new Anthropic();
   const message = await anthropic.messages.create({
     model: REPLY_MODEL,
-    max_tokens: 700,
+    // 2500, not 700: a thinking block shares this cap, and 700 would finish
+    // before the subject/body JSON starts.
+    max_tokens: 2500,
+    output_config: MEDIUM_EFFORT,
     system: BASE_SYSTEM,
     messages: [
       {
@@ -152,8 +157,7 @@ export async function generateReply(
     ],
   });
 
-  const block = message.content[0];
-  const text = block && block.type === "text" ? block.text : "";
+  const text = messageText(message.content);
   const parsed = safeJson(text);
 
   const fallbackSubject =

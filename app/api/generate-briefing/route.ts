@@ -11,6 +11,8 @@ import {
   type LinkableEvent,
 } from "@/lib/briefing-links";
 import { withVoice } from "@/lib/voice";
+import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 import {
   dayOfYear,
   selectBriefingShape,
@@ -179,8 +181,11 @@ async function generateBriefing(
   const shapeGuidance = buildBriefingShapeGuidance(shape, openers);
 
   const message = await anthropic.messages.create({
-    model: "claude-opus-4-7",
-    max_tokens: 1024,
+    model: PREMIUM_COPY_MODEL,
+    // 4096, not 1024: Opus 5.5 thinking shares this cap. A 1024 ceiling
+    // truncates the briefing before the visible text finishes.
+    max_tokens: 4096,
+    output_config: MEDIUM_EFFORT,
     system: withVoice(SYSTEM_PROMPT),
     messages: [
       {
@@ -196,17 +201,17 @@ async function generateBriefing(
     );
   }
 
-  const block = message.content[0];
-  if (block.type !== "text") throw new Error("Unexpected response type");
+  const text = messageText(message.content);
+  if (!text) throw new Error("Unexpected response type");
 
   // WS-6 opener guard: flag (don't block) a first-3-words repeat vs recent days.
-  const newOpener = openerKey(block.text);
+  const newOpener = openerKey(text);
   if (newOpener && openers.some((o) => openerKey(o) === newOpener)) {
     console.warn(
       `[briefing] opener "${newOpener}" repeats a recent briefing (shape=${shape.id})`,
     );
   }
-  return block.text;
+  return text;
 }
 
 async function saveBriefing(text: string, eventCount: number) {

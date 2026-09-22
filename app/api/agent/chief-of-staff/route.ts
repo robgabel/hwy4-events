@@ -23,6 +23,8 @@ import {
   ensureAuditItems,
   parseAuditSignal,
 } from "@/lib/agent/audit-signal";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 // Agent Cockpit Stage 0 reasoner. Reads the day's signals (verification queue,
 // pending submissions, recent auto-merges, latest SEO capture), asks Sonnet to
@@ -31,7 +33,7 @@ import {
 
 export const maxDuration = 60;
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = REASONER_MODEL;
 
 const SYSTEM_PROMPT = `You are the chief of staff for Hwy4Events.com, a one-person community events site for the Highway 4 corridor (Angels Camp to Bear Valley, California). Each morning you write a short digest for Rob, the owner, summarizing the state of the site's automation and flagging what needs a human.
 
@@ -190,7 +192,8 @@ async function generateDigest(
   const anthropic = new Anthropic();
   const message = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 1500,
+    max_tokens: 4000,
+    output_config: MEDIUM_EFFORT,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -208,8 +211,7 @@ async function generateDigest(
     input: message.usage.input_tokens,
     output: message.usage.output_tokens,
   };
-  const block = message.content[0];
-  const text = block && block.type === "text" ? block.text : "";
+  const text = messageText(message.content);
   const parsed = coerceDigest(parseModelJson(text));
   if (parsed) return { digest: parsed, status: "ok", usage };
 

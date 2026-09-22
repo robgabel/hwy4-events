@@ -19,6 +19,8 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "./lib/supabase-admin.js";
+import { HAIKU_MODEL } from "../lib/agent/models.js";
+import { messageText } from "../lib/agent/message-text.js";
 import { KNOWN_VENUES } from "./lib/venues.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -135,19 +137,14 @@ If you cannot find an address with high confidence, return null for address.`;
 
   try {
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: HAIKU_MODEL,
       max_tokens: 1024,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 } as any],
       messages: [{ role: "user", content: prompt }],
     });
 
-    const text = response.content
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .filter((b: any) => b.type === "text")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((b: any) => b.text)
-      .join("\n");
+    const text = messageText(response.content);
 
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return { address: null, rationale: `No JSON in response: ${text.slice(0, 200)}` };

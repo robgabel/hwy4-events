@@ -25,8 +25,10 @@ import {
   type HrefResolver,
 } from "./newsletter-render";
 import { withVoice } from "./voice";
+import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "./agent/models";
+import { messageText } from "./agent/message-text";
 
-export const NEWSLETTER_MODEL = "claude-opus-4-7";
+export const NEWSLETTER_MODEL = PREMIUM_COPY_MODEL;
 
 // Sender identity for every newsletter-adjacent send (weekly issue, welcome,
 // confirm, feedback). Env wins over region config so a deployment can override
@@ -239,7 +241,10 @@ export async function generateNewsletter(
 
   const message = await anthropic.messages.create({
     model: NEWSLETTER_MODEL,
-    max_tokens: 1500,
+    // 4096, not 1500: Opus 5.5 thinking shares this cap. Medium effort keeps
+    // the think short; the extra room is so the newsletter body still finishes.
+    max_tokens: 4096,
+    output_config: MEDIUM_EFFORT,
     system: withVoice(NEWSLETTER_SYSTEM_PROMPT),
     messages: [
       {
@@ -249,12 +254,12 @@ export async function generateNewsletter(
     ],
   });
 
-  const block = message.content[0];
-  if (block.type !== "text") throw new Error("Unexpected response type");
+  const text = messageText(message.content);
+  if (!text) throw new Error("Unexpected response type");
 
   // Defensive: if the LLM accidentally returns a JSON wrapper, unwrap it so we
   // never leak raw JSON into the email body. Otherwise return text as-is.
-  const body = unwrapAccidentalJson(block.text);
+  const body = unwrapAccidentalJson(text);
 
   // Enforce link integrity before the draft is stored: a minted slug here
   // would bypass the click-tracking rewrite (buildSlugToEventId only maps

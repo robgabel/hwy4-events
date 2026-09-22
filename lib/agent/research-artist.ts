@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { findBannedPhrase, withVoice } from "@/lib/voice";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
+import { messageText } from "./message-text";
 
 // Web research for the artist-blurb drafter (PRD-artist-descriptions.md, Phase 1).
 // Given a band/act name (as it appears in an event's `artists` field) plus the
@@ -14,7 +16,7 @@ import { findBannedPhrase, withVoice } from "@/lib/voice";
 //
 // Same Anthropic web_search + Sonnet pattern as lib/agent/research-venue.ts.
 
-export const RESEARCH_MODEL = "claude-sonnet-4-6";
+export const RESEARCH_MODEL = REASONER_MODEL;
 
 export type ArtistLinks = {
   website?: string;
@@ -180,7 +182,8 @@ export async function researchArtist(
 
   const message = await anthropic.messages.create({
     model: RESEARCH_MODEL,
-    max_tokens: 1200,
+    max_tokens: 4000,
+    output_config: MEDIUM_EFFORT,
     system: SYSTEM,
     // web_search_20250305 is an Anthropic server tool executed during the call.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -188,12 +191,7 @@ export async function researchArtist(
     messages: [{ role: "user", content: userMsg }],
   });
 
-  const text = message.content
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((b: any) => b.type === "text")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((b: any) => b.text)
-    .join("\n");
+  const text = messageText(message.content);
 
   return coerce(safeJson(text));
 }

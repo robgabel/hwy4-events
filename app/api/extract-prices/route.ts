@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { HAIKU_MODEL } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 export const maxDuration = 120;
 
@@ -106,14 +108,14 @@ export async function GET(request: Request) {
 
     try {
       const msg = await anthropic.messages.create({
-        model: "claude-haiku-4-5-20251001",
+        model: HAIKU_MODEL,
         max_tokens: 150,
         messages: [{ role: "user", content: prompt }],
       });
-      const block = msg.content[0];
-      if (block.type !== "text") throw new Error("non-text response");
+      const text = messageText(msg.content).trim();
+      if (!text) throw new Error("non-text response");
 
-      let json = block.text.trim();
+      let json = text;
       if (json.startsWith("```")) {
         json = json.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
       }

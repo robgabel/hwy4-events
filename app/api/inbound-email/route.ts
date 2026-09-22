@@ -13,6 +13,8 @@ import {
   verifyWebhookSignature,
   type NormalizedEvent,
 } from "@/lib/inbound-email";
+import { REASONER_MODEL, THINKING_DISABLED } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 // Email-to-event ingestion (PRD-email-ingest.md). A curator forwards an
 // unstructured event email — often with a poster image — to a dedicated address.
@@ -40,7 +42,7 @@ import {
 
 export const maxDuration = 120; // Resend fetch-back + a vision call can be slow
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = REASONER_MODEL;
 
 // Match the submit form: 4 MB upload ceiling (under Vercel's 4.5 MB body cap),
 // JPG/PNG/WebP only. A small floor skips tracking pixels and signature logos.
@@ -282,11 +284,13 @@ export async function POST(request: Request) {
     const anthropic = new Anthropic({ apiKey: anthropicKey });
     const message = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 2048,
+      // Thinking off: this reply is a JSON array the extractor parses. 3072
+      // covers Sonnet 5's larger tokenizer on a multi-event email.
+      max_tokens: 3072,
+      thinking: THINKING_DISABLED,
       messages: [{ role: "user", content }],
     });
-    const block = message.content[0];
-    const text = block && block.type === "text" ? block.text : "";
+    const text = messageText(message.content);
     normalized = parseExtractedEvents(text)
       .map((r) => normalizeExtracted(r))
       .filter((e): e is NormalizedEvent => !!e);

@@ -11,6 +11,8 @@ import {
   describeTimeMismatch,
   parseStatedTime,
 } from "@/lib/verify-times";
+import { HAIKU_MODEL } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 export const maxDuration = 120;
 
@@ -285,14 +287,14 @@ export async function GET(request: Request) {
 
     try {
       const msg = await anthropic.messages.create({
-        model: "claude-haiku-4-5-20251001",
+        model: HAIKU_MODEL,
         max_tokens: 250,
         messages: [{ role: "user", content: prompt }],
       });
-      const block = msg.content[0];
-      if (block.type !== "text") throw new Error("non-text response");
+      const raw = messageText(msg.content).trim();
+      if (!raw) throw new Error("non-text response");
 
-      let json = block.text.trim();
+      let json = raw;
       if (json.startsWith("```")) {
         json = json.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
       }

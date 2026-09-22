@@ -11,6 +11,8 @@ import {
   type LinkableEvent,
 } from "@/lib/briefing-links";
 import { withVoice } from "@/lib/voice";
+import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 export const maxDuration = 60;
 
@@ -207,8 +209,10 @@ async function generateWeekendBriefing(
   }
 
   const message = await anthropic.messages.create({
-    model: "claude-opus-4-7",
-    max_tokens: 1024,
+    model: PREMIUM_COPY_MODEL,
+    // 4096, not 1024: Opus 5.5 thinking shares this cap.
+    max_tokens: 4096,
+    output_config: MEDIUM_EFFORT,
     system: withVoice(WEEKEND_SYSTEM_PROMPT),
     messages: [
       {
@@ -224,9 +228,9 @@ async function generateWeekendBriefing(
     );
   }
 
-  const block = message.content[0];
-  if (block.type !== "text") throw new Error("Unexpected response type");
-  return block.text;
+  const text = messageText(message.content);
+  if (!text) throw new Error("Unexpected response type");
+  return text;
 }
 
 async function saveWeekendBriefing(text: string, eventCount: number) {
