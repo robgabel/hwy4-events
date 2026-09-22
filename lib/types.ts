@@ -56,8 +56,10 @@ export interface Hwy4Event {
   // When true, family_friendly is human-set; no scraper may overwrite it.
   family_friendly_locked?: boolean;
   // True => a mundane recurring venue operation (Thursday dinner, Sunday brunch),
-  // hidden from every public list. Only the sequoia-woods/moose-lodge write paths
-  // set it. See lib/notability.ts + the read-time filters in lib/events-data.ts.
+  // hidden from every list including an opted-in club. The detail page 404s
+  // these rows, so a card must not link to one (HWY-45). Only the
+  // sequoia-woods/moose-lodge write paths set it. See lib/notability.ts,
+  // lib/events-data.ts, and lib/list-visibility.ts.
   is_routine?: boolean;
   // When true, is_routine is human-set; no scraper may overwrite it.
   notability_locked?: boolean;
@@ -186,6 +188,7 @@ export type EventListItem = Pick<
   | "verification_status"
   | "community_sourced"
   | "family_friendly"
+  | "is_routine"
 >;
 
 export interface CollapsedEvent extends EventListItem {

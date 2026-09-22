@@ -19,6 +19,7 @@ import { getSupabase } from "@/lib/supabase";
 import { Hwy4Event, EventListItem } from "@/lib/types";
 import { gateEventDescription } from "@/lib/description-quality";
 import { pacificToday, addDays } from "@/lib/date-windows";
+import { filterListableEvents } from "@/lib/list-visibility";
 import type { SitemapEventRow } from "@/lib/sitemap";
 
 export const EVENTS_CACHE_TAG = "events";
@@ -34,7 +35,7 @@ const EVENT_COLUMNS =
   "address, category, artists, status, price, cost_tier, event_url, " +
   "source_event_id, source_name, source_url, image_url, visibility, org_slug, " +
   "robs_pick, sold_out, is_weekly, verification_status, community_sourced, venue_key, " +
-  "family_friendly, " +
+  "family_friendly, is_routine, " +
   // series_umbrella: nothing downstream of this fetch reads it today; kept
   // because the shared Hwy4Event shape declares it and dropping one boolean
   // buys nothing (the read-time dedup that needed it was retired 2026-08-23).
@@ -56,15 +57,14 @@ async function fetchUpcomingEvents(): Promise<Hwy4Event[]> {
       .gte("date", today)
       .neq("status", "cancelled")
       // Hide mundane recurring venue operations (Thursday dinners, Sunday
-      // brunches) from the PUBLIC feed the same way cancelled rows are hidden —
-      // but keep them for members-only (private) events. A Moose/Sequoia member
-      // using the Clubs filter *wants* the lodge dinner and its menu; that's the
-      // whole value of the members view, so the routine hide would over-apply
-      // there. Private rows only render when their club is toggled on (client-
-      // side enabledOrgs), so exempting them never leaks routine meals into the
-      // public feed. Only sequoia-woods/moose-lodge writers set is_routine=true;
-      // null-safe because the column is NOT NULL DEFAULT false. See lib/notability.ts.
-      .or("is_routine.neq.true,visibility.eq.private")
+      // brunches) from every list, including the Clubs view. The detail page
+      // 404s these rows with no private exemption (lib/events.ts), so keeping
+      // them for members-only events rendered a card that 404'd (HWY-45, the
+      // Arnold lodge Breakfast on /this-weekend stay links). Private
+      // non-routine rows stay in this fetch; list surfaces gate them with
+      // filterListableEvents (lib/list-visibility.ts). Only sequoia-woods and
+      // moose-lodge writers set is_routine. Null-safe: NOT NULL DEFAULT false.
+      .neq("is_routine", true)
       .order("date", { ascending: true })
       .order("start_time", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
@@ -164,6 +164,7 @@ export function toListEvents(events: Hwy4Event[]): EventListItem[] {
     verification_status: e.verification_status,
     community_sourced: e.community_sourced,
     family_friendly: e.family_friendly,
+    is_routine: e.is_routine,
   }));
 }
 
@@ -176,13 +177,22 @@ export async function getEventsInRange(
   return all.filter((e) => e.date >= start && e.date <= end);
 }
 
-/** Upcoming events in a single town, capped (already deduped upstream). */
+/**
+ * Upcoming events in a single town, capped (already deduped upstream).
+ * The cap counts rows a card may show: routine rows and members-only rows
+ * with no club opted in are dropped first, so they cannot crowd out public
+ * events. Pass `enabledOrgs` only when a Clubs toggle is on the page.
+ */
 export async function getEventsInTown(
   townName: string,
-  limit = 20
+  limit = 20,
+  enabledOrgs?: ReadonlySet<string>
 ): Promise<Hwy4Event[]> {
   const all = await getUpcomingEvents();
-  return all.filter((e) => e.town === townName).slice(0, limit);
+  return filterListableEvents(
+    all.filter((e) => e.town === townName),
+    enabledOrgs
+  ).slice(0, limit);
 }
 
 /** Minimal rows for sitemap URL generation: identity + the recency/curation

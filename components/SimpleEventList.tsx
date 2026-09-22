@@ -5,6 +5,7 @@ import type { Hwy4Event, CollapsedEvent } from "@/lib/types";
 import EventCard from "./EventCard";
 import NewsletterSignup from "./NewsletterSignup";
 import type { TownForecasts } from "@/lib/weather";
+import { filterListableEvents } from "@/lib/list-visibility";
 
 /**
  * Minimal client-rendered list of EventCards, used by server pages (town,
@@ -24,6 +25,7 @@ export default function SimpleEventList({
   newsletterSource,
   forecastsByTown = null,
   artistGenres = {},
+  enabledOrgs,
 }: {
   events: Hwy4Event[];
   newsletterAfterIndex?: number;
@@ -31,11 +33,18 @@ export default function SimpleEventList({
   newsletterSource?: string;
   forecastsByTown?: TownForecasts | null;
   artistGenres?: Record<string, string>;
+  /**
+   * Clubs opt-in. Omit it and members-only rows stay hidden, matching the
+   * homepage before any club is checked. Pass the same set the homepage
+   * Clubs toggle holds if a page grows that control.
+   */
+  enabledOrgs?: ReadonlySet<string>;
 }) {
-  if (events.length === 0) return null;
+  const visible = filterListableEvents(events, enabledOrgs);
+  if (visible.length === 0) return null;
   return (
     <div className="space-y-3">
-      {events.map((e, i) => (
+      {visible.map((e, i) => (
         <Fragment key={e.id}>
           <EventCard
             event={e as CollapsedEvent}
