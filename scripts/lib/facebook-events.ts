@@ -339,7 +339,7 @@ async function classifyCategoriesBatch(
   // Deterministic floor (shared lib/categorize.ts): seed every event from
   // keywords so an LLM failure/whiff can't silently leave it at "other".
   for (const e of events) {
-    e.category = classifyEventCategory(`${e.name} ${e.description ?? ""}`);
+    e.category = classifyEventCategory(e.name, e.description);
   }
 
   const client = new Anthropic();
@@ -391,7 +391,7 @@ ${JSON.stringify(items, null, 2)}`;
       // authoritative keyword wins; otherwise the LLM may upgrade a soft/"other"
       // result, but never downgrade a specific keyword result to "other".
       category: reconcileCategory(
-        classifyEventCategoryDetailed(`${e.name} ${e.description ?? ""}`),
+        classifyEventCategoryDetailed(e.name, e.description),
         byIndex.get(i),
       ) as Category,
     }));
