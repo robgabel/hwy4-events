@@ -424,6 +424,8 @@ Concert listings that reach us through ticket-reseller pages arrive with junk a 
 
 Locked by `scripts/test/description-quality.test.ts` and `scripts/test/audit-checks.test.ts`, both of which assert what must **survive** as hard as what gets removed. Ship-time dry run over every distinct at-risk live description: 1 changed (the junk row), 7 byte-identical.
 
+**Concrete-value override (HWY-46).** `assessDescription` still flags stubs (`too_short` under 15 words, `no_terminal_punctuation`, `generic_hype`), but a price, a comma-separated lineup/menu/activity list (≥2 short items), or a proper noun moves the verdict from suppress to pass/rewrite. A name that is also in the title counts ("Miss Debbie"); venue, town, and month names do not, so "runs June 13–14" at Bear Valley stays suppressed. A clock time or a lone hint word ("family") does not override a stub: "Bingo. Doors open 5:30pm" and an unpunctuated "family activities…" sentence stay hidden. `empty` and `ends_with_colon` stay hard suppressors. Render-only; stored descriptions are not rewritten.
+
 ## Event Pricing (cost_tier)
 
 Some events charge admission (Brice Station concerts, ticketed festivals). The fee is often present in the scraped `price` free-text or buried in the description, but free-text can't drive a badge or filter — so we derive a typed signal.
