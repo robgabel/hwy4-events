@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 // Relative (not "@/") import so the scripts/ test runner can import this module.
 import { TASK_PRIORITIES, TASK_TYPES, type TaskPriority, type TaskType } from "../tasks";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
+import { messageText } from "./message-text";
 
 // Phase 2 of the Roadmap board (PRD-roadmap-board.md §5): turn a cockpit reasoner's
 // digest into `proposed` hwy4_tasks tickets. The chief-of-staff (daily) and the
@@ -17,7 +19,7 @@ import { TASK_PRIORITIES, TASK_TYPES, type TaskPriority, type TaskType } from ".
 // must not fail the digest), and it dedups against open + recently-dismissed
 // tickets by normalized title so a daily reasoner can't refile the same idea.
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = REASONER_MODEL;
 const MAX_PER_RUN = 2; // a reasoner proposes at most 2 tickets/run — precision over volume
 
 export type ProposeTasksResult = { proposed: number; skipped: number };
@@ -126,7 +128,8 @@ export async function proposeTasksFromDigest(
     const anthropic = new Anthropic();
     const message = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 1200,
+      max_tokens: 3000,
+      output_config: MEDIUM_EFFORT,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -139,8 +142,7 @@ export async function proposeTasksFromDigest(
         },
       ],
     });
-    const block = message.content[0];
-    const text = block && block.type === "text" ? block.text : "";
+    const text = messageText(message.content);
     extracted = safeJsonArray(text).map(coerce).filter((t): t is ExtractedTask => t !== null).slice(0, MAX_PER_RUN);
   } catch (err) {
     console.error(`[propose-tasks:${opts.source}] extraction failed:`, err);

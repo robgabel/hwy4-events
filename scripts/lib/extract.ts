@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { applyVenueDetection } from "./venue-matcher.js";
 import { withVoice } from "../../lib/voice.js";
+import { REASONER_MODEL, THINKING_DISABLED } from "../../lib/agent/models.js";
+import { messageText } from "../../lib/agent/message-text.js";
 
 export interface ExtractedEvent {
   name: string;
@@ -151,11 +153,15 @@ ${content}`;
     // dates from unstructured pages (BLS flyers, Facebook, generic sources).
     // It's the highest-stakes call in the pipeline — a wrong venue/address here
     // ships straight to the map — so accuracy beats the per-call cost savings.
-    model: "claude-sonnet-4-6",
-    // 8192, not 2048: a busy source (BVAC lists ~50 events including past
+    model: REASONER_MODEL,
+    // 12288, not 2048: a busy source (BVAC lists ~50 events including past
     // ones) overflows a 2048-token JSON array, and truncated JSON fails
-    // parse — the source then silently extracts 0 events.
-    max_tokens: 8192,
+    // parse — the source then silently extracts 0 events. Sonnet 5's tokenizer
+    // is larger than 4.6, so the old 8192 ceiling grew with it.
+    // Thinking stays off: the reply is a bare JSON array, and a thinking
+    // block would share this cap and shift content[0] off the JSON.
+    max_tokens: 12288,
+    thinking: THINKING_DISABLED,
     // Accuracy first: extraction must never invent facts. The voice constitution
     // governs ONLY how the free-text `description` field is phrased.
     system: withVoice(
@@ -164,8 +170,7 @@ ${content}`;
     messages: [{ role: "user", content: prompt }],
   });
 
-  const text =
-    message.content[0].type === "text" ? message.content[0].text : "";
+  const text = messageText(message.content);
 
   try {
     // Extract JSON from the response (handle markdown code blocks)

@@ -34,7 +34,7 @@ touching any content surface.
   `worthKnowing`, `faqs`, `metaDescription`, `lastVerified`, optional `draft`).
 - **Rendered by** [`app/towns/[slug]/page.tsx`](../app/towns/[slug]/page.tsx).
 - **Drafted by** [`scripts/draft-town-content.ts`](../scripts/draft-town-content.ts) (Opus,
-  `claude-opus-4-7`; system prompt ~L76–173). The script **prints JSON to stdout**; Rob
+  `claude-opus-5-5` via `PREMIUM_COPY_MODEL`; system prompt ~L76–173). The script **prints JSON to stdout**; Rob
   reviews and pastes into `town-content.ts` by hand. It already enforces no-em-dash +
   a banned-phrase list post-generation and refuses to emit violations.
 - **Distinctive-string anchors** (per §3): `"burned me more than once"`, `"Worth knowing"`,
@@ -48,7 +48,7 @@ touching any content surface.
 ## 2. Daily "Millie" briefing
 
 - **Routes:** [`app/api/generate-briefing/route.ts`](../app/api/generate-briefing/route.ts)
-  (`SYSTEM_PROMPT` ~L11–27, model `claude-opus-4-7` ~L152) and
+  (`SYSTEM_PROMPT` ~L11–27, model `claude-opus-5-5` via `PREMIUM_COPY_MODEL`) and
   [`app/api/generate-weekend-briefing/route.ts`](../app/api/generate-weekend-briefing/route.ts)
   (`WEEKEND_SYSTEM_PROMPT` ~L11–27).
 - **Storage:** `site_config` keys `weekly_briefing` / `weekend_briefing` (+ `_date`,
@@ -63,7 +63,7 @@ touching any content surface.
 ## 3. Venue blurbs
 
 - **Drafted by** [`scripts/draft-venue-blurbs.ts`](../scripts/draft-venue-blurbs.ts) (Opus,
-  `claude-opus-4-7`; `SYSTEM_PROMPT` ~L42–83). Already enforces no-em-dash + banned phrases
+  `claude-opus-5-5` via `PREMIUM_COPY_MODEL`; `SYSTEM_PROMPT` ~L42–83). Already enforces no-em-dash + banned phrases
   (~L152–158) and **skips writing** any blurb that trips a rule (~L234–250).
 - **Stored** in `hwy4_venues.blurb` (+ `blurb_generated_at`); **rendered** by
   [`components/VenueInfo.tsx`](../components/VenueInfo.tsx) on the event detail page.
@@ -83,7 +83,7 @@ There is **no column tagging which shape produced a given row** (source type is 
 | GoCalaveras | [`scripts/scrapers/gocalaveras.ts`](../scripts/scrapers/gocalaveras.ts) (`htmlToText` ~L495–512; detail-page enrich ~L584–660) | **(a) verbatim source** (HTML-stripped EventON `eventon_desc_in`) |
 | Bistro Espresso | [`scripts/scrapers/bistro-espresso.ts`](../scripts/scrapers/bistro-espresso.ts) (~L208) | **(a) verbatim source** (from JS bundle) |
 | Red Cross | [`scripts/scrapers/red-cross.ts`](../scripts/scrapers/red-cross.ts) (~L209–213) | **(c) hardcoded template stub** |
-| Generic Firecrawl | [`scripts/lib/extract.ts`](../scripts/lib/extract.ts) (prompt ~L93–121, `claude-sonnet-4-6` ~L128) | **(b) LLM rewrite/stub** ("1–2 sentence description") |
+| Generic Firecrawl | [`scripts/lib/extract.ts`](../scripts/lib/extract.ts) (prompt ~L93–121, `claude-sonnet-5` via `REASONER_MODEL`) | **(b) LLM rewrite/stub** ("1–2 sentence description") |
 | Blue Lake Springs (Vision) | [`app/api/scrape-bls/route.ts`](../app/api/scrape-bls/route.ts) (prompt ~L48–79, Sonnet vision) | **(b) LLM stub** from flyer image |
 | Moose Lodge (PDF) | [`app/api/scrape-moose-lodge/route.ts`](../app/api/scrape-moose-lodge/route.ts) (prompt ~L197–238, Haiku) | **(b) LLM stub** from PDF (already has a no-em-dash rule) |
 
@@ -157,10 +157,12 @@ There is **no column tagging which shape produced a given row** (source type is 
   tests live in `scripts/test/*.test.ts` (node:test, import `lib` via `.js` ESM specifiers,
   zero extra deps). `.github/workflows/test.yml` runs `cd scripts && npm test` on PRs
   touching `lib/**` / `scripts/**`. WS-4's voice lint plugs in here.
-- **Anthropic SDK** `@anthropic-ai/sdk` is a dep of both root and `scripts/`. Models in use:
-  `claude-opus-4-7` (briefings, newsletter, venue/town drafts), `claude-sonnet-4-6`
-  (extract, vision, agents), `claude-haiku-4-5` (moose PDF, price extraction).
-  *(Side note: the workspace's newest Opus is 4.8 — model freshness is out of scope for this PRD.)*
+- **Anthropic SDK** `@anthropic-ai/sdk` is a dep of both root and `scripts/` (0.78 already
+  accepts string model ids and `output_config.effort`; no bump required for this swap).
+  Ids live in [`lib/agent/models.ts`](../lib/agent/models.ts): `claude-opus-5-5`
+  (briefings, newsletter, venue/town drafts), `claude-sonnet-5` (extract, vision, agents),
+  `claude-haiku-4-5-20251001` (moose PDF, price extraction, category classify). Reply
+  text is `messageText()` in [`lib/agent/message-text.ts`](../lib/agent/message-text.ts).
 - **DB-mutation philosophy** (matches this repo's reconcile/backfill convention): live
   user-facing fixes ship as **render-time pure functions** (`lib/`) so no prod write is
   required and they self-heal on re-scrape. Backfill/data-fix scripts go under

@@ -6,6 +6,8 @@ import { SITE_URL } from "@/lib/constants";
 import { gatherScraperHealthContext } from "@/lib/agent/scraper-health-context";
 import { coerceDigest, emptyDigest, type Digest, type ScraperHealthContext } from "@/lib/agent/types";
 import { parseModelJson } from "@/lib/agent/model-json";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 // Weekly scraper-health memo: the operational-health counterpart to the daily
 // chief-of-staff digest and the weekly growth memo. Reads scrape_runs (written
@@ -15,7 +17,7 @@ import { parseModelJson } from "@/lib/agent/model-json";
 
 export const maxDuration = 60;
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = REASONER_MODEL;
 
 const SYSTEM_PROMPT = `You are the person who keeps the lights on for Hwy4Events.com's data pipeline, a one-person community events site for the Highway 4 corridor (Angels Camp to Bear Valley, California). Once a week you write a short operational-health memo for Rob, the owner, about the scrapers that keep the site's event catalog current.
 
@@ -45,7 +47,8 @@ async function generateMemo(
   const anthropic = new Anthropic();
   const message = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 1500,
+    max_tokens: 4000,
+    output_config: MEDIUM_EFFORT,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -60,8 +63,7 @@ async function generateMemo(
   });
 
   const usage = { input: message.usage.input_tokens, output: message.usage.output_tokens };
-  const block = message.content[0];
-  const text = block && block.type === "text" ? block.text : "";
+  const text = messageText(message.content);
   const parsed = coerceDigest(parseModelJson(text));
   if (parsed) return { digest: parsed, status: "ok", usage };
 

@@ -11,6 +11,8 @@ import {
   classifyEventCategoryDetailed,
   reconcileCategory,
 } from "../../lib/categorize.js";
+import { HAIKU_MODEL } from "../../lib/agent/models.js";
+import { messageText } from "../../lib/agent/message-text.js";
 
 /**
  * Facebook Events Discover scraper.
@@ -368,12 +370,11 @@ ${JSON.stringify(items, null, 2)}`;
 
   try {
     const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: HAIKU_MODEL,
       max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
     });
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "";
+    const text = messageText(message.content);
     const jsonStr = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     const parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed)) return events;

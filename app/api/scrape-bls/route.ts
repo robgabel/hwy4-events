@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { requireCronAuth, requireRegion } from "@/lib/cron-auth";
 import { resolveFamilyFriendly } from "@/lib/family-friendly";
+import { REASONER_MODEL, THINKING_DISABLED } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 export const maxDuration = 120; // Vision API calls can be slow
 
@@ -170,8 +172,11 @@ async function extractEventFromImage(
 ): Promise<ExtractedEvent | null> {
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 500,
+      model: REASONER_MODEL,
+      // One flyer, one JSON object. Thinking off so the 1024 cap is the
+      // event, not a thinking block. 500 was tight once the tokenizer grew.
+      max_tokens: 1024,
+      thinking: THINKING_DISABLED,
       messages: [
         {
           role: "user",
@@ -192,11 +197,11 @@ async function extractEventFromImage(
       ],
     });
 
-    const block = message.content[0];
-    if (block.type !== "text") return null;
+    const text = messageText(message.content);
+    if (!text) return null;
 
     // Parse the JSON response — handle potential markdown fencing
-    let jsonText = block.text.trim();
+    let jsonText = text.trim();
     if (jsonText.startsWith("```")) {
       jsonText = jsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     }

@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
+import { messageText } from "./message-text";
 
 // Web research for the create_venue_row proposer (PRD-live-music-experience.md
 // Phase 1A). Finds a venue's verified street address so the proposal arrives
@@ -10,7 +12,7 @@ import Anthropic from "@anthropic-ai/sdk";
 // because the target is different: an org's canonical events URL there, a postal
 // street address here.
 
-export const RESEARCH_MODEL = "claude-sonnet-4-6";
+export const RESEARCH_MODEL = REASONER_MODEL;
 
 export type VenueResearch = {
   address: string | null; // full street address: "1154 Pennsylvania Gulch Rd, Murphys, CA 95247"
@@ -96,7 +98,8 @@ export async function researchVenueAddress(
 
   const message = await anthropic.messages.create({
     model: RESEARCH_MODEL,
-    max_tokens: 1000,
+    max_tokens: 4000,
+    output_config: MEDIUM_EFFORT,
     system: SYSTEM,
     // web_search_20250305 is an Anthropic server tool executed during the call.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,12 +107,7 @@ export async function researchVenueAddress(
     messages: [{ role: "user", content: userMsg }],
   });
 
-  const text = message.content
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((b: any) => b.type === "text")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((b: any) => b.text)
-    .join("\n");
+  const text = messageText(message.content);
 
   return coerce(safeJson(text));
 }

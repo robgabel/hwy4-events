@@ -27,7 +27,10 @@ import {
 import { matchVenueRow, type VenueRegistryRow } from "@/lib/venue-match";
 import type { EventCategory, EventCostTier } from "@/lib/types";
 
-export const TRIAGE_MODEL = "claude-sonnet-4-6";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
+import { messageText } from "./message-text";
+
+export const TRIAGE_MODEL = REASONER_MODEL;
 
 const CATEGORIES: EventCategory[] = [
   "live_music",
@@ -429,7 +432,10 @@ export async function analyzeSubmission(
   const anthropic = new Anthropic();
   const message = await anthropic.messages.create({
     model: TRIAGE_MODEL,
-    max_tokens: 2000,
+    // Web search plus adaptive thinking share this cap. 6000 leaves room for
+    // the verdict JSON after a medium-effort think.
+    max_tokens: 6000,
+    output_config: MEDIUM_EFFORT,
     system: SYSTEM_PROMPT,
     // web_search_20250305 is an Anthropic server tool, executed during the call;
     // no client tool loop needed (same pattern as scripts/enrich-venue-addresses.ts).
@@ -438,12 +444,7 @@ export async function analyzeSubmission(
     messages: [{ role: "user", content: buildUserMessage(sub, rows, tagged) }],
   });
 
-  const text = message.content
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((b: any) => b.type === "text")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((b: any) => b.text)
-    .join("\n");
+  const text = messageText(message.content);
 
   const analysis = coerce(safeJson(text), tagged);
   if (!analysis) {

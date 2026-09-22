@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
+import { messageText } from "./message-text";
 
 // Web research for the create_org_row proposer (PRD-agent-cockpit.md, Stage 1.5).
 // Finds a venue/organizer's OWN canonical events page so the proposal arrives
@@ -7,7 +9,7 @@ import Anthropic from "@anthropic-ai/sdk";
 // model is told to return null + low confidence when unsure, and we defensively
 // reject social/aggregator URLs after the fact.
 
-export const RESEARCH_MODEL = "claude-sonnet-4-6";
+export const RESEARCH_MODEL = REASONER_MODEL;
 
 export type OrgResearch = {
   canonical_url: string | null;
@@ -97,7 +99,8 @@ export async function researchOrgCanonical(
 
   const message = await anthropic.messages.create({
     model: RESEARCH_MODEL,
-    max_tokens: 1000,
+    max_tokens: 4000,
+    output_config: MEDIUM_EFFORT,
     system: SYSTEM,
     // web_search_20250305 is an Anthropic server tool executed during the call.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,12 +108,7 @@ export async function researchOrgCanonical(
     messages: [{ role: "user", content: userMsg }],
   });
 
-  const text = message.content
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((b: any) => b.type === "text")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((b: any) => b.text)
-    .join("\n");
+  const text = messageText(message.content);
 
   return coerce(safeJson(text));
 }

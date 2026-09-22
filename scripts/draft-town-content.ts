@@ -21,6 +21,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { withVoice } from "../lib/voice.js";
+import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "../lib/agent/models.js";
+import { messageText } from "../lib/agent/message-text.js";
 
 // --- args ---
 
@@ -209,16 +211,15 @@ async function main() {
   console.error(`Drafting ${town!.name} (this takes ~30-60s with Opus)...`);
 
   const response = await client.messages.create({
-    model: "claude-opus-4-7",
-    max_tokens: 8192,
+    model: PREMIUM_COPY_MODEL,
+    // 16384, not 8192: a full town-page JSON plus Opus 5.5 thinking.
+    max_tokens: 16384,
+    output_config: MEDIUM_EFFORT,
     system: withVoice(SYSTEM_PROMPT),
     messages: [{ role: "user", content: USER_PROMPT }],
   });
 
-  const text = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
+  const text = messageText(response.content);
 
   // Strip code-fence guards if Opus adds them despite the prompt
   const cleaned = text

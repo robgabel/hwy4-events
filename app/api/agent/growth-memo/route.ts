@@ -12,6 +12,8 @@ import {
 import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
 import { parseModelJson } from "@/lib/agent/model-json";
 import { captureLessonsFromConcludedExperiments } from "@/lib/agent/growth-lessons";
+import { MEDIUM_EFFORT, REASONER_MODEL } from "@/lib/agent/models";
+import { messageText } from "@/lib/agent/message-text";
 
 // Growth memo (PRD-growth-agent.md, Phase 1). The weekly Head-of-Growth
 // reasoner: reads the growth signal pack and writes one memo — the North Star
@@ -24,7 +26,7 @@ import { captureLessonsFromConcludedExperiments } from "@/lib/agent/growth-lesso
 
 export const maxDuration = 60;
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = REASONER_MODEL;
 
 const SYSTEM_PROMPT = `You are the head of growth for Hwy4Events.com, a one-person hyperlocal events site for the Highway 4 corridor (Angels Camp to Bear Valley, California). Once a week you write a short, sharp growth memo for Rob, the owner.
 
@@ -73,8 +75,10 @@ async function generateMemo(context: GrowthContext): Promise<{
     model: MODEL,
     // A summary + north_star + a fully-drafted email easily exceeds 2000 output
     // tokens; truncation there leaves unterminated JSON that fails to parse and
-    // used to dump the raw blob into the summary card. 4000 holds the whole memo.
-    max_tokens: 4000,
+    // used to dump the raw blob into the summary card. 8000 holds the memo
+    // plus the adaptive-thinking tokens that share this cap.
+    max_tokens: 8000,
+    output_config: MEDIUM_EFFORT,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -90,8 +94,7 @@ async function generateMemo(context: GrowthContext): Promise<{
 
   const usage = { input: message.usage.input_tokens, output: message.usage.output_tokens };
   const truncated = message.stop_reason === "max_tokens";
-  const block = message.content[0];
-  const text = block && block.type === "text" ? block.text : "";
+  const text = messageText(message.content);
   const parsed = coerceGrowthDigest(parseModelJson(text));
   if (parsed) return { digest: parsed, status: "ok", failure: null, usage };
 

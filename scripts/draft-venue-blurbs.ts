@@ -31,6 +31,8 @@ import { join, resolve } from "node:path";
 import { supabaseAdmin } from "./lib/supabase-admin.js";
 import { BANNED_PHRASES, withVoice } from "../lib/voice.js";
 import { getActiveFacts } from "../lib/local-facts.js";
+import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "../lib/agent/models.js";
+import { messageText } from "../lib/agent/message-text.js";
 
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
@@ -247,15 +249,15 @@ Lean on the Places signals for practical persona facts (dogs, kids, groups, outd
     let hasSource = false;
     try {
       const res = await client.messages.create({
-        model: "claude-opus-4-7",
-        max_tokens: 600,
+        model: PREMIUM_COPY_MODEL,
+        // 4096, not 600: Opus 5.5 thinking shares this cap. The blurb JSON
+        // itself is short; the extra room is for the think.
+        max_tokens: 4096,
+        output_config: MEDIUM_EFFORT,
         system: withVoice(SYSTEM_PROMPT),
         messages: [{ role: "user", content: userPrompt }],
       });
-      const text = res.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("\n");
+      const text = messageText(res.content);
       const parsed = JSON.parse(stripFences(text)) as { blurb: string; has_source: boolean };
       blurb = (parsed.blurb ?? "").trim();
       hasSource = !!parsed.has_source;

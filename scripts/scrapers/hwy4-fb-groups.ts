@@ -18,6 +18,8 @@ import {
   normalizeExtracted,
   type NormalizedEvent,
 } from "../../lib/inbound-email.js";
+import { REASONER_MODEL, THINKING_DISABLED } from "../../lib/agent/models.js";
+import { messageText } from "../../lib/agent/message-text.js";
 
 /**
  * Hwy 4 Facebook GROUP scraper — a front door onto the submissions queue.
@@ -50,7 +52,7 @@ import {
 // --dry-run prints a raw item.
 const APIFY_ACTOR = "apify~facebook-groups-scraper";
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = REASONER_MODEL;
 
 /** Posts pulled per group per run, before filtering. */
 const RESULTS_LIMIT = 60;
@@ -133,7 +135,10 @@ async function extractFromPost(
   try {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 2048,
+      // Thinking off: one post, one JSON array. A thinking block first would
+      // be joined away, but it would also eat this cap.
+      max_tokens: 3072,
+      thinking: THINKING_DISABLED,
       messages: [
         {
           role: "user",
@@ -141,10 +146,7 @@ async function extractFromPost(
         },
       ],
     });
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
+    const text = messageText(response.content);
     return parseExtractedEvents(text)
       .map(normalizeExtracted)
       .filter((e): e is NormalizedEvent => e !== null);
