@@ -71,7 +71,12 @@ function mapProduct(p: ShopifyProduct): ExtractedEvent | null {
     venue_name: VENUE,
     town: TOWN,
     address: null, // filled from the venue registry by normalizeEventLocation
-    category: classifyEventCategory(`${parsed.name} ${description ?? ""} live music concert`),
+    // Force live_music via title-side tokens (HWY-47: description amenity is
+    // no longer an authoritative claim). Brice's ticket store is concerts.
+    category: classifyEventCategory(
+      `${parsed.name} live music concert`,
+      description,
+    ),
     price: productPrice(p),
     artists: [parsed.name],
     event_url: `${PRODUCT_BASE}/${p.handle}`,

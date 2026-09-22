@@ -1019,7 +1019,7 @@ async function classifyEvents(events: ExtractedEvent[]): Promise<void> {
   // batch-wide "other" fallback. The LLM then only *upgrades* to a more specific
   // category and adds artists.
   for (const e of events) {
-    e.category = classifyEventCategory(`${e.name} ${e.description ?? ""}`);
+    e.category = classifyEventCategory(e.name, e.description);
   }
 
   const eventList = events
@@ -1079,7 +1079,8 @@ Return ONLY the JSON array, no other text.`;
         // specific keyword result to "other". (lib/categorize.reconcileCategory)
         events[c.i].category = reconcileCategory(
           classifyEventCategoryDetailed(
-            `${events[c.i].name} ${events[c.i].description ?? ""}`,
+            events[c.i].name,
+            events[c.i].description,
           ),
           c.category,
         );

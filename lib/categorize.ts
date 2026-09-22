@@ -18,6 +18,12 @@ import type { EventCategory } from "./types";
  *  - SOFT rules are weaker signals; an LLM MAY upgrade them to a more specific
  *    category, but may never downgrade a specific keyword result to "other".
  *
+ * Name vs description (HWY-47): `live_music_strong` is authoritative only when
+ * it matches the **title**. A description-only hit is a soft candidate so a
+ * later civic/festival rule can win; amenity phrasing ("and live music",
+ * "listening to live music by…") is stripped from the description score so a
+ * market or car show that *hosts* music is not *about* music.
+ *
  * Used by:
  *  - the GoCalaveras + Facebook scrapers (deterministic floor, reconciled with an
  *    LLM via `reconcileCategory`)
@@ -60,6 +66,10 @@ interface CategoryRule {
 // the unambiguous tokens carry override weight. Verified token-for-token against
 // the pre-2026-06-23 single-regex classifier; the only deliberate category-output
 // change is "blood drive" → civic (was "other"), matching the red-cross scraper.
+//
+// HWY-47: `festival_strong` (oktoberfest) sits before `kids` so a blurb that
+// says "family-friendly" cannot steal a named Oktoberfest into kids once the
+// amenity live-music claim is no longer authoritative.
 const RULES: CategoryRule[] = [
   { category: "live_music", rule: "live_music_strong", authoritative: true,
     pattern: /\b(live music|open mic|karaoke)\b/ },
@@ -85,6 +95,11 @@ const RULES: CategoryRule[] = [
     pattern: /\b(opera|ballet|shakespeare|playhouse)\b/ },
   { category: "fine_arts", rule: "performing_arts", authoritative: false,
     pattern: /\b(theater|theatre|broadway|matinee|one-act)\b/ },
+
+  // Named festival forms that `\bfest\b` cannot see inside a compound word
+  // (Oktoberfest). Before kids so "family-friendly" in the blurb cannot steal.
+  { category: "festival", rule: "festival_strong", authoritative: true,
+    pattern: /\b(oktoberfest)\b/ },
 
   { category: "kids", rule: "kids", authoritative: false,
     pattern: /\b(kids|kid|children|family|youth|teens?|tweens?|day camp|summer camp|adventure camp|forest school|creek critters|easter egg|story ?time)\b/ },
@@ -131,28 +146,75 @@ const VENUE_BOILERPLATE =
 const ACT_NAME_NOISE =
   /(?:(?:&|\band)\s+family\b|\bfamily(?=\s+(?:band|lineup)\b))/gi;
 
+/**
+ * Description phrasing that mentions live music as an amenity or list item,
+ * not as what the event *is*. HWY-47: farmers-market / car-show / Oktoberfest
+ * blurbs were stealing the live_music badge. Title matches are never stripped.
+ */
+const LIVE_MUSIC_AMENITY =
+  /\b(?:(?:with|and|featuring|plus|&)\s+live\s+music|listening\s+to\s+live\s+music|live\s+music\s+(?:by|at|from|have\s+been|has\s+been)|live\s+music\s*,)/gi;
+
 function stripVenueBoilerplate(text: string): string {
   return text.replace(VENUE_BOILERPLATE, " ").replace(ACT_NAME_NOISE, " ");
+}
+
+function stripLiveMusicAmenity(text: string): string {
+  return text.replace(LIVE_MUSIC_AMENITY, " ");
 }
 
 /**
  * Full classification result: the category, which rule fired, and whether that
  * rule is authoritative (high-precision → should beat an LLM). The scrapers use
  * this; everyone else can use the `classifyEventCategory` convenience wrapper.
+ *
+ * Pass `name` and `description` separately when both are available. A single
+ * concatenated string still works (treated as the name), but then a description
+ * amenity buried in that blob can still fire `live_music_strong` — callers that
+ * previously did `` `${name} ${description}` `` should pass two args.
  */
-export function classifyEventCategoryDetailed(text: string): DetailedCategory {
-  const haystack = stripVenueBoilerplate(text.toLowerCase());
+export function classifyEventCategoryDetailed(
+  name: string,
+  description?: string | null,
+): DetailedCategory {
+  const nameHay = stripVenueBoilerplate(name.toLowerCase());
+  const descHay = stripVenueBoilerplate((description ?? "").toLowerCase());
+  const descLiveHay = stripLiveMusicAmenity(descHay);
+  const combinedHay = `${nameHay} ${descHay}`.replace(/\s+/g, " ").trim();
+
+  // Description-only live_music_strong is held until every other rule has had a
+  // chance — a car show / market / festival title must win over an amenity blurb.
+  let deferredLiveMusic: DetailedCategory | null = null;
+
   for (const r of RULES) {
-    if (r.pattern.test(haystack)) {
+    if (r.rule === "live_music_strong") {
+      if (r.pattern.test(nameHay)) {
+        return { category: r.category, rule: r.rule, authoritative: true };
+      }
+      if (r.pattern.test(descLiveHay)) {
+        deferredLiveMusic = {
+          category: r.category,
+          rule: r.rule,
+          authoritative: false,
+        };
+      }
+      continue;
+    }
+
+    if (r.pattern.test(combinedHay)) {
       return { category: r.category, rule: r.rule, authoritative: r.authoritative };
     }
   }
+
+  if (deferredLiveMusic) return deferredLiveMusic;
   return { category: "other", rule: null, authoritative: false };
 }
 
 /** Convenience: just the category. Stable signature for the no-LLM callers. */
-export function classifyEventCategory(text: string): EventCategory {
-  return classifyEventCategoryDetailed(text).category;
+export function classifyEventCategory(
+  name: string,
+  description?: string | null,
+): EventCategory {
+  return classifyEventCategoryDetailed(name, description).category;
 }
 
 /**

@@ -6,14 +6,18 @@
  * once landed in "other" (a failed/whiffed classify run) was stuck there
  * forever even when a later scrape classified it correctly.
  *
- * Upgrade-only by default: it never downgrades a specific category to "other",
- * so it only ever *fixes* rows. By default it touches only rows currently in
- * "other" (the backlog); pass --all-categories to re-run over every row.
+ * By default it touches only rows currently in "other" (the backlog) and never
+ * writes "other" over a specific category. Pass `--all-categories` to re-run
+ * over every row — needed after a classifier *retype* (e.g. HWY-47 amenity
+ * live_music → civic/festival), since those rows are not in "other".
  *
  * Dry-run by default; apply with --apply. Future-only by default; --all for past.
  *
  *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... tsx backfill-categories.ts
  *   ...                                            tsx backfill-categories.ts --apply
+ *   # HWY-47 amenity-stolen live_music rows (after deploy):
+ *   ...  tsx backfill-categories.ts --all-categories
+ *   ...  tsx backfill-categories.ts --all-categories --apply
  */
 import { supabaseAdmin } from "./lib/supabase-admin.js";
 import { classifyEventCategory } from "../lib/categorize.js";
@@ -45,8 +49,13 @@ async function main() {
   const tally: Record<string, number> = {};
 
   for (const row of rows) {
-    const next = classifyEventCategory(`${row.name} ${row.description ?? ""}`);
-    // Upgrade-only: never write "other" over an existing specific category.
+    // Name + description separately so live_music_strong stays title-scoped
+    // (HWY-47). With --all-categories this also rewrites amenity-stolen
+    // live_music rows onto civic/festival.
+    const next = classifyEventCategory(row.name, row.description);
+    // Never write "other" over an existing specific category (upgrade-or-retype
+    // only). Retype is intentional: live_music → civic for a market blurb is a
+    // fix, not a downgrade.
     if (next === (row.category ?? "other")) continue;
     if (next === "other") continue;
 

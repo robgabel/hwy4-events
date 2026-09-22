@@ -103,3 +103,130 @@ test("classify: '& Family' strips even with no live-music token in the text", ()
   );
   assert.notEqual(got, "kids");
 });
+
+// ─── HWY-47: amenity "live music" in a blurb must not steal the category ───
+
+test("HWY-47: farmers market stays civic despite live-music amenity in description", () => {
+  // Production: Murphys Park Farmers Market (6 upcoming rows). Title alone is
+  // civic_strong; the creek-side blurb used to win via live_music_strong.
+  assert.equal(classifyEventCategory("Murphys Park Farmers Market"), "civic");
+  assert.equal(
+    classifyEventCategory(
+      "Murphys Park Farmers Market",
+      "Come enjoy shopping your favorite local vendors while listening to live music by the creek.",
+    ),
+    "civic",
+  );
+  const detailed = classifyEventCategoryDetailed(
+    "Murphys Park Farmers Market",
+    "Come enjoy shopping your favorite local vendors while listening to live music by the creek.",
+  );
+  assert.equal(detailed.category, "civic");
+  assert.equal(detailed.rule, "civic_strong");
+});
+
+test("HWY-47: car show stays civic despite live-music amenity in description", () => {
+  // Production: 21st Arnold Classic Car Show — Jen's homepage badge bug.
+  assert.equal(classifyEventCategory("21st Arnold Classic Car Show"), "civic");
+  assert.equal(
+    classifyEventCategory(
+      "21st Arnold Classic Car Show",
+      "Food vendors and live music have been staples of past events.",
+    ),
+    "civic",
+  );
+});
+
+test("HWY-47: Oktoberfest is festival, not live_music (or kids via family-friendly)", () => {
+  // Production: Oktoberfest @ Murphys Creek Park. `\bfest\b` cannot see inside
+  // "Oktoberfest"; festival_strong covers the compound. family-friendly in the
+  // blurb must not steal into kids once live_music is demoted.
+  assert.equal(
+    classifyEventCategory(
+      "Oktoberfest @ Murphys Creek Park",
+      "Join us for local craft beer, bratwurst, live music, and family-friendly activities.",
+    ),
+    "festival",
+  );
+  const detailed = classifyEventCategoryDetailed(
+    "Oktoberfest @ Murphys Creek Park",
+    "Join us for local craft beer, bratwurst, live music, and family-friendly activities.",
+  );
+  assert.equal(detailed.rule, "festival_strong");
+  assert.equal(detailed.authoritative, true);
+});
+
+test("HWY-47: title-carried live music / open mic / karaoke stay live_music", () => {
+  // Genuine music listings — the signal is in the title, so amenity demotion
+  // must not touch them. Assert keep-matching as hard as the stop-matching above.
+  assert.equal(classifyEventCategory("Live Music @ Prospect 772"), "live_music");
+  assert.equal(
+    classifyEventCategoryDetailed("Live Music @ Prospect 772").rule,
+    "live_music_strong",
+  );
+  assert.equal(
+    classifyEventCategoryDetailed("Live Music @ Prospect 772").authoritative,
+    true,
+  );
+  assert.equal(
+    classifyEventCategory("Open Mic @ Val du Vino Music Barn"),
+    "live_music",
+  );
+  assert.equal(
+    classifyEventCategory("Karaoke at The Murphys Irish Pub"),
+    "live_music",
+  );
+  // Title signal beats a civic-looking description.
+  assert.equal(
+    classifyEventCategory(
+      "Live Music @ Prospect 772",
+      "Bring the whole family for a night on the patio.",
+    ),
+    "live_music",
+  );
+  // Soft title signal (concert / band) still classifies live_music.
+  assert.equal(classifyEventCategory("Summer Concert in the Park"), "live_music");
+  // "Live at The Lube: Hit Replay" has no strong/soft keyword today (other);
+  // scrapers/LLM may upgrade. Locked so HWY-47 does not invent a new title rule.
+  assert.equal(
+    classifyEventCategory("Live at The Lube: Hit Replay", "Classic rock covers."),
+    "other",
+  );
+});
+
+test("HWY-47: description-only non-amenity live music is soft, not authoritative", () => {
+  // A bare "live music" claim in prose (not amenity phrasing) defers so a
+  // later rule can win; with no later rule it still lands live_music, soft.
+  const deferred = classifyEventCategoryDetailed(
+    "Evening on the Patio",
+    "There will be live music tonight under the oaks.",
+  );
+  assert.equal(deferred.category, "live_music");
+  assert.equal(deferred.rule, "live_music_strong");
+  assert.equal(deferred.authoritative, false);
+  // Soft → LLM may retype; authoritative title claim may not.
+  assert.equal(reconcileCategory(deferred, "civic"), "civic");
+  assert.equal(
+    reconcileCategory(classifyEventCategoryDetailed("Live Music Night"), "civic"),
+    "live_music",
+  );
+});
+
+test("HWY-47: amenity live music alone does not classify the event as live_music", () => {
+  // Amenity phrasing is stripped from the description score — with no other
+  // signal the row stays other (never live_music from a host-music blurb).
+  assert.equal(
+    classifyEventCategory(
+      "Community Picnic at Utica Park",
+      "Bring a blanket. Food trucks and live music by the bandstand.",
+    ),
+    "other",
+  );
+  assert.equal(
+    classifyEventCategory(
+      "Annual Chili Cookoff",
+      "Vendors, games, and live music, plus awards at 3pm.",
+    ),
+    "other",
+  );
+});

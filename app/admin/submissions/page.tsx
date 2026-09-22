@@ -534,7 +534,7 @@ function SubmissionCard({
   const category =
     suggestedCat ??
     subCat ??
-    classifyEventCategory(`${sub.event_name} ${sub.description ?? ""}`);
+    classifyEventCategory(sub.event_name, sub.description);
 
   const showMerge = sub.ai_verdict === "duplicate_needs_update" && !!matched;
 

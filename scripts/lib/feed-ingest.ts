@@ -237,9 +237,16 @@ function priceFromSignals(
   return fallback;
 }
 
-function categoryFrom(source: FeedSource, parts: Array<string | null | undefined>): string {
-  const text = parts.filter(Boolean).join(" ");
-  const category = classifyEventCategory(text);
+function categoryFrom(
+  source: FeedSource,
+  title: string,
+  description?: string | null,
+  extras: Array<string | null | undefined> = [],
+): string {
+  // Title (+ source category labels) vs description — HWY-47 title-scoped
+  // live_music_strong. Extras are organizer-supplied type names, not prose.
+  const name = [title, ...extras].filter(Boolean).join(" ");
+  const category = classifyEventCategory(name, description);
   return category === "other" && source.defaultCategory ? source.defaultCategory : category;
 }
 
@@ -319,7 +326,7 @@ export function mapLocalistResponse(data: unknown, source: FeedSource): Extracte
         venue_name: venue,
         town,
         address,
-        category: categoryFrom(source, [title, description, ...filterNames]),
+        category: categoryFrom(source, title, description, filterNames),
         price: priceFromSignals(ev.free, ev.ticket_cost),
         artists: null,
         event_url: url,
@@ -383,7 +390,7 @@ export function mapTribeResponse(data: unknown, source: FeedSource): ExtractedEv
       venue_name: venue,
       town,
       address,
-      category: categoryFrom(source, [title, description, ...cats]),
+      category: categoryFrom(source, title, description, cats),
       price: cost || null,
       artists: null,
       event_url: cleanText(ev.url) ?? source.sourceUrl,
@@ -609,7 +616,7 @@ export function parseRssFeed(xml: string, source: FeedSource): ExtractedEvent[] 
       venue_name: source.defaultVenue,
       town,
       address,
-      category: categoryFrom(source, [title, description, ...categories]),
+      category: categoryFrom(source, title, description, categories),
       price: /\bfree\b/i.test(searchable) ? "Free" : null,
       artists: null,
       event_url: link,
@@ -735,7 +742,7 @@ export function parseICalFeed(text: string, source: FeedSource): ExtractedEvent[
       venue_name: location.venue,
       town: location.town,
       address: location.address,
-      category: categoryFrom(source, [title, description]),
+      category: categoryFrom(source, title, description),
       price: source.defaultPrice ?? (/\bfree\b/i.test(`${title} ${description ?? ""}`) ? "Free" : null),
       artists: null,
       event_url: eventUrl,
