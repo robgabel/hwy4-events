@@ -345,10 +345,27 @@ const SCAFFOLD_WORDS = new Set([
 const TERMINAL_PUNCT = /[.!?…)"'’"]$/;
 
 // Tokens that signal the description adds genuine value beyond scaffolding:
-// money, instructions, audience cues. (Times/dates are intentionally NOT here —
-// the card already shows date + start time, so a date-only "value add" is not
-// enough to keep a stub.)
+// money, instructions, audience cues. (A bare clock time or a calendar date is
+// intentionally NOT enough on its own — the card already shows date + start
+// time, so "Bingo. Doors open 5:30pm" and "runs June 13–14" stay stubs.)
 const VALUE_HINT = /\b(free|tickets?|ticketed|rsvp|reserv|register|admission|donation|byob|bring|ages?|kids?|family|members?|doors?|menu|raffle|prizes?|cash|proceeds|benefit|vendors?|live music|potluck|no fee|sign[- ]?up|call|21\+?)\b/i;
+
+const CLOCK_TIME = /\b\d{1,2}(:\d{2})?\s?[ap]\.?m\.?\b/i;
+const MONEY = /\$\s?\d/;
+
+// Month names are dates, not acts. "June" in "runs June 13–14" must not read
+// as a rescuing proper noun.
+const MONTHS = new Set([
+  "january", "february", "march", "april", "may", "june", "july",
+  "august", "september", "october", "november", "december",
+]);
+
+// Mid-sentence capitals. Sentence-initial words ("The event…", "Doors open…")
+// are syntax, not names — the same lookbehind the hype check uses.
+const PROPER_NOUN_RE = /(?<!^)(?<![.!?]\s)\b[A-Z][a-zA-Z]+\b/g;
+
+// A comma-separated item longer than this is a clause, not a lineup/menu entry.
+const LIST_ITEM_MAX_WORDS = 8;
 
 function words(s: string): string[] {
   return (s.toLowerCase().match(/[a-z0-9$']+/gi) || []).map((w) => w.toLowerCase());
@@ -362,16 +379,115 @@ function hasDigit(s: string): boolean {
   return /\d/.test(s);
 }
 
+function isStubReason(reason: string): boolean {
+  return (
+    reason.startsWith("too_short") ||
+    reason === "no_terminal_punctuation" ||
+    reason === "generic_hype"
+  );
+}
+
+/** Commas that are not inside parentheses, so "(Elton John and Billy Joel)"
+ *  stays one lineup entry. */
+function splitCommaOutsideParens(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let buf = "";
+  for (const ch of text) {
+    if (ch === "(") depth++;
+    else if (ch === ")" && depth > 0) depth--;
+    else if (ch === "," && depth === 0) {
+      parts.push(buf);
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  parts.push(buf);
+  return parts;
+}
+
+/**
+ * How many comma-separated items look like a concrete list (lineup, menu,
+ * activity list). A bare date ("June 13-14, 2026") and a two-clause sentence
+ * do not qualify — items have to be short and carry a real word.
+ */
+function concreteListCount(text: string): number {
+  let n = 0;
+  for (const part of splitCommaOutsideParens(text)) {
+    const w = words(part);
+    if (w.length < 1 || w.length > LIST_ITEM_MAX_WORDS) continue;
+    const lexical = w.filter(
+      (x) =>
+        /[a-z]/i.test(x) &&
+        !/^\d/.test(x) &&
+        x.length > 2 &&
+        !SCAFFOLD_WORDS.has(x) &&
+        !MONTHS.has(x),
+    );
+    if (lexical.length === 0) continue;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * Names worth showing even in a short description.
+ *
+ * Title words count: "Miss Debbie" is the point of the sentence, and filtering
+ * her out because she is also in the title is how Storytime was suppressed.
+ * Venue and town words do not count — the card already prints them, and
+ * counting them would let "held at Bear Valley Mountain Resort" rescue the
+ * date-only archery stub. Month names do not count, for the same reason.
+ *
+ * A sentence-initial word counts only when the description is a finished
+ * multi-word sentence AND that word is in the event title ("Oktoberfest
+ * dinner at the lodge."). A normal opener ("Get your costumes ready…") is
+ * not a name, and a one-word title echo ("Bingo.") is not either.
+ */
+function rescuingProperNouns(
+  text: string,
+  eventTitle?: string | null,
+  venueName?: string | null,
+  town?: string | null,
+): string[] {
+  const blocked = new Set(contentWords(`${venueName ?? ""} ${town ?? ""}`));
+  const seen = new Set<string>();
+  const found: string[] = [];
+  const keep = (w: string) => {
+    const lw = w.toLowerCase();
+    if (seen.has(lw) || SCAFFOLD_WORDS.has(lw) || MONTHS.has(lw) || blocked.has(lw)) return;
+    seen.add(lw);
+    found.push(w);
+  };
+
+  for (const w of text.match(PROPER_NOUN_RE) || []) keep(w);
+
+  if (TERMINAL_PUNCT.test(text)) {
+    const first = text.match(/^([A-Z][a-zA-Z]{2,})\b/);
+    const firstSentence = text.split(/[.!?]/)[0] ?? "";
+    const inTitle = new Set(words(eventTitle ?? "")).has((first?.[1] ?? "").toLowerCase());
+    if (first && inTitle && words(firstSentence).length >= 4) keep(first[1]);
+  }
+  return found;
+}
+
 /**
  * Verdict for a description. Call on the ALREADY-SANITIZED text. `eventTitle`
  * and `venueName` (+ optional `town`) ground the title-restatement check.
  *
- * suppress (do not render) if any:
- *   - < 15 words
- *   - ends with ":" or its final sentence has no terminal punctuation
+ * suppress (do not render) if any hard reason remains:
+ *   - empty
+ *   - ends with ":" (always a tease, even when the words before it are concrete)
  *   - title/venue restatement that adds no new value (overlap >60%, or <3 novel
- *     content words once title/venue/town/dates/scaffolding are removed)
- *   - pure exclamatory hype: no digits, ≥1 "!", no proper noun beyond title/venue
+ *     content words once title/venue/town/dates/scaffolding are removed), unless
+ *     `addsValue` (hint / money / clock / a concrete list / a rescuing name)
+ *   - stub shape, UNLESS a concrete-value override fires (HWY-46):
+ *       too_short (< 15 words), no_terminal_punctuation, generic_hype
+ *     yield to a price, ≥2 comma-separated concrete items, or a proper noun
+ *     (including one that also appears in the title). A clock time or a lone
+ *     hint word does not override those — the card already shows the hour, and
+ *     "family activities all day long" is still a truncated stub.
  * rewrite (usable, but flag for condensing/cleanup) if:
  *   - sanitizer stripped >30% of meaningful lines
  *   - length > 1200 chars
@@ -388,6 +504,20 @@ export function assessDescription(
   if (t.length === 0) return { verdict: "suppress", reasons: ["empty"] };
 
   const wordCount = words(t).length;
+  const hasMoney = MONEY.test(t);
+  const hasClock = CLOCK_TIME.test(t);
+  const hasHint = VALUE_HINT.test(t);
+  const listCount = concreteListCount(t);
+  const named = rescuingProperNouns(t, eventTitle, venueName, opts?.town);
+  // Concrete enough to show a short lineup, a price fragment, or a one-sentence
+  // note whose only name is already in the title. Hoisted so both the
+  // title-restatement guard and the stub veto see the same signal.
+  const concreteValue = hasMoney || listCount >= 2 || named.length > 0;
+  // Title restatement keeps this guard. The original trio (hint / money /
+  // clock) still counts; a list or a rescuing name does too. A date-only
+  // restatement ("runs June 13–14") matches none of them.
+  const addsValue = hasHint || hasMoney || hasClock || concreteValue;
+
   if (wordCount < MIN_WORDS) reasons.push(`too_short(${wordCount}w)`);
 
   // Ends with ":" → always a tease/stub. Missing terminal punctuation only
@@ -407,23 +537,24 @@ export function assessDescription(
     const overlap = tWords.filter((w) => scaffoldRef.has(w)).length / tWords.length;
     // Novel = content words not in title/venue/town and not date/number tokens.
     const novel = tWords.filter((w) => !scaffoldRef.has(w) && !/^\d/.test(w));
-    // A date the card already shows is NOT value — only money / clock times /
-    // explicit instruction words count, so a "runs June 13–14" stub still fails.
-    const addsValue =
-      VALUE_HINT.test(t) ||
-      /\$\s?\d/.test(t) ||
-      /\b\d{1,2}(:\d{2})?\s?[ap]\.?m\.?\b/i.test(t);
     if ((overlap > 0.6 || novel.length < 3) && !addsValue) {
       reasons.push("title_restatement");
     }
   }
 
-  // Pure exclamatory hype with nothing concrete.
+  // Pure exclamatory hype with nothing concrete. A name counts even when it
+  // is also in the title — "with Miss Debbie!" is not generic hype.
   if (!hasDigit(t) && /!/.test(t)) {
-    const properNouns = (t.match(/(?<!^)(?<![.!?]\s)\b[A-Z][a-zA-Z]+/g) || []).filter(
-      (w) => !scaffoldRef.has(w.toLowerCase()),
-    );
+    const properNouns = t.match(PROPER_NOUN_RE) || [];
     if (properNouns.length === 0) reasons.push("generic_hype");
+  }
+
+  // empty already returned. ends_with_colon and title_restatement stay.
+  // Stub-shaped reasons yield when the text is actually informative.
+  if (concreteValue) {
+    for (let i = reasons.length - 1; i >= 0; i--) {
+      if (isStubReason(reasons[i])) reasons.splice(i, 1);
+    }
   }
 
   if (reasons.length > 0) return { verdict: "suppress", reasons };

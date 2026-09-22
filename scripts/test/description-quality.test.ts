@@ -190,6 +190,163 @@ test("pass: short-but-specific description with logistics", () => {
   assert.equal(assessDescription(text, "Patio Pour", "Newsome Harlow").verdict, "pass");
 });
 
+// ---------------------------------------------------------------------------
+// HWY-46: short factual content must render.
+//
+// The 15-word cliff plus "no terminal punctuation" and "generic hype" were
+// hiding lineups, prices, and activity lists. Concrete value (a price, a
+// comma-separated list, or a real name — including one that is also in the
+// title) moves these from suppress to pass. Empty, a trailing colon, and the
+// date-only archery stub stay suppressed (those tests above).
+// ---------------------------------------------------------------------------
+
+const HWY46_EVIDENCE: { name: string; venue: string; town: string; description: string }[] = [
+  {
+    name: "Storytime with Miss Debbie",
+    venue: "Arnold Library",
+    town: "Arnold",
+    description: "Come sing songs, dance and listen to stories every week with Miss Debbie!",
+  },
+  {
+    name: "Tribute Fest",
+    venue: "Ironstone Amphitheater",
+    town: "Murphys",
+    description: "Piano Man (Elton John and Billy Joel), Australian Bee Gees, Fleetwood Mask",
+  },
+  {
+    name: "Dinner and Karaoke",
+    venue: "Ebbetts Pass Moose Lodge",
+    town: "Arnold",
+    description: "Chicken fried Steak dinner, Karaoke at 6:30pm, $18",
+  },
+  {
+    name: "Copperopolis Summer Concert Series",
+    venue: "Copperopolis Coppertown Square",
+    town: "Copperopolis",
+    description: "Bon Jovi Tribute",
+  },
+  {
+    name: "Fall Event",
+    venue: "Lodge Lake",
+    town: "Arnold",
+    description:
+      "A fall festival featuring carnival games, buffet, and music. Includes a Volunteer Appreciation Dinner.",
+  },
+  {
+    name: "Live Music @ Stevenot Winery",
+    venue: "Stevenot Winery",
+    town: "Murphys",
+    description: "Stevenot Winery Presents:Jill Warren – FREE Live Music",
+  },
+  {
+    name: "1st Annual Live Like Lilly Dinner and Dance",
+    venue: "Calaveras County Fair & Jumping Frog Jubilee",
+    town: "Angels Camp",
+    description: "Dinner, Dancing, Silent Auction, Raffle Prizea and amazing food!! More details to come!",
+  },
+  {
+    name: "Oktoberfest Dinner",
+    venue: "Ebbetts Pass Moose Lodge",
+    town: "Arnold",
+    description: "Oktoberfest dinner at the Ebbetts Pass Moose Lodge.",
+  },
+  {
+    name: "EskiCup 2026",
+    venue: "The Golf Club at Copper Valley",
+    town: "Copperopolis",
+    description: "Only for EskiCup participants",
+  },
+  {
+    name: "Stevenot Winery Halloween Party",
+    venue: "Stevenot Winery",
+    town: "Murphys",
+    description: "Join us for a Halloween Party at Stevenot Winery!",
+  },
+  // Stored text drifted after the 2026-09-19 snapshot. Same events, same gate.
+  {
+    name: "Dinner and Karaoke",
+    venue: "Ebbetts Pass Moose Lodge",
+    town: "Arnold",
+    description: "Dinner at 6pm, karaoke at 6:30pm. Chicken fried steak dinner $18",
+  },
+  {
+    name: "Oktoberfest Dinner",
+    venue: "Ebbetts Pass Moose Lodge",
+    town: "Arnold",
+    description: "Oktoberfest dinner at the Ebbetts Pass Moose Lodge on October 3.",
+  },
+];
+
+test("pass: HWY-46 evidence set renders (verdict is not suppress)", () => {
+  for (const row of HWY46_EVIDENCE) {
+    const a = assessDescription(row.description, row.name, row.venue, { town: row.town });
+    assert.notEqual(a.verdict, "suppress", `${row.name} [${a.reasons.join(", ")}]`);
+    assert.equal(
+      displayDescription({
+        description: row.description,
+        name: row.name,
+        venue_name: row.venue,
+        town: row.town,
+      }),
+      row.description,
+      row.name,
+    );
+  }
+});
+
+test("pass: lineup with no terminal punctuation", () => {
+  const text = "Piano Man (Elton John and Billy Joel), Australian Bee Gees, Fleetwood Mask";
+  const a = assessDescription(text, "Tribute Fest", "Ironstone Amphitheater", { town: "Murphys" });
+  assert.equal(a.verdict, "pass");
+  assert.ok(!a.reasons.includes("no_terminal_punctuation"));
+  assert.equal(
+    displayDescription({
+      description: text,
+      name: "Tribute Fest",
+      venue_name: "Ironstone Amphitheater",
+      town: "Murphys",
+    }),
+    text,
+  );
+});
+
+test("pass: price and time fragment", () => {
+  const text = "Chicken fried Steak dinner, Karaoke at 6:30pm, $18";
+  const a = assessDescription(text, "Dinner and Karaoke", "Ebbetts Pass Moose Lodge", {
+    town: "Arnold",
+  });
+  assert.equal(a.verdict, "pass");
+  assert.ok(!a.reasons.some((r) => r.startsWith("too_short")));
+});
+
+test("pass: short sentence whose only proper noun is also in the title", () => {
+  const text = "Come sing songs, dance and listen to stories every week with Miss Debbie!";
+  const a = assessDescription(text, "Storytime with Miss Debbie", "Arnold Library", {
+    town: "Arnold",
+  });
+  assert.equal(a.verdict, "pass");
+  assert.ok(!a.reasons.includes("generic_hype"));
+  assert.ok(!a.reasons.some((r) => r.startsWith("too_short")));
+});
+
+test("suppress: a short generic sentence is not rescued by its opening capital", () => {
+  // "Get" is capitalized only because it starts the sentence. It is not in the
+  // title, and the town square is already on the card. Length still hides it.
+  const text = "Get your costumes ready for a fun evening in the Town Square.";
+  const a = assessDescription(text, "Trick or Treat in the Town Square", "Copperopolis Town Square", {
+    town: "Copperopolis",
+  });
+  assert.equal(a.verdict, "suppress");
+  assert.ok(a.reasons.some((r) => r.startsWith("too_short")));
+});
+
+test("suppress: a trailing colon still wins over a concrete list", () => {
+  const text = "Carnival games, buffet, and live music:";
+  const a = assessDescription(text, "Fall Event", "Lodge Lake", { town: "Arnold" });
+  assert.equal(a.verdict, "suppress");
+  assert.ok(a.reasons.includes("ends_with_colon"));
+});
+
 test("rewrite: over-long but usable still renders (not suppressed)", () => {
   const text =
     "The Calaveras County Fair returns to Frogtown with four days of rodeo, carnival rides, livestock shows, and live music on three stages. ".repeat(
