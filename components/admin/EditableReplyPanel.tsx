@@ -2,13 +2,17 @@
 
 import { useState } from "react";
 import type { SubmissionReply } from "@/lib/agent/submission-reply";
+import { replyPanelMode } from "@/lib/agent/expire-submissions";
 
 // Editable draft reply to a submitter, with a Gmail compose deep-link that always
 // reflects the current text. The agent drafts the copy; the owner can tweak the
 // subject and body here, then "Open in Gmail" carries those exact edits into a
-// pre-filled compose window. The app never sends mail (the cockpit rule that
-// outward actions are always a human click). Edits live in the page only — they
-// are not persisted to the DB; "Reset to draft" restores the agent's original copy.
+// pre-filled compose window. Publish, dismiss, and question replies stay drafts:
+// the owner sends them from Gmail. Edits live in the page only; they are not
+// persisted to the DB. "Reset to draft" restores the agent's original copy.
+//
+// The expire cron is the exception. When `reply.auto_sent` is set, this panel
+// is a read-only record of the email already sent. It does not offer Gmail.
 
 // Inlined (not imported from lib/agent/submission-reply, which pulls in the
 // Anthropic SDK) so this client bundle stays light. Manual encoding so spaces are
@@ -28,6 +32,26 @@ export default function EditableReplyPanel({
   const [subject, setSubject] = useState(reply.subject);
   const [body, setBody] = useState(reply.body);
   const [copied, setCopied] = useState(false);
+
+  if (replyPanelMode(reply) === "sent") {
+    return (
+      <div style={replyPanelStyle}>
+        <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#1B3A2D" }}>
+          {heading}
+        </p>
+        <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b7d70" }}>
+          Sent automatically{reply.to ? <> to <strong style={{ color: "#3a4a3a" }}>{reply.to}</strong></> : ""}.
+          No need to send it again.
+        </p>
+        <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "#2d3a22" }}>
+          {reply.subject}
+        </p>
+        <div style={{ fontSize: 15, color: "#2d3a22", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+          {reply.body}
+        </div>
+      </div>
+    );
+  }
 
   // No email on file → nothing to write to (matches the prior read-only panel).
   if (!reply.to) return null;

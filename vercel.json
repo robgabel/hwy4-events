@@ -101,6 +101,10 @@
       "schedule": "30 18 * * *"
     },
     {
+      "path": "/api/agent/expire-submissions",
+      "schedule": "30 14 * * *"
+    },
+    {
       "path": "/api/agent/collect-seo",
       "schedule": "0 11 * * *"
     },
