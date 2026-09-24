@@ -10,7 +10,7 @@ Ticket ref: **$ARGUMENTS**
 Supabase project id: `uzediwokyshjbsymevtp` (use the Supabase MCP `execute_sql` / `apply_migration`).
 The board table is `hwy4_tasks`; the human handle is `ref` (e.g. `HWY-42`).
 
-Follow this loop exactly. **Never merge the PR — you open a draft and stop.**
+Follow this loop exactly. **Never merge the PR.** After the draft PR exists, this command hands off to the repo's standing PR workflow (CLAUDE.md → Dev Workflow → "PR workflow"): a separate QA agent reviews the PR, and on a blocker/major finding you give Rob three solutions and one recommendation and wait.
 
 ## 1. Read the ticket
 ```sql
@@ -45,5 +45,8 @@ set status = 'in_review', pr_url = '<pr url>', pr_number = <n>, updated_at = now
 where ref = '$ARGUMENTS';
 ```
 
-## 5. Report back
-Tell the user: what you built, the draft PR link, what you verified, and that the card is now **In review** in `/admin/roadmap` awaiting their review + merge. Do not merge — the merge is always the human's click.
+## 5. Run the PR workflow
+Spawn the independent QA agent on the draft PR exactly as CLAUDE.md's "PR workflow" section says (fresh subagent, briefed only with the PR number + `.claude/skills/pr-qa/SKILL.md`). On PASS, mark the PR ready. On a blocker/major finding, stop and give Rob the three-options brief; do not fix until he picks.
+
+## 6. Report back
+Tell the user: what you built, the draft PR link, what you verified, the QA verdict, and that the card is now **In review** in `/admin/roadmap` awaiting their review + merge. Do not merge — the merge is always the human's click.

@@ -14,6 +14,7 @@
     "draft-venue-blurbs": "tsx draft-venue-blurbs.ts",
     "warm-maps": "tsx warm-map-cache.ts",
     "reclassify-visitor-class": "tsx reclassify-visitor-class.ts",
+    "voice-lint": "tsx voice-lint.ts",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
