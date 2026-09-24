@@ -64,7 +64,7 @@ The agent starts fresh: reads the PR body, the diff, the touched files, and CLAU
 
 ```
 VERDICT: PASS | FINDINGS
-CHECKS RUN: tests <pass/fail>, tsc root <pass/fail>, tsc scripts <pass/fail>, voice-lint <pass/fail/skipped>
+CHECKS RUN: tests <pass/fail>, tsc root <pass/fail/skipped>, tsc scripts <pass/fail/skipped>, voice-lint <pass/fail/skipped>
 
 F1 [severity: blocker|major|minor] <one-line claim>
    file:line
