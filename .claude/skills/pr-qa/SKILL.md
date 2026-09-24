@@ -1,6 +1,6 @@
 ---
 name: pr-qa
-description: Independent QA pass on a Hwy4Events pull request by a separate agent. Read-only; reports findings, fixes nothing. Usage /pr-qa <PR number or branch>. Every PR gets this before it is offered for merge.
+description: Independent QA pass on a Hwy4Events pull request by a SEPARATE agent. Read-only; reports findings, fixes nothing. Not for invoking in the builder session; the builder spawns a fresh subagent and hands it this file plus the PR number. Every PR gets this before it is offered for merge.
 ---
 
 # PR QA (the separate reviewer)
