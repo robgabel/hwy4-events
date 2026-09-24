@@ -560,7 +560,7 @@ Every code change on this repo ships through this loop. No exceptions for "small
 4. **Apply the approved fix, push, spawn a fresh QA agent** on the updated PR. Repeat until PASS.
 5. **On PASS, mark the PR ready** and tell Rob what was checked. **Rob's merge is always the last click** — the builder never merges. After merge, verify the Vercel deploy (standing rule).
 
-`/build-ticket HWY-N` ([.claude/commands/build-ticket.md](.claude/commands/build-ticket.md)) feeds step 1; its "open a draft PR and stop" now means "open a draft PR, run step 2, then stop at step 3 or 5."
+`/build-ticket HWY-N` ([.claude/commands/build-ticket.md](.claude/commands/build-ticket.md)) feeds step 1 and hands off to this loop after the draft PR exists.
 
 - `npm run dev` for local development
 - Vercel auto-deploys from `main`
