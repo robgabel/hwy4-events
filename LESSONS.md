@@ -5,6 +5,20 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-09-27: The duplicate is in the merge, not just the matcher
+
+Rob's screenshot: "The Gathering on Murphys Main Street" (GoCalaveras, 11:00) beside "Murphys Gathering – A Celebration of All Things Magical" (Visit Murphys, 12:00, the organizer's own time). A full scan found 5 live pairs while the same day's audit read `same_event_duplicates: 0`. Plan: `PRD-dedup-merge-v2.md`.
+
+- **A merge that keeps one `(source_name, source_event_id, dedup_key)` destroys the absorbed source's key, and that source re-inserts.** Write-time merge overwrites the row's `source_event_id` with the other source's ID but keeps `source_name`; reconcile's `buildFill` copies a loser's ID onto a survivor of a different source; reconcile deletes the loser's `dedup_key`. Every exact lookup filters on `source_name`, so those IDs are dead weight (~49 rows). The absorbed source then depends on the fuzzy matcher every day, and one degraded scrape (GoCalaveras 429s: "Unknown Venue", no description) re-inserts. BVTS 10-10 was re-merged 5 times in 30 days. Rule: a merge must preserve every contributing source's exact key (a link table), never overwrite or orphan it.
+- **Measure a design claim before it becomes doc.** The "~7.5h transit window" in CLAUDE.md was never measured. The merge log had the answer all along (`merged_at - (merged_snapshot->>'created_at')`): median 122h.
+- **A hard veto evaluated before identity makes every signal below it unreachable.** Third member of the family (the town bucket 07-28, the start bucket HWY-10, now the clock itself). Multi-hour events disagree on the start *across* sources (gates vs first act vs last year); *within* a source a different start means a distinct occurrence (18 cross-source vs 374 same-source same-venue pairs over 4 months). Source identity is the discriminator the predicate never had.
+- **Past rows are a free corpus of misses.** Reconcile runs daily on future rows, so any past same-day pair still in the table is, by construction, a pair the matcher missed while it was live. Mine it for recall numbers and fixtures before touching the matcher.
+- **A pre-filter inside one scraper is a dedup layer whether or not the docs list it.** GoCalaveras's Sonnet `crossSourceDedup` drops events before `upsertEvents`: no times, no augmentation, no log, nondeterministic.
+- **Widening a tolerance keyed on a classifier requires re-auditing what the classifier admits.** `isGenericTitle`'s prefix-anchored live-music arm admits "Live Music - Neil Buettner", so the 2026-09-19 90-minute tolerance lets it merge with a same-venue "Thursday Night Dinner", and the −12 richness penalty keeps the hidden dinner and deletes the concert. Latent (summer titles only), verified with the real code.
+- **Exhaustive dry runs work from a credential-less remote session.** Install `tsx` in the scratchpad, import the repo's real `lib/event-identity.ts`, and let an oversized MCP result spill to its file; parse the file in the harness instead of pulling it into context. That is how all 7,194 same-day catalog pairs got checked.
+
+---
+
 ## 2026-09-19 — A series placeholder's usual start is not this night's start
 
 Rob saw two Brice Station cards on 2026-09-19: "Greg Sutton and Friends" at 6:00 PM (the venue's own Shopify ticket product, `times_locked`, "one hour earlier than our usual start time") and "Brice Station Vineyards – Hilltop Concert Series" at 7:00–10:00 PM (GoCalaveras EventON, leftover Earth Tones Trio artists from a June Music-in-the-Parks listing). Same room, same night, one real concert.
