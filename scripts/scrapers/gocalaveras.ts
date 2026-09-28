@@ -789,7 +789,14 @@ export async function fetchEventDetails(
  *  the server's own backoff request. */
 export async function fetchEventDetailsResult(
   eventUrl: string
-): Promise<{ details: EnrichedDetails | null; outcome: EnrichOutcome; retryAfterMs?: number }> {
+): Promise<{
+  details: EnrichedDetails | null;
+  outcome: EnrichOutcome;
+  retryAfterMs?: number;
+  /** The HTTP status of a non-2xx answer, so the degraded-insert hold can tell
+   *  a page that is gone (404/410) from one that is only refusing us today. */
+  status?: number;
+}> {
   let html: string;
   try {
     const resp = await fetch(eventUrl, { headers: BROWSER_HEADERS });
@@ -799,6 +806,7 @@ export async function fetchEventDetailsResult(
       return {
         details: null,
         outcome,
+        status: resp.status,
         retryAfterMs:
           outcome === "rate_limited"
             ? retryDelayMs(
@@ -893,13 +901,15 @@ export async function fetchEventDetailsResult(
  *  so the run can be counted honestly (HWY-32). */
 async function enrichEventDetails(
   event: ExtractedEvent
-): Promise<{ outcome: EnrichOutcome; retryAfterMs?: number }> {
+): Promise<{ outcome: EnrichOutcome; retryAfterMs?: number; status?: number }> {
   if (!event.event_url || !event.event_url.includes("gocalaveras.com")) {
     return { outcome: "empty" };
   }
   const res = await fetchEventDetailsResult(event.event_url);
   const details = res.details;
-  if (!details) return { outcome: res.outcome, retryAfterMs: res.retryAfterMs };
+  if (!details) {
+    return { outcome: res.outcome, retryAfterMs: res.retryAfterMs, status: res.status };
+  }
 
   // "Enriched" means the page actually gave us something. A 200 that yields no
   // usable field is `empty`, not a success — otherwise a markup change would
@@ -993,7 +1003,7 @@ async function enrichEvents(events: ExtractedEvent[]): Promise<void> {
       // Thread the FINAL outcome (after the retry) onto the event, so upsertEvents
       // can hold a new row whose detail page never loaded instead of inserting
       // the venue-less, description-less shape that re-duplicates merged rows.
-      batch[j].enrichment_failed = isEnrichFailure(r.outcome);
+      batch[j].enrichment_failed = isEnrichFailure(r.outcome, r.status);
       if (r.outcome === "rate_limited") {
         consecutive429++;
         if (shouldTripCircuit(consecutive429)) broken = true;

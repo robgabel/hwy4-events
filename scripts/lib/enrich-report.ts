@@ -82,12 +82,18 @@ export function classifyStatus(status: number): Exclude<EnrichOutcome, "enriched
 }
 
 /** Did this outcome leave the event without its detail-page fields for a
- *  reason a later run can fix? `empty` is not a failure: the page loaded and had
- *  nothing, so waiting a day buys nothing and the bare row is the truth. Every
- *  non-2xx, transport error and breaker skip is. Feeds the degraded-insert hold
- *  (scripts/lib/degraded-hold.ts, dedup v2 Phase 0.4). */
-export const isEnrichFailure = (o: EnrichOutcome): boolean =>
-  o === "rate_limited" || o === "http_error" || o === "network_error" || o === "skipped";
+ *  reason a later run can fix? Feeds the degraded-insert hold
+ *  (scripts/lib/degraded-hold.ts, dedup v2 Phase 0.4), so "no" means the row
+ *  inserts now instead of waiting. `empty` is not a failure: the page loaded
+ *  and had nothing, so waiting buys nothing and the bare row is the truth.
+ *  Neither is a 404 or 410: the page is gone, and a later run will find it gone
+ *  again. A 429, any other non-2xx (403 walls and 5xx lift), a transport error
+ *  and a breaker skip all are. An http_error with no status is treated as a
+ *  failure, since it cannot be shown to be permanent. */
+export const isEnrichFailure = (o: EnrichOutcome, httpStatus?: number): boolean => {
+  if (o === "http_error") return httpStatus !== 404 && httpStatus !== 410;
+  return o === "rate_limited" || o === "network_error" || o === "skipped";
+};
 
 export const attempted = (t: EnrichTally): number =>
   t.enriched + t.empty + t.rateLimited + t.httpError + t.networkError;
