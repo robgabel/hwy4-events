@@ -1,6 +1,6 @@
 # PRD: Dedup v2. Identity that survives merges, a matcher that tolerates real-world noise, and merge-augment with authority
 
-> **Status (2026-09-27):** Proposed. Diagnosis measured against prod (`uzediwokyshjbsymevtp`) and a matcher prototype validated on the full 4-month catalog. Nothing shipped yet. Phase 0 is a ready-to-run runbook (Appendix C) awaiting Rob's go.
+> **Status (2026-09-28):** Phase 0 done (see "Phase 0 outcome" under §5). 0.1 was executed in prod on 2026-09-28; 0.2 to 0.4 are built and tested on branch `claude/duplication-merge-augment-strategy-0gkzss` and take effect on the first scrape after merge. Phases 1 to 3 are still proposed. Diagnosis measured against prod (`uzediwokyshjbsymevtp`) and a matcher prototype validated on the full 4-month catalog.
 
 Triggered by Rob's 2026-09-27 screenshot: two cards for the same Oct 17 event, "The Gathering on Murphys Main Street" (GoCalaveras, 11:00 AM–5:00 PM, Community) and "Murphys Gathering – A Celebration of All Things Magical" (Visit Murphys, 12:00 PM–5:00 PM, Festival).
 
@@ -109,6 +109,14 @@ Three shifts, in order of how much they change the system:
 
 *Acceptance:* 0 live duplicate pairs in the near-miss SQL (Appendix B query); zero "Unknown Venue" GoCalaveras inserts for 7 days.
 
+**Phase 0 outcome (2026-09-28).**
+
+- **0.1, done in prod.** All 5 pairs cancelled-as-dup, each with a reversible `event_merge_log` snapshot (`signal` starts `manual:dedup-v2 phase0`), so every loser URL 301s to its survivor. Survivors: Gathering `7357b581` (Visit Murphys, 12:00 to 17:00), Live Like Lilly `204ae1b8` (17:00), All Hallows 10-24 `2171ef14` (junk venue string resolved to the fairgrounds, artists added), 10-25 `533bfca0`, BVTS `98110902`. One deviation: Live Like Lilly did not need `/admin/verification`, because the organizer's own ticket page (ticketstripe) states 17:00; the 18:00 was the Facebook copy. The BVTS loser `94b2a310` stays as a cancelled tombstone that keeps EventON 192106 resolvable, so GoCalaveras's next scrape updates it instead of inserting a sixth copy.
+- **0.2, done in code.** `KnownVenue.addresses` holds secondary addresses (matching only; `address` stays the display address), and the fairgrounds carries its 2465 Gun Club Rd entrance. The planned `resolveVenueKey` change turned out unnecessary: the address layer already runs when `venue_name` is a non-generic junk string. No backfill either: every live Gun Club row already carried `fairgrounds`. Until this merges, a GoCalaveras re-scrape may put the junk venue string back on `2171ef14` (cosmetic; its duplicate is already tombstoned).
+- **0.3, done in code.** `isPlaceholderForMatch` (`lib/event-identity.ts`): a generic title stays a placeholder only when the text after a "Live Music -" / "Music in the …" prefix is missing, TBD/TBA, the whole venue name, or filler ("Friday Night", "Upstairs"). Whole venue, not a shared word: Sequoia Woods books a band called "Sequoia Blue", and reading an act as a placeholder is the direction that deletes a concert. It now gates the XOR start tolerance, the `venuesAgree && placeholder` identity signal, and the survivor penalty in `lib/dedupe-events.ts`. Full-catalog dry run against the old predicate: exactly the 2 false merges from Appendix B dropped ("Wednesday Night Deli Special" / "Live Music - Neil Buettner", "Patio Party #4 … - The Hit Men" / "Live Music - Jamie Byous"), nothing else changed. Brice Hilltop vs Greg Sutton, "Live Music @ The Lube Room" vs a named act, and the Patio Party TBD re-list still merge.
+- **0.4, done in code.** `scripts/lib/degraded-hold.ts`. GoCalaveras threads each event's final enrichment outcome onto it (`enrichment_failed`: 429, other non-2xx, transport error, or circuit-breaker skip; a page that loaded bare is not a failure). At the INSERT decision only, after exact-key and strong-match both miss, `upsertEvents` holds a row that failed enrichment and still has a generic venue and no description, logging `DEGRADED_INSERT_HELD` per row and counting `held` in `scrape_runs.source_results`. It never holds an event dated on the run day, so it can defer a listing but never lose one. Updates and merges are untouched. A source-level test pins that every `hwy4_events` insert site in `dedup.ts` consults the hold.
+- Tests 898/898 (19 new); mutation checks run on the new locks.
+
 ### Phase 1: matcher v2, dedup recall (1–2 days including adversarial review)
 
 Prototyped in this investigation (scratch harness over the real `lib/event-identity.ts`); numbers in Appendix B.
@@ -184,7 +192,7 @@ This is the structural win. It turns "one row = one source identity" into "one e
 
 ## 8. Decisions for Rob
 
-1. **Phase 0 runbook:** approve, and I run it via MCP, or you run Appendix C yourself.
+1. ~~**Phase 0 runbook:** approve, and I run it via MCP, or you run Appendix C yourself.~~ Approved and run 2026-09-28.
 2. **Authority tiers:** confirm Visit Murphys = organizer tier for Murphys Business Association events (Gathering, Irish Day, Day of the Dead, Open House) and curated-local otherwise.
 3. **Unresolved clock conflicts:** flag to `/admin/verification` only (recommended; blank beats wrong), or also show a quiet "times vary by source" note on the card.
 4. **LLM adjudicator in the review queue:** recommended yes (pennies a day at this volume), human-gated until a canary graduates it.
@@ -247,6 +255,8 @@ order by a.date;
 ## Appendix C. Phase 0 runbook (review, then run one pair per `execute_sql` call)
 
 Pattern per pair: snapshot the loser to `event_merge_log` (so the stale-slug fallback 301s its URL to the survivor), back-fill the survivor, then **cancel** (not delete) the aggregator copy so its key keeps resolving and the next scrape updates the tombstone instead of re-inserting. Revert: set the loser's `status` back to `'confirmed'` and delete its log row.
+
+**Executed 2026-09-28** as written, with two differences: B skipped the verification flag (the organizer's ticket page confirms 17:00), and A skipped the optional image borrow. Each executed `signal` string carries its reason.
 
 ```sql
 -- A. Murphys Gathering 10-17: keep Visit Murphys (organizer, 12:00-17:00), cancel GoCalaveras.
