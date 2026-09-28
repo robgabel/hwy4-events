@@ -552,6 +552,66 @@ export function isGenericTitle(name: string): boolean {
   );
 }
 
+/** Words that can follow a generic prefix without naming an act: "Live Music -
+ *  Friday Night", "Live Music: Upstairs". A tail made only of these is still a
+ *  placeholder. */
+const NON_ACT_TAIL_WORDS = new Set([
+  "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+  "night", "nights", "evening", "afternoon", "tonight", "weekend", "the", "on",
+  "in", "at", "upstairs", "downstairs", "deck", "patio", "lounge", "bar",
+]);
+
+/** The text after a prefix-anchored generic title's separator ("Live Music -
+ *  Neil Buettner" -> "neil buettner", "Music in the Square- Bad Jovi" -> "bad
+ *  jovi"), or null when the title has no such tail ("Live Music @ The Lube
+ *  Room", "Music in the Park"). `normalizeName` has already folded every dash
+ *  variant to "-". */
+function tailAfterGenericPrefix(name: string): string | null {
+  const m = normalizeName(name).match(
+    /^(?:live (?:music|entertainment|tunes)|music (?:in|at|on) the [^-:]+?)\s*[-:]\s*(.+)$/
+  );
+  return m ? m[1].trim() : null;
+}
+
+/** A generic title that carries no act: the only shape the matcher may pair
+ *  with a named act on the placeholder signal, the 90-minute series start
+ *  tolerance, and the survivor penalty.
+ *
+ *  Deliberately NARROWER than `isGenericTitle`, whose live-music and "music in
+ *  the" arms are prefix-anchored and so also admit titles that NAME the act
+ *  after the prefix: "Live Music - Neil Buettner", "Music in the Square- Bad
+ *  Jovi". Treating those as placeholders (dedup v2, PRD-dedup-merge-v2.md
+ *  Phase 0.3) let a named act merge into ANY other row at the same venue
+ *  within 90 minutes, a routine "Thursday Night Dinner" or a different band,
+ *  and the -12 placeholder penalty then kept the other row, so reconcile would
+ *  have deleted the concert. A tail that is just a TBD/TBA marker, the venue's
+ *  own name ("Live Music - Stevenot Winery"), or filler words ("Live Music:
+ *  Friday Night") still reads as a placeholder, so every merge that relied on
+ *  a true placeholder keeps working. */
+export function isPlaceholderForMatch(e: {
+  name?: string | null;
+  venue_name?: string | null;
+}): boolean {
+  const name = e.name ?? "";
+  if (!isGenericTitle(name)) return false;
+  const tail = tailAfterGenericPrefix(name);
+  if (!tail) return true;
+  if (/^(?:tbd|tba)\b/.test(tail)) return true;
+  // A tail that restates the venue, plus at most filler ("Live Music -
+  // Stevenot Winery", "... Stevenot Winery Patio"), names no act. It must
+  // restate the WHOLE venue: sharing one word is not enough, because acts get
+  // named after places (Sequoia Woods books a band called "Sequoia Blue"), and
+  // misreading an act as a placeholder is the direction that deletes a concert.
+  const venueTokens = normalizeVenue(e.venue_name).split(" ").filter(Boolean);
+  const tailTokens = normalizeVenue(tail).split(" ").filter(Boolean);
+  const restatesVenue =
+    venueTokens.length > 0 && venueTokens.every((w) => tailTokens.includes(w));
+  const rest = restatesVenue
+    ? tailTokens.filter((w) => !venueTokens.includes(w))
+    : tailTokens;
+  return rest.every((w) => NON_ACT_TAIL_WORDS.has(w));
+}
+
 /** Aggregator placeholder shapes that carry NO act information. Deliberately
  *  NARROWER than `isGenericTitle` (adversarial review of #264, finding B1):
  *  the TBD/TBA tail is an organizer retraction that must land, and the
@@ -821,11 +881,12 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   // aggregator's series-default start to disagree with the named act's
   // this-night start (2026-09-19 Brice: 7:00 PM Hilltop vs 6:00 PM Greg
   // Sutton). XOR — two generic titles at different hours stay split, and
-  // two specific titles still need equal starts.
+  // two specific titles still need equal starts. A title that names its act
+  // after a generic prefix ("Live Music - Neil Buettner") is specific here.
   const seriesStartTolerance =
     !!a.name &&
     !!b.name &&
-    isGenericTitle(a.name) !== isGenericTitle(b.name);
+    isPlaceholderForMatch(a) !== isPlaceholderForMatch(b);
 
   if (!timesAnchor(a, b, venuesAgree, seriesStartTolerance)) return false;
 
@@ -838,7 +899,7 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   ) {
     return true;
   }
-  if (venuesAgree && (isGenericTitle(a.name) || isGenericTitle(b.name))) {
+  if (venuesAgree && (isPlaceholderForMatch(a) || isPlaceholderForMatch(b))) {
     return true;
   }
   if (venuesAgree && actNamedInOther(a, b)) {

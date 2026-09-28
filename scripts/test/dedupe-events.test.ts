@@ -292,3 +292,41 @@ test("does NOT collapse two towns' same-titled events at different venues", () =
 // heavily locked by event-identity.test.ts, and clusterEvents/pickSurvivor
 // are exercised transitively by the dedupeEvents tests above; nothing locks
 // findDuplicateClusters by name (it is clusterEvents(...).filter(len>1)).
+
+test("a named 'Live Music - <Act>' row keeps the card over a richer true placeholder (dedup v2 0.3)", () => {
+  // The aggregator's "Live Music @ Sequoia Woods" row is the richer one here
+  // (long blurb, image, source id). It used to win because the named row was
+  // ALSO penalized as a placeholder, so the merged card lost the band name.
+  const sequoia = {
+    date: "2027-07-10",
+    town: "Arnold",
+    venue_name: "Sequoia Woods Country Club",
+    visibility: "public" as const,
+  };
+  const placeholder: DedupableEvent = {
+    ...sequoia,
+    name: "Live Music @ Sequoia Woods",
+    start_time: "19:00",
+    end_time: "22:00",
+    description: "x".repeat(300),
+    source_event_id: "192001",
+    image_url: "https://example.com/a.jpg",
+    event_url: "https://www.gocalaveras.com/events/live-music-sequoia-woods/",
+    artists: null,
+  };
+  const named: DedupableEvent = {
+    ...sequoia,
+    name: "Live Music - Jill Warren",
+    start_time: "18:30",
+    end_time: "21:30",
+    description: "Jill Warren on the deck.",
+    source_event_id: "sw-2027-07-10-jill",
+    artists: null,
+  };
+  assert.equal(pickSurvivor([placeholder, named]).name, "Live Music - Jill Warren");
+  assert.equal(pickSurvivor([named, placeholder]).name, "Live Music - Jill Warren");
+  // ...and the pair is one event, so dedupe collapses it to that card.
+  const out = dedupeEvents([placeholder, named]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].name, "Live Music - Jill Warren");
+});

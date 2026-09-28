@@ -13,6 +13,7 @@ import {
   isSameEvent,
   isGenericTitle,
   isActlessPlaceholderTitle,
+  isPlaceholderForMatch,
   mergeArtistLists,
   namedActTakesPrecedence,
   generateDedupKey,
@@ -1350,4 +1351,127 @@ test("the press-release signal keeps every other guard", () => {
     ),
     false
   );
+});
+
+// ---------------------------------------------------------------------------
+// Dedup v2 Phase 0.3: a generic PREFIX that names its act is not a placeholder.
+//
+// `isGenericTitle`'s live-music arm is prefix-anchored, so "Live Music - Neil
+// Buettner" read as a placeholder. Since the 2026-09-19 series tolerance that
+// let a named act merge with ANY other title at the same venue within 90
+// minutes, and the -12 placeholder penalty then kept the other row: reconcile
+// would have deleted a Sequoia Woods concert in favor of the hidden "Thursday
+// Night Dinner". Found by the 2026-09-27 exhaustive dry run over 7,194
+// same-day pairs (today's matcher paired the 2026-08-08 Patio Party / Jamie
+// Byous rows and the 2026-09-02 Deli Special / Neil Buettner rows).
+// ---------------------------------------------------------------------------
+
+test("isPlaceholderForMatch: a generic prefix that names the act is not a placeholder", () => {
+  // True placeholders keep their old behavior.
+  assert.equal(isPlaceholderForMatch({ name: "Live Music @ The Lube Room" }), true);
+  assert.equal(isPlaceholderForMatch({ name: "Music in the Park" }), true);
+  assert.equal(
+    isPlaceholderForMatch({ name: "Brice Station Vineyards – Hilltop Concert Series" }),
+    true
+  );
+  assert.equal(
+    isPlaceholderForMatch({ name: "Patio Party #4 featuring live music (TBD)" }),
+    true
+  );
+  assert.equal(isPlaceholderForMatch({ name: "Murphys Creek Theatre presents" }), true);
+  assert.equal(isPlaceholderForMatch({ name: "Live Music: TBD" }), true);
+  assert.equal(isPlaceholderForMatch({ name: "Live Music - Friday Night" }), true);
+  assert.equal(
+    isPlaceholderForMatch({ name: "Live Music - Stevenot Winery", venue_name: "Stevenot Winery" }),
+    true
+  );
+  assert.equal(
+    isPlaceholderForMatch({ name: "Live Music: Stevenot Winery Patio", venue_name: "Stevenot Winery" }),
+    true
+  );
+  // Restating the venue means ALL of it. Acts get named after places: Sequoia
+  // Woods really books "Sequoia Blue", and a band called just "Sequoia" must
+  // not read as the venue (that misread is the one that deletes a concert).
+  assert.equal(
+    isPlaceholderForMatch({ name: "Live Music - Sequoia Blue", venue_name: "Sequoia Woods Country Club" }),
+    false
+  );
+  assert.equal(
+    isPlaceholderForMatch({ name: "Live Music - Sequoia", venue_name: "Sequoia Woods Country Club" }),
+    false
+  );
+  // A named act behind the prefix is the act, not a slot.
+  assert.equal(isPlaceholderForMatch({ name: "Live Music - Neil Buettner" }), false);
+  assert.equal(isPlaceholderForMatch({ name: "Live Music – Jill Warren" }), false);
+  assert.equal(
+    isPlaceholderForMatch({
+      name: "Live Music – Beer Garden Concert Series – Dirty Cello",
+      venue_name: "Murphys Wine & Beer Garden",
+    }),
+    false
+  );
+  assert.equal(isPlaceholderForMatch({ name: "Music in The Square- Bad Jovi" }), false);
+  // Specific titles were never placeholders.
+  assert.equal(isPlaceholderForMatch({ name: "Thursday Night Dinner" }), false);
+  // isGenericTitle stays the broad classifier; only the matcher narrows it.
+  assert.equal(isGenericTitle("Live Music - Neil Buettner"), true);
+});
+
+const sequoiaSlot = {
+  date: "2027-07-08",
+  town: "Arnold",
+  venue_name: "Sequoia Woods Country Club",
+  venue_key: "sequoia-woods",
+  address: "1000 Cypress Point Drive, Arnold, CA 95223",
+  artists: null,
+};
+
+test("a named act behind 'Live Music -' never merges into a routine dinner in its slot", () => {
+  const concert = { ...sequoiaSlot, name: "Live Music - Neil Buettner", start_time: "18:00", end_time: "21:00", description: null };
+  const dinner = {
+    ...sequoiaSlot,
+    name: "Thursday Night Dinner",
+    start_time: "18:00",
+    end_time: null,
+    description:
+      "Weekly dinner service in the Sequoia Woods dining room, with the chef's rotating seasonal menu and a full bar.",
+  };
+  assert.equal(isSameEvent(concert, dinner), false);
+  assert.equal(isSameEvent(dinner, concert), false);
+});
+
+test("two named acts at one venue 30 minutes apart stay split (2026-08-08 Sequoia rows)", () => {
+  const byous = { ...sequoiaSlot, name: "Live Music - Jamie Byous", start_time: "18:30", end_time: "21:30", description: null };
+  const hitMen = {
+    ...sequoiaSlot,
+    name: "Patio Party #4 featuring live music - The Hit Men",
+    start_time: "19:00",
+    end_time: "22:00",
+    description: null,
+  };
+  assert.equal(isSameEvent(byous, hitMen), false);
+  assert.equal(isSameEvent(hitMen, byous), false);
+});
+
+test("a named act and karaoke starting together stay split", () => {
+  const act = { ...sequoiaSlot, name: "Live Music - Jamie Byous", start_time: "19:00", end_time: "22:00", description: null };
+  const karaoke = { ...sequoiaSlot, name: "Karaoke - Taylor Made", start_time: "19:00", end_time: "23:00", description: null };
+  // Same start, different ends: before the fix the placeholder signal fired and
+  // merged them. (An IDENTICAL window with null artists is sameExactWindow's
+  // call, which reads only the artists field; out of scope for this fix.)
+  assert.equal(isSameEvent(act, karaoke), false);
+  assert.equal(isSameEvent(karaoke, act), false);
+});
+
+test("a true 'Live Music @ venue' placeholder still merges with the venue's named act", () => {
+  const placeholder = {
+    ...sequoiaSlot,
+    name: "Live Music @ Sequoia Woods",
+    start_time: "19:00",
+    end_time: "22:00",
+    description: null,
+  };
+  const named = { ...sequoiaSlot, name: "Live Music - Jill Warren", start_time: "18:30", end_time: "21:30", description: null };
+  assert.equal(isSameEvent(placeholder, named), true);
+  assert.equal(isSameEvent(named, placeholder), true);
 });
