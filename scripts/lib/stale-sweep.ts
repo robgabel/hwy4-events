@@ -87,6 +87,7 @@ export interface SweepRow {
   times_locked?: boolean | null;
   notability_locked?: boolean | null;
   family_friendly_locked?: boolean | null;
+  visibility_locked?: boolean | null;
 }
 
 /** Hard ceiling on per-run deletions regardless of venue size. */
@@ -215,7 +216,8 @@ export function isProtectedRow(row: SweepRow): string | null {
     row.poster_locked ||
     row.times_locked ||
     row.notability_locked ||
-    row.family_friendly_locked
+    row.family_friendly_locked ||
+    row.visibility_locked
   )
     return "locked";
   return null;
