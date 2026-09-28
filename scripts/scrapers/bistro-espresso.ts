@@ -1,10 +1,12 @@
 import { supabaseAdmin } from "../lib/supabase-admin.js";
 import {
   generateDedupKey,
+  keepStr,
   type UpsertResult,
 } from "../lib/dedup.js";
 import type { ExtractedEvent } from "../lib/extract.js";
 import { resolveFamilyFriendly } from "../../lib/family-friendly.js";
+import { resolveVenueKey } from "../lib/venue-matcher.js";
 
 const SITE_ORIGIN = "https://www.thebistroespresso.com";
 const EVENTS_URL = `${SITE_ORIGIN}/events/`;
@@ -272,11 +274,14 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
     description: event.description,
     category: event.category,
   });
+  // This writer bypasses upsertEvents, so it has to stamp venue_key itself
+  // (HWY-48). Upgrade-only: a null resolution never wipes a stored key.
+  const resolvedKey = resolveVenueKey(event);
 
   const { data: byKey } = await supabaseAdmin
     .from("hwy4_events")
     .select(
-      "id, name, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, family_friendly, family_friendly_locked"
+      "id, name, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, family_friendly, family_friendly_locked"
     )
     .eq("dedup_key", dedupKey)
     .maybeSingle();
@@ -284,6 +289,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
   if (byKey) {
     const sameTime = (a: string | null, b: string | null) =>
       (a ?? "").slice(0, 5) === (b ?? "").slice(0, 5);
+    const nextKey = keepStr(resolvedKey, byKey.venue_key);
     const changed =
       byKey.name !== event.name ||
       byKey.venue_name !== event.venue_name ||
@@ -294,6 +300,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
       byKey.address !== event.address ||
       byKey.town !== event.town ||
       byKey.image_url !== (event.image_url ?? null) ||
+      nextKey !== (byKey.venue_key ?? null) ||
       (!byKey.family_friendly_locked && byKey.family_friendly !== familyFlag);
     if (changed) {
       await supabaseAdmin
@@ -301,6 +308,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
         .update({
           name: event.name,
           venue_name: event.venue_name,
+          venue_key: nextKey,
           description: event.description,
           start_time: event.start_time,
           end_time: event.end_time,
@@ -324,7 +332,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
   const { data: sameNight } = await supabaseAdmin
     .from("hwy4_events")
     .select(
-      "id, name, venue_name, description, start_time, end_time, event_url, image_url, source_name, family_friendly_locked"
+      "id, name, venue_name, venue_key, description, start_time, end_time, event_url, image_url, source_name, family_friendly_locked"
     )
     .eq("date", event.date)
     .eq("town", event.town)
@@ -343,6 +351,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
       .update({
         name: event.name,
         venue_name: event.venue_name,
+        venue_key: keepStr(resolvedKey, existing.venue_key),
         description: event.description ?? existing.description,
         start_time: event.start_time,
         end_time: event.end_time,
@@ -373,6 +382,7 @@ async function upsertBistroEvent(event: ExtractedEvent): Promise<Outcome> {
     start_time: event.start_time,
     end_time: event.end_time,
     venue_name: event.venue_name,
+    venue_key: resolvedKey,
     town: event.town,
     address: event.address,
     category: event.category,

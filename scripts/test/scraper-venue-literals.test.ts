@@ -85,17 +85,47 @@ test("every venue name /api/scrape-bls can emit is a registry canonical", () => 
   const src = read("../../app/api/scrape-bls/route.ts");
   const fn = src.slice(src.indexOf("function resolveVenue"));
   const body = fn.slice(0, fn.indexOf("\n}\n"));
-  const names = [...body.matchAll(/return "([^"]+)"/g)].map((m) => m[1]);
+  const pairs = [...body.matchAll(/name: "([^"]+)", venueKey: "([^"]+)"/g)].map((m) => ({
+    name: m[1],
+    key: m[2],
+  }));
 
-  assert.ok(names.length >= 5, `expected resolveVenue to return several names, saw ${names.length}`);
-  for (const n of new Set(names)) {
+  assert.ok(pairs.length >= 5, `expected resolveVenue to return several venues, saw ${pairs.length}`);
+  for (const { name, key } of pairs) {
     assert.ok(
-      CANONICALS.has(n),
-      `resolveVenue returns "${n}", which is not a canonical in scripts/lib/venues.ts. ` +
+      CANONICALS.has(name),
+      `resolveVenue returns "${name}", which is not a canonical in scripts/lib/venues.ts. ` +
         "This route raw-INSERTs, so the string lands in venue_name verbatim and an " +
         "alias spelling can never resolve to a venue_key (HWY-25)."
     );
+    assert.equal(
+      KNOWN_VENUES[key]?.canonical,
+      name,
+      `resolveVenue pairs "${name}" with venue_key "${key}", which is not that entry's key`
+    );
   }
+});
+
+// HWY-48. These three writers insert (and, for bistro and the lodge, update)
+// without going through upsertEvents, so a missing venue_key stays NULL forever.
+// The drift guard is the same shape as the address pin above: the write has to
+// name the column, and a hardcoded key has to be the registry key.
+test("raw-insert writers stamp venue_key", () => {
+  const bistro = read("../scrapers/bistro-espresso.ts");
+  const bistroInsert = bistro.slice(bistro.lastIndexOf(".insert({"));
+  assert.match(bistroInsert, /venue_key:\s*resolvedKey/);
+  assert.match(bistro, /venue_key:\s*nextKey/);
+  assert.match(bistro, /venue_key:\s*keepStr\(resolvedKey, existing\.venue_key\)/);
+
+  const moose = read("../../app/api/scrape-moose-lodge/route.ts");
+  const venueKey = literal(moose, /venueKey:\s*"([^"]+)"/, "LODGE.venueKey");
+  assert.equal(venueKey, "ebbetts-pass-moose-lodge");
+  assert.equal(KNOWN_VENUES[venueKey].canonical, literal(moose, /venue:\s*"([^"]+)"/, "LODGE.venue"));
+  assert.match(moose, /venue_key:\s*LODGE\.venueKey/);
+
+  const bls = read("../../app/api/scrape-bls/route.ts");
+  const blsInsert = bls.slice(bls.indexOf('.from("hwy4_events").insert({'));
+  assert.match(blsInsert, /venue_key:\s*venue\.venueKey/);
 });
 
 // The registry entries these writers depend on must keep a street address, or

@@ -516,6 +516,11 @@ type MergeableRow = MatchableRow & {
   event_url: string | null;
   address: string | null;
   image_url: string | null;
+  /** Stored registry key. Optional on the type so a caller that hasn't
+   *  selected it still typechecks; the write paths always select it, because
+   *  a missing value reads as null and the upgrade-only guard (HWY-48) would
+   *  then re-stamp a resolved key on every run. */
+  venue_key?: string | null;
   source_event_id?: string | null;
   price_locked?: boolean | null;
   description_locked?: boolean | null;
@@ -590,6 +595,7 @@ export function buildStrongMatchUpdate(
   const keepName =
     placeholderNameSteal(existing, event) || !(event.name && event.name.trim());
   const writtenName = keepName ? existing.name : pick(event.name, existing.name);
+  const writtenVenue = pickVenue(event.venue_name, existing.venue_name);
   // Incoming actless placeholder must not donate its series-default clock,
   // leftover artists, EventON description, aggregator URL, or EventON sid
   // onto a specific row (2026-09-19 Brice: Hilltop @ 19:00 with stale Earth
@@ -607,7 +613,12 @@ export function buildStrongMatchUpdate(
     dedup_key: keepName
       ? generateDedupKey(existing.name, event.date, event.town)
       : dedupKey,
-    venue_name: pickVenue(event.venue_name, existing.venue_name),
+    venue_name: writtenVenue,
+    // HWY-48. A strong match used to leave venue_key untouched, so a resident
+    // NULL (the key is not part of isSameEvent's required signals) stayed NULL
+    // after a registry alias was added. Resolve from the venue name this
+    // payload will actually store, and never wipe a stored key with null.
+    venue_key: writtenVenueKey(existing, event, writtenVenue),
     // description + price are human-set when locked — leave them out entirely.
     ...(existing.description_locked ? {} : { description: writtenDescription }),
     // Times are human-set when locked — leave them out entirely. A series
@@ -660,7 +671,7 @@ export function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked";
+  "id, name, date, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked";
 
 type ExistingRow = {
   id: string;
@@ -670,6 +681,10 @@ type ExistingRow = {
   // silently dropped and the stored row keeps showing the old day.
   date: string;
   venue_name: string;
+  /** Selected on every exact-match read. Absent only in test fixtures; a
+   *  production row that omitted it would look NULL and the HWY-48 heal would
+   *  re-mark the row updated on every run. */
+  venue_key?: string | null;
   description: string | null;
   start_time: string | null;
   end_time: string | null;
@@ -705,6 +720,38 @@ export function keepStr(
   stored: string | null | undefined
 ): string | null {
   return incoming && incoming.trim() ? incoming : stored ?? null;
+}
+
+/**
+ * Venue key an update will store (HWY-48).
+ *
+ * Resolves from the venue name the row will actually carry (the kept name
+ * when a generic scrape must not steal a specific one), then keeps a stored
+ * key when that resolution is null. A registry alias added after the row
+ * landed therefore heals a NULL key on the next scrape, and a degraded scrape
+ * that resolves to nothing cannot wipe a key the row already has — the same
+ * contract as `keepStr`. A newly resolved key may replace a different stored
+ * key: that is a correction, the same way a stated price replaces a stored one.
+ *
+ * Callers must pass the venue name the payload writes, not the incoming name
+ * blindly. Resolving the degraded shape would null a resolved key every
+ * morning (the Arnold Angels treadmill, venue edition).
+ */
+export function writtenVenueKey(
+  existing: { venue_key?: string | null },
+  event: {
+    name: string;
+    description: string | null;
+    venue_name: string;
+    address: string | null;
+    event_url?: string | null;
+  },
+  writtenVenueName: string
+): string | null {
+  return keepStr(
+    resolveVenueKey({ ...event, venue_name: writtenVenueName }),
+    existing.venue_key
+  );
 }
 
 /**
@@ -788,6 +835,11 @@ export function placeholderVenueSteal(
 }
 
 export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
+  // Same venue name the exact-match payload will store, so the key diff below
+  // is "what we WOULD write", not "what the scrape resolved in isolation".
+  const keepVenue = placeholderVenueSteal(existing, event);
+  const writtenVenueName = keepVenue ? existing.venue_name : event.venue_name;
+  const nextVenueKey = writtenVenueKey(existing, event, writtenVenueName);
   return (
     // A placeholder name would not be written over a specific one
     // (placeholderNameSteal), so that diff is not a change.
@@ -800,11 +852,15 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
     // (placeholderVenueSteal — the town rides with the kept venue), so
     // neither diff is a change. Mirrors the payload exactly, same as keepStr:
     // a wipe-shaped venue diff must not re-mark the row "updated" every run.
-    // Deliberately does NOT read venue_key: a specific-name row whose key is
-    // NULL won't re-key through this path while the guard holds — that heal
-    // belongs to `npm run backfill-venue-keys` (review of #275, NB-3).
-    (!placeholderVenueSteal(existing, event) &&
-      existing.venue_name !== event.venue_name) ||
+    (!keepVenue && existing.venue_name !== event.venue_name) ||
+    // HWY-48. A NULL key whose venue now resolves is a real change, so the
+    // exact-match path (which writes only when this is true) actually stamps
+    // it. A resolution of null is not a change: the payload keeps the stored
+    // key, and counting the wipe would re-mark the row updated every run
+    // while writing nothing new. Replaces the #275 NB-3 decision that a null
+    // key on a specific-name row was backfill-only — an alias added after
+    // insert never reached that backfill on the daily scrape.
+    nextVenueKey !== (existing.venue_key ?? null) ||
     // A locked field can't be written, so a diff there is not a change. For
     // the keepStr-guarded display fields, "changed" is defined as "what the
     // payload WOULD write differs from what is stored" — the exact same
@@ -823,7 +879,7 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
       keepStr(event.price, existing.price) !== (existing.price ?? null)) ||
     keepStr(event.event_url, existing.event_url) !== (existing.event_url ?? null) ||
     keepStr(event.address, existing.address) !== (existing.address ?? null) ||
-    (!placeholderVenueSteal(existing, event) && existing.town !== event.town) ||
+    (!keepVenue && existing.town !== event.town) ||
     // Self-heal: a specific incoming category that differs from the stored one
     // counts as a change (so a stuck "other" row updates). Never a downgrade —
     // the update payload itself refuses to write "other" over a specific value.
@@ -870,13 +926,14 @@ export function buildExactMatchUpdate(
   // stay the hash of whichever name the row actually carries. Same rule one
   // level down: a generic venue placeholder never overwrites a specific
   // venue, and the town rides with the kept venue (placeholderVenueSteal) —
-  // so the key must hash the town the row actually keeps, and the venue_key
-  // must resolve from the venue name the row actually carries, not from the
-  // degraded incoming shape (which would null a resolved key every morning).
+  // so the dedup_key must hash the town the row actually keeps, and the
+  // venue_key must resolve from the venue name the row actually carries
+  // (writtenVenueKey), not from the degraded incoming shape.
   const keepName = placeholderNameSteal(existing, event);
   const keepVenue = placeholderVenueSteal(existing, event);
   const writtenName = keepName ? existing.name : event.name;
   const writtenTown = keepVenue ? existing.town : event.town;
+  const writtenVenueName = keepVenue ? existing.venue_name : event.venue_name;
   const writtenDescription = existing.description_locked
     ? existing.description
     : keepStr(event.description, existing.description);
@@ -884,10 +941,8 @@ export function buildExactMatchUpdate(
     name: writtenName,
     // Propagate a rescheduled date (dedup_key below stays consistent with it).
     date: event.date,
-    venue_name: keepVenue ? existing.venue_name : event.venue_name,
-    venue_key: resolveVenueKey(
-      keepVenue ? { ...event, venue_name: existing.venue_name } : event
-    ),
+    venue_name: writtenVenueName,
+    venue_key: writtenVenueKey(existing, event, writtenVenueName),
     // Locked fields are human-set — never overwrite them. Unlocked display
     // fields are null-guarded (HWY-29): a scraped blank keeps the stored
     // value rather than wiping reconcile's back-fill.
@@ -1380,6 +1435,7 @@ export async function upsertEvents(
       name: string;
       date: string;
       venue_name: string;
+      venue_key: string | null;
       description: string | null;
       start_time: string | null;
       end_time: string | null;
@@ -1403,7 +1459,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
+          "id, name, date, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -1414,7 +1470,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, date, venue_name, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
+          "id, name, date, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();
@@ -1482,7 +1538,7 @@ export async function upsertEvents(
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked"
+          "id, name, town, start_time, end_time, venue_name, venue_key, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked"
         )
         .eq("date", event.date);
 
