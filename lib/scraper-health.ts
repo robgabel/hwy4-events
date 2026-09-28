@@ -12,6 +12,9 @@ export interface SourceResult {
    *  because every `scrape_runs` row captured before the guard shipped lacks it,
    *  and because sources whose policy is "allow" report nothing. */
   unpinned?: number;
+  /** New rows held by the degraded-insert hold (dedup v2 0.4). Optional for the
+   *  same reason as `unpinned`: older rows lack it. */
+  held?: number;
   error: string | null;
 }
 

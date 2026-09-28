@@ -7,6 +7,7 @@ import { isOutOfCorridor } from "./corridor.js";
 import { capSeriesHorizon } from "./ingest-horizon.js";
 import { applyUrlDate } from "./url-date.js";
 import { partitionUnpinned, type UnpinnedPolicy } from "./unpinned-guard.js";
+import { degradedHoldLine, shouldHoldDegradedInsert } from "./degraded-hold.js";
 // The "same event" rule + its string helpers live in ONE place, shared with the
 // read-time collapse in lib/dedupe-events.ts. Do not re-implement them here.
 import {
@@ -408,6 +409,11 @@ export interface UpsertResult {
   /** Rows carrying neither `source_event_id` nor `event_url`. Always 0 for
    *  sources whose policy is "allow" (seeds/vision — unpinned by design). */
   unpinned: number;
+  /** New rows NOT inserted because their detail-page enrichment failed and they
+   *  had no venue and no description (scripts/lib/degraded-hold.ts, dedup v2
+   *  0.4). Optional so every existing constructor stays valid; only a source
+   *  that sets `enrichment_failed` (GoCalaveras) can make it nonzero. */
+  held?: number;
 }
 
 export type { UnpinnedPolicy };
@@ -1034,6 +1040,32 @@ function guardUnpinned(
 }
 
 /**
+ * Degraded-insert hold (dedup v2 0.4, scripts/lib/degraded-hold.ts). Asked only
+ * at the INSERT decision, after the exact-key and strong-match lookups missed,
+ * so updates and merges are untouched. Shared by the serial and batched paths
+ * so they can't drift. Returns true when the row must NOT be inserted this run.
+ */
+function holdDegradedInsert(
+  event: ExtractedEvent,
+  runDate: string,
+  result: UpsertResult
+): boolean {
+  if (!shouldHoldDegradedInsert(event, runDate)) return false;
+  console.warn(degradedHoldLine(event));
+  result.held = (result.held ?? 0) + 1;
+  return true;
+}
+
+/** One summary line per upsert call, beside the per-row DEGRADED_INSERT_HELD
+ *  lines, so a held run can't read as a quiet one. */
+function reportDegradedHolds(sourceName: string, result: UpsertResult): void {
+  if (!result.held) return;
+  console.warn(
+    `  DEGRADED_HOLD ${sourceName} ${result.held} new row(s) held until a run enriches them`
+  );
+}
+
+/**
  * Batched upsert path. Replaces the per-event SELECT+UPDATE/INSERT loop with
  * a small fixed number of bulk queries regardless of batch size. Enabled by
  * BATCH_DEDUP=1 environment variable; falls back to the serial path otherwise
@@ -1262,7 +1294,11 @@ async function upsertEventsBatched(
   const toInsertAll = unmatched.filter((u) => !fuzzyMatched.has(u.dedupKey));
   const seenKeys = new Set<string>();
   const toInsert: typeof toInsertAll = [];
+  const runDate = now.slice(0, 10);
   for (const u of toInsertAll) {
+    // Held before the in-batch key check, so a held degraded copy can never
+    // claim the key ahead of an enriched twin in the same batch.
+    if (holdDegradedInsert(u.event, runDate, result)) continue;
     if (seenKeys.has(u.dedupKey)) {
       console.warn(
         `  Dropped in-batch duplicate (same dedup_key): "${u.event.name}" | ${u.event.date} | ${u.event.town}`
@@ -1317,6 +1353,7 @@ async function upsertEventsBatched(
     }
   }
 
+  reportDegradedHolds(sourceName, result);
   recordSourceResult(orgSlug, result);
   return result;
 }
@@ -1360,6 +1397,9 @@ export async function upsertEvents(
   // at the end instead of only per row (HWY-33) — they are deliberately not a
   // field on UpsertResult; see countUpdateResult.
   let updateErrors = 0;
+  // Read once, so the degraded-insert hold judges every row against one run
+  // date rather than per-row clock reads either side of UTC midnight.
+  const runDate = new Date().toISOString().slice(0, 10);
 
   events = dropOutOfCorridor(events, orgSlug);
   events = dropFarFutureSeries(events, sourceName);
@@ -1507,6 +1547,12 @@ export async function upsertEvents(
         continue;
       }
 
+      // No exact key, no strong match. If the row is the venue-less,
+      // description-less shape a failed detail page leaves behind, inserting it
+      // is how merged rows re-duplicate (the BVTS treadmill); hold it and let a
+      // run that enriches it insert it properly (dedup v2 0.4).
+      if (holdDegradedInsert(event, runDate, result)) continue;
+
       // Insert new event
       const { error } = await supabaseAdmin.from("hwy4_events").insert({
         name: event.name,
@@ -1553,6 +1599,7 @@ export async function upsertEvents(
     console.warn(`${updateErrors} row update(s) failed for ${sourceName} (not counted as updated)`);
   }
 
+  reportDegradedHolds(sourceName, result);
   recordSourceResult(orgSlug, result);
   return result;
 }

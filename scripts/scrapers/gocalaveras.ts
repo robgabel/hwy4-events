@@ -3,6 +3,7 @@ import { decodeEventFields, type ExtractedEvent } from "../lib/extract.js";
 import {
   classifyStatus,
   emptyTally,
+  isEnrichFailure,
   retryDelayMs,
   shouldTripCircuit,
   summarizeEnrichment,
@@ -965,8 +966,10 @@ async function enrichEvents(events: ExtractedEvent[]): Promise<void> {
   for (let i = 0; i < toEnrich.length; i += ENRICH_CONCURRENCY) {
     if (broken) {
       // Breaker already tripped: count the rest as skipped without firing a
-      // single further request.
+      // single further request. A skip is a failure for the degraded-insert
+      // hold (dedup v2 0.4): these rows never saw their detail page.
       tally.skipped += toEnrich.length - i;
+      for (const e of toEnrich.slice(i)) e.enrichment_failed = true;
       break;
     }
 
@@ -984,8 +987,13 @@ async function enrichEvents(events: ExtractedEvent[]): Promise<void> {
       results[j] = await enrichEventDetails(batch[j]);
     }
 
-    for (const r of results) {
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j];
       tallyOutcome(tally, r.outcome);
+      // Thread the FINAL outcome (after the retry) onto the event, so upsertEvents
+      // can hold a new row whose detail page never loaded instead of inserting
+      // the venue-less, description-less shape that re-duplicates merged rows.
+      batch[j].enrichment_failed = isEnrichFailure(r.outcome);
       if (r.outcome === "rate_limited") {
         consecutive429++;
         if (shouldTripCircuit(consecutive429)) broken = true;

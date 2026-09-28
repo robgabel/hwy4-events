@@ -81,6 +81,14 @@ export function classifyStatus(status: number): Exclude<EnrichOutcome, "enriched
   return status === 429 ? "rate_limited" : "http_error";
 }
 
+/** Did this outcome leave the event without its detail-page fields for a
+ *  reason a later run can fix? `empty` is not a failure: the page loaded and had
+ *  nothing, so waiting a day buys nothing and the bare row is the truth. Every
+ *  non-2xx, transport error and breaker skip is. Feeds the degraded-insert hold
+ *  (scripts/lib/degraded-hold.ts, dedup v2 Phase 0.4). */
+export const isEnrichFailure = (o: EnrichOutcome): boolean =>
+  o === "rate_limited" || o === "http_error" || o === "network_error" || o === "skipped";
+
 export const attempted = (t: EnrichTally): number =>
   t.enriched + t.empty + t.rateLimited + t.httpError + t.networkError;
 
@@ -138,8 +146,9 @@ export function summarizeEnrichment(
   if (t.skipped > 0) {
     warning =
       `GoCalaveras enrichment CIRCUIT BROKE after ${t.rateLimited} rate-limited requests: ` +
-      `${t.skipped} event(s) not enriched. New rows will land without detail ` +
-      `descriptions, posters or addresses until this clears.`;
+      `${t.skipped} event(s) not enriched. New rows with no venue and no ` +
+      `description are held (DEGRADED_INSERT_HELD) until a run enriches them; ` +
+      `the rest land without detail descriptions, posters or addresses until this clears.`;
   } else if (tried > 0 && t.rateLimited / tried >= RATE_LIMIT_WARN_RATIO) {
     const pct = Math.round((t.rateLimited / tried) * 100);
     warning =
