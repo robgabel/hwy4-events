@@ -5,6 +5,16 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-09-28: A matcher that reads who wrote a row cannot share a table with a writer that relabels rows
+
+Dedup v2 Phase 1 (`PRD-dedup-merge-v2.md`) made the matcher tolerate a clock gap only between two different feeds (`source_name`), because one feed listing two starts is two sessions. Wiring it into the write path exposed the trap before it shipped.
+
+- **A write-time merge rewrote the resident's name, clock, `dedup_key` and `source_event_id` with the incoming feed's, but kept its `source_name`.** Under the old matcher that was merely churn. Under a source-aware matcher it is a trap: the row now says "Visit Murphys" but carries GoCalaveras's keys and clock. Visit Murphys can no longer find it by key and re-inserts at its own clock, and the matcher reads the pair as one feed's two sessions, which nothing (write path, reconcile, audit) will ever merge. Rule: when a predicate reads provenance, no writer may change a row's content without changing its provenance, and the cheapest compliant writer is fill-only. Phase 1 writes the new cross-clock and cross-town matches fill-only; Phase 2's source-key links remove the problem for all merges.
+- **Test a clustering rule against the states it will actually see, not a pile-up of history.** Replaying every merged-away snapshot at once put copies side by side that never coexisted (six BVTS listings on one date), and the ambiguity rule dissolved them. Re-running each logged merge against the rows that existed when it was made told the true story: 79 of 81 still merge. Both views are worth running; only the second one measures regressions.
+- **"Ambiguous" needs positive evidence, not just a missing match.** The first cannot-link treated any non-matching pair as proof of two events, so a vague "Dinner" row split a five-row Queen of Hearts cluster that main merged correctly. Evidence now means two venues, two acts, one feed at two starts, or two titles that each name something the other does not. A title too vague to match blocks nothing.
+
+---
+
 ## 2026-09-27: The duplicate is in the merge, not just the matcher
 
 Rob's screenshot: "The Gathering on Murphys Main Street" (GoCalaveras, 11:00) beside "Murphys Gathering – A Celebration of All Things Magical" (Visit Murphys, 12:00, the organizer's own time). A full scan found 5 live pairs while the same day's audit read `same_event_duplicates: 0`. Plan: `PRD-dedup-merge-v2.md`.

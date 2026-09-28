@@ -11,6 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   clusterEvents,
+  clusterEventsDetailed,
   dedupeEvents,
   mergeCluster,
   pickSurvivor,
@@ -356,4 +357,129 @@ test("a TBD slot cannot chain a different act into its re-listing's cluster (ded
       ["Live Music - Jamie Byous"],
     ]
   );
+});
+
+// ---------------------------------------------------------------------------
+// Dedup v2 Phase 1.5: union-find with a cannot-link. A row that resembles two
+// events that must stay apart joins neither; a vague row that merely fails to
+// match does not block a merge. Real multi-row dates live in
+// dedup-golden.test.ts; these pin the rule's shapes.
+// ---------------------------------------------------------------------------
+
+const park = {
+  date: "2026-07-12",
+  town: "Arnold",
+  venue_name: "Calaveras Big Trees State Park",
+  venue_key: "big-trees-state-park",
+  visibility: "public" as const,
+  description: null,
+  artists: null,
+};
+const names = (cs: DedupableEvent[][]) => cs.map((c) => c.map((e) => e.name).sort()).sort();
+
+test("a placeholder that matches two different programs joins neither, and is reported", () => {
+  const placeholder: DedupableEvent = { ...park, name: "Calaveras Big Trees State Park", start_time: "10:00", source_name: "GoCalaveras.com" };
+  const rangers: DedupableEvent = { ...park, name: "Junior Rangers", start_time: "10:00", source_name: "Calaveras Big Trees State Park" };
+  const walk: DedupableEvent = { ...park, name: "Meadow Walk", start_time: "10:00", source_name: "Calaveras Big Trees State Park" };
+  for (const order of [[placeholder, rangers, walk], [rangers, walk, placeholder], [rangers, placeholder, walk]]) {
+    const r = clusterEventsDetailed(order);
+    assert.deepEqual(names(r.clusters), [["Calaveras Big Trees State Park"], ["Junior Rangers"], ["Meadow Walk"]]);
+    // Reported once, under the placeholder, with both programs it matched.
+    assert.deepEqual(
+      r.refused.map((x) => [x.row.name, x.matches.map((m) => m.name).sort()]),
+      [["Calaveras Big Trees State Park", ["Junior Rangers", "Meadow Walk"]]]
+    );
+  }
+  // With one program in the slot the placeholder is that program's listing.
+  assert.deepEqual(names(clusterEvents([placeholder, rangers])), [["Calaveras Big Trees State Park", "Junior Rangers"]]);
+});
+
+test("two copies of an ambiguous placeholder still merge with each other, never with either side", () => {
+  const p1: DedupableEvent = { ...park, name: "Calaveras Big Trees State Park", start_time: "10:00", source_name: "GoCalaveras.com" };
+  const p2: DedupableEvent = { ...p1, source_name: "Visit Murphys" };
+  const rangers: DedupableEvent = { ...park, name: "Junior Rangers", start_time: "10:00", source_name: "Calaveras Big Trees State Park" };
+  const walk: DedupableEvent = { ...park, name: "Meadow Walk", start_time: "10:00", source_name: "Calaveras Big Trees State Park" };
+  assert.deepEqual(names(clusterEvents([p1, rangers, p2, walk])), [
+    ["Calaveras Big Trees State Park", "Calaveras Big Trees State Park"],
+    ["Junior Rangers"],
+    ["Meadow Walk"],
+  ]);
+});
+
+test("an all-day listing that overlaps a feed's two sessions joins neither session", () => {
+  // The PRD's cannot-link: one feed's 10:00 and 12:00 sessions are two events,
+  // and an aggregator's 10:00-14:00 listing must not glue them together.
+  const venue = { ...park, venue_name: "Lackler Ceramics", venue_key: null, town: "Arnold" };
+  const morning: DedupableEvent = { ...venue, name: "Kids Clay", start_time: "10:00", end_time: "11:30", source_name: "GoCalaveras.com" };
+  const midday: DedupableEvent = { ...venue, name: "Kids Clay", start_time: "12:00", end_time: "13:30", source_name: "GoCalaveras.com" };
+  const allDay: DedupableEvent = { ...venue, name: "Kids Clay Day", start_time: "10:00", end_time: "14:00", source_name: "Visit Murphys" };
+  const r = clusterEventsDetailed([morning, midday, allDay]);
+  assert.deepEqual(names(r.clusters), [["Kids Clay"], ["Kids Clay"], ["Kids Clay Day"]]);
+  assert.ok(r.refused.some((x) => x.row === allDay));
+});
+
+test("a venue-less listing never glues two venues' same-titled events together", () => {
+  const night = { date: "2026-06-12", town: "Murphys", visibility: "public" as const, description: null, artists: null, start_time: "19:00" };
+  const pub: DedupableEvent = { ...night, name: "Karaoke Night", venue_name: "Murphys Irish Pub", source_name: "Murphys Irish Pub" };
+  const bar: DedupableEvent = { ...night, name: "Karaoke Night", venue_name: "The Watering Hole", source_name: "GoCalaveras.com" };
+  const unknown: DedupableEvent = { ...night, name: "Karaoke Night", venue_name: "Unknown Venue", source_name: "Community Submission" };
+  assert.deepEqual(names(clusterEvents([pub, unknown, bar])), [["Karaoke Night"], ["Karaoke Night"], ["Karaoke Night"]]);
+});
+
+test("a routine row never survives a cluster that holds a real event, even a Rob's Pick (dedup v2 1.7)", () => {
+  const lodge = { date: "2026-07-27", town: "Arnold", venue_name: "Ebbetts Pass Moose Lodge", visibility: "private" as const, artists: null };
+  const routine: DedupableEvent = {
+    ...lodge,
+    name: "Queen of Hearts and Burger Night",
+    start_time: "17:30",
+    description: "Burger night and the Queen of Hearts drawing, members and guests welcome all evening.",
+    image_url: "https://example.com/p.jpg",
+    robs_pick: true,
+    is_routine: true,
+  };
+  const event: DedupableEvent = { ...lodge, name: "Queen of Hearts", start_time: "17:30", description: null, is_routine: false };
+  assert.equal(pickSurvivor([routine, event]).name, "Queen of Hearts");
+  assert.equal(pickSurvivor([event, routine]).name, "Queen of Hearts");
+});
+
+test("two named acts under one series title never merge through an all-evening listing", () => {
+  const venue = {
+    date: "2026-08-22",
+    town: "Murphys",
+    venue_name: "Murphys Irish Pub",
+    visibility: "public" as const,
+    description: null,
+  };
+  // Two feeds list two different acts' sets under the same series title.
+  const early: DedupableEvent = { ...venue, name: "Blues Night", start_time: "18:00", end_time: "20:00", artists: ["The Hollerin' Hounds"], source_name: "Murphys Irish Pub" };
+  const late: DedupableEvent = { ...venue, name: "Blues Night", start_time: "21:00", end_time: "23:00", artists: ["Sipsy River Band"], source_name: "Visit Murphys" };
+  // A third feed lists the whole evening with no act.
+  const evening: DedupableEvent = { ...venue, name: "Blues Night", start_time: "18:00", end_time: "23:00", artists: null, source_name: "GoCalaveras.com" };
+  const r = clusterEventsDetailed([early, evening, late]);
+  assert.ok(
+    r.clusters.every((c) => !(c.includes(early) && c.includes(late))),
+    "the two acts share no cluster"
+  );
+});
+
+test("a chain of clock-tolerant matches never joins one feed's two sessions, in any input order", () => {
+  // Four feeds list one class with drifting clocks. Each neighbour pair
+  // overlaps, but no single row matches both of the studio's own sessions
+  // (10:00 and 14:00), so only the union-time cannot-link keeps them apart.
+  const studio = { date: "2026-10-01", town: "Arnold", venue_name: "Lackler Ceramics", visibility: "public" as const, description: null, artists: null, name: "Kids Clay" };
+  const morning: DedupableEvent = { ...studio, start_time: "10:00", end_time: "12:00", source_name: "Lackler Ceramics", created_at: "2026-09-01T00:00:00Z" };
+  const aggA: DedupableEvent = { ...studio, start_time: "11:00", end_time: "13:00", source_name: "GoCalaveras.com", created_at: "2026-09-02T00:00:00Z" };
+  const aggB: DedupableEvent = { ...studio, start_time: "12:30", end_time: "14:30", source_name: "Visit Murphys", created_at: "2026-09-03T00:00:00Z" };
+  const afternoon: DedupableEvent = { ...studio, start_time: "14:00", end_time: "16:00", source_name: "Lackler Ceramics", created_at: "2026-09-04T00:00:00Z" };
+  const sets = (evs: DedupableEvent[]) =>
+    clusterEvents(evs).map((c) => c.map((e) => e.start_time).sort().join("+")).sort();
+  const want = sets([morning, aggA, aggB, afternoon]);
+  assert.ok(want.every((s) => !(s.includes("10:00") && s.includes("14:00"))), JSON.stringify(want));
+  for (const order of [
+    [afternoon, aggB, aggA, morning],
+    [aggB, morning, afternoon, aggA],
+    [aggA, afternoon, morning, aggB],
+  ]) {
+    assert.deepEqual(sets(order), want, "oldest-first processing makes the result order-free");
+  }
 });

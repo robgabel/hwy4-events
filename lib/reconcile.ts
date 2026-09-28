@@ -21,12 +21,19 @@
 // reconcile mechanics (snapshot, back-fill, delete, audit log).
 
 import {
-  clusterEvents,
+  clusterEventsDetailed,
   pickSurvivor,
   normalizeVenue,
   type DedupableEvent,
+  type RefusedMatch,
 } from "./dedupe-events";
-import { textSimilarity, GENERIC_VENUES, mergeArtistLists, isActlessPlaceholderTitle } from "./event-identity";
+import {
+  textSimilarity,
+  GENERIC_VENUES,
+  mergeArtistLists,
+  isActlessPlaceholderTitle,
+  sameEventMatch,
+} from "./event-identity";
 
 /** The minimal Supabase surface the reconcile uses. Typed structurally rather
  *  than as the concrete `SupabaseClient` on purpose: the Next app and the
@@ -69,6 +76,9 @@ export interface ReconcileResult {
   merged: MergeRecord[];
   /** Rows actually deleted (0 in dry-run). */
   deleted: number;
+  /** Matches the clustering declined because the row resembles two events
+   *  that must stay apart (dedup v2 1.5). Never merged; for a human. */
+  refused: RefusedMatch<ReconcileRow>[];
 }
 
 export interface ReconcileOptions {
@@ -88,6 +98,10 @@ const SELECT_COLUMNS = "*";
  *  re-derives the cheap title/artist/description/venue signals from the
  *  *exported* helpers (it does not fork the predicate). */
 function describeMatch(a: ReconcileRow, b: ReconcileRow): string {
+  // Two feeds disagreeing on the start, matched on strong identity inside
+  // overlapping windows (dedup v2 1.2). Named first: every signal below
+  // assumes the clocks agreed.
+  if (sameEventMatch(a, b) === "cross_source") return "cross-source-window";
   if (a.name && b.name && textSimilarity(a.name, b.name) >= 0.85) return "title";
   const setA = new Set(
     (a.artists ?? []).map((x) => x?.toLowerCase().trim()).filter(Boolean)
@@ -186,11 +200,18 @@ export async function reconcileDuplicates(
   if (error) throw error;
 
   const rows = (data ?? []) as unknown as ReconcileRow[];
-  const clusters = clusterEvents(rows).filter((c) => c.length > 1);
+  const detailed = clusterEventsDetailed(rows);
+  const clusters = detailed.clusters.filter((c) => c.length > 1);
 
   log(
     `${dryRun ? "DRY RUN" : "EXECUTE"} — ${clusters.length} duplicate cluster(s) among ${rows.length} future events.\n`
   );
+  for (const r of detailed.refused) {
+    log(
+      `  REFUSED ${r.row.date} "${r.row.name}" [${r.row.id}] matches rows kept apart: ` +
+        r.matches.map((m) => `"${m.name}" [${m.id}]`).join(", ")
+    );
+  }
 
   const merged: MergeRecord[] = [];
   let deleted = 0;
@@ -261,5 +282,11 @@ export async function reconcileDuplicates(
       : `Done. ${deleted} row(s) deleted across ${clusters.length} cluster(s); ${merged.length} merge(s) logged.`
   );
 
-  return { clusters: clusters.length, scanned: rows.length, merged, deleted };
+  return {
+    clusters: clusters.length,
+    scanned: rows.length,
+    merged,
+    deleted,
+    refused: detailed.refused,
+  };
 }

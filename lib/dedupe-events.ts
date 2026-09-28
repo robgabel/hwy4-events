@@ -14,6 +14,8 @@
 
 import {
   isSameEvent,
+  distinctEventEvidence,
+  titleCovers,
   isPlaceholderForMatch,
   normalizeVenue,
   GENERIC_VENUES,
@@ -37,6 +39,8 @@ export interface DedupableEvent extends EventIdentity {
   // For the survivor tie-break (HWY-29). Optional: read-time projections drop
   // the timestamps; reconcile selects `*`, so its rows carry it.
   created_at?: string | null;
+  // Row identity, for a deterministic clustering order (with created_at).
+  id?: string | null;
 }
 
 /** Higher score = better card to show / keep. Curated picks always win; then
@@ -66,8 +70,17 @@ function richness(e: DedupableEvent): number {
   // that names its act after a generic prefix ("Live Music - Jill Warren") is
   // not a placeholder and is not penalized: it IS the band name.
   if (e.name && isPlaceholderForMatch(e)) s -= 12;
+  // A routine operation ("Thursday Night Dinner") is hidden on every public
+  // surface, so a cluster that also holds a real event must never keep the
+  // routine row: the event would vanish with it (dedup v2 1.7). Outweighs
+  // everything above, a Rob's Pick included.
+  if (e.is_routine) s -= ROUTINE_SURVIVOR_PENALTY;
   return s;
 }
+
+/** Larger than every positive richness term combined, so any non-routine row
+ *  outranks any routine one. */
+const ROUTINE_SURVIVOR_PENALTY = 1000;
 
 /** Groups rows that *could* be the same event so clustering stays near-linear.
  *  Keyed on date + visibility only — every identity field is left to
@@ -91,6 +104,23 @@ function bucketKey(e: DedupableEvent): string {
   return [e.date, e.visibility ?? ""].join("|");
 }
 
+/** A match the clustering split, reported under the row that bridges it: the
+ *  row resembles events that must stay apart (so joining any would be a
+ *  guess), or it matched one row of a cluster that holds a row it provably is
+ *  not. `matches` are the rows it matched outside its own cluster. Each split
+ *  pair appears once. */
+export interface RefusedMatch<T> {
+  row: T;
+  matches: T[];
+}
+
+export interface ClusterResult<T> {
+  /** Every input row in exactly one cluster (singletons included). */
+  clusters: T[][];
+  /** Matches the clustering declined to act on, for a human to review. */
+  refused: RefusedMatch<T>[];
+}
+
 /**
  * Cluster events into same-event groups. Every input row appears in exactly
  * one cluster (singletons included). Order within a cluster follows input
@@ -98,31 +128,187 @@ function bucketKey(e: DedupableEvent): string {
  * the "same event" definition can never drift between them.
  */
 export function clusterEvents<T extends DedupableEvent>(events: T[]): T[][] {
-  const buckets = new Map<string, T[]>();
-  for (const e of events) {
+  return clusterEventsDetailed(events).clusters;
+}
+
+/**
+ * `clusterEvents`, plus the matches it declined (dedup v2 Phase 1.5).
+ *
+ * Union-find over the pairwise rule, with a cannot-link. The rule is not
+ * transitive, and Phase 1 loosened it (clock tolerance across feeds, title
+ * containment), so plain chaining would let one row that resembles two events
+ * glue them together: a venue-only placeholder at Calaveras Big Trees matches
+ * every program in its slot, and Junior Rangers plus the Meadow Walk would
+ * become one cluster, one of them deleted by reconcile. So a union happens
+ * only if the combined cluster holds no pair with positive evidence of being
+ * different events (`distinctEventEvidence`: two named venues, two acts, one
+ * feed at two start times, two titles naming different things, unless another
+ * row in the cluster names both titles). A pair that is merely too vague to
+ * match ("Dinner" beside "Queen of Hearts & Dinner") does not block, so
+ * today's merges keep happening.
+ *
+ * A row that matches two rows which must stay apart is torn between two
+ * events: it is taken out, the bucket is re-clustered without it, and it is
+ * reported in `refused` with the rows it matched. Leaving a duplicate is
+ * recoverable; merging the wrong pair deletes an event.
+ *
+ * Deterministic whatever order the database returns rows in: each bucket is
+ * processed oldest row first (`created_at`, then `id`, then input position).
+ */
+export function clusterEventsDetailed<T extends DedupableEvent>(
+  events: T[]
+): ClusterResult<T> {
+  const buckets = new Map<string, number[]>();
+  events.forEach((e, i) => {
     const key = bucketKey(e);
     const list = buckets.get(key) ?? [];
-    list.push(e);
+    list.push(i);
     buckets.set(key, list);
-  }
+  });
 
-  const clusters: T[][] = [];
+  const clusters: number[][] = [];
+  const refused: RefusedMatch<T>[] = [];
   for (const list of buckets.values()) {
     if (list.length === 1) {
       clusters.push(list);
       continue;
     }
     // Cluster ONLY within this bucket. Searching across buckets would let a
-    // venue match chain unrelated events from different dates/times together.
-    const bucketClusters: T[][] = [];
-    for (const e of list) {
-      const hit = bucketClusters.find((c) => c.some((m) => isSameEvent(e, m)));
-      if (hit) hit.push(e);
-      else bucketClusters.push([e]);
+    // venue match chain unrelated events from different dates together.
+    const order = [...list].sort((i, j) => compareRowAge(events[i], events[j]) || i - j);
+    const n = events.length;
+    const matchCache = new Map<number, boolean>();
+    const match = (i: number, j: number): boolean => {
+      const k = i < j ? i * n + j : j * n + i;
+      let v = matchCache.get(k);
+      if (v === undefined) {
+        v = isSameEvent(events[i], events[j]);
+        matchCache.set(k, v);
+      }
+      return v;
+    };
+    const evidenceCache = new Map<number, ReturnType<typeof distinctEventEvidence>>();
+    const evidence = (i: number, j: number) => {
+      const k = i < j ? i * n + j : j * n + i;
+      if (!evidenceCache.has(k)) {
+        evidenceCache.set(k, match(i, j) ? null : distinctEventEvidence(events[i], events[j]));
+      }
+      return evidenceCache.get(k)!;
+    };
+    // Two rows provably different that no row in `pool` joins. A `titles`
+    // pair is joined by a row that matches both and names both of their
+    // titles: then they read as two partial titles of one event.
+    const apart = (i: number, j: number, pool: number[]): boolean => {
+      const ev = evidence(i, j);
+      if (!ev) return false;
+      if (ev !== "titles") return true;
+      return !pool.some(
+        (c) =>
+          c !== i &&
+          c !== j &&
+          match(c, i) &&
+          match(c, j) &&
+          titleCovers(events[c], events[i]) &&
+          titleCovers(events[c], events[j])
+      );
+    };
+    // Would one cluster of these parts hold two rows that must stay apart?
+    const conflicts = (parts: number[][]): boolean => {
+      const pool = parts.flat();
+      for (let p = 0; p < parts.length; p++)
+        for (let q = p + 1; q < parts.length; q++)
+          for (const i of parts[p]) for (const j of parts[q]) if (apart(i, j, pool)) return true;
+      return false;
+    };
+
+    // Union-find in age order, then set aside every row that bridges two rows
+    // which must stay apart, and repeat without them until nothing is torn.
+    const settle = (pool: number[]): { groups: number[][]; torn: number[] } => {
+      const out = new Set<number>();
+      for (;;) {
+        const active = pool.filter((j) => !out.has(j));
+        let groups: number[][] = [];
+        for (const i of active) {
+          const hits = groups.filter((g) => g.some((j) => match(i, j)));
+          if (hits.length > 0 && !conflicts([[i], ...hits])) {
+            groups = groups.filter((g) => !hits.includes(g));
+            groups.push([...hits.flat(), i]);
+          } else {
+            groups.push([i]);
+          }
+        }
+        const torn = active.filter((c) => {
+          const nb = active.filter((j) => j !== c && match(c, j));
+          for (let x = 0; x < nb.length; x++)
+            for (let y = x + 1; y < nb.length; y++) if (apart(nb[x], nb[y], active)) return true;
+          return false;
+        });
+        if (torn.length === 0) return { groups, torn: pool.filter((j) => out.has(j)) };
+        for (const i of torn) out.add(i);
+      }
+    };
+    const main = settle(order);
+    // The rows set aside may still be one listing twice (two copies of the
+    // same vague placeholder); they cluster among themselves, never with
+    // either side. A row torn again here stays alone.
+    const aside = settle(main.torn);
+    const groups = [...main.groups, ...aside.groups, ...aside.torn.map((i) => [i])];
+    const groupOf = new Map<number, number[]>();
+    for (const g of groups) for (const i of g) groupOf.set(i, g);
+
+    for (const g of groups) clusters.push(g);
+    // Report each match the clustering split once, under the row that bridges
+    // the most of them (the placeholder, not each program it matched).
+    let split: [number, number][] = [];
+    for (let x = 0; x < order.length; x++)
+      for (let y = x + 1; y < order.length; y++) {
+        const [i, j] = [order[x], order[y]];
+        if (groupOf.get(i) !== groupOf.get(j) && match(i, j)) split.push([i, j]);
+      }
+    while (split.length > 0) {
+      const count = new Map<number, number>();
+      for (const [i, j] of split) {
+        count.set(i, (count.get(i) ?? 0) + 1);
+        count.set(j, (count.get(j) ?? 0) + 1);
+      }
+      const bridge = order.reduce((best, i) =>
+        (count.get(i) ?? 0) > (count.get(best) ?? 0) ? i : best
+      );
+      const partners = split
+        .filter(([i, j]) => i === bridge || j === bridge)
+        .map(([i, j]) => (i === bridge ? j : i));
+      refused.push({ row: events[bridge], matches: partners.map((j) => events[j]) });
+      split = split.filter(([i, j]) => i !== bridge && j !== bridge);
     }
-    clusters.push(...bucketClusters);
   }
-  return clusters;
+
+  // Input order within each cluster, clusters by first appearance.
+  for (const c of clusters) c.sort((a, b) => a - b);
+  clusters.sort((a, b) => a[0] - b[0]);
+  return {
+    clusters: clusters.map((c) => c.map((i) => events[i])),
+    refused,
+  };
+}
+
+/** Oldest first: `created_at`, then `id`. Rows without either compare equal
+ *  and fall back to input order. */
+function compareRowAge(a: DedupableEvent, b: DedupableEvent): number {
+  const ca = a.created_at ?? "";
+  const cb = b.created_at ?? "";
+  if (ca !== cb) {
+    if (!ca) return 1;
+    if (!cb) return -1;
+    return ca < cb ? -1 : 1;
+  }
+  const ia = a.id ?? "";
+  const ib = b.id ?? "";
+  if (ia !== ib) {
+    if (!ia) return 1;
+    if (!ib) return -1;
+    return ia < ib ? -1 : 1;
+  }
+  return 0;
 }
 
 /** The richest row of a cluster — the one to keep / display. On a richness tie,

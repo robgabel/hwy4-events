@@ -65,6 +65,14 @@ export async function GET(request: Request) {
         merged_from_id: m.merged_from_id,
         signal: m.signal,
       })),
+      // Matches left unmerged because the row resembles two events that must
+      // stay apart (dedup v2 1.5). The daily audit carries them to Slack.
+      refused: result.refused.map((r) => ({
+        id: r.row.id,
+        name: r.row.name,
+        date: r.row.date,
+        matches: r.matches.map((m) => ({ id: m.id, name: m.name })),
+      })),
     });
   } catch (err) {
     console.error("[reconcile-dupes] Failed:", err);

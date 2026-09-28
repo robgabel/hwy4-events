@@ -21,6 +21,9 @@ import { getAdminClient } from "@/lib/admin/db";
 import { resolveFamilyFriendly } from "@/lib/family-friendly";
 import { failRedirect, flashRedirect, field, requireField, safeReturnTo } from "@/lib/admin/flash";
 
+/** `source_name` of every community-published row. */
+const COMMUNITY_SOURCE_NAME = "Community Submission";
+
 const ADMIN_PATH = "/admin/submissions";
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as EventCategory[];
 
@@ -167,7 +170,7 @@ async function findResidentDuplicate(
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, venue_key, series_umbrella"
+      "id, name, date, town, venue_name, address, start_time, end_time, description, artists, venue_key, series_umbrella, source_name, is_routine"
     )
     .eq("date", candidate.date)
     .neq("status", "cancelled");
@@ -225,6 +228,9 @@ export async function publishSubmission(formData: FormData) {
       description,
       artists: null,
       venue_key: registryVenue?.venue_key ?? null,
+      // The feed this row will carry, so a resident from another feed can
+      // match across a clock gap the way reconcile would (dedup v2 1.4).
+      source_name: COMMUNITY_SOURCE_NAME,
     });
     if (dupe) {
       failRedirect(
@@ -251,7 +257,7 @@ export async function publishSubmission(formData: FormData) {
     status: "confirmed",
     visibility: "public",
     community_sourced: true,
-    source_name: "Community Submission",
+    source_name: COMMUNITY_SOURCE_NAME,
     source_url: `${SITE_URL}/submit`,
     cost_tier: "unknown",
     // Publishing IS the verification: a human reviewed this submission before

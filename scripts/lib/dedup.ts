@@ -12,6 +12,9 @@ import { degradedHoldLine, shouldHoldDegradedInsert } from "./degraded-hold.js";
 // read-time collapse in lib/dedupe-events.ts. Do not re-implement them here.
 import {
   isSameEvent,
+  sameEventMatch,
+  distinctEventEvidence,
+  titleCovers,
   normalizeName,
   normalizeTown,
   generateDedupKey,
@@ -19,6 +22,7 @@ import {
   mergeArtistLists,
   namedActTakesPrecedence,
   type EventIdentity,
+  type SameEventMatch,
 } from "../../lib/event-identity.js";
 import { sanitizeDescriptionDetailed } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
@@ -476,24 +480,148 @@ interface MatchableRow {
    *  scrape can never be merged INTO an umbrella (HWY-10); scraped events never
    *  set it themselves, so the incoming side is always false. */
   series_umbrella?: boolean | null;
+  /** Selected so the write-time match sees what the nightly reconcile sees
+   *  (dedup v2 1.4): the registry key, the feed that wrote the row, and the
+   *  routine flag. Without them the two layers disagreed about the same pair. */
+  venue_key?: string | null;
+  source_name?: string | null;
+  is_routine?: boolean | null;
+  town?: string;
+  address?: string | null;
 }
 
-/** Decide if an incoming event and an existing same-date/same-town candidate
- *  are the same real event. Thin wrapper over the shared `isSameEvent` so the
- *  write-time and read-time definitions can never diverge. The caller already
- *  guarantees date + town match; `isSameEvent` re-checks the time slot and the
- *  identity signals (title / artists / description / venue+generic / venue+act). */
-function isStrongEventMatch(
-  event: ExtractedEvent,
+/** The candidate columns every fuzzy-match query selects. One list, so the
+ *  serial and batched paths can never ask the matcher different questions. */
+const CANDIDATE_SELECT =
+  "id, name, town, date, start_time, end_time, venue_name, venue_key, source_name, is_routine, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked";
+
+/** How an incoming event matches an existing same-date candidate, or null.
+ *  Thin wrapper over the shared `sameEventMatch` so the write-time and
+ *  reconcile definitions can never diverge. `incoming` comes from
+ *  `asIdentity`, which carries the feed, registry key and routine flag. */
+function strongMatchKind(
+  incoming: EventIdentity,
   candidate: MatchableRow & { name?: string }
-): boolean {
-  return isSameEvent(event, { ...candidate, name: candidate.name ?? "" });
+): SameEventMatch | null {
+  return sameEventMatch(incoming, { ...candidate, name: candidate.name ?? "" });
 }
 
-/** Shape the incoming scrape as an EventIdentity, stamping the registry key
- *  so `namedActTakesPrecedence` can tell a venue's own writer from an
- *  aggregator's series placeholder. */
-function asIdentity(event: ExtractedEvent): EventIdentity {
+/** The resident an incoming event merges into, and how it matched.
+ *
+ *  Parity with reconcile's clustering (dedup v2 1.5): an incoming row that
+ *  matches two residents which are provably different events (two named
+ *  venues, two acts, one feed's two sessions, or two titles naming different
+ *  things with no row naming both) is ambiguous. It merges into neither, so
+ *  the caller inserts it and the nightly audit reports the refused pair.
+ *  Several matches that are the same event (an unreconciled duplicate) are
+ *  fine; a same-slot match is preferred over a clock-tolerant one. */
+export function pickStrongMatch<C extends MatchableRow & { name?: string }>(
+  incoming: EventIdentity,
+  candidates: C[]
+): { match: { row: C; kind: SameEventMatch } | null; ambiguous: C[] } {
+  const hits: { row: C; kind: SameEventMatch }[] = [];
+  for (const c of candidates) {
+    const kind = strongMatchKind(incoming, c);
+    if (kind) hits.push({ row: c, kind });
+  }
+  const ids = hits.map((h): EventIdentity => ({ ...h.row, name: h.row.name ?? "" }));
+  // A `titles` pair is joined by a row that matches both and names both of
+  // their titles, the incoming row included (it matched both by construction).
+  const joined = (x: number, y: number): boolean =>
+    (titleCovers(incoming, ids[x]) && titleCovers(incoming, ids[y])) ||
+    ids.some(
+      (c, z) =>
+        z !== x &&
+        z !== y &&
+        isSameEvent(c, ids[x]) &&
+        isSameEvent(c, ids[y]) &&
+        titleCovers(c, ids[x]) &&
+        titleCovers(c, ids[y])
+    );
+  for (let x = 0; x < hits.length; x++) {
+    for (let y = x + 1; y < hits.length; y++) {
+      if (isSameEvent(ids[x], ids[y])) continue;
+      const ev = distinctEventEvidence(ids[x], ids[y]);
+      if (!ev || (ev === "titles" && joined(x, y))) continue;
+      return { match: null, ambiguous: hits.map((h) => h.row) };
+    }
+  }
+  const match = hits.find((h) => h.kind === "standard") ?? hits[0] ?? null;
+  return { match, ambiguous: [] };
+}
+
+function logAmbiguousMatch(eventName: string, residents: { name?: string }[]): void {
+  console.log(
+    `  AMBIGUOUS_MATCH "${eventName}" matches ${residents.length} different events: ` +
+      residents.map((r) => `"${r.name ?? ""}"`).join(", ") +
+      " (inserted; review in the audit)"
+  );
+}
+
+/** Should a match be written fill-only? When the two rows disagree on the
+ *  clock (the cross-source window rule) or on the town label, rewriting the
+ *  resident with the incoming row's name, clock and keys would relabel it: its
+ *  `source_name` stays, its content becomes the other feed's, and its own feed,
+ *  unable to find it by key, re-inserts a row the matcher then reads as the
+ *  same feed listing two sessions. A persistent duplicate nothing can merge.
+ *  Fill-only keeps each feed able to find its row. */
+export function isFillOnlyMatch(
+  kind: SameEventMatch,
+  incoming: { town?: string | null },
+  resident: { town?: string | null }
+): boolean {
+  return kind === "cross_source" || normalizeTown(incoming.town) !== normalizeTown(resident.town);
+}
+
+/** A merge that only fills what the resident lacks (see `isFillOnlyMatch`):
+ *  description, price, poster, address and link when blank, the union of
+ *  artists, and a category upgrade from "other". Never the name, clock, venue,
+ *  town, `dedup_key` or `source_event_id`. Null when there is nothing to fill. */
+export function buildFillOnlyUpdate(
+  existing: MergeableRow,
+  event: ExtractedEvent,
+  now: string
+): Record<string, unknown> | null {
+  const blank = (v: unknown) => v == null || (typeof v === "string" && v.trim() === "");
+  const out: Record<string, unknown> = {};
+  if (!existing.description_locked && blank(existing.description) && !blank(event.description)) {
+    out.description = event.description;
+  }
+  if (!existing.price_locked && blank(existing.price) && !blank(event.price)) out.price = event.price;
+  if (!existing.poster_locked && blank(existing.image_url) && !blank(event.image_url)) {
+    out.image_url = event.image_url;
+  }
+  if (blank(existing.address) && !blank(event.address)) out.address = event.address;
+  if (blank(existing.event_url) && !blank(event.event_url)) out.event_url = event.event_url;
+  const artists = mergeArtistLists(existing, event);
+  if (JSON.stringify(artists ?? []) !== JSON.stringify(existing.artists ?? [])) {
+    out.artists = artists;
+  }
+  if (
+    event.category &&
+    event.category !== "other" &&
+    (!existing.category || existing.category === "other")
+  ) {
+    out.category = event.category;
+  }
+  if (Object.keys(out).length === 0) return null;
+  if (!existing.family_friendly_locked && (out.description || out.category)) {
+    out.family_friendly = resolveFamilyFriendly({
+      name: existing.name,
+      description: (out.description as string | undefined) ?? existing.description,
+      category: (out.category as string | undefined) ?? existing.category ?? "other",
+    });
+  }
+  out.updated_at = now;
+  return out;
+}
+
+/** Shape the incoming scrape as an EventIdentity, stamping what the resident
+ *  rows carry so both sides of a comparison hold the same fields (dedup v2
+ *  1.4): the registry key (also how `namedActTakesPrecedence` tells a venue's
+ *  own writer from an aggregator's series placeholder), the feed, and the
+ *  routine flag `normalizeBatch` resolved. */
+function asIdentity(event: ExtractedEvent, sourceName?: string): EventIdentity {
   return {
     name: event.name,
     date: event.date,
@@ -505,6 +633,8 @@ function asIdentity(event: ExtractedEvent): EventIdentity {
     end_time: event.end_time,
     description: event.description,
     artists: event.artists,
+    source_name: sourceName ?? null,
+    is_routine: event.is_routine ?? false,
   };
 }
 
@@ -513,7 +643,7 @@ function logPlaceholderDeferred(incomingName: string, namedName: string): void {
 }
 
 const PLACEHOLDER_SIBLING_SELECT =
-  "id, name, date, town, start_time, end_time, venue_name, venue_key, description, artists, address, series_umbrella";
+  "id, name, date, town, start_time, end_time, venue_name, venue_key, source_name, is_routine, description, artists, address, series_umbrella";
 
 type MergeableRow = MatchableRow & {
   name: string;
@@ -1170,9 +1300,7 @@ async function upsertEventsBatched(
   if (siblingDates.length > 0) {
     const { data: candidates } = await supabaseAdmin
       .from("hwy4_events")
-      .select(
-        "id, name, town, date, start_time, end_time, venue_name, venue_key, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked"
-      )
+      .select(CANDIDATE_SELECT)
       .in("date", siblingDates);
     for (const c of (candidates ?? []) as Candidate[]) {
       const list = candidatesByDate.get(c.date) ?? [];
@@ -1189,7 +1317,7 @@ async function upsertEventsBatched(
         continue;
       }
       const named = namedActTakesPrecedence(
-        asIdentity(m.event),
+        asIdentity(m.event, sourceName),
         (candidatesByDate.get(m.event.date) ?? []).filter((c) => c.id !== m.existing.id),
         orgSlug
       );
@@ -1203,41 +1331,44 @@ async function upsertEventsBatched(
     matched = kept;
   }
 
-  // Match the unmatched batch against existing same-date rows. A row is the
-  // same event only with the shared `isSameEvent` rule — never title
-  // similarity alone. The time slot is usually an exact start; a generic
-  // series placeholder vs a named act may disagree by up to 90 minutes.
+  // Match the unmatched batch against existing same-date rows, corridor-wide:
+  // the shared rule owns the town question (a differing label only vetoes when
+  // the venues do not agree), the way reconcile applies it (dedup v2 1.4). A
+  // row is the same event only with the shared `sameEventMatch` rule, never
+  // title similarity alone.
   let fuzzyMatched: Set<string> = new Set();
   if (unmatched.length > 0) {
-    const matchUpdates: { id: string; payload: object; eventName: string; existingName: string }[] = [];
+    const matchUpdates: { id: string; payload: object | null; eventName: string; existingName: string }[] = [];
     const claimed = new Set<string>(); // existing row ids already merged into this batch
     for (const u of unmatched) {
-      const dateCandidates = candidatesByDate.get(u.event.date) ?? [];
-      const canonicalTown = normalizeTown(u.event.town);
-      const hit = dateCandidates.find(
-        (c) =>
-          !claimed.has(c.id) &&
-          normalizeTown(c.town) === canonicalTown &&
-          isStrongEventMatch(u.event, c)
+      const { match, ambiguous } = pickStrongMatch(
+        asIdentity(u.event, sourceName),
+        (candidatesByDate.get(u.event.date) ?? []).filter((c) => !claimed.has(c.id))
       );
-      if (hit) {
-        claimed.add(hit.id);
-        matchUpdates.push({
-          id: hit.id,
-          payload: buildStrongMatchUpdate(hit, u.event, u.dedupKey, now),
-          eventName: u.event.name,
-          existingName: hit.name,
-        });
-        fuzzyMatched.add(u.dedupKey);
-      }
+      if (ambiguous.length > 0) logAmbiguousMatch(u.event.name, ambiguous);
+      if (!match) continue;
+      const hit = match.row;
+      claimed.add(hit.id);
+      matchUpdates.push({
+        id: hit.id,
+        payload: isFillOnlyMatch(match.kind, u.event, hit)
+          ? buildFillOnlyUpdate(hit, u.event, now)
+          : buildStrongMatchUpdate(hit, u.event, u.dedupKey, now),
+        eventName: u.event.name,
+        existingName: hit.name,
+      });
+      fuzzyMatched.add(u.dedupKey);
     }
 
     if (matchUpdates.length > 0) {
       // Per-row UPDATEs in parallel. Can't use upsert(onConflict:"id") — a
       // partial payload trips NOT NULL constraints before ON CONFLICT routing.
+      // A fill-only match with nothing to fill writes nothing.
       const updates = await Promise.all(
         matchUpdates.map((m) =>
-          supabaseAdmin.from("hwy4_events").update(m.payload).eq("id", m.id)
+          m.payload
+            ? supabaseAdmin.from("hwy4_events").update(m.payload).eq("id", m.id)
+            : Promise.resolve({ error: null })
         )
       );
       let errCount = 0;
@@ -1473,7 +1604,7 @@ export async function upsertEvents(
           .select(PLACEHOLDER_SIBLING_SELECT)
           .eq("date", event.date);
         const named = namedActTakesPrecedence(
-          asIdentity(event),
+          asIdentity(event, sourceName),
           ((siblings ?? []) as Array<EventIdentity & { id: string }>).filter(
             (s) => s.id !== existing.id
           ),
@@ -1514,31 +1645,33 @@ export async function upsertEvents(
         if (!countUpdateResult(result, "unchanged", error, event.name)) updateErrors++;
       }
     } else {
-      // Cross-source / re-titled-event match: same date + town + the shared
-      // `isSameEvent` rule (time slot + a strong identity signal). This
-      // catches the same real event listed under a different title that the
-      // title-based dedup_key can't see.
-      const canonicalTown = normalizeTown(event.town);
+      // Cross-source / re-titled-event match: same date + the shared
+      // `sameEventMatch` rule (time slot + a strong identity signal),
+      // corridor-wide like reconcile (dedup v2 1.4). This catches the same
+      // real event listed under a different title that the title-based
+      // dedup_key can't see.
       const { data: candidates } = await supabaseAdmin
         .from("hwy4_events")
-        .select(
-          "id, name, town, start_time, end_time, venue_name, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked"
-        )
+        .select(CANDIDATE_SELECT)
         .eq("date", event.date);
 
-      const strongMatch = candidates?.find(
-        (c) =>
-          normalizeTown(c.town) === canonicalTown &&
-          isStrongEventMatch(event, c as MatchableRow)
+      const { match, ambiguous } = pickStrongMatch(
+        asIdentity(event, sourceName),
+        (candidates ?? []) as (MergeableRow & { id: string })[]
       );
+      if (ambiguous.length > 0) logAmbiguousMatch(event.name, ambiguous);
 
-      if (strongMatch) {
+      if (match) {
+        const strongMatch = match.row;
         // Merge into the existing row so the survivor keeps the best of both,
-        // and re-key it to the incoming dedup_key.
-        const { error } = await supabaseAdmin
-          .from("hwy4_events")
-          .update(buildStrongMatchUpdate(strongMatch as MergeableRow, event, dedupKey, now))
-          .eq("id", strongMatch.id);
+        // and re-key it to the incoming dedup_key; fill-only when the two
+        // rows disagree on the clock or the town (see isFillOnlyMatch).
+        const payload = isFillOnlyMatch(match.kind, event, strongMatch)
+          ? buildFillOnlyUpdate(strongMatch, event, now)
+          : buildStrongMatchUpdate(strongMatch, event, dedupKey, now);
+        const { error } = payload
+          ? await supabaseAdmin.from("hwy4_events").update(payload).eq("id", strongMatch.id)
+          : { error: null };
         if (countUpdateResult(result, "skippedFuzzy", error, event.name)) {
           console.log(`  Merged duplicate: "${event.name}" → existing "${strongMatch.name}"`);
         } else {

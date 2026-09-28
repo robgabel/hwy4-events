@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
-import { findDuplicateClusters } from "@/lib/dedupe-events";
+import { clusterEventsDetailed } from "@/lib/dedupe-events";
 import { computeActionableLinkGaps, GAP_VENUE_THRESHOLD } from "@/lib/link-gaps";
 import { AUDIT_SIGNAL_KEY } from "@/lib/agent/audit-signal";
 import {
@@ -114,6 +114,10 @@ interface EventRow {
   event_url: string | null;
   last_scraped_at: string | null;
   status: string | null;
+  source_name: string | null;
+  is_routine: boolean | null;
+  series_umbrella: boolean | null;
+  created_at: string | null;
 }
 
 function normalizeName(name: string): string {
@@ -146,7 +150,7 @@ export async function GET(request: Request) {
   const { data: events, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, town, venue_name, venue_key, address, start_time, end_time, description, artists, category, visibility, is_routine, image_url, org_slug, event_url, last_scraped_at, status, series_umbrella"
+      "id, name, date, town, venue_name, venue_key, address, start_time, end_time, description, artists, category, visibility, is_routine, image_url, org_slug, event_url, last_scraped_at, status, series_umbrella, source_name, created_at"
     )
     .gte("date", today)
     .order("date", { ascending: true });
@@ -188,9 +192,9 @@ export async function GET(request: Request) {
   // exact time + a strong signal (venue / description / artists) but a
   // different title. These slip past the title-based dedup_key. Report only
   // clusters whose normalized names differ, to avoid double-counting (1).
-  const sameEventDupes = findDuplicateClusters(
-    rows.filter((r) => r.status !== "cancelled")
-  )
+  const clustering = clusterEventsDetailed(rows.filter((r) => r.status !== "cancelled"));
+  const sameEventDupes = clustering.clusters
+    .filter((cluster) => cluster.length > 1)
     .filter((cluster) => {
       const distinctNames = new Set(cluster.map((r) => normalizeName(r.name)));
       return distinctNames.size > 1;
@@ -204,6 +208,17 @@ export async function GET(request: Request) {
       names: cluster.map((r) => r.name),
       venues: cluster.map((r) => r.venue_name ?? "—"),
     }));
+
+  // 1c. Matches the clustering refused (dedup v2 1.5): a row that resembles two
+  // events which must stay apart (two named venues, two acts, one feed's two
+  // sessions, two titles naming different things). Reconcile never merges
+  // these, so this is where a human sees them. One entry per such row.
+  const refusedMatches = clustering.refused.map((r) => ({
+    date: r.row.date,
+    id: r.row.id,
+    name: r.row.name,
+    matches: r.matches.map((m) => m.name),
+  }));
 
   // 2. Hidden future events.
   const hidden = rows
@@ -379,6 +394,7 @@ export async function GET(request: Request) {
     issues: {
       duplicates: duplicates.length,
       same_event_duplicates: sameEventDupes.length,
+      dedup_refused: refusedMatches.length,
       hidden: hidden.length,
       missing_venue: missingVenue.length,
       unresolved_venue: unresolvedVenue.length,
@@ -488,6 +504,15 @@ export async function GET(request: Request) {
       }
       if (sameEventDupes.length > 10) lines.push(`  …and ${sameEventDupes.length - 10} more`);
     }
+    if (refusedMatches.length > 0) {
+      lines.push(
+        `\n*${refusedMatches.length} listing(s) left unmerged: each resembles two events that must stay apart (review by hand):*`
+      );
+      for (const r of refusedMatches.slice(0, 10)) {
+        lines.push(`• \`${r.date}\` "${r.name}" ~ ${r.matches.map((n) => `"${n}"`).join(" / ")}`);
+      }
+      if (refusedMatches.length > 10) lines.push(`  …and ${refusedMatches.length - 10} more`);
+    }
     if (hidden.length > 0) {
       lines.push(`\n*${hidden.length} hidden future event(s):*`);
       for (const h of hidden.slice(0, 5)) {
@@ -585,6 +610,7 @@ export async function GET(request: Request) {
     details: {
       duplicates,
       same_event_duplicates: sameEventDupes,
+      dedup_refused: refusedMatches,
       hidden,
       missing_venue: missingVenue,
       unresolved_venue: unresolvedVenue,

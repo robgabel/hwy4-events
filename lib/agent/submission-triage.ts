@@ -125,6 +125,9 @@ function submissionToIdentity(
     end_time: null,
     description: sub.description,
     artists: null,
+    // Published submissions carry this feed name, so a resident from another
+    // feed can match across a clock gap the way reconcile would (dedup v2 1.4).
+    source_name: "Community Submission",
   };
 }
 
@@ -168,6 +171,7 @@ interface DbCandidateRow {
   address: string | null;
   venue_key: string | null;
   series_umbrella: boolean | null;
+  is_routine: boolean | null;
 }
 
 /** How many candidates to put in front of the model. The corridor over a
@@ -195,7 +199,7 @@ async function findCandidates(
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, start_time, end_time, venue_name, address, venue_key, series_umbrella, town, description, artists, category, event_url, source_name, community_sourced, status, dedup_key"
+      "id, name, date, start_time, end_time, venue_name, address, venue_key, series_umbrella, town, description, artists, category, event_url, source_name, is_routine, community_sourced, status, dedup_key"
     )
     .gte("date", addDays(sub.event_date, -3))
     .lte("date", addDays(sub.event_date, 3))
@@ -236,6 +240,8 @@ async function findCandidates(
           end_time: r.end_time,
           description: r.description,
           artists: r.artists,
+          source_name: r.source_name,
+          is_routine: r.is_routine,
         }),
         exact_dedup: exact,
       } satisfies TriageCandidate,

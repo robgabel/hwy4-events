@@ -50,6 +50,16 @@ export interface EventIdentity {
    *  than any name fuzzy: the registry, not the scraped string, is the authority
    *  on what a venue is and where it sits. */
   venue_key?: string | null;
+  /** The feed that wrote the row (`hwy4_events.source_name`). Two DIFFERENT
+   *  feeds disagreeing on the start is often scrape noise (gates-open vs first
+   *  act vs last year's hours), so they may match across a clock gap; one feed
+   *  listing two starts is that feed enumerating two sessions, so it may not
+   *  (dedup v2 Phase 1.2). Absent on either side means no clock tolerance. */
+  source_name?: string | null;
+  /** A routine venue operation (`hwy4_events.is_routine`, lib/notability.ts):
+   *  a weekly dinner, a deli special. A placeholder never pairs with one, since
+   *  the pair would merge a concert into the hidden dinner (dedup v2 1.7). */
+  is_routine?: boolean | null;
 }
 
 const TOWN_ALIASES: Record<string, string> = {
@@ -508,6 +518,170 @@ function venueNoiseTokens(...venues: (string | null | undefined)[]): Set<string>
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Distinctive title identity (dedup v2 Phase 1.1, PRD-dedup-merge-v2.md).
+//
+// Two sources re-title one event in their own words: "The Gathering on Murphys
+// Main Street" vs "Murphys Gathering – A Celebration of All Things Magical",
+// "Karaoke W/ Kim" vs "Karaoke with Kim @ Murphys Irish Pub", "1st Annual Live
+// Like Lilly Dinner and Dance" vs "Live Like Lilly Fundraising Dinner". Every
+// other title signal compares whole titles, so the words that differ (the
+// venue, the town, "annual", "celebration", a date, "@") drown the one or two
+// words that name the event. This reduces a title to its DISTINCTIVE words and
+// asks whether all of one listing's words appear in the other's.
+// ---------------------------------------------------------------------------
+
+/** Words that never name an event. */
+const TITLE_STOPWORDS = new Set([
+  "a", "an", "the", "of", "and", "or", "at", "on", "in", "for", "with", "to",
+  "by", "from", "as", "our", "your", "all", "most", "w", "is", "it", "its",
+  "this", "be", "join", "us", "come", "presents", "present", "featuring",
+  "feat", "ft", "vs",
+]);
+
+/** Event-TYPE words: they say what kind of thing it is, not which one. Two
+ *  listings of one event share its distinctive words ("lilly", "hallows",
+ *  "gathering", "hermitfest"), not these. */
+const EVENT_TYPE_WORDS = new Set([
+  "annual", "celebration", "celebrating", "celebrate", "festival", "fest",
+  "faire", "fair", "event", "events", "party", "night", "nights", "day", "days",
+  "evening", "morning", "afternoon", "weekend", "live", "music", "concert",
+  "concerts", "series", "show", "shows", "dinner", "lunch", "brunch",
+  "breakfast", "dance", "fundraiser", "fundraising", "benefit", "class",
+  "classes", "workshop", "session", "program", "tour", "tours", "special",
+  "grand", "opening", "free", "family", "kids", "community", "new", "summer",
+  "fall", "winter", "spring", "holiday", "tasting", "wine", "market",
+]);
+
+/** Calendar words: a date is not an identity, and the matcher has already
+ *  compared dates. Weekdays included, plural too ("Mimosa Sundays"). */
+const CALENDAR_WORDS = new Set([
+  "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "sept", "oct",
+  "nov", "dec", "january", "february", "march", "april", "june", "july",
+  "august", "september", "october", "november", "december", "monday",
+  "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "mondays",
+  "tuesdays", "wednesdays", "thursdays", "fridays", "saturdays", "sundays",
+  "today", "tonight", "am", "pm",
+]);
+
+/** A title as comparable word tokens: `normalizeForMatch`, then a Facebook
+ *  Discover "Town, CALIFORNIA - " prefix, parentheticals ("(Oct 24-25)"), an "@
+ *  venue" tail, and apostrophes are dropped and "w/" is read as "with", before
+ *  splitting on anything that is not a letter or digit. Stopwords and one-letter
+ *  fragments are removed. */
+export function titleWordTokens(name: string | null | undefined): string[] {
+  let n = normalizeForMatch(name ?? "");
+  n = n.replace(/^[a-z .']{2,40},\s*(?:california|calif\.?|ca)\s*[-:]\s*/, "");
+  n = n.replace(/\([^)]*\)/g, " ");
+  n = n.replace(/\s+[@~]\s*.*$/, "");
+  n = n.replace(/\bw\//g, "with ");
+  n = n.replace(/['`]/g, "");
+  return n
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 1 && !TITLE_STOPWORDS.has(t));
+}
+
+/** Ordinals, numbers, clock fragments ("7pm", "3rd", "2026"), calendar words. */
+function isNoiseToken(t: string): boolean {
+  return /\d/.test(t) || CALENDAR_WORDS.has(t);
+}
+
+/** A venue or town name as a word set, with a singular/plural fold so a title
+ *  saying "big tree" is cleared by a venue saying "Big Trees". */
+function placeWords(v: string | null | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const t of normalizeVenue(v).split(" ")) {
+    if (!t) continue;
+    out.add(t);
+    out.add(t.endsWith("s") ? t.slice(0, -1) : `${t}s`);
+  }
+  return out;
+}
+
+/** The words that name THIS event: the title's tokens minus event-type words,
+ *  calendar noise, both rows' towns, and the venue words BOTH rows' venue names
+ *  share. Only the shared venue words go: a junk venue string can carry the
+ *  event's own name ("All Hallows Fantasy Faire, Gary PooBar Britt…" as the
+ *  venue of the All Hallows Faire), and stripping every venue word would delete
+ *  the very token that identifies the event. */
+export function distinctiveTitleTokens(
+  e: EventIdentity,
+  other: EventIdentity
+): Set<string> {
+  const mine = placeWords(e.venue_name);
+  const theirs = placeWords(other.venue_name);
+  const strip = new Set([...mine].filter((t) => theirs.has(t)));
+  for (const t of placeWords(e.town)) strip.add(t);
+  for (const t of placeWords(other.town)) strip.add(t);
+  return new Set(
+    titleWordTokens(e.name).filter(
+      (t) => !strip.has(t) && !EVENT_TYPE_WORDS.has(t) && !isNoiseToken(t)
+    )
+  );
+}
+
+/** Every distinctive word of one title appears in the other ("gathering" ⊂
+ *  "gathering, things, magical"). Full containment of the smaller set, not a
+ *  share of it: at one venue on one night, the single word that differs is
+ *  usually the whole difference ("North Grove Guided Walk" vs "South Grove
+ *  Guided Walk", "Kids Clay" vs "Adult Clay"). A title with no distinctive
+ *  words at all ("Live Music", "Wine Tasting") never matches here. */
+export function distinctiveTitleMatch(a: EventIdentity, b: EventIdentity): boolean {
+  const da = distinctiveTitleTokens(a, b);
+  const db = distinctiveTitleTokens(b, a);
+  if (da.size === 0 || db.size === 0) return false;
+  const [small, big] = da.size <= db.size ? [da, db] : [db, da];
+  for (const t of small) if (!big.has(t)) return false;
+  return true;
+}
+
+/** A title that is nothing but its venue's name ("Murphys Creek Theatre" at
+ *  Murphys Creek Theatre, how GoCalaveras titled some occurrences) carries no
+ *  show identity, so it is a placeholder (dedup v2 1.3). Exact equality after
+ *  venue normalization, deliberately: a looser containment test would read a
+ *  title like "Park" or "The Barn" at a longer-named venue as venue-only. */
+export function isVenueOnlyTitle(e: {
+  name?: string | null;
+  venue_name?: string | null;
+}): boolean {
+  const v = normalizeVenue(e.venue_name);
+  if (!v || GENERIC_VENUES.has(v)) return false;
+  return normalizeVenue(e.name) === v;
+}
+
+/** Duration assumed for a row that states no end, for the overlap test. */
+export const ASSUMED_EVENT_DURATION_MIN = 120;
+/** Largest start disagreement two different feeds may have and still be one
+ *  event (the Murphys Gathering: 11:00 on one aggregator, 12:00 on another). */
+export const CROSS_SOURCE_MAX_START_DRIFT_MIN = 180;
+
+/** [start, end) in minutes after midnight; an end at or before the start
+ *  crosses midnight. Null when the start is unknown. */
+function windowOf(e: EventIdentity): [number, number] | null {
+  const s = normalizeTime(e.start_time);
+  if (!s) return null;
+  const sm = clockMinutes(s);
+  const en = normalizeTime(e.end_time);
+  let em = en ? clockMinutes(en) : sm + ASSUMED_EVENT_DURATION_MIN;
+  if (em <= sm) em += 24 * 60;
+  return [sm, em];
+}
+
+/** Two different feeds, both starts known, starts within the drift cap, and
+ *  the windows overlap. The overlap is what keeps a matinee and an evening
+ *  performance apart, and the source test is what keeps a venue's own two
+ *  sessions apart: one feed listing two starts is two occurrences. */
+function crossSourceWindowsOverlap(a: EventIdentity, b: EventIdentity): boolean {
+  const sa = (a.source_name ?? "").trim();
+  const sb = (b.source_name ?? "").trim();
+  if (!sa || !sb || sa === sb) return false;
+  const wa = windowOf(a);
+  const wb = windowOf(b);
+  if (!wa || !wb) return false;
+  if (Math.abs(wa[0] - wb[0]) > CROSS_SOURCE_MAX_START_DRIFT_MIN) return false;
+  return wa[0] < wb[1] && wb[0] < wa[1];
+}
+
 /** The venue string to use for matching. Facebook-style place fields often
  *  carry a locality instead of a venue — "Meadowmont, California" for an event
  *  at Meadowmont Lodge (2026-07-05, the Coffee & Cars triple). Strip a trailing
@@ -632,8 +806,9 @@ function tailWords(tail: string): string[] {
  *  words ("Live Music: Friday Night") still reads as a placeholder, so every
  *  merge that relied on a true placeholder keeps working. When a tail is
  *  ambiguous it reads as an act. For MATCHING that can only cost a merge, never
- *  a concert, because every placeholder here is also `isGenericTitle`, so the
- *  predicate can only merge less than it did before this test existed. For
+ *  a concert, because every generic placeholder here is also `isGenericTitle`,
+ *  so the predicate merged less than before this test existed (Phase 0; the
+ *  venue-only shape joined in Phase 1.3, measured separately). For
  *  SURVIVORSHIP it is not free: an act-read title also escapes the -12
  *  penalty, so a rich aggregator row titled "Live Music - Greg Sutton" can now
  *  outrank the organizer's own listing of that show. No real cluster changed
@@ -643,6 +818,11 @@ export function isPlaceholderForMatch(e: {
   venue_name?: string | null;
 }): boolean {
   const name = e.name ?? "";
+  // A title that only restates the venue names no show (dedup v2 1.3). The
+  // one placeholder shape that is not `isGenericTitle`; the start tolerance in
+  // `isSameEvent` reads it too, so the tolerance stays at least as broad as
+  // this signal.
+  if (isVenueOnlyTitle(e)) return true;
   if (!isGenericTitle(name)) return false;
   const parts = splitGenericTitle(name);
   // An end-anchored generic arm ("... Concert Series", "... (TBD)"), or a
@@ -790,6 +970,13 @@ function sameExactWindow(a: EventIdentity, b: EventIdentity): boolean {
   return true;
 }
 
+/** Both rows name an act and no act is shared: two rows that disagree about
+ *  who is playing are asserting two different shows. */
+function namesDifferentActs(a: EventIdentity, b: EventIdentity): boolean {
+  const namesAct = (e: EventIdentity) => (e.artists ?? []).some((x) => (x ?? "").trim());
+  return namesAct(a) && namesAct(b) && !artistsOverlap(a.artists, b.artists);
+}
+
 /** Minimum description length for the shared-press-release signal. Short blurbs
  *  ("Live music in the beer garden") repeat across genuinely different events;
  *  only a substantial body of copied text carries identity. */
@@ -838,6 +1025,95 @@ function sharedPressRelease(a: EventIdentity, b: EventIdentity): boolean {
   return textSimilarity(da, db) >= PRESS_RELEASE_SIMILARITY;
 }
 
+/** Do two rows name the same physical place? `bothVenuesKnown`: both carry a
+ *  real (non-generic) venue. `venuesAgree`: they provably share one.
+ *
+ *  Venue veto (2026-07-02 security/correctness review, P3). Two events at
+ *  DIFFERENT *known* venues are never the same show — even with an identical
+ *  title or a shared artist. "Trivia Night", "Open Mic", "Karaoke", "Bingo"
+ *  run at many venues on the same night at the same time; merging them would
+ *  hide one immediately and let a later reconcile/delete permanently drop it.
+ *  Only fires when BOTH venues are known and non-generic: a row with an
+ *  empty/"Unknown Venue" side stays eligible for the legitimate cross-source
+ *  merge (one feed names the venue, the other doesn't).
+ *
+ *  The venue registry key is the strongest signal available: two rows carrying
+ *  the same `venue_key` were resolved to the same registry entry at write time,
+ *  so no amount of string divergence matters. Below it, the fuzzies: venue-name
+ *  containment, a same-street-number address anchor (two sources naming the same
+ *  lot differently — "Bristol's Ranch House Cafe" vs "Bristols's Cafe Parking
+ *  Lot", both at 961 Highway 4), and token overlap for a name rewritten from
+ *  both ends at once. */
+function venueAgreement(
+  a: EventIdentity,
+  b: EventIdentity
+): { bothVenuesKnown: boolean; venuesAgree: boolean } {
+  const va = venueForMatch(a);
+  const vb = venueForMatch(b);
+  return {
+    bothVenuesKnown: !!va && !!vb && !GENERIC_VENUES.has(va) && !GENERIC_VENUES.has(vb),
+    venuesAgree:
+      (!!a.venue_key && a.venue_key === b.venue_key) ||
+      venueMatch(va, vb) ||
+      sameStreetNumber(a.address, b.address) ||
+      venueTokensAgree(va, vb),
+  };
+}
+
+/** What says two rows are different events (see `distinctEventEvidence`). */
+export type DistinctEventEvidence = "venues" | "acts" | "sessions" | "titles";
+
+/** Positive evidence that two rows are DIFFERENT events, for callers that group
+ *  rows (dedup v2 Phase 1.5). The pairwise rule is not transitive: a row that
+ *  resembles two others can pull them into one cluster even though they do not
+ *  match each other. Most such pairs are harmless (a vague "Dinner" beside
+ *  "Queen of Hearts & Dinner"), but these are not:
+ *   - `venues`: two known venues that differ;
+ *   - `acts`: two named acts, none shared;
+ *   - `sessions`: one feed listing two different starts (a venue's morning and
+ *     evening sessions, which an all-day aggregator listing overlaps both of);
+ *   - `titles`: two titles that each name something and neither names the
+ *     other ("Junior Rangers" and "Meadow Walk" in the same park at 10:00).
+ *  `titles` is the one a third row can outweigh: two partial titles of one
+ *  dinner ("Dinner - Tacos", "Moose Legion Dinner") are joined by a row that
+ *  names both ("Dinner - Moose Legion Tacos"), see `titleCovers`. Meaningful
+ *  only for a pair `isSameEvent` rejects. */
+export function distinctEventEvidence(
+  a: EventIdentity,
+  b: EventIdentity
+): DistinctEventEvidence | null {
+  const { bothVenuesKnown, venuesAgree } = venueAgreement(a, b);
+  if (bothVenuesKnown && !venuesAgree) return "venues";
+  if (namesDifferentActs(a, b)) return "acts";
+  const sa = normalizeTime(a.start_time);
+  const sb = normalizeTime(b.start_time);
+  const src = (e: EventIdentity) => (e.source_name ?? "").trim();
+  if (src(a) && src(a) === src(b) && sa && sb && sa !== sb) return "sessions";
+  const da = distinctiveTitleTokens(a, b);
+  const db = distinctiveTitleTokens(b, a);
+  if (da.size === 0 || db.size === 0) return null;
+  const within = (x: Set<string>, y: Set<string>) => [...x].every((t) => y.has(t));
+  return !within(da, db) && !within(db, da) ? "titles" : null;
+}
+
+/** Row `c`'s title names every distinctive word of row `a`'s. A placeholder
+ *  names nothing, so it never covers anything. */
+export function titleCovers(c: EventIdentity, a: EventIdentity): boolean {
+  const da = distinctiveTitleTokens(a, c);
+  if (da.size === 0) return false;
+  const dc = distinctiveTitleTokens(c, a);
+  for (const t of da) if (!dc.has(t)) return false;
+  return true;
+}
+
+/** How two rows matched. `cross_source`: two different feeds disagree on the
+ *  start and the match rests on the cross-source window rule (dedup v2 1.2),
+ *  so it holds only because different feeds wrote the rows; a writer that
+ *  overwrote one row with the other's keys and clock would break it (see
+ *  `buildCrossSourceFillUpdate` in scripts/lib/dedup.ts). `standard`: every
+ *  other rule, all of which hold whoever wrote the rows. */
+export type SameEventMatch = "standard" | "cross_source";
+
 /** Are two rows the same real event? The one definition, imported by both the
  *  read-time collapse and the write-time merge.
  *
@@ -852,47 +1128,45 @@ function sharedPressRelease(a: EventIdentity, b: EventIdentity): boolean {
  *   - near-identical titles, or
  *   - overlapping artists, or
  *   - near-identical descriptions, or
- *   - same venue AND one title is a generic placeholder, or
+ *   - same venue AND one title is a placeholder (generic, or only the venue's
+ *     name) AND neither row is a routine operation, or
  *   - same venue AND one row's act name appears in the other's text, or
  *   - same venue AND a shared substantive description core, or
  *   - same venue AND heavily-overlapping title tokens (minus the "@ venue" tail), or
+ *   - same venue AND the distinctive words of one title are all in the other, or
  *   - same venue AND an identical start-AND-end window (`sameExactWindow`).
  *  Two *different specific* titles with distinct descriptions never merge on
  *  venue + date + START time alone — a park runs simultaneous programs. They do
- *  merge when the whole window matches end to end. A generic series placeholder
- *  vs a named act at the same venue may disagree on start by up to
+ *  merge when the whole window matches end to end. A placeholder vs a named
+ *  act at the same venue may disagree on start by up to
  *  `GENERIC_SERIES_START_TOLERANCE_MIN` (the aggregator's series-default clock
- *  vs the organizer's this-night time). */
+ *  vs the organizer's this-night time).
+ *
+ *  Across a clock gap (dedup v2 1.2): two DIFFERENT feeds at the same venue
+ *  whose windows overlap and whose starts are within
+ *  `CROSS_SOURCE_MAX_START_DRIFT_MIN` match on strong identity only
+ *  (distinctive title, shared artist, the act named in the other, or a near-
+ *  identical description), never on a placeholder or the window alone. */
 export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
-  if (a.date && b.date && a.date !== b.date) return false;
+  return sameEventMatch(a, b) !== null;
+}
 
-  const va = venueForMatch(a);
-  const vb = venueForMatch(b);
+/** `isSameEvent`, reporting which rule matched (see `SameEventMatch`), or null. */
+export function sameEventMatch(
+  a: EventIdentity,
+  b: EventIdentity
+): SameEventMatch | null {
+  if (a.date && b.date && a.date !== b.date) return null;
+  // Both rows dated (and so the same night). The two Phase 1 signals, the
+  // cross-source clock rule and distinctive-title containment, were designed
+  // and measured on one night's listings only. The poster and verification
+  // "whole series" actions call this with the dates stripped to match a
+  // recurring event across nights, where containment is weaker evidence ("Trivia
+  // Night" is contained in "Halloween Trivia Night", the one-off special), so
+  // those callers keep the pre-Phase-1 rule.
+  const sameNight = !!a.date && !!b.date;
 
-  // Venue veto (2026-07-02 security/correctness review, P3). Two events at
-  // DIFFERENT *known* venues are never the same show — even with an identical
-  // title or a shared artist. "Trivia Night", "Open Mic", "Karaoke", "Bingo"
-  // run at many venues on the same night at the same time; merging them would
-  // hide one immediately and let a later reconcile/delete permanently drop it.
-  // Only fires when BOTH venues are known and non-generic: a row with an
-  // empty/"Unknown Venue" side stays eligible for the legitimate cross-source
-  // merge (one feed names the venue, the other doesn't). The generic/umbrella +
-  // actNamedInOther paths below already require venueMatch, so this veto only
-  // removes the title/artist/description shortcuts across conflicting venues.
-  const bothVenuesKnown =
-    !!va && !!vb && !GENERIC_VENUES.has(va) && !GENERIC_VENUES.has(vb);
-  // The venue registry key is the strongest signal available: two rows carrying
-  // the same `venue_key` were resolved to the same registry entry at write time,
-  // so no amount of string divergence matters. Below it, the fuzzies: venue-name
-  // containment, a same-street-number address anchor (two sources naming the same
-  // lot differently — "Bristol's Ranch House Cafe" vs "Bristols's Cafe Parking
-  // Lot", both at 961 Highway 4), and token overlap for a name rewritten from
-  // both ends at once.
-  const venuesAgree =
-    (!!a.venue_key && a.venue_key === b.venue_key) ||
-    venueMatch(va, vb) ||
-    sameStreetNumber(a.address, b.address) ||
-    venueTokensAgree(va, vb);
+  const { bothVenuesKnown, venuesAgree } = venueAgreement(a, b);
 
   // Town veto, softened by venue agreement (2026-07-28, the Doc Nancy dupe).
   // `town` is a HUMAN-ENTERED LABEL, not a fact about the event: the corridor is
@@ -910,7 +1184,7 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
     b.town &&
     normalizeTown(a.town) !== normalizeTown(b.town)
   ) {
-    return false;
+    return null;
   }
 
   // A distributed event listed by two sources under two different pseudo-venues:
@@ -924,44 +1198,78 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
     !isUmbrella(b) &&
     sharedPressRelease(a, b)
   ) {
-    return true;
+    return "standard";
   }
 
-  if (bothVenuesKnown && !venuesAgree) return false;
+  if (bothVenuesKnown && !venuesAgree) return null;
 
-  // Exactly one title is a series/live-music placeholder: allow the
-  // aggregator's series-default start to disagree with the named act's
-  // this-night start (2026-09-19 Brice: 7:00 PM Hilltop vs 6:00 PM Greg
-  // Sutton). XOR — two generic titles at different hours stay split, and
-  // two specific titles still need equal starts. Keyed on the BROAD
-  // `isGenericTitle` on purpose, not `isPlaceholderForMatch`: the narrower
-  // test would pass a TBD slot and a different named act through the
-  // tolerance ("Patio Party #4 featuring live music (TBD)" 19:00 vs "Live
-  // Music - Jamie Byous" 18:30, the 2026-08-08 Sequoia night), and the
-  // placeholder signal below would then merge two events (dedup v2 Phase 0
-  // review, 2026-09-28). Broad tolerance + narrow signal means Phase 0 only
-  // ever merges less than before, never more.
+  // Exactly one title is a placeholder: allow the aggregator's series-default
+  // start to disagree with the named act's this-night start (2026-09-19
+  // Brice: 7:00 PM Hilltop vs 6:00 PM Greg Sutton). XOR — two generic titles
+  // at different hours stay split, and two specific titles still need equal
+  // starts. Keyed on the BROAD `isGenericTitle` on purpose, not
+  // `isPlaceholderForMatch`: the narrower test would pass a TBD slot and a
+  // different named act through the tolerance ("Patio Party #4 featuring live
+  // music (TBD)" 19:00 vs "Live Music - Jamie Byous" 18:30, the 2026-08-08
+  // Sequoia night), and the placeholder signal below would then merge two
+  // events (dedup v2 Phase 0 review, 2026-09-28). A venue-only title ("Murphys
+  // Creek Theatre") is the one placeholder `isGenericTitle` misses, so it
+  // joins the broad side here (Phase 1.3), keeping the tolerance at least as
+  // broad as the placeholder signal.
+  const placeholderish = (e: EventIdentity) =>
+    isGenericTitle(e.name) || isVenueOnlyTitle(e);
   const seriesStartTolerance =
-    !!a.name &&
-    !!b.name &&
-    isGenericTitle(a.name) !== isGenericTitle(b.name);
+    !!a.name && !!b.name && placeholderish(a) !== placeholderish(b);
 
-  if (!timesAnchor(a, b, venuesAgree, seriesStartTolerance)) return false;
+  if (!timesAnchor(a, b, venuesAgree, seriesStartTolerance)) {
+    // Two DIFFERENT feeds at the same venue whose windows overlap but whose
+    // starts disagree: gates-open vs first act vs last year's hours (the
+    // Murphys Gathering, 11:00 on one aggregator and 12:00 on the other, was
+    // invisible to every layer). Strong identity only: never the placeholder
+    // or window signals, which say nothing about WHICH event a listing is.
+    // One feed listing two starts is two sessions, so it never gets here.
+    if (!sameNight || !venuesAgree || isUmbrella(a) || isUmbrella(b)) return null;
+    if (!crossSourceWindowsOverlap(a, b)) return null;
+    // Two rows that each name an act and disagree about who is playing are
+    // two shows, whatever their titles share (see `sameExactWindow`).
+    if (namesDifferentActs(a, b)) return null;
+    if (
+      distinctiveTitleMatch(a, b) ||
+      artistsOverlap(a.artists, b.artists) ||
+      actNamedInOther(a, b) ||
+      (!!a.description &&
+        !!b.description &&
+        textSimilarity(a.description, b.description) >= 0.92)
+    ) {
+      return "cross_source";
+    }
+    return null;
+  }
 
-  if (a.name && b.name && textSimilarity(a.name, b.name) >= 0.85) return true;
-  if (artistsOverlap(a.artists, b.artists)) return true;
+  if (a.name && b.name && textSimilarity(a.name, b.name) >= 0.85) return "standard";
+  if (artistsOverlap(a.artists, b.artists)) return "standard";
   if (
     a.description &&
     b.description &&
     textSimilarity(a.description, b.description) >= 0.92
   ) {
-    return true;
+    return "standard";
   }
-  if (venuesAgree && (isPlaceholderForMatch(a) || isPlaceholderForMatch(b))) {
-    return true;
+  // A placeholder pairs with any title at its venue in the slot, which is
+  // exactly why it must never pair with a routine operation: "Live Music @
+  // Sequoia Woods" 19:00 would otherwise merge with the hidden "Thursday Night
+  // Dinner" 18:00, and the concert would vanish into a row the site never
+  // shows (dedup v2 1.7).
+  if (
+    venuesAgree &&
+    !a.is_routine &&
+    !b.is_routine &&
+    (isPlaceholderForMatch(a) || isPlaceholderForMatch(b))
+  ) {
+    return "standard";
   }
   if (venuesAgree && actNamedInOther(a, b)) {
-    return true;
+    return "standard";
   }
   // Same venue + same slot, but the two sources gave the event different
   // specific titles and edited the shared blurb between listings, so neither
@@ -973,18 +1281,27 @@ export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   // hosting different back-to-back programs (distinct titles AND distinct
   // description text) still stays split.
   if (venuesAgree && descriptionsShareCore(a.description, b.description)) {
-    return true;
+    return "standard";
   }
   if (
     venuesAgree &&
     titlesShareTokens(a.name, b.name, venueNoiseTokens(a.venue_name, b.venue_name))
   ) {
-    return true;
+    return "standard";
+  }
+  // The same event re-titled in each source's own words: every distinctive
+  // word of one title is in the other once venue, town, event-type words and
+  // dates are set aside (dedup v2 1.1). "Karaoke at The Murphys Irish Pub" vs
+  // "Karaoke W/ Kim", "3rd of July Murphys Annual Patriotic Car Cruise" vs
+  // "Murphys 3rd Annual Most Patriotic Car Cruise Celebrating America's
+  // Independence".
+  if (sameNight && venuesAgree && distinctiveTitleMatch(a, b)) {
+    return "standard";
   }
   if (venuesAgree && sameExactWindow(a, b)) {
-    return true;
+    return "standard";
   }
-  return false;
+  return null;
 }
 
 /** Deterministic dedup key: `sha256(normalizeName(name)|date|normalizeTown(town))`,

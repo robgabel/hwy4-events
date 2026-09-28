@@ -11,13 +11,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   isSameEvent,
+  sameEventMatch,
   isGenericTitle,
   isActlessPlaceholderTitle,
   isPlaceholderForMatch,
+  isVenueOnlyTitle,
+  titleWordTokens,
+  distinctiveTitleTokens,
+  distinctiveTitleMatch,
+  distinctEventEvidence,
+  titleCovers,
   mergeArtistLists,
   namedActTakesPrecedence,
   generateDedupKey,
   normalizeForMatch,
+  CROSS_SOURCE_MAX_START_DRIFT_MIN,
   type EventIdentity,
 } from "../../lib/event-identity.js";
 
@@ -1588,4 +1596,178 @@ test("a named act behind 'with' never merges into the routine deli special an ho
     assert.equal(isSameEvent(deli, concert), false, name);
     assert.equal(isSameEvent(concert, deli), false, name);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Dedup v2 Phase 1 (PRD-dedup-merge-v2.md): distinctive titles, the
+// cross-source clock rule, venue-only placeholders, and the routine gate. The
+// real rows live in dedup-golden.test.ts; these pin each rule's edges.
+// ---------------------------------------------------------------------------
+
+test("titleWordTokens drops Facebook decoration, parentheticals, @ tails, w/ and apostrophes", () => {
+  assert.deepEqual(
+    titleWordTokens("Angels Camp, CALIFORNIA - All Hallows Faire (Oct 24-25)"),
+    ["hallows", "faire"]
+  );
+  assert.deepEqual(titleWordTokens("Karaoke W/ Kim"), ["karaoke", "kim"]);
+  assert.deepEqual(titleWordTokens("Karaoke with Kim @ Murphys Irish Pub"), ["karaoke", "kim"]);
+  assert.deepEqual(titleWordTokens("18th Annual – All Hallow's Faire"), ["hallows", "faire"]);
+});
+
+test("distinctive tokens drop event-type words, dates, towns and SHARED venue words only", () => {
+  const gathering = { name: "The Gathering on Murphys Main Street", town: "Murphys", venue_name: "Murphys Main Street" };
+  const magical = {
+    name: "Murphys Gathering – A Celebration of All Things Magical",
+    town: "Murphys",
+    venue_name: "Murphys Main Street",
+  };
+  assert.deepEqual([...distinctiveTitleTokens(gathering, magical)], ["gathering"]);
+  assert.deepEqual([...distinctiveTitleTokens(magical, gathering)], ["gathering", "things", "magical"]);
+  // A junk venue string that carries the event's own name must not delete it:
+  // only venue words BOTH rows share are stripped.
+  const junk = { name: "All Hallows Faire", town: "Angels Camp", venue_name: "All Hallows Fantasy Faire, Gary PooBar Britt" };
+  const fair = { name: "All Hallows Faire", town: "Angels Camp", venue_name: "Calaveras County Fairgrounds" };
+  assert.deepEqual([...distinctiveTitleTokens(junk, fair)], ["hallows"]);
+  // Weekdays, months, ordinals and clock fragments are not identity.
+  assert.deepEqual(
+    [...distinctiveTitleTokens({ name: "Thursday 7pm Trivia, Oct 3rd", town: "Arnold" }, { name: "x" })],
+    ["trivia"]
+  );
+});
+
+test("distinctive titles match only on full containment of the smaller set", () => {
+  const at = (name: string) => ({ name, town: "Arnold", venue_name: "Calaveras Big Trees State Park" });
+  assert.equal(distinctiveTitleMatch(at("Junior Rangers"), at("Junior Rangers: Creek Critters")), true);
+  // One differing word is the whole difference at one venue on one night.
+  assert.equal(distinctiveTitleMatch(at("North Grove Guided Walk"), at("South Grove Guided Walk")), false);
+  assert.equal(distinctiveTitleMatch(at("Junior Rangers"), at("Meadow Walk")), false);
+  // A title with no distinctive words never matches on this signal.
+  assert.equal(distinctiveTitleMatch(at("Live Music"), at("Live Music on the Deck")), false);
+  assert.equal(distinctiveTitleMatch(at("Wine Tasting"), at("Wine Tasting")), false);
+});
+
+test("a venue-only title is a placeholder, by exact equality only", () => {
+  const theatre = { name: "Murphys Creek Theatre", venue_name: "Murphys Creek Theatre" };
+  assert.equal(isVenueOnlyTitle(theatre), true);
+  assert.equal(isPlaceholderForMatch(theatre), true);
+  // Containment is not enough: "Park" is not the venue "Murphys Community Park".
+  assert.equal(isVenueOnlyTitle({ name: "Park", venue_name: "Murphys Community Park" }), false);
+  assert.equal(isVenueOnlyTitle({ name: "Unknown Venue", venue_name: "Unknown Venue" }), false);
+  assert.equal(isVenueOnlyTitle({ name: "An Act of God", venue_name: "Murphys Creek Theatre" }), false);
+});
+
+test("a venue-only title pairs with the show in its slot, within the placeholder tolerance", () => {
+  const base = { date: "2026-12-19", town: "Murphys", venue_name: "Murphys Creek Theatre", venue_key: "murphys-creek-theatre" };
+  const venueOnly = { ...base, name: "Murphys Creek Theatre", start_time: "19:00", source_name: "GoCalaveras.com" };
+  const show = { ...base, name: "An Act of God", start_time: "19:30", end_time: "21:00", source_name: "Visit Murphys" };
+  assert.equal(sameEventMatch(venueOnly, show), "standard");
+  // Two placeholders never get the tolerance: both sides are placeholder-ish.
+  const liveMusic = { ...base, name: "Live Music - TBD", start_time: "19:30", source_name: "Visit Murphys" };
+  assert.equal(sameEventMatch(venueOnly, liveMusic), null);
+  // Outside the 90-minute tolerance a venue-only title is no identity at all.
+  assert.equal(sameEventMatch(venueOnly, { ...show, start_time: "14:00", end_time: "15:30" }), null);
+});
+
+test("cross-source clock rule: two feeds, one venue, overlapping windows, strong identity", () => {
+  const street = { date: "2026-10-17", town: "Murphys", venue_name: "Murphys Main Street" };
+  const goCal = { ...street, name: "The Gathering on Murphys Main Street", start_time: "11:00", end_time: "17:00", source_name: "GoCalaveras.com" };
+  const visit = { ...street, name: "Murphys Gathering – A Celebration of All Things Magical", start_time: "12:00", end_time: "17:00", source_name: "Visit Murphys" };
+  assert.equal(sameEventMatch(goCal, visit), "cross_source");
+  assert.equal(sameEventMatch(visit, goCal), "cross_source");
+  // One feed listing two starts is two sessions.
+  assert.equal(sameEventMatch(goCal, { ...visit, source_name: "GoCalaveras.com" }), null);
+  // No feed on either side: no clock tolerance.
+  assert.equal(sameEventMatch(goCal, { ...visit, source_name: null }), null);
+  // The series callers strip dates to compare across nights; no tolerance there.
+  const { date: _d1, ...goCalNoDate } = goCal;
+  const { date: _d2, ...visitNoDate } = visit;
+  assert.equal(sameEventMatch(goCalNoDate, visitNoDate), null);
+  // A different venue, even with the same words, is a different event.
+  assert.equal(sameEventMatch(goCal, { ...visit, venue_name: "Murphys Community Park" }), null);
+});
+
+test("cross-source clock rule: windows must overlap and starts sit within the drift cap", () => {
+  const base = { date: "2026-12-19", town: "Murphys", venue_name: "Murphys Creek Theatre", name: "An Act of God" };
+  const matinee = { ...base, start_time: "14:00", source_name: "GoCalaveras.com" };
+  // Unknown end reads as a two-hour show: 14:00-16:00 and 16:30-18:00 do not overlap.
+  assert.equal(sameEventMatch(matinee, { ...base, start_time: "16:30", end_time: "18:00", source_name: "Visit Murphys" }), null);
+  // 19:30 is past the cap whatever the windows say.
+  assert.equal(CROSS_SOURCE_MAX_START_DRIFT_MIN, 180);
+  assert.equal(sameEventMatch(matinee, { ...base, start_time: "19:30", end_time: "23:59", source_name: "Visit Murphys" }), null);
+  // Overlapping and within the cap: the same performance.
+  assert.equal(sameEventMatch(matinee, { ...base, start_time: "15:00", end_time: "17:00", source_name: "Visit Murphys" }), "cross_source");
+});
+
+test("cross-source clock rule never rests on a placeholder, the window, or rival acts", () => {
+  const base = { date: "2026-08-02", town: "Murphys", venue_name: "Murphys Irish Pub", venue_key: "murphys-irish-pub" };
+  // A placeholder names nothing. Past the 90-minute placeholder tolerance
+  // and inside overlapping windows, a feed's bare "Live Music" could be any set.
+  const afternoon = { ...base, name: "Live Music @ Murphys Irish Pub", start_time: "16:00", end_time: "20:00", source_name: "GoCalaveras.com" };
+  const evening = { ...base, name: "Eva Grace Followed By the Sipsy River Band", start_time: "17:45", end_time: "21:00", source_name: "Murphys Irish Pub" };
+  assert.equal(sameEventMatch(afternoon, evening), null);
+  assert.equal(sameEventMatch(evening, afternoon), null);
+  // Shared title words but two named acts: two shows.
+  const a = { ...base, name: "Blues Night: The Hollerin' Hounds", start_time: "18:00", end_time: "21:00", artists: ["The Hollerin' Hounds"], source_name: "GoCalaveras.com" };
+  const b = { ...base, name: "Blues Night", start_time: "19:00", end_time: "22:00", artists: ["Sipsy River Band"], source_name: "Murphys Irish Pub" };
+  assert.equal(sameEventMatch(a, b), null);
+});
+
+test("a placeholder never pairs with a routine operation (dedup v2 1.7)", () => {
+  const base = { date: "2026-08-13", town: "Arnold", venue_name: "Sequoia Woods Country Club", venue_key: "sequoia-woods" };
+  const liveMusic = { ...base, name: "Live Music @ Sequoia Woods", start_time: "19:00", end_time: "21:00" };
+  const dinner = { ...base, name: "Thursday Night Dinner", start_time: "18:00", end_time: "21:00", is_routine: true };
+  assert.equal(isSameEvent(liveMusic, dinner), false);
+  assert.equal(isSameEvent(dinner, liveMusic), false);
+  // The same pair without the routine flag is the placeholder pairing it always was.
+  assert.equal(isSameEvent(liveMusic, { ...dinner, is_routine: false, start_time: "19:00" }), true);
+});
+
+test("distinctEventEvidence names what keeps two rows apart, and nothing for vague titles", () => {
+  const base = { date: "2026-07-12", town: "Arnold", venue_name: "Calaveras Big Trees State Park", start_time: "10:00", source_name: "Calaveras Big Trees State Park" };
+  assert.equal(distinctEventEvidence({ ...base, name: "Junior Rangers" }, { ...base, name: "Meadow Walk" }), "titles");
+  assert.equal(
+    distinctEventEvidence({ ...base, name: "Tapas Class" }, { ...base, name: "Tapas Class", start_time: "18:00" }),
+    "sessions"
+  );
+  assert.equal(
+    distinctEventEvidence({ ...base, name: "Karaoke" }, { ...base, name: "Karaoke", venue_name: "Murphys Irish Pub" }),
+    "venues"
+  );
+  assert.equal(
+    distinctEventEvidence({ ...base, name: "Concert", artists: ["A"] }, { ...base, name: "Concert", artists: ["B"] }),
+    "acts"
+  );
+  // A title with no distinctive words is not evidence of anything.
+  assert.equal(distinctEventEvidence({ ...base, name: "Dinner" }, { ...base, name: "Queen of Hearts" }), null);
+  // One title naming the other's words is not a conflict either.
+  assert.equal(distinctEventEvidence({ ...base, name: "Junior Rangers" }, { ...base, name: "Junior Rangers: Creek Critters" }), null);
+});
+
+test("titleCovers: a row names every distinctive word of another; a placeholder names nothing", () => {
+  const at = (name: string) => ({ name, town: "Arnold", venue_name: "Ebbetts Pass Moose Lodge" });
+  assert.equal(titleCovers(at("Dinner - Moose Legion Tacos"), at("Dinner - Tacos")), true);
+  assert.equal(titleCovers(at("Dinner - Moose Legion Tacos"), at("Moose Legion Dinner")), true);
+  assert.equal(titleCovers(at("Dinner - Tacos"), at("Moose Legion Dinner")), false);
+  assert.equal(titleCovers(at("Live Music"), at("Dinner - Tacos")), false);
+});
+
+test("distinctive-title containment is a same-night rule: the series callers strip dates and keep the old rule", () => {
+  // /admin/posters and /admin/verification compare a recurring event across
+  // nights with the dates removed. Containment was measured on one night's
+  // listings only; across nights a generic series title is contained in every
+  // themed or named edition of it. Only this signal links the pair below.
+  const base = { town: "Murphys", venue_name: "Murphys Irish Pub", start_time: "19:00" };
+  const series = { ...base, name: "Karaoke at The Murphys Irish Pub" };
+  const kim = { ...base, name: "Karaoke W/ Kim", end_time: "22:00" };
+  assert.equal(isSameEvent(series, kim), false);
+  assert.equal(isSameEvent({ ...series, date: "2026-07-10" }, { ...kim, date: "2026-07-10" }), true);
+});
+
+test("cross-source clock rule: the drift cap holds even when the windows overlap", () => {
+  const base = { date: "2026-10-03", town: "Murphys", venue_name: "Murphys Community Park", name: "Grape Stomp" };
+  const allDay = { ...base, start_time: "09:30", end_time: "22:00", source_name: "GoCalaveras.com" };
+  // 09:30 vs 12:30 (180 min) is inside the cap; 09:30 vs 13:00 is not, though
+  // the all-day window overlaps both.
+  assert.equal(sameEventMatch(allDay, { ...base, start_time: "12:30", end_time: "14:00", source_name: "Visit Murphys" }), "cross_source");
+  assert.equal(sameEventMatch(allDay, { ...base, start_time: "13:00", end_time: "14:30", source_name: "Visit Murphys" }), null);
 });
