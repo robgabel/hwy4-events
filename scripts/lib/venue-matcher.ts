@@ -130,10 +130,16 @@ function normalizeAddress(addr: string): string {
   return tokens.join(" ").trim();
 }
 
+// Every street address a venue answers to: its display `address` plus any
+// secondary entrances in `addresses`. All of them go through the ambiguity
+// filter below, so a secondary address shared with another venue can't flip
+// a correctly named one either.
 const _addressCandidates: { norm: string; key: string; venue: KnownVenue }[] = [];
 for (const [key, venue] of Object.entries(KNOWN_VENUES)) {
-  if (!venue.address) continue;
-  _addressCandidates.push({ norm: normalizeAddress(venue.address), key, venue });
+  for (const addr of [venue.address, ...(venue.addresses ?? [])]) {
+    if (!addr) continue;
+    _addressCandidates.push({ norm: normalizeAddress(addr), key, venue });
+  }
 }
 
 // Some venues genuinely share a street address (e.g. Ebbetts Pass Moose Lodge

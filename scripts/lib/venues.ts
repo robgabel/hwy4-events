@@ -26,6 +26,13 @@ export interface KnownVenue {
   town: string;
   /** Street address, if known */
   address?: string;
+  /** Other street addresses the SAME venue answers to (a second entrance or
+   *  gate that sources list instead). Indexed for address matching only;
+   *  `address` stays the display and directions address. Added 2026-09-28
+   *  for the fairgrounds, whose Gun Club Road entrance never resolved, so a
+   *  source listing it could not agree with one listing Frogtown Road
+   *  (PRD-dedup-merge-v2.md, Phase 0.2). */
+  addresses?: string[];
 }
 
 export const KNOWN_VENUES: Record<string, KnownVenue> = {
@@ -248,6 +255,10 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     ],
     town: "Angels Camp",
     address: "101 Frogtown Rd, Angels Camp, CA 95222",
+    // The event-center entrance. GoCalaveras, Facebook, and organizer ticket
+    // pages list either street for the same grounds (All Hallows Faire, Live
+    // Like Lilly, 2026-10).
+    addresses: ["2465 Gun Club Rd, Angels Camp, CA 95222"],
   },
   "brice-station": {
     canonical: "Brice Station Vineyards",
