@@ -42,6 +42,9 @@ const storedRow = {
   name: "WHAT THE CONSTITUTION MEANS TO ME",
   date: "2026-08-28",
   venue_name: "Murphys Creek Theatre",
+  // The name already resolves. Without this, HWY-48's null-key heal would
+  // mark an otherwise-identical wipe as changed.
+  venue_key: "murphys-creek-theatre",
   description: "By Heidi Schreck. 90 minutes, no intermission.",
   start_time: "19:30",
   end_time: "21:00",
@@ -400,6 +403,7 @@ const briceRow = {
   name: "Arnold Angels Music Festival",
   date: "2026-10-04",
   venue_name: "Brice Station Vineyards",
+  venue_key: "brice-station",
   description: "Benefit festival for the Arnold Angels.",
   start_time: "12:00",
   end_time: null,
@@ -558,6 +562,9 @@ test("the venue guard stands down when the degraded scrape asserts a NEW address
   assert.equal(payload.town, "Arnold");
   assert.equal(payload.address, "1234 Blagen Loop, Arnold, CA 95223");
   assert.equal(payload.dedup_key, incomingKey);
+  // The relocation doesn't resolve to a registry key. That absence must not
+  // wipe the key the row already has (HWY-48, keepStr).
+  assert.equal(payload.venue_key, "brice-station");
   // Same incoming address as stored is NOT a relocation — guard holds.
   assert.equal(
     placeholderVenueSteal(briceRow, {
@@ -566,4 +573,95 @@ test("the venue guard stands down when the degraded scrape asserts a NEW address
     } as never),
     true
   );
+});
+
+// ---------------------------------------------------------------------------
+// HWY-48: venue_key self-heals on update, and a null resolution never wipes
+// a stored key. The Coppertown Square Facebook row stayed NULL after the
+// alias landed because exact-match updates only run when rowChanged is true,
+// and that predicate used to ignore the key. Strong-match updates omitted
+// the column entirely.
+// ---------------------------------------------------------------------------
+
+const copperRow = {
+  id: "e3",
+  name: "Music In The Square- The Yacht Rockers",
+  date: "2026-09-12",
+  venue_name: "Coppertown Square",
+  description: "Saturday night music in the square.",
+  start_time: "18:00",
+  end_time: "21:00",
+  price: null,
+  event_url: "https://www.facebook.com/events/1801994517316530",
+  address: null,
+  town: "Copperopolis",
+  image_url: null,
+  category: "live_music",
+  venue_key: "copperopolis-town-square",
+};
+
+const copperScrape = {
+  ...copperRow,
+  artists: null,
+  source_event_id: "1801994517316530",
+} as never;
+
+test("HWY-48: a null venue_key self-heals when the venue name now resolves", async () => {
+  const { rowChanged, buildExactMatchUpdate } = await load();
+  const unkeyed = { ...copperRow, venue_key: null };
+  assert.equal(rowChanged(unkeyed as never, copperScrape), true);
+  const now = "2026-09-28T00:00:00.000Z";
+  const payload = buildExactMatchUpdate(
+    unkeyed as never,
+    copperScrape,
+    "k",
+    now
+  ) as Record<string, unknown>;
+  assert.equal(payload.venue_key, "copperopolis-town-square");
+  assert.equal(payload.venue_name, "Coppertown Square");
+});
+
+test("HWY-48: an already-resolved key is not a change on an identical re-scrape", async () => {
+  const { rowChanged } = await load();
+  assert.equal(rowChanged(copperRow as never, copperScrape), false);
+});
+
+test("HWY-48: an unresolvable venue never nulls a stored key", async () => {
+  const { rowChanged, buildExactMatchUpdate, buildStrongMatchUpdate } = await load();
+  const unresolvable = {
+    ...(degradedScrape as object),
+    venue_name: "Pop-up Stage Behind the Market",
+    town: "Murphys",
+    address: null,
+  } as never;
+  // The name still changes, so the row updates — the key must not go with it.
+  assert.equal(rowChanged(briceRow as never, unresolvable), true);
+  const now = "2026-09-28T00:00:00.000Z";
+  const exact = buildExactMatchUpdate(briceRow as never, unresolvable, "k", now) as Record<
+    string,
+    unknown
+  >;
+  assert.equal(exact.venue_name, "Pop-up Stage Behind the Market");
+  assert.equal(exact.venue_key, "brice-station");
+
+  const merged = buildStrongMatchUpdate(
+    { ...briceRow, artists: null } as never,
+    unresolvable,
+    "k",
+    now
+  ) as Record<string, unknown>;
+  assert.equal(merged.venue_key, "brice-station");
+});
+
+test("HWY-48: a strong-match update stamps a null key from the venue it keeps", async () => {
+  const { buildStrongMatchUpdate } = await load();
+  const now = "2026-09-28T00:00:00.000Z";
+  const merged = buildStrongMatchUpdate(
+    { ...copperRow, venue_key: null, artists: null } as never,
+    { ...(copperScrape as object), name: "The Yacht Rockers" } as never,
+    "dddddddddddddddddddddddddddddddd",
+    now
+  ) as Record<string, unknown>;
+  assert.equal(merged.venue_name, "Coppertown Square");
+  assert.equal(merged.venue_key, "copperopolis-town-square");
 });

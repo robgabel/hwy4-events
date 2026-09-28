@@ -113,24 +113,24 @@ function slugify(text: string): string {
     .substring(0, 60);
 }
 
-// HWY-25. This route raw-INSERTs rather than going through `upsertEvents`, so
-// it never gets `normalizeEventLocation`'s registry pass — whatever string this
-// returns is the venue_name that lands in the row, verbatim and forever. It
-// must therefore be a CANONICAL name from scripts/lib/venues.ts, not an alias:
-// "BLS Amphitheater" and "BLS Pool" are alias spellings, and rows carrying them
-// never resolve to a venue_key, so they get no venue hub page, no Places facts
-// and no street address. scripts/test/scraper-venue-literals.test.ts pins every
-// name returned here to the registry.
-function resolveVenue(hint: string | null): string {
-  if (!hint) return "Snowflake Lodge";
+// HWY-25 / HWY-48. This route raw-INSERTs rather than going through
+// `upsertEvents`, so it never gets `normalizeEventLocation`'s registry pass.
+// The name that lands in the row must be a CANONICAL from scripts/lib/venues.ts
+// (an alias spelling can never resolve to a venue_key), and the insert must
+// stamp that entry's key itself — there is no later update pass to heal a NULL.
+// scripts/test/scraper-venue-literals.test.ts pins both.
+function resolveVenue(hint: string | null): { name: string; venueKey: string } {
+  if (!hint) return { name: "Snowflake Lodge", venueKey: "snowflake-lodge" };
   const lower = hint.toLowerCase();
-  if (lower.includes("bistro")) return "Blue Lake Bistro";
+  if (lower.includes("bistro")) return { name: "Blue Lake Bistro", venueKey: "blue-lake-bistro" };
   if (lower.includes("amphitheater") || lower.includes("amphitheatre"))
-    return "Blue Lake Springs Amphitheater";
-  if (lower.includes("lake") || lower.includes("beach")) return "Lodge Lake";
-  if (lower.includes("pool")) return "Blue Lake Springs Pool";
-  if (lower.includes("lodge") || lower.includes("snowflake")) return "Snowflake Lodge";
-  return "Snowflake Lodge";
+    return { name: "Blue Lake Springs Amphitheater", venueKey: "bls-amphitheater" };
+  if (lower.includes("lake") || lower.includes("beach"))
+    return { name: "Lodge Lake", venueKey: "lodge-lake" };
+  if (lower.includes("pool")) return { name: "Blue Lake Springs Pool", venueKey: "bls-pool" };
+  if (lower.includes("lodge") || lower.includes("snowflake"))
+    return { name: "Snowflake Lodge", venueKey: "snowflake-lodge" };
+  return { name: "Snowflake Lodge", venueKey: "snowflake-lodge" };
 }
 
 async function fetchImageUrls(): Promise<PageImage[]> {
@@ -331,7 +331,8 @@ export async function GET(request: Request) {
         start_time: event.start_time,
         end_time: event.end_time,
         description: event.description,
-        venue_name: venue,
+        venue_name: venue.name,
+        venue_key: venue.venueKey,
         town: "Arnold",
         // Category describes WHAT the event is; the members-only gating comes
         // from visibility/org_slug below, not the category.
@@ -381,7 +382,7 @@ export async function GET(request: Request) {
       events: newEvents.map(({ event, page }) => ({
         name: event.name,
         date: event.date,
-        venue: resolveVenue(event.venue_hint),
+        venue: resolveVenue(event.venue_hint).name,
         source_url: page,
       })),
     });

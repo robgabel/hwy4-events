@@ -30,6 +30,8 @@ const base = {
   name: "Harvest Concert",
   date: "2026-08-01",
   venue_name: "Ironstone Vineyards",
+  // Already resolved. A null key would be a HWY-48 heal and read as a change.
+  venue_key: "ironstone",
   description: "Live music",
   start_time: "19:00:00",
   end_time: "22:00:00",
