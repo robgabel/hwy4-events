@@ -1436,16 +1436,22 @@ test("isPlaceholderForMatch: an act behind any separator is an act, not a slot",
     // The act follows a filler qualifier; filler is not read to the end of
     // the title and the act is still found.
     "Live Music - Friday Night featuring Neil Buettner",
+    // A dash or colon straight after the prefix, with no space (second review).
+    "Live Music-Neil Buettner",
+    "Live Music–Neil Buettner",
+    "Live Music:Neil Buettner",
   ]) {
     assert.equal(isPlaceholderForMatch({ name, venue_name: sequoia }), false, name);
   }
-  assert.equal(
-    isPlaceholderForMatch({
-      name: "Live Music @ The Lube Room: Poison Oakies",
-      venue_name: "The Lube Room Saloon",
-    }),
-    false
-  );
+  // Restating the venue does not hide the act that follows it, whether the
+  // venue_name carries the whole title's venue or only part of it.
+  for (const venue_name of ["The Lube Room Saloon", "The Lube Room"]) {
+    assert.equal(
+      isPlaceholderForMatch({ name: "Live Music @ The Lube Room: Poison Oakies", venue_name }),
+      false,
+      venue_name
+    );
+  }
 });
 
 test("isPlaceholderForMatch: every real placeholder shape stays a placeholder", () => {
@@ -1463,9 +1469,20 @@ test("isPlaceholderForMatch: every real placeholder shape stays a placeholder", 
     ["Live Music with TBD", null],
     ["Live Music - Act to be announced", null],
     ["Live Music @ Val-du-Vino", "Val du Vino Winery"],
+    // Real venue strings that carry a separator of their own (second review):
+    // the whole remainder is the venue, so there is still no act.
+    ["Live Music @ Sierra Nevada Adventure Company (Arnold)", "Sierra Nevada Adventure Company (Arnold)"],
+    ["Live Music @ ART Trailhead – Valley View Dr.", "ART Trailhead – Valley View Dr."],
   ];
   for (const [name, venue_name] of cases) {
     assert.equal(isPlaceholderForMatch({ name, venue_name }), true, name);
+  }
+  // Every connector word between filler and a TBD marker is filler too. This
+  // locks the connector entries in NON_ACT_TAIL_WORDS, which the second review
+  // showed no other test did.
+  for (const connector of ["with", "featuring", "feat.", "ft.", "w/", "by", "and"]) {
+    const name = `Live Music - Friday Night ${connector} TBD`;
+    assert.equal(isPlaceholderForMatch({ name }), true, name);
   }
 });
 

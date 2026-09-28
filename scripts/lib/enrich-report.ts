@@ -152,8 +152,8 @@ export function summarizeEnrichment(
   if (t.skipped > 0) {
     warning =
       `GoCalaveras enrichment CIRCUIT BROKE after ${t.rateLimited} rate-limited requests: ` +
-      `${t.skipped} event(s) not enriched. New rows with no venue and no ` +
-      `description are held (DEGRADED_INSERT_HELD) until a run enriches them; ` +
+      `${t.skipped} event(s) not enriched. New rows with no venue, description ` +
+      `or street number are held (DEGRADED_INSERT_HELD) until a run enriches them; ` +
       `the rest land without detail descriptions, posters or addresses until this clears.`;
   } else if (tried > 0 && t.rateLimited / tried >= RATE_LIMIT_WARN_RATIO) {
     const pct = Math.round((t.rateLimited / tried) * 100);

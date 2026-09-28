@@ -576,27 +576,31 @@ const NON_ACT_TAIL_WORDS = new Set([
 const GENERIC_TITLE_PREFIX =
   /^(?:live (?:music|entertainment|tunes)|music (?:in|at|on) the)\b/;
 
-/** Where an act name can begin after a generic prefix: a dash with a space on
- *  at least one side ("Live Music - X", "Music in The Square- X"; the in-word
+/** Where an act name can begin after a generic prefix: a dash or colon right
+ *  after the prefix ("Live Music-X", "Live Music:X"), a dash with a space on at
+ *  least one side ("Live Music - X", "Music in The Square- X"; the in-word
  *  hyphen of "Val-du-Vino" is not one), a colon followed by a space ("@ The
  *  Lube Room: X", not "7:30"), an opening parenthesis, or a connector word
  *  ("with", "featuring", "feat.", "ft.", "w/", "by"). Text between the prefix
  *  and the separator is where the venue or the night goes ("Live Music @ The
  *  Lube Room: X", "Live Music Thursday - X") and is not read as an act. */
-const ACT_SEPARATOR = /\s-|-\s|:\s|\(|\b(?:with|featuring|feat|ft|by)\b|\bw\//;
+const ACT_SEPARATOR =
+  /^\s*[-:]|\s-|-\s|:\s|\(|\b(?:with|featuring|feat|ft|by)\b|\bw\//;
 
-/** The text after the first act separator in a prefix-anchored generic title
- *  ("Live Music - Neil Buettner" -> "neil buettner", "Live Music with Lost in
- *  the Shuffle" -> "lost in the shuffle"), or null when there is none ("Live
- *  Music @ The Lube Room", "Live Music Upstairs", "Music in the Park").
+/** A prefix-anchored generic title split at its first act separator: `rest` is
+ *  everything after the prefix, `tail` the text after the separator ("Live
+ *  Music - Neil Buettner" -> "neil buettner", "Live Music with Lost in the
+ *  Shuffle" -> "lost in the shuffle"), null when there is no separator ("Live
+ *  Music @ The Lube Room", "Live Music Upstairs", "Music in the Park"). Null
+ *  overall when the title does not start with a generic prefix.
  *  `normalizeName` has already folded every dash variant to "-". */
-function tailAfterGenericPrefix(name: string): string | null {
+function splitGenericTitle(name: string): { rest: string; tail: string | null } | null {
   const n = normalizeName(name);
   const prefix = n.match(GENERIC_TITLE_PREFIX);
   if (!prefix) return null;
   const rest = n.slice(prefix[0].length);
   const sep = ACT_SEPARATOR.exec(rest);
-  return sep ? rest.slice(sep.index + sep[0].length).trim() : null;
+  return { rest, tail: sep ? rest.slice(sep.index + sep[0].length).trim() : null };
 }
 
 /** Word tokens of a tail. Apostrophes are dropped (not split on) so "Howard's"
@@ -627,25 +631,37 @@ function tailWords(tail: string): string[] {
  *  markers, the venue's own name ("Live Music - Stevenot Winery"), or filler
  *  words ("Live Music: Friday Night") still reads as a placeholder, so every
  *  merge that relied on a true placeholder keeps working. When a tail is
- *  ambiguous it reads as an act: that can only cost a merge, never a concert. */
+ *  ambiguous it reads as an act. For MATCHING that can only cost a merge, never
+ *  a concert, because every placeholder here is also `isGenericTitle`, so the
+ *  predicate can only merge less than it did before this test existed. For
+ *  SURVIVORSHIP it is not free: an act-read title also escapes the -12
+ *  penalty, so a rich aggregator row titled "Live Music - Greg Sutton" can now
+ *  outrank the organizer's own listing of that show. No real cluster changed
+ *  survivor when this shipped; letting authority beat richness is Phase 2. */
 export function isPlaceholderForMatch(e: {
   name?: string | null;
   venue_name?: string | null;
 }): boolean {
   const name = e.name ?? "";
   if (!isGenericTitle(name)) return false;
-  const tail = tailAfterGenericPrefix(name);
-  if (tail === null) return true;
-  // A tail that restates the venue, plus at most filler ("Live Music -
-  // Stevenot Winery", "... Stevenot Winery Patio"), names no act. It must
-  // restate the WHOLE venue: sharing one word is not enough, because acts get
-  // named after places (Sequoia Woods books a band called "Sequoia Blue").
-  const words = tailWords(tail);
+  const parts = splitGenericTitle(name);
+  // An end-anchored generic arm ("... Concert Series", "... (TBD)"), or a
+  // generic prefix with no act separator after it: no act.
+  if (!parts || parts.tail === null) return true;
+  // Words that restate the venue, plus at most filler, name no act ("Live
+  // Music - Stevenot Winery", "... Stevenot Winery Patio"). The WHOLE venue
+  // must be restated: sharing one word is not enough, because acts get named
+  // after places (Sequoia Woods books a band called "Sequoia Blue").
   const venueWords = normalizeVenue(e.venue_name).split(" ").filter(Boolean);
-  const restatesVenue =
-    venueWords.length > 0 && venueWords.every((w) => words.includes(w));
-  const rest = restatesVenue ? words.filter((w) => !venueWords.includes(w)) : words;
-  return rest.every((w) => NON_ACT_TAIL_WORDS.has(w));
+  const namesNoAct = (words: string[]): boolean => {
+    const restates = venueWords.length > 0 && venueWords.every((w) => words.includes(w));
+    const rest = restates ? words.filter((w) => !venueWords.includes(w)) : words;
+    return rest.every((w) => NON_ACT_TAIL_WORDS.has(w));
+  };
+  // The whole remainder can be the venue's own name even when that name holds
+  // a separator ("Live Music @ Sierra Nevada Adventure Company (Arnold)").
+  if (namesNoAct(tailWords(parts.rest))) return true;
+  return namesNoAct(tailWords(parts.tail));
 }
 
 /** Aggregator placeholder shapes that carry NO act information. Deliberately

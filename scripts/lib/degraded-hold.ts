@@ -92,5 +92,5 @@ export function shouldHoldDegradedInsert(e: HoldInput, runDate: string): boolean
  *  (recorded only: /admin/scrapers does not surface it yet, same as
  *  `unpinned`). */
 export function degradedHoldLine(e: Pick<ExtractedEvent, "name" | "date" | "venue_name">): string {
-  return `    DEGRADED_INSERT_HELD "${e.name}" ${e.date} (enrichment failed; venue "${e.venue_name}", no description)`;
+  return `    DEGRADED_INSERT_HELD "${e.name}" ${e.date} (enrichment failed; venue "${e.venue_name}", no description or street number)`;
 }
