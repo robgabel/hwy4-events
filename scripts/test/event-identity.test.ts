@@ -1417,6 +1417,58 @@ test("isPlaceholderForMatch: a generic prefix that names the act is not a placeh
   assert.equal(isGenericTitle("Live Music - Neil Buettner"), true);
 });
 
+test("isPlaceholderForMatch: an act behind any separator is an act, not a slot", () => {
+  // The Phase 0 review found the first version only read an act after a dash
+  // or colon placed right after the prefix. Sequoia's own calendar has already
+  // produced the "with" shape (row 3f9cf2ab, 2026-03-21).
+  const sequoia = "Sequoia Woods Country Club";
+  for (const name of [
+    "Live Music with Lost in the Shuffle – Sheryl's Birthday Bash & Welcome Home Anna & Jordan",
+    "Live Music with Neil Buettner",
+    "Live Music featuring Neil Buettner",
+    "Live Music feat. Neil Buettner",
+    "Live Music ft. Neil Buettner",
+    "Live Music w/ Neil Buettner",
+    "Live Music by Neil Buettner",
+    "Live Music (Neil Buettner)",
+    "Live Music on the Patio - Neil Buettner",
+    "Live Music Thursday - Neil Buettner",
+    // The act follows a filler qualifier; filler is not read to the end of
+    // the title and the act is still found.
+    "Live Music - Friday Night featuring Neil Buettner",
+  ]) {
+    assert.equal(isPlaceholderForMatch({ name, venue_name: sequoia }), false, name);
+  }
+  assert.equal(
+    isPlaceholderForMatch({
+      name: "Live Music @ The Lube Room: Poison Oakies",
+      venue_name: "The Lube Room Saloon",
+    }),
+    false
+  );
+});
+
+test("isPlaceholderForMatch: every real placeholder shape stays a placeholder", () => {
+  // Prod history's placeholder titles (all of them, 2026-09-28), plus the
+  // no-act-yet markers and a venue name with an in-word hyphen.
+  const cases: [string, string | null][] = [
+    ["Live Music Upstairs", "Boyle MacDonald Wines"],
+    ["Live Music @ Murphys Irish Pub", "Murphys Irish Pub"],
+    ["Live Music @ Howard’s Mystic Saloon", "Howard's Mystic Saloon"],
+    ["Live Music at the Beer Garden", "Murphys Wine & Beer Garden"],
+    ["Live Music at the Beer Garden (Act TBA)", "Murphys Wine & Beer Garden"],
+    ["Live Music on the Sundeck", "Bear Valley Lodge"],
+    ["Music in the Parks Summer Concert Series", "Murphys Community Park"],
+    ["Live Music - TBD", null],
+    ["Live Music with TBD", null],
+    ["Live Music - Act to be announced", null],
+    ["Live Music @ Val-du-Vino", "Val du Vino Winery"],
+  ];
+  for (const [name, venue_name] of cases) {
+    assert.equal(isPlaceholderForMatch({ name, venue_name }), true, name);
+  }
+});
+
 const sequoiaSlot = {
   date: "2027-07-08",
   town: "Arnold",
@@ -1463,7 +1515,7 @@ test("a named act and karaoke starting together stay split", () => {
   assert.equal(isSameEvent(karaoke, act), false);
 });
 
-test("a true 'Live Music @ venue' placeholder still merges with the venue's named act", () => {
+test("a true 'Live Music @ venue' placeholder still merges with the venue's named act in its slot", () => {
   const placeholder = {
     ...sequoiaSlot,
     name: "Live Music @ Sequoia Woods",
@@ -1471,7 +1523,52 @@ test("a true 'Live Music @ venue' placeholder still merges with the venue's name
     end_time: "22:00",
     description: null,
   };
-  const named = { ...sequoiaSlot, name: "Live Music - Jill Warren", start_time: "18:30", end_time: "21:30", description: null };
+  const named = { ...sequoiaSlot, name: "Live Music - Jill Warren", start_time: "19:00", end_time: "22:00", description: null };
   assert.equal(isSameEvent(placeholder, named), true);
   assert.equal(isSameEvent(named, placeholder), true);
+  // At a different start they stay split, exactly as before Phase 0: both
+  // titles are generic, so the series start tolerance does not apply.
+  const earlier = { ...named, start_time: "18:30", end_time: "21:30" };
+  assert.equal(isSameEvent(placeholder, earlier), false);
+  assert.equal(isSameEvent(earlier, placeholder), false);
+});
+
+test("a TBD slot never pairs with a different named act at another start (2026-08-08 Sequoia)", () => {
+  // The Phase 0 review's blocker. Keying the start tolerance on the narrow
+  // placeholder test let the TBD patio slot (19:00, later The Hit Men) pair
+  // with Jamie Byous at 18:30, and the placeholder signal merged them: in the
+  // write path the TBD row overwrote Byous's name, clock and source id.
+  const tbd = {
+    ...sequoiaSlot,
+    name: "Patio Party #4 featuring live music (TBD)",
+    start_time: "19:00",
+    end_time: "22:00",
+    description: null,
+  };
+  const byous = { ...sequoiaSlot, name: "Live Music - Jamie Byous", start_time: "18:30", end_time: "21:30", description: null };
+  assert.equal(isSameEvent(tbd, byous), false);
+  assert.equal(isSameEvent(byous, tbd), false);
+  // Same shape with a "Live Music - TBD" slot an hour before a named set.
+  const tbdSlot = { ...sequoiaSlot, name: "Live Music - TBD", start_time: "17:30", end_time: "20:30", description: null };
+  const jill = { ...sequoiaSlot, name: "Live Music - Jill Warren", start_time: "18:30", end_time: "21:30", description: null };
+  assert.equal(isSameEvent(tbdSlot, jill), false);
+  assert.equal(isSameEvent(jill, tbdSlot), false);
+});
+
+test("a named act behind 'with' never merges into the routine deli special an hour earlier", () => {
+  // The review's F1 probe on the real Appendix-B pair (bb073855 / 1bfb87f1),
+  // retitled to the "with" shape Sequoia has used: before the fix this merged
+  // and reconcile kept the deli special.
+  const deli = {
+    ...sequoiaSlot,
+    name: "Wednesday Night Deli Special - Final One!",
+    start_time: "17:00",
+    end_time: "20:00",
+    description: null,
+  };
+  for (const name of ["Live Music with Neil Buettner", "Live Music featuring Neil Buettner"]) {
+    const concert = { ...sequoiaSlot, name, start_time: "18:00", end_time: "21:00", description: null };
+    assert.equal(isSameEvent(deli, concert), false, name);
+    assert.equal(isSameEvent(concert, deli), false, name);
+  }
 });
