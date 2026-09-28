@@ -19,7 +19,7 @@ import {
   applyOrganizerTime,
   dismissEventSeries,
 } from "./actions";
-import { formatTimeForHuman } from "@/lib/verify-times";
+import { formatTimeForHuman, isClockConflictReason } from "@/lib/verify-times";
 
 export const dynamic = "force-dynamic";
 
@@ -113,8 +113,9 @@ export default async function VerificationAdminPage({
       title="Event verification queue"
       intro={
         <>
-          Events whose dates didn&rsquo;t match the organizer&rsquo;s canonical events page. Confirm
-          the ones that are fine, dismiss false positives, hide or delete the rest.
+          Events whose dates didn&rsquo;t match the organizer&rsquo;s canonical events page, or whose
+          start time two merged listings disagreed on. Confirm the ones that are fine, dismiss false
+          positives, hide or delete the rest.
         </>
       }
       error={error}
@@ -135,6 +136,10 @@ export default async function VerificationAdminPage({
 
 function FlaggedEventRow({ event, orgs }: { event: FlaggedEvent; orgs: Map<string, OrgRow> }) {
   const org = event.org_slug ? orgs.get(event.org_slug) : undefined;
+  // A merge of two listings that disagreed on the start staged the other
+  // listing's time (lib/verify-times.ts clockConflictPatch), not the organizer
+  // page's; label it as such.
+  const clockConflict = isClockConflictReason(event.verification_reason);
 
   return (
     <QueueCard>
@@ -203,12 +208,12 @@ function FlaggedEventRow({ event, orgs }: { event: FlaggedEvent; orgs: Map<strin
               margin: "0 0 6px",
             }}
           >
-            Time on the organizer&rsquo;s page
+            {clockConflict ? "Time on the other listing" : <>Time on the organizer&rsquo;s page</>}
           </p>
           <p style={{ color: "#3a3a3a", fontSize: 15, margin: 0 }}>
             We show <strong>{formatTimeForHuman(event.start_time)}</strong>
             {" · "}
-            their page states{" "}
+            {clockConflict ? "the other listing states" : "their page states"}{" "}
             <strong>{formatTimeForHuman(event.verification_suggested_start)}</strong>
           </p>
         </div>
@@ -276,7 +281,7 @@ function FlaggedEventRow({ event, orgs }: { event: FlaggedEvent; orgs: Map<strin
         <form action={confirmEvent} style={{ display: "inline" }}>
           <input type="hidden" name="id" value={event.id} />
           <button type="submit" style={adminBtn.primary}>
-            Confirm date
+            {clockConflict ? "Keep our time" : "Confirm date"}
           </button>
         </form>
         <form action={dismissEvent} style={{ display: "inline" }}>

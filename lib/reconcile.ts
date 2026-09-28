@@ -34,6 +34,7 @@ import {
   isActlessPlaceholderTitle,
   sameEventMatch,
 } from "./event-identity";
+import { clockConflictPatch } from "./verify-times";
 
 /** The minimal Supabase surface the reconcile uses. Typed structurally rather
  *  than as the concrete `SupabaseClient` on purpose: the Next app and the
@@ -79,6 +80,10 @@ export interface ReconcileResult {
   /** Matches the clustering declined because the row resembles two events
    *  that must stay apart (dedup v2 1.5). Never merged; for a human. */
   refused: RefusedMatch<ReconcileRow>[];
+  /** Survivors sent to /admin/verification because a merged-away listing
+   *  stated a different start (see `survivorClockFlag`). In dry-run, the ones
+   *  that would be. */
+  clockFlags: { id: string; reason: string }[];
 }
 
 export interface ReconcileOptions {
@@ -170,6 +175,25 @@ function buildFill(survivor: ReconcileRow, losers: ReconcileRow[]): Partial<Reco
   return fill;
 }
 
+/** When the cross-source rule merged a loser whose start differs from the
+ *  survivor's, the loser's clock is staged on the survivor for a human rather
+ *  than deleted with it (dedup v2 review #5; `clockConflictPatch` decides when
+ *  a flag is warranted). Only a DIRECT cross-source match flags: a series
+ *  placeholder's default clock (the standard path's start tolerance) is the
+ *  aggregator's leftover, not a competing claim about this event. */
+function survivorClockFlag(
+  survivor: ReconcileRow,
+  losers: ReconcileRow[],
+  now: string
+): Record<string, unknown> | null {
+  for (const l of losers) {
+    if (sameEventMatch(survivor, l) !== "cross_source") continue;
+    const patch = clockConflictPatch(survivor, l, now);
+    if (patch) return patch;
+  }
+  return null;
+}
+
 /**
  * Reconcile resident duplicate rows in `hwy4_events`.
  *
@@ -214,12 +238,15 @@ export async function reconcileDuplicates(
   }
 
   const merged: MergeRecord[] = [];
+  const clockFlags: { id: string; reason: string }[] = [];
   let deleted = 0;
 
   for (const cluster of clusters) {
     const survivor = pickSurvivor(cluster);
     const losers = cluster.filter((r) => r !== survivor);
     const fill = buildFill(survivor, losers);
+    const now = new Date().toISOString();
+    const flag = survivorClockFlag(survivor, losers, now);
 
     const records: MergeRecord[] = losers.map((l) => ({
       survivor_id: survivor.id,
@@ -236,10 +263,12 @@ export async function reconcileDuplicates(
     if (Object.keys(fill).length > 0) {
       log(`    fill survivor: ${Object.keys(fill).join(", ")}`);
     }
+    if (flag) log(`    flag survivor: ${flag.verification_reason}`);
     log("");
 
     if (dryRun) {
       merged.push(...records);
+      if (flag) clockFlags.push({ id: survivor.id, reason: String(flag.verification_reason) });
       continue;
     }
 
@@ -252,16 +281,20 @@ export async function reconcileDuplicates(
       continue;
     }
 
-    if (Object.keys(fill).length > 0) {
+    if (Object.keys(fill).length > 0 || flag) {
       // Back-filling the survivor is a content change, so stamp `updated_at`
-      // (the sitemap's <lastmod>). Inside the non-empty guard on purpose:
-      // stamping unconditionally would make the guard always true and bump
-      // every survivor's lastmod on every nightly run with nothing to fill.
+      // (the sitemap's <lastmod>). Only then, on purpose: stamping
+      // unconditionally would bump every survivor's lastmod on every nightly
+      // run with nothing to fill, and a verification flag changes nothing a
+      // reader sees.
+      const patch: Record<string, unknown> = { ...fill, ...(flag ?? {}) };
+      if (Object.keys(fill).length > 0) patch.updated_at = now;
       const { error: ue } = await supabase
         .from("hwy4_events")
-        .update({ ...fill, updated_at: new Date().toISOString() })
+        .update(patch)
         .eq("id", survivor.id);
       if (ue) log(`    update failed (survivor kept as-is): ${ue.message}`);
+      else if (flag) clockFlags.push({ id: survivor.id, reason: String(flag.verification_reason) });
     }
 
     const { error: de } = await supabase
@@ -288,5 +321,6 @@ export async function reconcileDuplicates(
     merged,
     deleted,
     refused: detailed.refused,
+    clockFlags,
   };
 }

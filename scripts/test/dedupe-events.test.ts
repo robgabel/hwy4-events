@@ -17,6 +17,7 @@ import {
   pickSurvivor,
   type DedupableEvent,
 } from "../../lib/dedupe-events.js";
+import { isSameEvent } from "../../lib/event-identity.js";
 
 const slot = {
   date: "2026-06-13",
@@ -466,11 +467,16 @@ test("a chain of clock-tolerant matches never joins one feed's two sessions, in 
   // Four feeds list one class with drifting clocks. Each neighbour pair
   // overlaps, but no single row matches both of the studio's own sessions
   // (10:00 and 14:00), so only the union-time cannot-link keeps them apart.
-  const studio = { date: "2026-10-01", town: "Arnold", venue_name: "Lackler Ceramics", visibility: "public" as const, description: null, artists: null, name: "Kids Clay" };
-  const morning: DedupableEvent = { ...studio, start_time: "10:00", end_time: "12:00", source_name: "Lackler Ceramics", created_at: "2026-09-01T00:00:00Z" };
-  const aggA: DedupableEvent = { ...studio, start_time: "11:00", end_time: "13:00", source_name: "GoCalaveras.com", created_at: "2026-09-02T00:00:00Z" };
-  const aggB: DedupableEvent = { ...studio, start_time: "12:30", end_time: "14:30", source_name: "Visit Murphys", created_at: "2026-09-03T00:00:00Z" };
-  const afternoon: DedupableEvent = { ...studio, start_time: "14:00", end_time: "16:00", source_name: "Lackler Ceramics", created_at: "2026-09-04T00:00:00Z" };
+  // No stated ends (each window reads as two hours): stated ends 90 minutes
+  // apart would fail the cross-source end check and the chain would never form.
+  const studio = { date: "2026-10-01", town: "Arnold", venue_name: "Lackler Ceramics", visibility: "public" as const, description: null, artists: null, name: "Kids Clay", end_time: null };
+  const morning: DedupableEvent = { ...studio, start_time: "10:00", source_name: "Lackler Ceramics", created_at: "2026-09-01T00:00:00Z" };
+  const aggA: DedupableEvent = { ...studio, start_time: "11:00", source_name: "GoCalaveras.com", created_at: "2026-09-02T00:00:00Z" };
+  const aggB: DedupableEvent = { ...studio, start_time: "12:30", source_name: "Visit Murphys", created_at: "2026-09-03T00:00:00Z" };
+  const afternoon: DedupableEvent = { ...studio, start_time: "14:00", source_name: "Lackler Ceramics", created_at: "2026-09-04T00:00:00Z" };
+  // The chain is real: each neighbour matches, and the ends of it do not.
+  assert.ok(isSameEvent(morning, aggA) && isSameEvent(aggA, aggB) && isSameEvent(aggB, afternoon));
+  assert.ok(!isSameEvent(morning, aggB) && !isSameEvent(aggA, afternoon));
   const sets = (evs: DedupableEvent[]) =>
     clusterEvents(evs).map((c) => c.map((e) => e.start_time).sort().join("+")).sort();
   const want = sets([morning, aggA, aggB, afternoon]);

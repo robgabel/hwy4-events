@@ -185,6 +185,38 @@ for (const batched of [false, true]) {
     assert.equal(row.source_event_id, "resident-1");
     assert.equal(row.event_url, "https://example.com/events/resident");
     assert.match(String(row.description), /wizards/, "blank fields still fill");
+    // The kept clock is not the last word: the organizer's 12:00 is staged for
+    // a human at /admin/verification (review #5), never applied by the merge.
+    assert.equal(row.verification_status, "needs_verification");
+    assert.equal(row.verification_suggested_start, "12:00");
+    assert.match(String(row.verification_reason), /Visit Murphys says 12:00 PM/);
+  });
+
+  test(`[${path}] a clock conflict never overrides locked times or an earlier verdict`, async () => {
+    const base = {
+      name: "The Gathering on Murphys Main Street",
+      town: "Murphys",
+      venue_name: "Murphys Main Street",
+      start_time: "11:00:00",
+      end_time: "17:00:00",
+      source_name: "GoCalaveras.com",
+      description: "Already described.",
+    };
+    const organizer = incoming({
+      name: "Murphys Gathering – A Celebration of All Things Magical",
+      town: "Murphys",
+      venue_name: "Murphys Main Street",
+      start_time: "12:00",
+      end_time: "17:00",
+    });
+    for (const over of [{ times_locked: true }, { verification_status: "dismissed" }, { verification_status: "verified" }]) {
+      const { result } = await upsert(batched, [organizer], [resident({ ...base, ...over })], "Visit Murphys", "visit-murphys");
+      assert.equal(result.inserted, 0);
+      const row = db.find((r) => r.id === "res")!;
+      assert.notEqual(row.verification_status, "needs_verification", JSON.stringify(over));
+      assert.equal(row.verification_suggested_start, undefined, JSON.stringify(over));
+      assert.equal(row.start_time, "11:00:00");
+    }
   });
 
   test(`[${path}] one feed at a different start is a second session: it inserts`, async () => {
@@ -304,6 +336,187 @@ for (const batched of [false, true]) {
 
 for (const batched of [false, true]) {
   const path = batched ? "batched" : "serial";
+
+  test(`[${path}] a series placeholder's default clock never raises a clock flag`, async () => {
+    // Brice Hilltop shape across two town labels (a fill-only match through
+    // the shared street number): the placeholder's 19:00 is the aggregator's
+    // series default, not a competing claim about the named act's 18:00.
+    const { result } = await upsert(
+      batched,
+      [
+        incoming({
+          name: "Live Music @ Hypothetical Hall",
+          town: "Dorrington",
+          venue_name: "Hypothetical Hall",
+          address: "4545 Hypothetical Rd, Dorrington, CA 95223",
+          start_time: "19:00",
+          category: "live_music",
+        }),
+      ],
+      [
+        resident({
+          name: "The Hollerin' Hounds",
+          artists: ["The Hollerin' Hounds"],
+          town: "Arnold",
+          venue_name: "Hypothetical Hall",
+          address: "4545 Hypothetical Rd",
+          start_time: "18:00:00",
+          source_name: "Hypothetical Hall",
+          category: "live_music",
+        }),
+      ],
+      "GoCalaveras.com",
+      "gocalaveras"
+    );
+    assert.equal(result.inserted, 0, "the placeholder merges");
+    const row = db.find((r) => r.id === "res")!;
+    assert.equal(row.start_time, "18:00:00");
+    assert.notEqual(row.verification_status, "needs_verification");
+  });
+
+  test(`[${path}] a cancelled tombstone is not a second event: the third feed merges into the live row`, async () => {
+    // Live 2026-10-10: the organizer's "BVTS Trail Work Day" plus the Phase 0
+    // tombstone of GoCalaveras's "Bear Valley Trail Stewardship". Counted as a
+    // second event, the tombstone made every third feed's listing ambiguous,
+    // so it inserted each morning and reconcile merged it back each afternoon.
+    const slot = { date: DAY, town: "Bear Valley", start_time: "08:30:00", end_time: "12:30:00", category: "civic" };
+    const { result, lines } = await upsert(
+      batched,
+      [
+        incoming({
+          name: "Bear Valley Trail Stewardship",
+          town: "Bear Valley",
+          venue_name: "Bear Valley Adventure Company",
+          start_time: "08:30",
+          end_time: "12:30",
+          category: "civic",
+          description: "Trail work day with Bear Valley Trail Stewardship.",
+        }),
+      ],
+      [
+        resident({
+          ...slot,
+          id: "bvac",
+          name: "BVTS Trail Work Day",
+          venue_name: "Bear Valley Adventure Company",
+          venue_key: "bear-valley-adventure-company",
+          source_name: "Bear Valley Adventure Co.",
+          description: "Bear Valley Trail Stewardship hosts a trail maintenance day starting at 8:30 AM.",
+          dedup_key: "bvac",
+          source_event_id: "bvac",
+        }),
+        resident({
+          ...slot,
+          id: "tomb",
+          name: "Bear Valley Trail Stewardship",
+          venue_name: "Unknown Venue",
+          source_name: "GoCalaveras.com",
+          status: "cancelled",
+          dedup_key: "tomb",
+          source_event_id: "tomb",
+        }),
+      ],
+      "Facebook Events Discover (Bear Valley)",
+      "fb-discover-bear-valley"
+    );
+    assert.equal(result.inserted, 0);
+    assert.equal(result.skippedFuzzy, 1);
+    assert.ok(!lines.some((l) => l.includes("AMBIGUOUS_MATCH")));
+    assert.ok(updates.some((u) => u.id === "bvac"), "the live row takes the merge");
+    assert.ok(!updates.some((u) => u.id === "tomb"), "the tombstone is left alone");
+  });
+
+  test(`[${path}] with no live match, a tombstone still absorbs its old listing`, async () => {
+    const { result } = await upsert(
+      batched,
+      [incoming({ name: "Bear Valley Trail Stewardship!", town: "Bear Valley", venue_name: "Unknown Venue", start_time: "08:30", end_time: "12:30", category: "civic" })],
+      [
+        resident({
+          id: "tomb",
+          name: "Bear Valley Trail Stewardship",
+          town: "Bear Valley",
+          venue_name: "Unknown Venue",
+          start_time: "08:30:00",
+          end_time: "12:30:00",
+          source_name: "Visit Murphys",
+          status: "cancelled",
+          category: "civic",
+        }),
+      ],
+      "GoCalaveras.com",
+      "gocalaveras"
+    );
+    assert.equal(result.inserted, 0);
+    assert.equal(db.find((r) => r.id === "tomb")!.status, "cancelled");
+  });
+
+  test(`[${path}] a members-only row never makes a public listing ambiguous`, async () => {
+    // Reconcile never clusters across visibility, so a private act at the same
+    // slot is not a second candidate for a public placeholder.
+    const hall = { town: "Arnold", venue_name: "Hypothetical Hall", start_time: "19:00:00", source_name: "Visit Murphys", category: "live_music" };
+    const { result, lines } = await upsert(
+      batched,
+      [incoming({ name: "Live Music @ Hypothetical Hall", town: "Arnold", venue_name: "Hypothetical Hall", start_time: "19:00", category: "live_music" })],
+      [
+        resident({ ...hall, id: "a", name: "The Hollerin' Hounds", artists: ["The Hollerin' Hounds"], dedup_key: "a", source_event_id: "a" }),
+        resident({ ...hall, id: "b", name: "Sipsy River Band", artists: ["Sipsy River Band"], dedup_key: "b", source_event_id: "b", visibility: "private" }),
+      ],
+      "GoCalaveras.com",
+      "gocalaveras"
+    );
+    assert.equal(result.inserted, 0);
+    assert.ok(!lines.some((l) => l.includes("AMBIGUOUS_MATCH")));
+    assert.ok(updates.some((u) => u.id === "a"));
+    assert.equal(db.find((r) => r.id === "a")!.name, "The Hollerin' Hounds", "a placeholder never renames an act");
+  });
+
+  test(`[${path}] a row an earlier event in the batch merged into still counts toward ambiguity`, async () => {
+    // The pub's own karaoke and trivia rows. GoCalaveras sends its karaoke
+    // listing (merges into the pub's) and a same-slot placeholder, which
+    // matches both acts: ambiguous on both paths, never merged into trivia
+    // just because the batch had already claimed karaoke.
+    const pub = { town: "Murphys", venue_name: "Murphys Irish Pub", venue_key: "murphys-irish-pub", start_time: "19:00:00", source_name: "Murphys Irish Pub", category: "live_music" };
+    const { result, lines } = await upsert(
+      batched,
+      [
+        incoming({ name: "Karaoke with Kim @ Murphys Irish Pub", town: "Murphys", venue_name: "Murphys Irish Pub", start_time: "19:00", end_time: "22:00", category: "live_music", source_event_id: "g-kim", event_url: "https://example.com/g-kim" }),
+        incoming({ name: "Live Music @ Murphys Irish Pub", town: "Murphys", venue_name: "Murphys Irish Pub", start_time: "19:00", category: "live_music", source_event_id: "g-lm", event_url: "https://example.com/g-lm" }),
+      ],
+      [
+        resident({ ...pub, id: "kim", name: "Karaoke W/ Kim", dedup_key: "kim", source_event_id: "pub-kim" }),
+        resident({ ...pub, id: "trivia", name: "Trivia Night", end_time: "21:00:00", dedup_key: "trivia", source_event_id: "pub-trivia" }),
+      ],
+      "GoCalaveras.com",
+      "gocalaveras"
+    );
+    assert.equal(result.inserted, 1, "the placeholder inserts as its own row");
+    assert.equal(result.skippedFuzzy, 1, "karaoke merges");
+    assert.ok(lines.some((l) => l.includes("AMBIGUOUS_MATCH") && l.includes("Live Music @ Murphys Irish Pub")));
+    assert.equal(db.find((r) => r.id === "trivia")!.name, "Trivia Night");
+    assert.ok(!updates.some((u) => u.id === "trivia"));
+  });
+
+  test(`[${path}] a second listing of a row the batch already merged into never inserts`, async () => {
+    const pub = { town: "Murphys", venue_name: "Murphys Irish Pub", venue_key: "murphys-irish-pub", start_time: "19:00:00", end_time: "22:00:00", source_name: "Murphys Irish Pub", category: "live_music" };
+    const { result, lines } = await upsert(
+      batched,
+      [
+        incoming({ name: "The Hit Men Live", town: "Murphys", venue_name: "Murphys Irish Pub", start_time: "19:00", end_time: "22:00", category: "live_music", source_event_id: "g-1", event_url: "https://example.com/g-1" }),
+        incoming({ name: "Live Music @ Murphys Irish Pub", town: "Murphys", venue_name: "Murphys Irish Pub", start_time: "19:00", end_time: "22:00", category: "live_music", source_event_id: "g-2", event_url: "https://example.com/g-2" }),
+      ],
+      [resident({ ...pub, id: "hit", name: "The Hit Men", artists: ["The Hit Men"], dedup_key: "hit", source_event_id: "pub-hit" })],
+      "GoCalaveras.com",
+      "gocalaveras"
+    );
+    assert.equal(result.inserted, 0);
+    assert.equal(result.skippedFuzzy, 2);
+    if (batched) assert.ok(lines.some((l) => l.includes("DUPLICATE_IN_BATCH")));
+    assert.equal(updates.filter((u) => u.id === "hit").length, batched ? 1 : 2);
+  });
+}
+
+for (const batched of [false, true]) {
+  const path = batched ? "batched" : "serial";
   test(`[${path}] a venue's own routine operation never merges into a live-music placeholder`, async () => {
     // Sequoia's scraper sends its dinner (the notability floor marks it
     // routine); GoCalaveras already listed the evening's music as a
@@ -345,7 +558,7 @@ for (const batched of [false, true]) {
 test("both write paths select the fields the matcher needs from every candidate", () => {
   const src = readFileSync(fileURLToPath(new URL("../lib/dedup.ts", import.meta.url)), "utf8");
   const select = src.match(/const CANDIDATE_SELECT =\s*"([^"]+)"/)?.[1] ?? "";
-  for (const col of ["venue_key", "source_name", "is_routine", "town", "date", "address", "series_umbrella"]) {
+  for (const col of ["venue_key", "source_name", "is_routine", "town", "date", "address", "series_umbrella", "status", "visibility", "verification_status", "community_sourced", "times_locked"]) {
     assert.ok(select.split(", ").includes(col), `CANDIDATE_SELECT lacks ${col}`);
   }
   assert.equal(
@@ -419,4 +632,49 @@ test("pickStrongMatch: an unreconciled duplicate pair is one event, and a same-s
   assert.equal(r.match?.row, slot);
   assert.equal(r.match?.kind, "standard");
   assert.equal(pickStrongMatch(inc, [early]).match?.kind, "cross_source");
+});
+
+test("pickStrongMatch: a row naming both of two differently titled residents joins them", async () => {
+  const { pickStrongMatch } = await import("../lib/dedup.js");
+  // No end times: two rows sharing a known start AND end at one venue already
+  // match on the exact window, which would make the joiner moot.
+  const slot = { date: DAY, town: "Arnold", venue_name: "Hypothetical Hall", start_time: "12:00", end_time: null, description: null, artists: null };
+  const okt = { ...slot, name: "Oktoberfest", source_name: "Visit Murphys" };
+  const brew = { ...slot, name: "Brewfest", source_name: "Facebook Events Discover (Arnold)" };
+  const both = { ...slot, name: "Oktoberfest & Brewfest", source_name: "GoCalaveras.com" };
+  const r = pickStrongMatch(both, [okt, brew]);
+  assert.deepEqual(r.ambiguous, [], "the incoming title covers both residents");
+  assert.ok(r.match);
+  // Matching both residents is not enough: a row that reaches Brewfest only
+  // through a shared act, and names only Oktoberfest, joins nothing.
+  const band = ["The Polka Kings"];
+  const r2 = pickStrongMatch(
+    { ...slot, name: "Oktoberfest", artists: band, source_name: "GoCalaveras.com" },
+    [okt, { ...brew, artists: band }]
+  );
+  assert.equal(r2.match, null);
+  assert.equal(r2.ambiguous.length, 2);
+});
+
+test("pickStrongMatch: live same-visibility rows first; the rest only as a fallback; taken rows are judged but never targeted", async () => {
+  const { pickStrongMatch } = await import("../lib/dedup.js");
+  const slot = { date: DAY, town: "Arnold", venue_name: "Hypothetical Hall", start_time: "19:00", end_time: null, description: null, source_name: "Visit Murphys" };
+  const inc = { ...slot, name: "Live Music @ Hypothetical Hall", source_name: "GoCalaveras.com" };
+  const a = { ...slot, name: "The Hollerin' Hounds", artists: ["The Hollerin' Hounds"], status: "confirmed", visibility: "public" };
+  const b = { ...slot, name: "Sipsy River Band", artists: ["Sipsy River Band"], status: "confirmed", visibility: "public" };
+  const cancelledB = { ...b, status: "cancelled" };
+  const privateB = { ...b, visibility: "private" };
+  assert.equal(pickStrongMatch(inc, [a, b]).match, null, "two live acts: ambiguous");
+  assert.equal(pickStrongMatch(inc, [a, cancelledB]).match?.row, a);
+  assert.equal(pickStrongMatch(inc, [a, privateB]).match?.row, a);
+  assert.equal(pickStrongMatch(inc, [a, privateB], { visibility: "private" }).match?.row, privateB);
+  assert.equal(pickStrongMatch(inc, [cancelledB]).match?.row, cancelledB, "fallback to the tombstone");
+  // Taken: judged (still ambiguous) and never the target.
+  const judged = pickStrongMatch(inc, [a, b], { isTaken: (c) => c === a });
+  assert.equal(judged.match, null);
+  assert.equal(judged.ambiguous.length, 2);
+  const onlyTaken = pickStrongMatch(inc, [a], { isTaken: (c) => c === a });
+  assert.equal(onlyTaken.match, null);
+  assert.equal(onlyTaken.taken, a);
+  assert.deepEqual(onlyTaken.ambiguous, []);
 });

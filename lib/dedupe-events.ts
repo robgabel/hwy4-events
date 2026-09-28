@@ -124,8 +124,9 @@ export interface ClusterResult<T> {
 /**
  * Cluster events into same-event groups. Every input row appears in exactly
  * one cluster (singletons included). Order within a cluster follows input
- * order. Shared by dedupeEvents (render) and findDuplicateClusters (audit) so
- * the "same event" definition can never drift between them.
+ * order. A thin view of `clusterEventsDetailed`, which reconcile and the
+ * /api/check-events audit call directly, so the "same event" definition can
+ * never drift between them.
  */
 export function clusterEvents<T extends DedupableEvent>(events: T[]): T[][] {
   return clusterEventsDetailed(events).clusters;
@@ -405,10 +406,11 @@ export function findDuplicateClusters<T extends DedupableEvent>(events: T[]): T[
 // after soaking silent for a clean week post-HWY-29 (dedup Move 3 complete).
 // Dedup at rest is owned by the write-time merge (scripts/lib/dedup.ts) and
 // the nightly /api/reconcile-dupes; the daily /api/check-events audit runs
-// the SAME clustering via `findDuplicateClusters` above, so a regression
-// still surfaces within a day — just in the audit, not the render path.
-// Consumers, precisely: `clusterEvents` + `pickSurvivor` feed
-// lib/reconcile.ts; `findDuplicateClusters` feeds /api/check-events;
-// `dedupeEvents`/`mergeCluster` have no production consumers and survive for
-// the dev CLI (scripts/check-feed-dedup.ts) and as the collapse
+// the SAME clustering (`clusterEventsDetailed`), so a regression still
+// surfaces within a day, just in the audit rather than the render path.
+// Consumers, precisely: `clusterEventsDetailed` + `pickSurvivor` feed
+// lib/reconcile.ts; `clusterEventsDetailed` feeds /api/check-events (its
+// clusters and its refusals, since dedup v2 Phase 1); `findDuplicateClusters`,
+// `dedupeEvents` and `mergeCluster` have no production consumers and survive
+// for tests, the dev CLI (scripts/check-feed-dedup.ts) and as the collapse
 // implementation should a read-time layer ever be wanted back.

@@ -539,19 +539,28 @@ const TITLE_STOPWORDS = new Set([
   "feat", "ft", "vs",
 ]);
 
-/** Event-TYPE words: they say what kind of thing it is, not which one. Two
+/** Event-FORMAT words: what kind of thing it is, which two listings of one
+ *  event add or drop freely ("Dinner and Dance" / "Fundraising Dinner"). Two
  *  listings of one event share its distinctive words ("lilly", "hallows",
- *  "gathering", "hermitfest"), not these. */
+ *  "gathering", "hermitfest"), not these. Deliberately NOT here: words that
+ *  tell one event from its sibling at the same venue, such as the audience
+ *  ("kids" / "adult", "family", "free", "new" member, "community") and the
+ *  subject ("wine" walk / art walk, car "show" / car wash). Dropping those
+ *  turned "Kids Clay" into a subset of "Adult Clay" (dedup v2 Phase 1 review). */
 const EVENT_TYPE_WORDS = new Set([
   "annual", "celebration", "celebrating", "celebrate", "festival", "fest",
   "faire", "fair", "event", "events", "party", "night", "nights", "day", "days",
   "evening", "morning", "afternoon", "weekend", "live", "music", "concert",
-  "concerts", "series", "show", "shows", "dinner", "lunch", "brunch",
-  "breakfast", "dance", "fundraiser", "fundraising", "benefit", "class",
-  "classes", "workshop", "session", "program", "tour", "tours", "special",
-  "grand", "opening", "free", "family", "kids", "community", "new", "summer",
-  "fall", "winter", "spring", "holiday", "tasting", "wine", "market",
+  "concerts", "series", "dinner", "lunch", "brunch", "breakfast", "dance",
+  "fundraiser", "fundraising", "benefit", "class", "classes", "workshop",
+  "session", "program", "tour", "tours", "special", "grand", "opening",
+  "summer", "fall", "winter", "spring", "holiday", "tasting", "market",
 ]);
+
+/** A distinctive set of one word identifies an event only if the word is at
+ *  least this long: "luau", "karaoke" and "gathering" do, "car", "dog" and
+ *  "art" are shared by too many unrelated titles. */
+const MIN_SINGLE_TOKEN_LENGTH = 4;
 
 /** Calendar words: a date is not an identity, and the matcher has already
  *  compared dates. Weekdays included, plural too ("Mimosa Sundays"). */
@@ -623,14 +632,16 @@ export function distinctiveTitleTokens(
 /** Every distinctive word of one title appears in the other ("gathering" ⊂
  *  "gathering, things, magical"). Full containment of the smaller set, not a
  *  share of it: at one venue on one night, the single word that differs is
- *  usually the whole difference ("North Grove Guided Walk" vs "South Grove
- *  Guided Walk", "Kids Clay" vs "Adult Clay"). A title with no distinctive
- *  words at all ("Live Music", "Wine Tasting") never matches here. */
+ *  usually the whole difference ("Kids Clay" vs "Adult Clay", "Wine Walk" vs
+ *  "Art Walk"). A title with no distinctive words at all ("Live Music") never
+ *  matches here, and neither does a one-word set shorter than
+ *  `MIN_SINGLE_TOKEN_LENGTH` ("Car Show" is not contained in "Car Wash"). */
 export function distinctiveTitleMatch(a: EventIdentity, b: EventIdentity): boolean {
   const da = distinctiveTitleTokens(a, b);
   const db = distinctiveTitleTokens(b, a);
   if (da.size === 0 || db.size === 0) return false;
   const [small, big] = da.size <= db.size ? [da, db] : [db, da];
+  if (small.size === 1 && [...small][0].length < MIN_SINGLE_TOKEN_LENGTH) return false;
   for (const t of small) if (!big.has(t)) return false;
   return true;
 }
@@ -665,6 +676,38 @@ function windowOf(e: EventIdentity): [number, number] | null {
   let em = en ? clockMinutes(en) : sm + ASSUMED_EVENT_DURATION_MIN;
   if (em <= sm) em += 24 * 60;
   return [sm, em];
+}
+
+/** Largest disagreement on a STATED end two feeds may have in the
+ *  cross-source rule. The rule forgives start noise (gates open vs first act);
+ *  when both feeds say when it ends and they disagree by more than this, the
+ *  shorter window is usually a part of the longer one (a parade inside the
+ *  festival day), not the same listing. */
+export const CROSS_SOURCE_MAX_END_DRIFT_MIN = 60;
+
+/** Both ends stated and further apart than `CROSS_SOURCE_MAX_END_DRIFT_MIN`. */
+function endsDisagree(a: EventIdentity, b: EventIdentity): boolean {
+  if (!normalizeTime(a.end_time) || !normalizeTime(b.end_time)) return false;
+  const wa = windowOf(a);
+  const wb = windowOf(b);
+  if (!wa || !wb) return false;
+  return Math.abs(wa[1] - wb[1]) > CROSS_SOURCE_MAX_END_DRIFT_MIN;
+}
+
+/** The more specific title covers a small slice of the vaguer title's time:
+ *  "All Hallows Costume Contest" for an hour inside the seven-hour "All
+ *  Hallows Faire". Its extra words name a part of the event, not the event.
+ *  Two titles with the same distinctive words are never a slice; an unknown
+ *  end counts as `ASSUMED_EVENT_DURATION_MIN`. */
+function isSubEventSlice(a: EventIdentity, b: EventIdentity): boolean {
+  const da = distinctiveTitleTokens(a, b);
+  const db = distinctiveTitleTokens(b, a);
+  if (da.size === db.size && [...da].every((t) => db.has(t))) return false;
+  const [specific, vague] = da.size > db.size ? [a, b] : [b, a];
+  const ws = windowOf(specific);
+  const wv = windowOf(vague);
+  if (!ws || !wv) return false;
+  return ws[1] - ws[0] < (wv[1] - wv[0]) / 2;
 }
 
 /** Two different feeds, both starts known, starts within the drift cap, and
@@ -1216,8 +1259,13 @@ export function sameEventMatch(
   // Creek Theatre") is the one placeholder `isGenericTitle` misses, so it
   // joins the broad side here (Phase 1.3), keeping the tolerance at least as
   // broad as the placeholder signal.
-  const placeholderish = (e: EventIdentity) =>
-    isGenericTitle(e.name) || isVenueOnlyTitle(e);
+  // Venue-only titles count on one night only: with the dates stripped (the
+  // series callers) a bare "Murphys Creek Theatre" row would pair with every
+  // production the theatre ever ran in its slot.
+  const venueOnly = (e: EventIdentity) => sameNight && isVenueOnlyTitle(e);
+  const placeholderish = (e: EventIdentity) => isGenericTitle(e.name) || venueOnly(e);
+  const placeholderSignal = (e: EventIdentity) =>
+    venueOnly(e) || (!isVenueOnlyTitle(e) && isPlaceholderForMatch(e));
   const seriesStartTolerance =
     !!a.name && !!b.name && placeholderish(a) !== placeholderish(b);
 
@@ -1230,19 +1278,25 @@ export function sameEventMatch(
     // One feed listing two starts is two sessions, so it never gets here.
     if (!sameNight || !venuesAgree || isUmbrella(a) || isUmbrella(b)) return null;
     if (!crossSourceWindowsOverlap(a, b)) return null;
+    // Start noise is forgiven; a stated end that disagrees is not. A shorter
+    // window ending much earlier is a part of the longer event.
+    if (endsDisagree(a, b)) return null;
     // Two rows that each name an act and disagree about who is playing are
     // two shows, whatever their titles share (see `sameExactWindow`).
     if (namesDifferentActs(a, b)) return null;
     if (
-      distinctiveTitleMatch(a, b) ||
       artistsOverlap(a.artists, b.artists) ||
-      actNamedInOther(a, b) ||
       (!!a.description &&
         !!b.description &&
         textSimilarity(a.description, b.description) >= 0.92)
     ) {
       return "cross_source";
     }
+    // Not `actNamedInOther`: across a clock gap, one listing's title turning
+    // up in another's prose is a cross-reference ("the professional cast of
+    // Henry V" in a theatre camp's blurb, "followed by The Hit Men"), not the
+    // same event (dedup v2 Phase 1 review).
+    if (distinctiveTitleMatch(a, b) && !isSubEventSlice(a, b)) return "cross_source";
     return null;
   }
 
@@ -1264,7 +1318,7 @@ export function sameEventMatch(
     venuesAgree &&
     !a.is_routine &&
     !b.is_routine &&
-    (isPlaceholderForMatch(a) || isPlaceholderForMatch(b))
+    (placeholderSignal(a) || placeholderSignal(b))
   ) {
     return "standard";
   }

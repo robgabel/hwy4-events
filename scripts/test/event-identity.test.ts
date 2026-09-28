@@ -1643,7 +1643,7 @@ test("distinctive titles match only on full containment of the smaller set", () 
   assert.equal(distinctiveTitleMatch(at("Junior Rangers"), at("Meadow Walk")), false);
   // A title with no distinctive words never matches on this signal.
   assert.equal(distinctiveTitleMatch(at("Live Music"), at("Live Music on the Deck")), false);
-  assert.equal(distinctiveTitleMatch(at("Wine Tasting"), at("Wine Tasting")), false);
+  assert.equal(distinctiveTitleMatch(at("Grand Opening"), at("Grand Opening Celebration")), false);
 });
 
 test("a venue-only title is a placeholder, by exact equality only", () => {
@@ -1763,11 +1763,120 @@ test("distinctive-title containment is a same-night rule: the series callers str
   assert.equal(isSameEvent({ ...series, date: "2026-07-10" }, { ...kim, date: "2026-07-10" }), true);
 });
 
-test("cross-source clock rule: the drift cap holds even when the windows overlap", () => {
+test("cross-source clock rule: the drift cap holds even when the windows overlap and the ends agree", () => {
   const base = { date: "2026-10-03", town: "Murphys", venue_name: "Murphys Community Park", name: "Grape Stomp" };
-  const allDay = { ...base, start_time: "09:30", end_time: "22:00", source_name: "GoCalaveras.com" };
-  // 09:30 vs 12:30 (180 min) is inside the cap; 09:30 vs 13:00 is not, though
-  // the all-day window overlaps both.
-  assert.equal(sameEventMatch(allDay, { ...base, start_time: "12:30", end_time: "14:00", source_name: "Visit Murphys" }), "cross_source");
-  assert.equal(sameEventMatch(allDay, { ...base, start_time: "13:00", end_time: "14:30", source_name: "Visit Murphys" }), null);
+  const allDay = { ...base, start_time: "09:30", end_time: "17:00", source_name: "GoCalaveras.com" };
+  // 09:30 vs 12:30 (180 min) is inside the cap; 09:30 vs 13:00 is not.
+  assert.equal(sameEventMatch(allDay, { ...base, start_time: "12:30", end_time: "17:00", source_name: "Visit Murphys" }), "cross_source");
+  assert.equal(sameEventMatch(allDay, { ...base, start_time: "13:00", end_time: "17:00", source_name: "Visit Murphys" }), null);
+});
+
+test("cross-source clock rule: stated ends must agree within an hour", () => {
+  const base = { date: "2026-10-17", town: "Murphys", venue_name: "Murphys Main Street", name: "Murphys Gathering" };
+  const goCal = { ...base, start_time: "11:00", end_time: "17:00", source_name: "GoCalaveras.com" };
+  assert.equal(sameEventMatch(goCal, { ...base, start_time: "12:00", end_time: "18:00", source_name: "Visit Murphys" }), "cross_source");
+  assert.equal(sameEventMatch(goCal, { ...base, start_time: "12:00", end_time: "18:30", source_name: "Visit Murphys" }), null);
+  // An unknown end cannot disagree.
+  assert.equal(sameEventMatch(goCal, { ...base, start_time: "12:00", source_name: "Visit Murphys" }), "cross_source");
+});
+
+test("cross-source clock rule: a shared act or a copied blurb carries identity when the titles share nothing", () => {
+  // Two feeds titling one show their own way. Neither title contains the
+  // other's distinctive words, so only the act (or the press release both
+  // feeds pasted) says it is one event.
+  const lawn = { date: "2026-08-22", town: "Murphys", venue_name: "Brice Station Vineyards", venue_key: "brice-station" };
+  const series = { ...lawn, name: "Summer Sunset Serenade", start_time: "18:00", end_time: "21:00", artists: ["Wolf Jett"], source_name: "GoCalaveras.com" };
+  const act = { ...lawn, name: "Wolf Jett & Friends on the Lawn", start_time: "19:00", end_time: "21:30", artists: ["Wolf Jett"], source_name: "Brice Station Vineyards" };
+  assert.equal(sameEventMatch(series, act), "cross_source");
+  assert.equal(sameEventMatch(series, { ...act, artists: null }), null, "without the act the titles carry nothing");
+  assert.equal(sameEventMatch(series, { ...act, source_name: "GoCalaveras.com" }), null, "one feed, two starts: two sessions");
+
+  const blurb =
+    "Paddle the quiet coves of Lake Alpine at peak fall color with a naturalist guide. Boats, paddles and " +
+    "life jackets are provided, no experience is needed, and the route stays close to shore for about two hours.";
+  const lake = { date: "2026-10-10", town: "Bear Valley", venue_name: "Lake Alpine Lodge" };
+  const colors = { ...lake, name: "Fall Colors Paddle", start_time: "09:00", end_time: "11:00", description: blurb, source_name: "Bear Valley Adventure Co." };
+  const tour = { ...lake, name: "Guided Kayak Tour", start_time: "10:00", end_time: "12:00", description: blurb.replace("about two hours", "roughly two hours"), source_name: "GoCalaveras.com" };
+  assert.equal(sameEventMatch(colors, tour), "cross_source");
+  assert.equal(sameEventMatch(colors, { ...tour, description: "Kayak tours leave the lodge dock every morning." }), null);
+});
+
+test("a part of a festival never merges into the festival across feeds (dedup v2 Phase 1 review)", () => {
+  // The review's repro on the real All Hallows row: a costume contest listed
+  // by another feed inside the faire's day read as the faire itself.
+  const fair = { date: "2026-10-25", town: "Angels Camp", venue_name: "Calaveras County Fairgrounds", venue_key: "fairgrounds" };
+  const faire = { ...fair, name: "18th Annual – All Hallow’s Faire", start_time: "11:00", end_time: "18:00", source_name: "GoCalaveras.com" };
+  const contest = { ...fair, name: "All Hallows Costume Contest", start_time: "14:00", source_name: "Visit Murphys" };
+  assert.equal(sameEventMatch(faire, { ...contest, end_time: "15:00" }), null, "stated end three hours early");
+  assert.equal(sameEventMatch(faire, contest), null, "no stated end: a two-hour slice of a seven-hour day");
+  assert.equal(sameEventMatch(faire, { ...contest, name: "All Hallows Closing Concert", start_time: "16:00", end_time: "18:00" }), null);
+  const street = { date: "2026-03-14", town: "Murphys", venue_name: "Main Street Murphys" };
+  const irishDay = { ...street, name: "Murphys Irish Day", start_time: "10:00", end_time: "17:00", source_name: "Visit Murphys" };
+  assert.equal(sameEventMatch(irishDay, { ...street, name: "Irish Day Parade", start_time: "11:00", end_time: "12:00", source_name: "GoCalaveras.com" }), null);
+  // The same event with the same distinctive words is never a slice
+  // (Hermitfest West: the 12:00 set listing inside the 9-2 festival).
+  const meadow = { date: "2026-09-13", town: "Bear Valley", venue_name: "Bear Valley Meadow", venue_key: "bear-valley-meadow" };
+  assert.equal(
+    sameEventMatch(
+      { ...meadow, name: "Hermitfest West – Music Festival", start_time: "09:00", end_time: "14:00", source_name: "scenic4.org" },
+      { ...meadow, name: "Hermitfest West", start_time: "12:00", end_time: "13:30", source_name: "Bear Valley Adventure Co." }
+    ),
+    "cross_source"
+  );
+});
+
+test("across a clock gap, one listing's title in another's prose is a cross-reference, not identity", () => {
+  // The review's blocker: a real GoCalaveras theatre-camp listing whose blurb
+  // names the season's play, beside a matinee of that play an hour later.
+  const theatre = { date: "2026-11-18", town: "Murphys", venue_name: "Murphys Creek Theatre", venue_key: "murphys-creek-theatre" };
+  const camp = {
+    ...theatre,
+    name: "Summer on Stage Camp – The Mirror Project",
+    start_time: "11:00",
+    end_time: "16:00",
+    source_name: "GoCalaveras.com",
+    description: "Campers work alongside the professional cast of Henry V in a week of workshops.",
+  };
+  const matinee = { ...theatre, name: "Henry V", start_time: "12:00", source_name: "Visit Murphys", description: "Shakespeare's history play." };
+  assert.equal(sameEventMatch(camp, matinee), null);
+  const pub = { date: "2026-09-26", town: "Murphys", venue_name: "Murphys Irish Pub", venue_key: "murphys-irish-pub" };
+  const openMic = { ...pub, name: "Open Mic Night", start_time: "17:00", end_time: "19:30", source_name: "GoCalaveras.com", description: "Sign up at 5. Followed by The Hit Men at 7." };
+  assert.equal(sameEventMatch(openMic, { ...pub, name: "The Hit Men", start_time: "19:00", source_name: "Murphys Irish Pub" }), null);
+});
+
+test("a one-word distinctive title must be at least four letters to identify an event", () => {
+  // "Art Class" reduces to {art}, which every art title at the venue contains.
+  // Four letters is the measured bar: "luau" and "karaoke" identify an event,
+  // "art", "car" and "dog" do not. Different ends keep the exact-window signal
+  // out of it, and these titles share too few words for the older overlap rule.
+  const hall = { date: "2026-10-09", town: "Murphys", venue_name: "Murphys Community Center", start_time: "18:00", source_name: "GoCalaveras.com" };
+  assert.equal(isSameEvent({ ...hall, name: "Art Class", end_time: "20:00" }, { ...hall, name: "Art & Wine Mixer Class", end_time: "21:00" }), false);
+  assert.equal(isSameEvent({ ...hall, name: "Dog Days", end_time: "20:00" }, { ...hall, name: "Dog Adoption Day", end_time: "21:00" }), false);
+  assert.equal(isSameEvent({ ...hall, name: "Luau Night", end_time: "20:00" }, { ...hall, name: "Moose Luau & Dinner", end_time: "21:00" }), true);
+});
+
+test("words that tell a variant from its sibling are distinctive: none of these merge", () => {
+  const venue = { date: "2026-10-01", town: "Arnold", venue_name: "Lackler Ceramics", source_name: "GoCalaveras.com", start_time: "15:00" };
+  const pairs: [string, string][] = [
+    ["Kids Clay", "Adult Clay"],
+    ["Kids Nature Walk", "Adult Nature Walk"],
+    ["Family Hike", "Sunset Hike"],
+    ["Free Yoga", "Hot Yoga"],
+    ["Kids Craft Night", "Adult Craft Night"],
+    ["Wine Walk", "Art Walk"],
+    ["Car Show", "Car Wash Fundraiser"],
+    ["Dog Show", "Dog Adoption Day"],
+    ["New Member Orientation", "Senior Member Orientation"],
+  ];
+  for (const [x, y] of pairs) {
+    assert.equal(sameEventMatch({ ...venue, name: x, end_time: "16:30" }, { ...venue, name: y, end_time: "17:00" }), null, `${x} / ${y}`);
+  }
+});
+
+test("a bare venue-name title pairs with its night's show, never across nights (series callers)", () => {
+  const base = { town: "Murphys", venue_name: "Murphys Creek Theatre", start_time: "19:30" };
+  const venueOnly = { ...base, name: "Murphys Creek Theatre" };
+  const show = { ...base, name: "An Act of God" };
+  assert.equal(isSameEvent(venueOnly, show), false, "dates stripped: /admin/posters must not pin one production's poster on another");
+  assert.equal(isSameEvent({ ...venueOnly, date: "2026-12-19" }, { ...show, date: "2026-12-19" }), true);
 });

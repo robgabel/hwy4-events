@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAdminClient } from "@/lib/admin/db";
 import { isSameEvent, type EventIdentity } from "@/lib/event-identity";
 import { failRedirect, flashRedirect, requireField, safeReturnTo } from "@/lib/admin/flash";
+import { isClockConflictReason } from "@/lib/verify-times";
 
 const ADMIN_PATH = "/admin/verification";
 
@@ -99,13 +100,16 @@ export async function applyOrganizerTime(formData: FormData) {
 
   const { data: row, error: readErr } = await supabase
     .from("hwy4_events")
-    .select("verification_suggested_start, verification_suggested_end")
+    .select("verification_suggested_start, verification_suggested_end, verification_reason")
     .eq("id", id)
     .maybeSingle();
   if (readErr) failRedirect(returnTo, readErr.message);
   if (!row?.verification_suggested_start) {
     failRedirect(returnTo, "No organizer time was recorded for this event.");
   }
+  // The staged time came from another listing of the event when a merge
+  // flagged a clock conflict (lib/verify-times.ts), else from the organizer.
+  const fromListing = isClockConflictReason(row!.verification_reason);
 
   await applyAction(
     id,
@@ -114,10 +118,12 @@ export async function applyOrganizerTime(formData: FormData) {
       end_time: row!.verification_suggested_end ?? null,
       times_locked: true,
       verification_status: "verified",
-      verification_reason: "Time applied from the organizer's page and locked.",
+      verification_reason: fromListing
+        ? "Time applied from the other listing and locked."
+        : "Time applied from the organizer's page and locked.",
       verification_checked_at: new Date().toISOString(),
     },
-    "Organizer's time applied and locked.",
+    fromListing ? "Other listing's time applied and locked." : "Organizer's time applied and locked.",
     returnTo
   );
 }

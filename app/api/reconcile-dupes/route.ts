@@ -73,6 +73,9 @@ export async function GET(request: Request) {
         date: r.row.date,
         matches: r.matches.map((m) => ({ id: m.id, name: m.name })),
       })),
+      // Survivors queued at /admin/verification because a merged-away listing
+      // stated a different start time.
+      clock_flags: result.clockFlags,
     });
   } catch (err) {
     console.error("[reconcile-dupes] Failed:", err);

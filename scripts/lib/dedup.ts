@@ -28,6 +28,7 @@ import { sanitizeDescriptionDetailed } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
 import { resolveFamilyFriendly } from "../../lib/family-friendly.js";
 import { isHttpUrl } from "../../lib/url.js";
+import { clockConflictPatch } from "../../lib/verify-times.js";
 import { recordSourceResult } from "./scrape-run-log.js";
 
 /**
@@ -488,12 +489,16 @@ interface MatchableRow {
   is_routine?: boolean | null;
   town?: string;
   address?: string | null;
+  /** Reconcile only ever clusters live rows within one visibility, so the
+   *  write path judges ambiguity over the same rows (see `pickStrongMatch`). */
+  status?: string | null;
+  visibility?: string | null;
 }
 
 /** The candidate columns every fuzzy-match query selects. One list, so the
  *  serial and batched paths can never ask the matcher different questions. */
 const CANDIDATE_SELECT =
-  "id, name, town, date, start_time, end_time, venue_name, venue_key, source_name, is_routine, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked";
+  "id, name, town, date, start_time, end_time, venue_name, venue_key, source_name, is_routine, status, visibility, description, artists, price, event_url, address, image_url, source_event_id, series_umbrella, price_locked, description_locked, poster_locked, notability_locked, times_locked, category, family_friendly_locked, verification_status, community_sourced";
 
 /** How an incoming event matches an existing same-date candidate, or null.
  *  Thin wrapper over the shared `sameEventMatch` so the write-time and
@@ -514,16 +519,35 @@ function strongMatchKind(
  *  things with no row naming both) is ambiguous. It merges into neither, so
  *  the caller inserts it and the nightly audit reports the refused pair.
  *  Several matches that are the same event (an unreconciled duplicate) are
- *  fine; a same-slot match is preferred over a clock-tolerant one. */
+ *  fine; a same-slot match is preferred over a clock-tolerant one.
+ *
+ *  Ambiguity is judged over the rows reconcile would cluster the incoming row
+ *  with: live (not cancelled) and in the incoming row's visibility. Judging it
+ *  over every row made a Phase 0 tombstone count as a second event, so the
+ *  third feed of a merged pair inserted a duplicate every morning that
+ *  reconcile merged back every afternoon. Cancelled and other-visibility rows
+ *  are a fallback target only when no live row matches, which is how a
+ *  tombstone keeps absorbing its old listing instead of letting it re-insert.
+ *
+ *  `isTaken` marks rows an earlier event in the same batch already merged
+ *  into. They still count toward ambiguity (the serial path, which re-reads
+ *  after every write, sees them too) but are never the target; when the only
+ *  match is taken, `taken` names it so the caller skips the event rather than
+ *  inserting a duplicate of a row it is updating. */
 export function pickStrongMatch<C extends MatchableRow & { name?: string }>(
   incoming: EventIdentity,
-  candidates: C[]
-): { match: { row: C; kind: SameEventMatch } | null; ambiguous: C[] } {
-  const hits: { row: C; kind: SameEventMatch }[] = [];
+  candidates: C[],
+  opts: { visibility?: string; isTaken?: (c: C) => boolean } = {}
+): { match: { row: C; kind: SameEventMatch } | null; ambiguous: C[]; taken: C | null } {
+  const visibility = opts.visibility ?? "public";
+  const isLive = (c: C) => c.status !== "cancelled" && (c.visibility ?? "public") === visibility;
+  const all: { row: C; kind: SameEventMatch }[] = [];
   for (const c of candidates) {
     const kind = strongMatchKind(incoming, c);
-    if (kind) hits.push({ row: c, kind });
+    if (kind) all.push({ row: c, kind });
   }
+  const live = all.filter((h) => isLive(h.row));
+  const hits = live.length > 0 ? live : all;
   const ids = hits.map((h): EventIdentity => ({ ...h.row, name: h.row.name ?? "" }));
   // A `titles` pair is joined by a row that matches both and names both of
   // their titles, the incoming row included (it matched both by construction).
@@ -543,18 +567,19 @@ export function pickStrongMatch<C extends MatchableRow & { name?: string }>(
       if (isSameEvent(ids[x], ids[y])) continue;
       const ev = distinctEventEvidence(ids[x], ids[y]);
       if (!ev || (ev === "titles" && joined(x, y))) continue;
-      return { match: null, ambiguous: hits.map((h) => h.row) };
+      return { match: null, ambiguous: hits.map((h) => h.row), taken: null };
     }
   }
-  const match = hits.find((h) => h.kind === "standard") ?? hits[0] ?? null;
-  return { match, ambiguous: [] };
+  const best = (list: typeof hits) => list.find((h) => h.kind === "standard") ?? list[0] ?? null;
+  const match = best(hits.filter((h) => !opts.isTaken?.(h.row)));
+  return { match, ambiguous: [], taken: match ? null : (best(hits)?.row ?? null) };
 }
 
 function logAmbiguousMatch(eventName: string, residents: { name?: string }[]): void {
   console.log(
     `  AMBIGUOUS_MATCH "${eventName}" matches ${residents.length} different events: ` +
       residents.map((r) => `"${r.name ?? ""}"`).join(", ") +
-      " (inserted; review in the audit)"
+      " (merged into none; inserted as its own row)"
   );
 }
 
@@ -616,6 +641,37 @@ export function buildFillOnlyUpdate(
   return out;
 }
 
+/** The write for a fill-only match: `buildFillOnlyUpdate`, plus, when the
+ *  match crossed a clock gap, the incoming feed's time staged on the resident
+ *  for a human (`clockConflictPatch`, lib/verify-times.ts). The resident keeps
+ *  its clock either way; the disagreement just stops being silent, so an
+ *  organizer's corrected time can still land through /admin/verification.
+ *  Null when there is nothing to write. */
+export function buildFillOnlyMerge(
+  kind: SameEventMatch,
+  existing: MergeableRow,
+  event: ExtractedEvent,
+  sourceName: string,
+  now: string
+): Record<string, unknown> | null {
+  const fill = buildFillOnlyUpdate(existing, event, now);
+  const flag =
+    kind === "cross_source"
+      ? clockConflictPatch(
+          existing,
+          {
+            start_time: event.start_time,
+            end_time: event.end_time,
+            source_name: sourceName,
+            event_url: event.event_url,
+          },
+          now
+        )
+      : null;
+  if (!fill && !flag) return null;
+  return { ...(fill ?? {}), ...(flag ?? {}) };
+}
+
 /** Shape the incoming scrape as an EventIdentity, stamping what the resident
  *  rows carry so both sides of a comparison hold the same fields (dedup v2
  *  1.4): the registry key (also how `namedActTakesPrecedence` tells a venue's
@@ -660,6 +716,10 @@ type MergeableRow = MatchableRow & {
   times_locked?: boolean | null;
   category?: string | null;
   family_friendly_locked?: boolean | null;
+  /** Read by the clock-conflict flag, which never overrides a verdict or a
+   *  community row (see `clockConflictPatch`). */
+  verification_status?: string | null;
+  community_sourced?: boolean | null;
 };
 
 function familyFriendlyPatch(
@@ -1341,18 +1401,33 @@ async function upsertEventsBatched(
     const matchUpdates: { id: string; payload: object | null; eventName: string; existingName: string }[] = [];
     const claimed = new Set<string>(); // existing row ids already merged into this batch
     for (const u of unmatched) {
-      const { match, ambiguous } = pickStrongMatch(
+      // Every candidate is judged, claimed ones included, so the batch reaches
+      // the serial path's verdict; only an unclaimed row can be written, since
+      // two updates computed from one snapshot would overwrite each other.
+      const { match, ambiguous, taken } = pickStrongMatch(
         asIdentity(u.event, sourceName),
-        (candidatesByDate.get(u.event.date) ?? []).filter((c) => !claimed.has(c.id))
+        candidatesByDate.get(u.event.date) ?? [],
+        { visibility, isTaken: (c) => claimed.has(c.id) }
       );
       if (ambiguous.length > 0) logAmbiguousMatch(u.event.name, ambiguous);
-      if (!match) continue;
+      if (!match) {
+        if (taken) {
+          // A second listing of a row this batch is already merging into. The
+          // serial path would merge it too; here it is skipped, not inserted.
+          console.log(
+            `  DUPLICATE_IN_BATCH "${u.event.name}" → existing "${taken.name}" (already merged this run)`
+          );
+          countUpdateResult(result, "skippedFuzzy", null, u.event.name);
+          fuzzyMatched.add(u.dedupKey);
+        }
+        continue;
+      }
       const hit = match.row;
       claimed.add(hit.id);
       matchUpdates.push({
         id: hit.id,
         payload: isFillOnlyMatch(match.kind, u.event, hit)
-          ? buildFillOnlyUpdate(hit, u.event, now)
+          ? buildFillOnlyMerge(match.kind, hit, u.event, sourceName, now)
           : buildStrongMatchUpdate(hit, u.event, u.dedupKey, now),
         eventName: u.event.name,
         existingName: hit.name,
@@ -1657,7 +1732,8 @@ export async function upsertEvents(
 
       const { match, ambiguous } = pickStrongMatch(
         asIdentity(event, sourceName),
-        (candidates ?? []) as (MergeableRow & { id: string })[]
+        (candidates ?? []) as (MergeableRow & { id: string })[],
+        { visibility }
       );
       if (ambiguous.length > 0) logAmbiguousMatch(event.name, ambiguous);
 
@@ -1667,7 +1743,7 @@ export async function upsertEvents(
         // and re-key it to the incoming dedup_key; fill-only when the two
         // rows disagree on the clock or the town (see isFillOnlyMatch).
         const payload = isFillOnlyMatch(match.kind, event, strongMatch)
-          ? buildFillOnlyUpdate(strongMatch, event, now)
+          ? buildFillOnlyMerge(match.kind, strongMatch, event, sourceName, now)
           : buildStrongMatchUpdate(strongMatch, event, dedupKey, now);
         const { error } = payload
           ? await supabaseAdmin.from("hwy4_events").update(payload).eq("id", strongMatch.id)

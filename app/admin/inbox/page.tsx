@@ -213,7 +213,8 @@ async function loadInbox(): Promise<InboxItem[]> {
     });
   }
 
-  // Verification — date didn't match the organizer's canonical page.
+  // Verification: date/time didn't match the organizer's canonical page, or
+  // two merged listings disagreed on the start (lib/verify-times.ts).
   for (const e of (verifies.data as VerifyRow[] | null) ?? []) {
     items.push({
       id: `verify-${e.id}`,

@@ -60,7 +60,7 @@ export async function VerificationRail() {
           Dates to verify
         </h2>
         <span style={{ color: MUTED, fontSize: 14 }}>
-          {rows.length} flagged · scraped date didn&rsquo;t match the organizer
+          {rows.length} flagged · a date or start time needs a human check
         </span>
       </div>
 

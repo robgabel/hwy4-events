@@ -124,3 +124,83 @@ export function describeTimeMismatch(
     `the organizer's page states ${formatTimeForHuman(pageStatedStart)}.`
   );
 }
+
+// ---------------------------------------------------------------------------
+// Clock conflicts between two listings (dedup v2 Phase 1, review finding #5).
+//
+// The cross-source rule merges two feeds' listings of one event even when they
+// disagree on the start by up to three hours (Murphys Gathering: GoCalaveras
+// 11:00, the organizer's own listing 12:00). A merge keeps ONE clock: the write
+// path keeps the resident's, reconcile keeps the richest row's. Discarding the
+// other silently meant an organizer's corrected time could never land. So the
+// kept row joins the /admin/verification queue with the other listing's time
+// staged in `verification_suggested_*`, where the existing one-click
+// "Use H:MM (locks it)" applies it. Nothing here writes `start_time`: a machine
+// stages, a human applies, the same contract as the organizer check above.
+// ---------------------------------------------------------------------------
+
+/** The fixed opening of the reason a clock-conflict flag writes, so the
+ *  verification page can label the staged time as another listing's rather
+ *  than the organizer's page. */
+export const CLOCK_CONFLICT_REASON_PREFIX = "Two listings disagree on the start time.";
+
+export function isClockConflictReason(reason: string | null | undefined): boolean {
+  return !!reason && reason.startsWith(CLOCK_CONFLICT_REASON_PREFIX);
+}
+
+export interface ClockListing {
+  start_time?: string | null;
+  end_time?: string | null;
+  source_name?: string | null;
+  event_url?: string | null;
+}
+
+export interface KeptClockRow extends ClockListing {
+  times_locked?: boolean | null;
+  verification_status?: string | null;
+  community_sourced?: boolean | null;
+}
+
+/**
+ * The verification patch for a kept row whose start differs from another
+ * listing's, or null (write nothing) when:
+ *  - either start is unstated or unparseable, or the two agree (never flag on
+ *    silence, the rule `compareEventTime` follows);
+ *  - the kept row's times are locked, so they are already authoritative;
+ *  - the row already carries a verdict (verified, dismissed, or queued for
+ *    another reason). A human's call or the organizer check outranks a feed's
+ *    disagreement, and re-flagging a dismissed row on every nightly run is how
+ *    a queue stops being read;
+ *  - the row is community sourced. A flag there would hide its public "call
+ *    ahead" note (`eventConfidence` reads needs_verification as stale_source),
+ *    and a person already reviewed its time at publish.
+ *
+ * When the other listing states no end, the staged end is the kept row's own
+ * end if it still follows the staged start, so applying the suggestion moves
+ * the start without erasing a known end.
+ */
+export function clockConflictPatch(
+  kept: KeptClockRow,
+  other: ClockListing,
+  now: string
+): Record<string, unknown> | null {
+  if (kept.times_locked || kept.community_sourced) return null;
+  if ((kept.verification_status ?? "unchecked") !== "unchecked") return null;
+  const ours = parseStatedTime(kept.start_time);
+  const theirs = parseStatedTime(other.start_time);
+  if (!ours || !theirs || ours === theirs) return null;
+  const ourEnd = parseStatedTime(kept.end_time);
+  const theirEnd = parseStatedTime(other.end_time) ?? (ourEnd && ourEnd > theirs ? ourEnd : null);
+  const who = other.source_name?.trim() || "Another listing";
+  const ourFeed = kept.source_name?.trim();
+  return {
+    verification_status: "needs_verification",
+    verification_reason:
+      `${CLOCK_CONFLICT_REASON_PREFIX} ${who} says ${formatTimeForHuman(theirs)}; ` +
+      `we show ${formatTimeForHuman(ours)}${ourFeed ? ` from ${ourFeed}` : ""}.` +
+      (other.event_url ? ` Their listing: ${other.event_url}` : ""),
+    verification_suggested_start: theirs,
+    verification_suggested_end: theirEnd,
+    verification_checked_at: now,
+  };
+}

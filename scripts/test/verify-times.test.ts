@@ -9,9 +9,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  clockConflictPatch,
   compareEventTime,
   describeTimeMismatch,
   formatTimeForHuman,
+  isClockConflictReason,
   parseStatedTime,
 } from "../../lib/verify-times.js";
 
@@ -95,4 +97,64 @@ test("a range only inherits its end meridiem when the reading is unambiguous", (
   assert.equal(parseStatedTime("11:30-1pm"), null);
   // When the start states its own meridiem there is nothing to infer.
   assert.equal(parseStatedTime("11:00 am - 1:00 pm"), "11:00");
+});
+
+// Clock conflicts between two merged listings (dedup v2 review #5). The merge
+// keeps one clock; the other is staged here for a human, never applied.
+const NOW = "2026-09-28T16:00:00.000Z";
+const gathering = {
+  start_time: "11:00:00",
+  end_time: "17:00:00",
+  source_name: "GoCalaveras.com",
+  times_locked: false,
+  verification_status: "unchecked",
+  community_sourced: false,
+};
+const organizer = {
+  start_time: "12:00",
+  end_time: "17:00",
+  source_name: "Visit Murphys",
+  event_url: "https://visitmurphys.com/event/murphys-gathering/",
+};
+
+test("a clock conflict stages the other listing's time for a human", () => {
+  const patch = clockConflictPatch(gathering, organizer, NOW)!;
+  assert.equal(patch.verification_status, "needs_verification");
+  assert.equal(patch.verification_suggested_start, "12:00");
+  assert.equal(patch.verification_suggested_end, "17:00");
+  assert.equal(patch.verification_checked_at, NOW);
+  const reason = String(patch.verification_reason);
+  assert.ok(isClockConflictReason(reason));
+  assert.match(reason, /Visit Murphys says 12:00 PM; we show 11:00 AM from GoCalaveras\.com\./);
+  assert.match(reason, /visitmurphys\.com/);
+  // Staging only: the patch never writes the clock itself.
+  assert.ok(!("start_time" in patch) && !("end_time" in patch) && !("times_locked" in patch));
+});
+
+test("a clock conflict flags nothing on silence, agreement, a lock, a verdict or a community row", () => {
+  assert.equal(clockConflictPatch({ ...gathering, start_time: null }, organizer, NOW), null);
+  assert.equal(clockConflictPatch(gathering, { ...organizer, start_time: null }, NOW), null);
+  assert.equal(clockConflictPatch(gathering, { ...organizer, start_time: "11:00 AM" }, NOW), null);
+  assert.equal(clockConflictPatch({ ...gathering, times_locked: true }, organizer, NOW), null);
+  for (const status of ["verified", "dismissed", "needs_verification"]) {
+    assert.equal(clockConflictPatch({ ...gathering, verification_status: status }, organizer, NOW), null, status);
+  }
+  // A community row's public "call ahead" note would vanish under a flag.
+  assert.equal(clockConflictPatch({ ...gathering, community_sourced: true }, organizer, NOW), null);
+  // An unset status is the column default, unchecked.
+  assert.ok(clockConflictPatch({ ...gathering, verification_status: null }, organizer, NOW));
+});
+
+test("a clock conflict keeps a known end when the other listing states none", () => {
+  const noEnd = { ...organizer, end_time: null };
+  assert.equal(clockConflictPatch(gathering, noEnd, NOW)!.verification_suggested_end, "17:00");
+  // Our end no longer follows their start: stage no end rather than a backwards window.
+  const early = { ...gathering, start_time: "09:00:00", end_time: "10:00:00" };
+  assert.equal(clockConflictPatch(early, noEnd, NOW)!.verification_suggested_end, null);
+});
+
+test("only a clock-conflict reason reads as one", () => {
+  assert.equal(isClockConflictReason(describeTimeMismatch("17:45", "18:15")), false);
+  assert.equal(isClockConflictReason(null), false);
+  assert.equal(isClockConflictReason("Dismissed by admin."), false);
 });
