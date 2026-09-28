@@ -14,7 +14,7 @@
 
 import {
   isSameEvent,
-  isGenericTitle,
+  isPlaceholderForMatch,
   normalizeVenue,
   GENERIC_VENUES,
   type EventIdentity,
@@ -62,8 +62,10 @@ function richness(e: DedupableEvent): number {
   if (e.event_url) s += 1;
   // An umbrella/series placeholder ("Bistro Summer Concerts Series") must lose
   // the display slot to the specific act sharing its venue + time, so the card
-  // shows the band name and its category, not the generic series row.
-  if (e.name && isGenericTitle(e.name)) s -= 12;
+  // shows the band name and its category, not the generic series row. A title
+  // that names its act after a generic prefix ("Live Music - Jill Warren") is
+  // not a placeholder and is not penalized: it IS the band name.
+  if (e.name && isPlaceholderForMatch(e)) s -= 12;
   return s;
 }
 

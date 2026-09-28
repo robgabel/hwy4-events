@@ -81,6 +81,20 @@ export function classifyStatus(status: number): Exclude<EnrichOutcome, "enriched
   return status === 429 ? "rate_limited" : "http_error";
 }
 
+/** Did this outcome leave the event without its detail-page fields for a
+ *  reason a later run can fix? Feeds the degraded-insert hold
+ *  (scripts/lib/degraded-hold.ts, dedup v2 Phase 0.4), so "no" means the row
+ *  inserts now instead of waiting. `empty` is not a failure: the page loaded
+ *  and had nothing, so waiting buys nothing and the bare row is the truth.
+ *  Neither is a 404 or 410: the page is gone, and a later run will find it gone
+ *  again. A 429, any other non-2xx (403 walls and 5xx lift), a transport error
+ *  and a breaker skip all are. An http_error with no status is treated as a
+ *  failure, since it cannot be shown to be permanent. */
+export const isEnrichFailure = (o: EnrichOutcome, httpStatus?: number): boolean => {
+  if (o === "http_error") return httpStatus !== 404 && httpStatus !== 410;
+  return o === "rate_limited" || o === "network_error" || o === "skipped";
+};
+
 export const attempted = (t: EnrichTally): number =>
   t.enriched + t.empty + t.rateLimited + t.httpError + t.networkError;
 
@@ -138,8 +152,9 @@ export function summarizeEnrichment(
   if (t.skipped > 0) {
     warning =
       `GoCalaveras enrichment CIRCUIT BROKE after ${t.rateLimited} rate-limited requests: ` +
-      `${t.skipped} event(s) not enriched. New rows will land without detail ` +
-      `descriptions, posters or addresses until this clears.`;
+      `${t.skipped} event(s) not enriched. New rows with no venue, description ` +
+      `or street number are held (DEGRADED_INSERT_HELD) until a run enriches them; ` +
+      `the rest land without detail descriptions, posters or addresses until this clears.`;
   } else if (tried > 0 && t.rateLimited / tried >= RATE_LIMIT_WARN_RATIO) {
     const pct = Math.round((t.rateLimited / tried) * 100);
     warning =

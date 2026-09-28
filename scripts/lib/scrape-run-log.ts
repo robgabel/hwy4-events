@@ -75,6 +75,11 @@ interface SourceTotals {
    *  for sources whose policy is "allow" (seeds/vision, unpinned by design), so
    *  a nonzero here is a text-scrape source worth looking at. */
   unpinned: number;
+  /** New rows held back by the degraded-insert hold (enrichment failed, no
+   *  venue, no description; scripts/lib/degraded-hold.ts). A run that holds
+   *  rows every day means the source's detail pages are down, not that it is
+   *  quiet. */
+  held: number;
   error: string | null;
 }
 
@@ -84,6 +89,7 @@ const emptyTotals = (): SourceTotals => ({
   unchanged: 0,
   skippedFuzzy: 0,
   unpinned: 0,
+  held: 0,
   error: null,
 });
 
@@ -108,6 +114,7 @@ export function recordSourceResult(key: string, result: UpsertResult): void {
   totals.unchanged += result.unchanged;
   totals.skippedFuzzy += result.skippedFuzzy;
   totals.unpinned += result.unpinned;
+  totals.held += result.held ?? 0;
   current.sources.set(key, totals);
 }
 

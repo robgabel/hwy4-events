@@ -42,6 +42,14 @@ export interface ExtractedEvent {
    */
   is_routine?: boolean;
   routine_reason?: string | null;
+  /**
+   * True when the source's detail-page enrichment FAILED for this event this
+   * run (429, other non-2xx, transport error, or skipped by the circuit
+   * breaker), as opposed to a page that loaded and was genuinely bare. Set by
+   * GoCalaveras; read only by the degraded-insert hold in upsertEvents
+   * (scripts/lib/degraded-hold.ts). Never written to the DB.
+   */
+  enrichment_failed?: boolean;
 }
 
 const client = new Anthropic();

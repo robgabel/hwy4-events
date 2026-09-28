@@ -10,6 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  clusterEvents,
   dedupeEvents,
   mergeCluster,
   pickSurvivor,
@@ -292,3 +293,67 @@ test("does NOT collapse two towns' same-titled events at different venues", () =
 // heavily locked by event-identity.test.ts, and clusterEvents/pickSurvivor
 // are exercised transitively by the dedupeEvents tests above; nothing locks
 // findDuplicateClusters by name (it is clusterEvents(...).filter(len>1)).
+
+test("a named 'Live Music - <Act>' row keeps the card over a richer true placeholder (dedup v2 0.3)", () => {
+  // The aggregator's "Live Music @ Sequoia Woods" row is the richer one here
+  // (long blurb, image, source id). It used to win because the named row was
+  // ALSO penalized as a placeholder, so the merged card lost the band name.
+  const sequoia = {
+    date: "2027-07-10",
+    town: "Arnold",
+    venue_name: "Sequoia Woods Country Club",
+    visibility: "public" as const,
+  };
+  const placeholder: DedupableEvent = {
+    ...sequoia,
+    name: "Live Music @ Sequoia Woods",
+    start_time: "19:00",
+    end_time: "22:00",
+    description: "x".repeat(300),
+    source_event_id: "192001",
+    image_url: "https://example.com/a.jpg",
+    event_url: "https://www.gocalaveras.com/events/live-music-sequoia-woods/",
+    artists: null,
+  };
+  const named: DedupableEvent = {
+    ...sequoia,
+    name: "Live Music - Jill Warren",
+    start_time: "19:00",
+    end_time: "22:00",
+    description: "Jill Warren on the deck.",
+    source_event_id: "sw-2027-07-10-jill",
+    artists: null,
+  };
+  assert.equal(pickSurvivor([placeholder, named]).name, "Live Music - Jill Warren");
+  assert.equal(pickSurvivor([named, placeholder]).name, "Live Music - Jill Warren");
+  // ...and the pair is one event, so dedupe collapses it to that card.
+  const out = dedupeEvents([placeholder, named]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].name, "Live Music - Jill Warren");
+});
+
+test("a TBD slot cannot chain a different act into its re-listing's cluster (dedup v2 Phase 0 review)", () => {
+  // The real 2026-08-08 Sequoia evening: the TBD patio slot, the named re-list
+  // of that slot (The Hit Men), and Jamie Byous 30 minutes earlier. Only the
+  // slot and its re-list are one event; Byous must never join them, or
+  // reconcile deletes a distinct act.
+  const night = {
+    date: "2026-08-08",
+    town: "Arnold",
+    venue_name: "Sequoia Woods Country Club",
+    visibility: "public" as const,
+    description: null,
+    artists: null,
+  };
+  const tbd: DedupableEvent = { ...night, name: "Patio Party #4 featuring live music (TBD)", start_time: "19:00", end_time: "22:00" };
+  const byous: DedupableEvent = { ...night, name: "Live Music - Jamie Byous", start_time: "18:30", end_time: "21:30" };
+  const hitMen: DedupableEvent = { ...night, name: "Patio Party #4 featuring live music - The Hit Men", start_time: "19:00", end_time: "22:00" };
+  const clusters = clusterEvents([tbd, byous, hitMen]).map((c) => c.map((e) => e.name).sort());
+  assert.deepEqual(
+    clusters.sort((x, y) => y.length - x.length),
+    [
+      ["Patio Party #4 featuring live music (TBD)", "Patio Party #4 featuring live music - The Hit Men"],
+      ["Live Music - Jamie Byous"],
+    ]
+  );
+});
