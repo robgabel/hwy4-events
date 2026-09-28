@@ -1867,10 +1867,77 @@ test("words that tell a variant from its sibling are distinctive: none of these 
     ["Car Show", "Car Wash Fundraiser"],
     ["Dog Show", "Dog Adoption Day"],
     ["New Member Orientation", "Senior Member Orientation"],
+    ["Community Yoga", "Kids Yoga"],
   ];
   for (const [x, y] of pairs) {
     assert.equal(sameEventMatch({ ...venue, name: x, end_time: "16:30" }, { ...venue, name: y, end_time: "17:00" }), null, `${x} / ${y}`);
   }
+});
+
+test("a title made only of qualifier words names no event (dedup v2 Phase 1, second review)", () => {
+  // Keeping "free", "kids", "wine" distinctive made "Free Concert" reduce to
+  // {free}, contained in every same-venue title that shares the word.
+  // Pairs chosen so main's older title-overlap rule stays silent: only the
+  // distinctive-title rule could have matched them.
+  const park = { date: "2026-10-01", town: "Angels Camp", venue_name: "Utica Park", start_time: "17:00", source_name: "GoCalaveras.com" };
+  const pairs: [string, string][] = [
+    ["Free Concert", "Free Yoga in the Park"],
+    ["Wine Tasting", "Wine & Paint Night"],
+    ["Kids Night", "Kids Pottery & Pizza Night"],
+    ["Family Day", "Family Fishing Derby"],
+    ["Community Dinner", "Community Garden Workday"],
+  ];
+  for (const [x, y] of pairs) {
+    assert.equal(sameEventMatch({ ...park, name: x, end_time: "19:00" }, { ...park, name: y, end_time: "20:00" }), null, `${x} / ${y}`);
+  }
+  // Across a clock gap too: "Free Bingo" is not "Free Dinner".
+  assert.equal(
+    sameEventMatch(
+      { ...park, name: "Free Bingo", start_time: "09:00", end_time: "13:00" },
+      { ...park, name: "Free Dinner", start_time: "10:30", source_name: "Visit Murphys" }
+    ),
+    null
+  );
+  // A qualifier beside a real subject still identifies the event.
+  assert.equal(
+    sameEventMatch({ ...park, name: "Free Yoga", end_time: "18:00" }, { ...park, name: "Free Yoga in the Park", end_time: "18:30" }),
+    "standard"
+  );
+});
+
+test("a vaguer listing with no stated end could be the whole day: a part of it never merges into it", () => {
+  // Second review: the unknown end was read as two hours, so a festival listed
+  // without one still absorbed its own parade.
+  const street = { date: "2026-03-14", town: "Murphys", venue_name: "Main Street Murphys" };
+  const irishDay = { ...street, name: "Murphys Irish Day", start_time: "10:00", source_name: "Visit Murphys" };
+  assert.equal(sameEventMatch(irishDay, { ...street, name: "Irish Day Parade", start_time: "11:00", end_time: "12:00", source_name: "GoCalaveras.com" }), null);
+  const fair = { date: "2026-10-25", town: "Angels Camp", venue_name: "Calaveras County Fairgrounds", venue_key: "fairgrounds" };
+  assert.equal(
+    sameEventMatch(
+      { ...fair, name: "18th Annual – All Hallow’s Faire", start_time: "11:00", source_name: "GoCalaveras.com" },
+      { ...fair, name: "All Hallows Costume Contest", start_time: "13:00", end_time: "14:00", source_name: "Visit Murphys" }
+    ),
+    null
+  );
+  // Same distinctive words: never a slice, whatever the ends (Lilly, no ends).
+  const grounds = { date: "2026-10-03", town: "Angels Camp", venue_name: "Calaveras County Fairgrounds" };
+  assert.equal(
+    sameEventMatch(
+      { ...grounds, name: "Live Like Lilly Fundraising Dinner", start_time: "17:00", source_name: "GoCalaveras.com" },
+      { ...grounds, name: "1st Annual Live Like Lilly Dinner and Dance", start_time: "18:00", source_name: "Facebook Events Discover (Angels Camp)" }
+    ),
+    "cross_source"
+  );
+});
+
+test("the slice line sits at half the vaguer listing's span", () => {
+  const farm = { date: "2026-10-10", town: "Murphys", venue_name: "Hypothetical Farm" };
+  const hoedown = { ...farm, name: "Harvest Hoedown", start_time: "10:00", end_time: "16:00", source_name: "GoCalaveras.com" };
+  const hayride = { ...farm, name: "Harvest Hoedown Hayride", source_name: "Visit Murphys" };
+  // Exactly half of six hours: the whole afternoon, not a slice.
+  assert.equal(sameEventMatch(hoedown, { ...hayride, start_time: "13:00", end_time: "16:00" }), "cross_source");
+  // Two and a half of six hours: a part of the day.
+  assert.equal(sameEventMatch(hoedown, { ...hayride, start_time: "13:00", end_time: "15:30" }), null);
 });
 
 test("a bare venue-name title pairs with its night's show, never across nights (series callers)", () => {

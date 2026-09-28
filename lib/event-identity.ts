@@ -562,6 +562,20 @@ const EVENT_TYPE_WORDS = new Set([
  *  "art" are shared by too many unrelated titles. */
 const MIN_SINGLE_TOKEN_LENGTH = 4;
 
+/** Words that tell an event from its sibling but name no event on their own:
+ *  the audience ("kids", "family", "adults", "seniors"), the price ("free"),
+ *  membership ("new", "members", "community") and a subject a venue repeats
+ *  across programs ("wine", "show"). They stay distinctive, so "Kids Clay" is
+ *  not contained in "Adult Clay". But a title whose distinctive words are only
+ *  these ("Free Concert", "Wine Tasting", "Kids Night") says who or how much,
+ *  not what, so it never matches by title: "Free Concert" is not "Free Yoga in
+ *  the Park" (dedup v2 Phase 1, second review). */
+const QUALIFIER_WORDS = new Set([
+  "kids", "kid", "children", "childrens", "youth", "teen", "teens", "family",
+  "families", "adult", "adults", "senior", "seniors", "free", "new", "member",
+  "members", "community", "wine", "wines", "show", "shows",
+]);
+
 /** Calendar words: a date is not an identity, and the matcher has already
  *  compared dates. Weekdays included, plural too ("Mimosa Sundays"). */
 const CALENDAR_WORDS = new Set([
@@ -635,13 +649,15 @@ export function distinctiveTitleTokens(
  *  usually the whole difference ("Kids Clay" vs "Adult Clay", "Wine Walk" vs
  *  "Art Walk"). A title with no distinctive words at all ("Live Music") never
  *  matches here, and neither does a one-word set shorter than
- *  `MIN_SINGLE_TOKEN_LENGTH` ("Car Show" is not contained in "Car Wash"). */
+ *  `MIN_SINGLE_TOKEN_LENGTH` ("Car Show" is not contained in "Car Wash") or a
+ *  set made only of `QUALIFIER_WORDS` ("Free Concert"). */
 export function distinctiveTitleMatch(a: EventIdentity, b: EventIdentity): boolean {
   const da = distinctiveTitleTokens(a, b);
   const db = distinctiveTitleTokens(b, a);
   if (da.size === 0 || db.size === 0) return false;
   const [small, big] = da.size <= db.size ? [da, db] : [db, da];
   if (small.size === 1 && [...small][0].length < MIN_SINGLE_TOKEN_LENGTH) return false;
+  if ([...small].every((t) => QUALIFIER_WORDS.has(t))) return false;
   for (const t of small) if (!big.has(t)) return false;
   return true;
 }
@@ -697,13 +713,17 @@ function endsDisagree(a: EventIdentity, b: EventIdentity): boolean {
 /** The more specific title covers a small slice of the vaguer title's time:
  *  "All Hallows Costume Contest" for an hour inside the seven-hour "All
  *  Hallows Faire". Its extra words name a part of the event, not the event.
- *  Two titles with the same distinctive words are never a slice; an unknown
- *  end counts as `ASSUMED_EVENT_DURATION_MIN`. */
+ *  Two titles with the same distinctive words are never a slice. A specific
+ *  title with no stated end counts as `ASSUMED_EVENT_DURATION_MIN`; a vaguer
+ *  title with no stated end could be a whole day, so nothing shows the other
+ *  is not one part of it ("Murphys Irish Day" with no end vs the 11-12 "Irish
+ *  Day Parade"), and it counts as a slice (dedup v2 Phase 1, second review). */
 function isSubEventSlice(a: EventIdentity, b: EventIdentity): boolean {
   const da = distinctiveTitleTokens(a, b);
   const db = distinctiveTitleTokens(b, a);
   if (da.size === db.size && [...da].every((t) => db.has(t))) return false;
   const [specific, vague] = da.size > db.size ? [a, b] : [b, a];
+  if (!normalizeTime(vague.end_time)) return true;
   const ws = windowOf(specific);
   const wv = windowOf(vague);
   if (!ws || !wv) return false;
@@ -1186,10 +1206,12 @@ export type SameEventMatch = "standard" | "cross_source";
  *  vs the organizer's this-night time).
  *
  *  Across a clock gap (dedup v2 1.2): two DIFFERENT feeds at the same venue
- *  whose windows overlap and whose starts are within
- *  `CROSS_SOURCE_MAX_START_DRIFT_MIN` match on strong identity only
- *  (distinctive title, shared artist, the act named in the other, or a near-
- *  identical description), never on a placeholder or the window alone. */
+ *  whose windows overlap, whose starts are within
+ *  `CROSS_SOURCE_MAX_START_DRIFT_MIN` and whose stated ends agree within
+ *  `CROSS_SOURCE_MAX_END_DRIFT_MIN` match on strong identity only (a shared
+ *  artist, a near-identical description, or a distinctive title that is not a
+ *  slice of the other's time), never on a placeholder, the window, or one
+ *  listing's title turning up in the other's prose. */
 export function isSameEvent(a: EventIdentity, b: EventIdentity): boolean {
   return sameEventMatch(a, b) !== null;
 }

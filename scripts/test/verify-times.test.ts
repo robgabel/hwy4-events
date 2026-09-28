@@ -141,6 +141,8 @@ test("a clock conflict flags nothing on silence, agreement, a lock, a verdict or
   }
   // A community row's public "call ahead" note would vanish under a flag.
   assert.equal(clockConflictPatch({ ...gathering, community_sourced: true }, organizer, NOW), null);
+  // A cancelled tombstone is not listed; nobody should fix its time.
+  assert.equal(clockConflictPatch({ ...gathering, status: "cancelled" }, organizer, NOW), null);
   // An unset status is the column default, unchecked.
   assert.ok(clockConflictPatch({ ...gathering, verification_status: null }, organizer, NOW));
 });
@@ -151,6 +153,16 @@ test("a clock conflict keeps a known end when the other listing states none", ()
   // Our end no longer follows their start: stage no end rather than a backwards window.
   const early = { ...gathering, start_time: "09:00:00", end_time: "10:00:00" };
   assert.equal(clockConflictPatch(early, noEnd, NOW)!.verification_suggested_end, null);
+  // Ending exactly at their start would stage a zero-length window.
+  const touching = { ...gathering, start_time: "11:00:00", end_time: "12:00:00" };
+  assert.equal(clockConflictPatch(touching, noEnd, NOW)!.verification_suggested_end, null);
+  // A zero-length stored window (end equal to start, bad data) donates nothing:
+  // read as crossing midnight it would stage a 23-hour window.
+  const zeroLength = { ...gathering, start_time: "11:00:00", end_time: "11:00:00" };
+  assert.equal(clockConflictPatch(zeroLength, noEnd, NOW)!.verification_suggested_end, null);
+  // An end past midnight is the next day, so it still follows their start.
+  const lateShow = { ...gathering, start_time: "21:00:00", end_time: "01:00:00" };
+  assert.equal(clockConflictPatch(lateShow, { ...noEnd, start_time: "22:00" }, NOW)!.verification_suggested_end, "01:00");
 });
 
 test("only a clock-conflict reason reads as one", () => {

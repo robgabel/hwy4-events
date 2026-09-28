@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAdminClientOrNull } from "@/lib/admin/db";
+import { isClockConflictReason } from "@/lib/verify-times";
 import {
   INK,
   MUTED,
@@ -225,7 +226,7 @@ async function loadInbox(): Promise<InboxItem[]> {
       meta: [e.date, e.town].filter(Boolean).join(" · ") || null,
       when: e.verification_checked_at,
       href: KIND.verify.href,
-      badge: "date unconfirmed",
+      badge: isClockConflictReason(e.verification_reason) ? "start time conflict" : "date unconfirmed",
       badgeTone: "warn",
     });
   }

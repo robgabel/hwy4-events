@@ -159,7 +159,13 @@ export interface KeptClockRow extends ClockListing {
   times_locked?: boolean | null;
   verification_status?: string | null;
   community_sourced?: boolean | null;
+  status?: string | null;
 }
+
+const minutesOf = (hhmm: string): number => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+};
 
 /**
  * The verification patch for a kept row whose start differs from another
@@ -173,24 +179,31 @@ export interface KeptClockRow extends ClockListing {
  *    a queue stops being read;
  *  - the row is community sourced. A flag there would hide its public "call
  *    ahead" note (`eventConfidence` reads needs_verification as stale_source),
- *    and a person already reviewed its time at publish.
+ *    and a person already reviewed its time at publish;
+ *  - the row is cancelled (a Phase 0 tombstone absorbing its old listing):
+ *    nobody should be asked to fix the time of an event that is not listed.
  *
  * When the other listing states no end, the staged end is the kept row's own
- * end if it still follows the staged start, so applying the suggestion moves
- * the start without erasing a known end.
+ * end if it still follows the staged start (an end past midnight counts as
+ * the next day), so applying the suggestion moves the start without erasing a
+ * known end.
  */
 export function clockConflictPatch(
   kept: KeptClockRow,
   other: ClockListing,
   now: string
 ): Record<string, unknown> | null {
-  if (kept.times_locked || kept.community_sourced) return null;
+  if (kept.times_locked || kept.community_sourced || kept.status === "cancelled") return null;
   if ((kept.verification_status ?? "unchecked") !== "unchecked") return null;
   const ours = parseStatedTime(kept.start_time);
   const theirs = parseStatedTime(other.start_time);
   if (!ours || !theirs || ours === theirs) return null;
   const ourEnd = parseStatedTime(kept.end_time);
-  const theirEnd = parseStatedTime(other.end_time) ?? (ourEnd && ourEnd > theirs ? ourEnd : null);
+  let ourEndMin = ourEnd ? minutesOf(ourEnd) : null;
+  if (ourEndMin !== null && ourEndMin < minutesOf(ours)) ourEndMin += 24 * 60;
+  const theirEnd =
+    parseStatedTime(other.end_time) ??
+    (ourEnd && ourEndMin !== null && ourEndMin > minutesOf(theirs) ? ourEnd : null);
   const who = other.source_name?.trim() || "Another listing";
   const ourFeed = kept.source_name?.trim();
   return {

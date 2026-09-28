@@ -517,6 +517,109 @@ for (const batched of [false, true]) {
 
 for (const batched of [false, true]) {
   const path = batched ? "batched" : "serial";
+
+  test(`[${path}] applying a staged clock never lets the next scrapes duplicate the event`, async () => {
+    // The second review's lifecycle: the flag's own "Use 12:00 PM (locks it)"
+    // click made both clocks agree, the organizer feed's next scrape matched
+    // in the same slot and rewrote the row's keys, and one scrape later
+    // GoCalaveras could not find its row and re-inserted it at 11:00, a
+    // duplicate no layer merges (one feed, two starts). A locked row now only
+    // ever takes fill-only merges.
+    const street = { town: "Murphys", venue_name: "Murphys Main Street", category: "festival" };
+    const goCalEvent = incoming({
+      ...street,
+      name: "The Gathering on Murphys Main Street",
+      start_time: "11:00",
+      end_time: "17:00",
+      source_event_id: "192826",
+      event_url: "https://www.gocalaveras.com/events/the-gathering-on-murphys-main-street/",
+    });
+    const vmEvent = incoming({
+      ...street,
+      name: "Murphys Gathering – A Celebration of All Things Magical",
+      start_time: "12:00",
+      end_time: "17:00",
+      source_event_id: "49075",
+      event_url: "https://visitmurphys.com/event/murphys-gathering/",
+    });
+    const seed = [
+      resident({
+        ...street,
+        name: "The Gathering on Murphys Main Street",
+        start_time: "11:00:00",
+        end_time: "17:00:00",
+        source_name: "GoCalaveras.com",
+        source_event_id: "192826",
+        dedup_key: "gocal-gathering",
+      }),
+    ];
+    await upsert(batched, [vmEvent], seed, "Visit Murphys", "visit-murphys");
+    const flagged = db.find((r) => r.id === "res")!;
+    assert.equal(flagged.verification_suggested_start, "12:00");
+    // The human applies the staged time (applyOrganizerTime's payload).
+    let state: Row[] = db.map((r) =>
+      r.id === "res"
+        ? { ...r, start_time: "12:00", end_time: "17:00", times_locked: true, verification_status: "verified" }
+        : { ...r }
+    );
+    for (let day = 2; day <= 4; day++) {
+      await upsert(batched, [goCalEvent], state, "GoCalaveras.com", "gocalaveras");
+      state = db.map((r) => ({ ...r }));
+      await upsert(batched, [vmEvent], state, "Visit Murphys", "visit-murphys");
+      state = db.map((r) => ({ ...r }));
+      assert.equal(state.length, 1, `day ${day}: still one row`);
+      assert.equal(state[0].source_event_id, "192826", `day ${day}: GoCalaveras keeps its key`);
+      assert.equal(state[0].start_time, "12:00", `day ${day}: the applied time stands`);
+    }
+  });
+
+  test(`[${path}] a venue's second session is judged against the row its first session just rewrote`, async () => {
+    // GoCalaveras lists the class as one 15:00-17:00 row; the studio's own
+    // feed lists two sessions. Session 1 rewrites the row to 15:00-16:00, so
+    // Session 2 no longer overlaps it and inserts, on both paths (the batched
+    // path used to judge Session 2 against the pre-write 15:00-17:00 row and
+    // drop it as a duplicate: second review, finding 4).
+    const studio = { town: "Arnold", venue_name: "Lackler Ceramics", category: "other" };
+    const { result } = await upsert(
+      batched,
+      [
+        incoming({ ...studio, name: "Kids Clay - Session 1", start_time: "15:00", end_time: "16:00", source_event_id: "v1", event_url: "https://example.com/v1" }),
+        incoming({ ...studio, name: "Kids Clay - Session 2", start_time: "16:00", end_time: "17:00", source_event_id: "v2", event_url: "https://example.com/v2" }),
+      ],
+      [resident({ ...studio, name: "Kids Clay Class", start_time: "15:00:00", end_time: "17:00:00", source_name: "GoCalaveras.com" })],
+      "Lackler Ceramics",
+      "lackler-ceramics"
+    );
+    assert.equal(result.skippedFuzzy, 1, "session 1 merges");
+    assert.equal(result.inserted, 1, "session 2 is its own row");
+    assert.ok(db.some((r) => r.name === "Kids Clay - Session 2"));
+  });
+
+  test(`[${path}] a tombstone absorbing a clock-shifted listing is never sent to verification`, async () => {
+    const { result } = await upsert(
+      batched,
+      [incoming({ name: "The Gathering on Murphys Main Street", town: "Murphys", venue_name: "Murphys Main Street", start_time: "11:00", end_time: "17:00" })],
+      [
+        resident({
+          name: "Murphys Gathering – A Celebration of All Things Magical",
+          town: "Murphys",
+          venue_name: "Murphys Main Street",
+          start_time: "12:00:00",
+          end_time: "17:00:00",
+          source_name: "Visit Murphys",
+          status: "cancelled",
+        }),
+      ],
+      "GoCalaveras.com",
+      "gocalaveras"
+    );
+    assert.equal(result.inserted, 0, "the tombstone absorbs it");
+    assert.equal(db.find((r) => r.id === "res")!.verification_status, undefined);
+  });
+}
+
+for (const batched of [false, true]) {
+  const path = batched ? "batched" : "serial";
   test(`[${path}] a venue's own routine operation never merges into a live-music placeholder`, async () => {
     // Sequoia's scraper sends its dinner (the notability floor marks it
     // routine); GoCalaveras already listed the evening's music as a
@@ -677,4 +780,16 @@ test("pickStrongMatch: live same-visibility rows first; the rest only as a fallb
   assert.equal(onlyTaken.match, null);
   assert.equal(onlyTaken.taken, a);
   assert.deepEqual(onlyTaken.ambiguous, []);
+  // The taken row named is the live one, not a tombstone listed ahead of it.
+  const tomb = { ...a, name: "The Hollerin Hounds", status: "cancelled" };
+  assert.equal(pickStrongMatch(inc, [tomb, a], { isTaken: (c) => c === a }).taken, a);
+});
+
+test("a resident with locked times only ever takes a fill-only merge", async () => {
+  const { isFillOnlyMatch } = await import("../lib/dedup.js");
+  const here = { town: "Murphys" };
+  assert.equal(isFillOnlyMatch("standard", here, { town: "Murphys" }), false);
+  assert.equal(isFillOnlyMatch("standard", here, { town: "Murphys", times_locked: true }), true);
+  assert.equal(isFillOnlyMatch("cross_source", here, { town: "Murphys" }), true);
+  assert.equal(isFillOnlyMatch("standard", here, { town: "Arnold" }), true);
 });

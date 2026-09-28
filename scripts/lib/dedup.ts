@@ -589,13 +589,25 @@ function logAmbiguousMatch(eventName: string, residents: { name?: string }[]): v
  *  `source_name` stays, its content becomes the other feed's, and its own feed,
  *  unable to find it by key, re-inserts a row the matcher then reads as the
  *  same feed listing two sessions. A persistent duplicate nothing can merge.
- *  Fill-only keeps each feed able to find its row. */
+ *  Fill-only keeps each feed able to find its row.
+ *
+ *  A resident with locked times is fill-only for the same reason. Its clock is
+ *  authoritative, and often came from the other feed: the "Use H:MM (locks
+ *  it)" click on a clock-conflict flag makes the two clocks agree, so the
+ *  other feed's next scrape matches in the same slot. A rewrite then handed
+ *  the row that feed's keys under its own feed's `source_name`, and two
+ *  scrapes after the click its own feed re-inserted the event at its old time
+ *  (the Gathering, found by the second review). */
 export function isFillOnlyMatch(
   kind: SameEventMatch,
   incoming: { town?: string | null },
-  resident: { town?: string | null }
+  resident: { town?: string | null; times_locked?: boolean | null }
 ): boolean {
-  return kind === "cross_source" || normalizeTown(incoming.town) !== normalizeTown(resident.town);
+  return (
+    kind === "cross_source" ||
+    !!resident.times_locked ||
+    normalizeTown(incoming.town) !== normalizeTown(resident.town)
+  );
 }
 
 /** A merge that only fills what the resident lacks (see `isFillOnlyMatch`):
@@ -1404,9 +1416,10 @@ async function upsertEventsBatched(
       // Every candidate is judged, claimed ones included, so the batch reaches
       // the serial path's verdict; only an unclaimed row can be written, since
       // two updates computed from one snapshot would overwrite each other.
+      const candidates = candidatesByDate.get(u.event.date) ?? [];
       const { match, ambiguous, taken } = pickStrongMatch(
         asIdentity(u.event, sourceName),
-        candidatesByDate.get(u.event.date) ?? [],
+        candidates,
         { visibility, isTaken: (c) => claimed.has(c.id) }
       );
       if (ambiguous.length > 0) logAmbiguousMatch(u.event.name, ambiguous);
@@ -1424,15 +1437,16 @@ async function upsertEventsBatched(
       }
       const hit = match.row;
       claimed.add(hit.id);
-      matchUpdates.push({
-        id: hit.id,
-        payload: isFillOnlyMatch(match.kind, u.event, hit)
-          ? buildFillOnlyMerge(match.kind, hit, u.event, sourceName, now)
-          : buildStrongMatchUpdate(hit, u.event, u.dedupKey, now),
-        eventName: u.event.name,
-        existingName: hit.name,
-      });
+      const payload = isFillOnlyMatch(match.kind, u.event, hit)
+        ? buildFillOnlyMerge(match.kind, hit, u.event, sourceName, now)
+        : buildStrongMatchUpdate(hit, u.event, u.dedupKey, now);
+      matchUpdates.push({ id: hit.id, payload, eventName: u.event.name, existingName: hit.name });
       fuzzyMatched.add(u.dedupKey);
+      // Later events are judged against the row as this write leaves it, the
+      // state the serial path reads back. A rewrite can move its clock off a
+      // later session that matched the old one (a venue's 16:00 class session
+      // after its 15:00 session took an aggregator's 15-17 row).
+      if (payload) candidates[candidates.indexOf(hit)] = { ...hit, ...payload } as Candidate;
     }
 
     if (matchUpdates.length > 0) {

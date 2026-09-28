@@ -15,7 +15,7 @@ import { reconcileDuplicates } from "../../lib/reconcile.js";
 
 type Row = Record<string, unknown>;
 
-function fakeClient(rows: Row[]) {
+function fakeClient(rows: Row[], opts: { failUpdates?: boolean } = {}) {
   const db = rows.map((r) => ({ ...r }));
   const updates: { id: unknown; patch: Row }[] = [];
   const logged: Row[] = [];
@@ -32,6 +32,7 @@ function fakeClient(rows: Row[]) {
         }
         const hits = db.filter((r) => filters.every((f) => f(r)));
         if (op === "update") {
+          if (opts.failUpdates) return { data: null, error: { message: "update rejected" } };
           for (const h of hits) {
             updates.push({ id: h.id, patch: payload as Row });
             Object.assign(h, payload);
@@ -130,6 +131,13 @@ test("a flag alone writes no updated_at: a verification note is not a content ch
   const patch = f.updates.find((u) => u.id === "gocal")!.patch;
   assert.equal(patch.verification_status, "needs_verification");
   assert.ok(!("updated_at" in patch));
+});
+
+test("a flag whose write failed is not reported as raised", async () => {
+  const f = fakeClient([goCal, organizer], { failUpdates: true });
+  const r = await reconcileDuplicates(f.client, { dryRun: false, fromDate: DAY });
+  assert.equal(r.clockFlags.length, 0);
+  assert.equal(f.db.find((x) => x.id === "gocal")!.verification_status, "unchecked");
 });
 
 test("dry-run reports the flag and writes nothing", async () => {
