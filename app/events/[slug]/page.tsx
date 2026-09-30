@@ -49,6 +49,7 @@ import ClassicRockBanner from "@/components/ClassicRockBanner";
 import { isParadeEvent, isFourthFeatureEvent, isTwoFiftyEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
 import { resolveEventLinkFromOrgs, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
 import { nameWithArtists } from "@/lib/venue-pages";
+import { hermitFestPageSeo } from "@/lib/hermit-fest-page";
 
 export const revalidate = 3600;
 
@@ -116,7 +117,12 @@ export async function generateMetadata({
   // Fold the headline act(s) into the title tag when a series row's name
   // doesn't carry them ("Ironstone Summer Concert Series" + artists) — the
   // generic series title is what searchers skip in a SERP (HWY-7).
-  const title = `${nameWithArtists(event.name, event.artists)} — ${dateStr} in ${event.town}`;
+  // HWY-53: the Hermit Fest ranking URL uses an absolute title that carries
+  // both spellings. Every other event keeps the name + date title.
+  const hermitSeo = hermitFestPageSeo(slug);
+  const title = hermitSeo
+    ? hermitSeo.title
+    : `${nameWithArtists(event.name, event.artists)} — ${dateStr} in ${event.town}`;
   // event.description is already gated (sanitized clean text or null) by
   // findEventBySlug. truncateMeta guarantees we never cut mid-word in the SERP.
   const description = event.description
@@ -128,7 +134,7 @@ export async function generateMetadata({
   const posterUrl = posterImageUrl(event, slug);
 
   return {
-    title,
+    title: hermitSeo ? { absolute: hermitSeo.title } : title,
     description,
     alternates: { canonical: `/events/${slug}` },
     openGraph: {
@@ -315,6 +321,7 @@ export default async function EventPage({ params }: PageProps) {
   const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     geocodeQuery || `${event.venue_name}, ${event.town}, CA`
   )}`;
+  const hermitSeo = hermitFestPageSeo(slug);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
@@ -413,8 +420,11 @@ export default async function EventPage({ params }: PageProps) {
             </div>
 
             <h1 className="font-display text-3xl font-bold leading-tight text-forest sm:text-4xl">
-              {event.name}
+              {hermitSeo?.h1 ?? event.name}
             </h1>
+            {hermitSeo && (
+              <p className="mt-3 leading-relaxed text-stone">{hermitSeo.whenLine}</p>
+            )}
             {humanizeHost(event.source_name, event.name) && (
               <p className="mt-2 text-sm font-semibold uppercase tracking-wide text-earth">
                 {humanizeHost(event.source_name, event.name)}
