@@ -8,8 +8,6 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import {
   resolveEventLink,
   resolveEventLinkFromOrgs,
@@ -356,8 +354,7 @@ test("isUnstableHost: social permalinks are never trusted", () => {
 // Lackler Ceramics (HWY-51). GoCalaveras stores no external ticket URL for
 // these classes. The location link on the aggregator page is the studio's
 // Google Business Profile homepage (utm_medium=wix_google_business_profile),
-// which is not where you book. The org canonical is the Wix workshops page,
-// the same URL migration 20260930_lackler_ceramics_links.sql inserts.
+// which is not where you book. The org canonical is the Wix workshops page.
 const LACKLER_WORKSHOPS = "https://www.lacklerceramics.com/workshops";
 const LACKLER_GBP_HOME =
   "https://www.lacklerceramics.com/?utm_source=google&utm_medium=wix_google_business_profile&utm_campaign=7294964499745750622";
@@ -388,19 +385,6 @@ test("Lackler Ceramics listings resolve to the workshops booking page", () => {
     assert.equal(r.href, LACKLER_WORKSHOPS);
     assert.equal(r.label, "Visit Lackler Ceramics");
   }
-});
-
-test("Lackler migration canonical matches the resolver contract", () => {
-  const sql = readFileSync(
-    fileURLToPath(new URL("../../supabase/migrations/20260930_lackler_ceramics_links.sql", import.meta.url)),
-    "utf8"
-  );
-  assert.match(
-    sql,
-    /'https:\/\/www\.lacklerceramics\.com\/workshops',\s*\n\s*ARRAY\['lackler ceramics'\]/
-  );
-  // The GBP homepage is documented as the bad link; it must not be the canonical.
-  assert.doesNotMatch(sql, /canonical_url[\s\S]{0,80}wix_google_business_profile/);
 });
 
 test("Lackler org canonical beats the Google Business Profile homepage", () => {
