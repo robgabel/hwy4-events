@@ -12,6 +12,7 @@ on:
       - 'content/**'
       - 'lib/**'
       - 'scripts/**'
+      - 'supabase/**'
       - '.github/workflows/test.yml'
   workflow_dispatch: # Manual trigger
 

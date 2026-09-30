@@ -23,6 +23,9 @@
  *    other sources (an aggregator's URL or source_event_id) are untouchable.
  *  - Human work is untouchable: robs_pick, community_sourced,
  *    series_umbrella, and any *_locked row is skipped and logged, never swept.
+ *    The lock set is STALE_SWEEP_LOCK_GUARDS (lib/lock-consumers.ts), not a
+ *    hand-written OR — a new lock column has to be guarded or acknowledged
+ *    there or CI fails (HWY-50). visibility_locked is guarded (HWY-49).
  *  - MAX_SWEEP_PER_RUN aborts the whole sweep when a run wants to delete more
  *    rows than any legitimate calendar edit would produce.
  *  - Reversible: the executor (stale-sweep-exec.ts) archives every row to
@@ -40,6 +43,8 @@
  * This module is pure (no Supabase import) so tests run without env; the
  * DB-touching half lives in stale-sweep-exec.ts.
  */
+
+import { STALE_SWEEP_LOCK_GUARDS } from "../../lib/lock-consumers.js";
 
 export interface SweepWindow {
   /** Inclusive YYYY-MM-DD bounds. */
@@ -210,16 +215,15 @@ export function isProtectedRow(row: SweepRow): string | null {
   if (row.robs_pick) return "robs_pick";
   if (row.community_sourced) return "community_sourced";
   if (row.series_umbrella) return "series_umbrella";
+  // Any registered lock protects the whole row. The set lives in
+  // STALE_SWEEP_LOCK_GUARDS so a new *_locked column cannot be omitted here
+  // while the rest of the consumers are forced to take a stance (HWY-50).
+  const record = row as Record<string, unknown>;
   if (
-    row.price_locked ||
-    row.description_locked ||
-    row.poster_locked ||
-    row.times_locked ||
-    row.notability_locked ||
-    row.family_friendly_locked ||
-    row.visibility_locked
-  )
+    Object.values(STALE_SWEEP_LOCK_GUARDS).some((lock) => record[lock] === true)
+  ) {
     return "locked";
+  }
   return null;
 }
 

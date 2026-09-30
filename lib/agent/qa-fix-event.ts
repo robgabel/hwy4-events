@@ -69,9 +69,11 @@ export const ACKNOWLEDGED_UNGUARDED_LOCKS: Record<string, string> = {
 // column, and an approved fix touching it would have failed at UPDATE time with
 // a raw Postgres error. The tests were green the whole time.
 //
-// `findQaSchemaDrift` is the pure half of the sensor: hand it the live column
-// list and it says which names no longer exist. scripts/check-qa-schema-drift.ts
-// supplies the live half from information_schema and fails loud on drift.
+// `findQaSchemaDrift` is the pure half of the QA sensor: hand it the live column
+// list and it says which names no longer exist. The sibling in
+// lib/lock-consumers.ts (`findLockConsumerDrift`) applies the same rule to
+// every lock consumer, not only this file. scripts/check-qa-schema-drift.ts
+// supplies the live half and fails loud on either kind of drift.
 
 export type QaSchemaDrift = {
   /** Whitelisted fixable columns that no longer exist on the table. */
