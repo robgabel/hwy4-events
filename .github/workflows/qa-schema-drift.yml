@@ -1,16 +1,20 @@
 name: QA schema drift
 
 # lib/agent/qa-fix-event.ts whitelists the hwy4_events columns the persona-QA
-# agent may propose fixing. It is a plain string array, so the unit tests can
-# check its shape but never its truth — a column dropped by a migration leaves
-# the whitelist green and wrong.
+# agent may propose fixing, and lib/lock-consumers.ts records every *_locked
+# consumer's stance (guard the field, or acknowledge why not). Both are plain
+# strings, so the unit tests can check their shape but never the live table —
+# a column added in the dashboard, or dropped by a migration, leaves them green
+# and wrong until this job reads prod.
 #
 # That is not hypothetical: HWY-19 dropped `importance` on 2026-08-18 while
 # PR #221 sat open, and the stale whitelist merged seven weeks later with a
 # fully green suite. An approved fix touching it would have failed on UPDATE.
+# HWY-50 widens the same job to the lock-consumer registry.
 #
 # The Tests workflow has no Supabase credentials (by design — the unit suite is
-# pure and offline), so this is a separate daily job that does have them.
+# pure and offline), so this is a separate daily job that does have them. The
+# offline pin is scripts/test/lock-consumers.test.ts, which reads repo SQL.
 
 on:
   schedule:
@@ -18,7 +22,13 @@ on:
   pull_request:
     paths:
       - 'lib/agent/qa-fix-event.ts'
+      - 'lib/lock-consumers.ts'
+      - 'scripts/lib/stale-sweep.ts'
+      - 'scripts/lib/dedup.ts'
+      - 'app/api/scrape-moose-lodge/route.ts'
+      - 'app/api/scrape-bls/route.ts'
       - 'scripts/check-qa-schema-drift.ts'
+      - 'scripts/test/lock-consumers.test.ts'
       - '.github/workflows/qa-schema-drift.yml'
   workflow_dispatch:
 
