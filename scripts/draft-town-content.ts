@@ -40,11 +40,11 @@ if (!slug) {
 // script has no Next.js / alias dependency) ---
 
 const CORRIDOR = [
-  { slug: "copperopolis", name: "Copperopolis", elevation: 850, tagline: "Copper country at the base" },
+  { slug: "copperopolis", name: "Copperopolis", elevation: 997, tagline: "Copper country at the base" },
   { slug: "angels-camp", name: "Angels Camp", elevation: 1300, tagline: "Gold Rush gateway town" },
   { slug: "murphys", name: "Murphys", elevation: 2100, tagline: "Wine country in the pines" },
-  { slug: "avery", name: "Avery", elevation: 2800, tagline: "Quiet stop on the way up" },
-  { slug: "white-pines", name: "White Pines", elevation: 3500, tagline: "Just below Arnold" },
+  { slug: "avery", name: "Avery", elevation: 3389, tagline: "Quiet stop on the way up" },
+  { slug: "white-pines", name: "White Pines", elevation: 3907, tagline: "Just below Arnold" },
   { slug: "arnold", name: "Arnold", elevation: 4000, tagline: "Heart of the corridor" },
   { slug: "dorrington", name: "Dorrington", elevation: 4800, tagline: "Quiet mountain hamlet" },
   { slug: "camp-connell", name: "Camp Connell", elevation: 5000, tagline: "Deep in the pines" },
