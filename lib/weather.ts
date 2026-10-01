@@ -2,7 +2,11 @@ import { WEATHER_USER_AGENT } from "./constants";
 import { REGION } from "./region";
 import { CORRIDOR_TOWNS } from "./towns";
 import { addDays, pacificToday } from "./date-windows";
-import { mapShortForecast, type ConditionKey } from "./weather-conditions";
+import {
+  mapShortForecast,
+  type ConditionKey,
+  type WeatherRange,
+} from "./weather-conditions";
 
 const PACIFIC_TZ = REGION.timezone;
 const POINTS_REVALIDATE_SECONDS = 86_400;
@@ -320,11 +324,11 @@ export function getWeatherForDate(
 }
 
 // A long event (this many hours or more) shows a range (low->high) instead of
-// one number whenever the forecast actually moves across its hours — in the
+// one number whenever the forecast actually moves across its hours. In the
 // mountains a 9-to-3 day camp runs cold-morning to warm-afternoon, and pinning
-// it to the chilly start hour undersells the day. The size of the swing only
-// decides the *verdict* ("bring layers"), not whether a range shows; that lives
-// in weatherQualifier (LAYERS_SWING_F).
+// it to the chilly start hour undersells the day. Whether that spread earns
+// "bring layers" (it cooled, or the floor is genuinely cool) or a heat warning
+// is weatherQualifier's decision; this function only stamps the ordered window.
 const LONG_EVENT_HOURS = 4;
 
 // Most notable condition wins the icon across a multi-hour window: one rainy
@@ -355,8 +359,10 @@ export interface ResolvedWeather {
   shortText: string;
   /** true = matched the event's actual hour(s); false = daily-high fallback. */
   hourly: boolean;
-  /** Set only for long, swingy events — the chip renders low->high + a verdict. */
-  range: { low: number; high: number } | null;
+  /** Set only for long events whose temp moves. Chip renders low->high.
+   *  `start`/`end` are chronological so the qualifier can tell a heat-up
+   *  from a cool-down. */
+  range: WeatherRange | null;
 }
 
 export function resolveEventWeather(
@@ -387,6 +393,10 @@ export function resolveEventWeather(
       .map((r) => r.temp)
       .filter((t): t is number => t !== null);
     if (temps.length >= 2) {
+      // `readings` is walked from the start hour forward, so the first and
+      // last known temps are the window's direction, not its extremes.
+      const start = temps[0];
+      const end = temps[temps.length - 1];
       const low = Math.min(...temps);
       const high = Math.max(...temps);
       if (high > low) {
@@ -400,7 +410,7 @@ export function resolveEventWeather(
           precipPct: Math.max(...readings.map((r) => r.precipPct)),
           shortText: `${low} to ${high} degrees across the event`,
           hourly: true,
-          range: { low, high },
+          range: { low, high, start, end },
         };
       }
     }
