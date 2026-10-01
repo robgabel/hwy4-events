@@ -124,7 +124,7 @@
 
 **Tech comfort:** High for business tools (Airbnb app, property management software, Canva). Moderate for general web.
 
-**Current event discovery:** Doesn't actively track events — that's the problem. She knows about Bear Valley ski season and the big Murphys festivals, but can't tell guests about the Thursday jazz night or the Saturday farmers market.
+**Current event discovery:** Doesn't actively track events — that's the problem. She knows about Bear Valley ski season and the big Murphys festivals, but can't tell guests about the Thursday jazz night or the Sunday farmers market.
 
 **Relationship to Hwy4Events:** Karen is a B2B-ish user — she doesn't consume events for herself, she redistributes them to guests. She wants a reliable, always-current source she can point guests to, or pull from for her welcome guides and pre-arrival messages.
 

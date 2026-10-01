@@ -511,7 +511,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 - Sunday evening: Plans the week's activities (laptop, kids in bed)
 - School days: Drop-off at local elementary [specific school TBD], coffee at Bistro Espresso
 - Weekday activities: White Pines Lake playground, BLS pool (summer), Big Trees easy trail
-- Weekend: BLS community events, Murphys Farmers Market (Saturdays 9am–1pm May–Thanksgiving)
+- Weekend: BLS community events, Murphys Farmers Market (Sundays 9am–1pm, late May into late October)
 
 **BLS mom life:**
 - Kids Kamp (summer rec program)
@@ -623,7 +623,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 | Murphys Irish Day | March | Premier cultural event in Murphys. Parade, live music, food, beer. Started ~33 years ago with under 1,000 attendees; grown substantially since (specific attendance figures unverified). | [visitmurphys.com/murphys-irish-day](https://visitmurphys.com/murphys-irish-day/) |
 | Spring Wine Weekend | April | 20+ Calaveras wineries participate. Barrel tastings, new releases. | [calaveraswines.org/events](https://www.calaveraswines.org/events) |
 | Calaveras County Fair & Jumping Frog Jubilee | 3rd weekend of May | First county fair in 1893; **Jumping Frog Jubilee started 1928**. 4-day fair: frog jumping contest, crafts, livestock, carnival, live entertainment. Mark Twain literary heritage. THE annual event for the corridor. | [frogtown.org/frog-jump](https://www.frogtown.org/frog-jump) |
-| Murphys Farmers Market | **Saturdays** (NOT Sundays — doc was wrong) | 9am–1pm at Murphys Park. Season May (around May 2) through Thanksgiving. | [instagram.com/p/DKAtIdihiNz](https://www.instagram.com/p/DKAtIdihiNz/) |
+| Murphys Farmers Market | **Sundays** | 9am–1pm at Murphys Community Park. Season usually late May into late October. | Live listings; [hwy4events.com/murphys-farmers-market](https://hwy4events.com/murphys-farmers-market) |
 | Independence Day | July 4 | Parades in both Arnold and Murphys. Community BBQs, fireworks. [specific details unverified] | — |
 | Bear Valley Music Festival | **Mid-July to early August** (~2.5 weeks; not "3 weeks in July" as doc said) | Concert series: classical, jazz, world music. 2026 dates: July 17 – August 2. | [bearvalleymusicfestival.org](https://www.bearvalleymusicfestival.org/) |
 | Labor Day Arts & Crafts Festival | Labor Day weekend | **In Arnold** (45+ year tradition). 10am–5pm, 50+ vendors. | [gocalaveras.com/labor-day-weekend-events](https://www.gocalaveras.com/labor-day-weekend-events/) |
@@ -665,7 +665,7 @@ Only incorporated city in Calaveras County (2020 census pop 3,667). Commercial/s
 ### Summer (June–August)
 - Peak tourism across the corridor
 - Full access to Alpine County via Ebbetts Pass
-- Saturday farmers market in Murphys, 4th of July celebrations
+- Sunday farmers market in Murphys (9am–1pm), 4th of July celebrations
 - Bear Valley Music Festival (mid-July to early August)
 - BLS summer rec programs (Memorial Day–Labor Day)
 - Camp Connell Beer Garden live music (Saturdays outdoor)
