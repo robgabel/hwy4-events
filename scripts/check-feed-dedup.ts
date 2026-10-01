@@ -7,7 +7,6 @@ import {
 import { fetchFeedEvents } from "./lib/feed-ingest.js";
 import { applyVenueDetection } from "./lib/venue-matcher.js";
 import { FEED_SOURCES } from "./scrapers/feed-sources.js";
-import { fetchHultEvents } from "./scrapers/hult.js";
 
 type SourceDedupRow = DedupableEvent & {
   source_slug: string;
@@ -33,24 +32,11 @@ async function main() {
     console.log(`${source.slug.padEnd(24)} ${String(events.length).padStart(4)} future events`);
   }
 
-  const hult = await fetchHultEvents();
-  const hultEvents = hult.events.filter((e) => e.date >= today);
-  for (const event of hultEvents) {
-    applyVenueDetection(event);
-    all.push({
-      ...event,
-      visibility: "public",
-      source_slug: "hult-center",
-      source_name: "Hult Center",
-    });
-  }
-  console.log(`${"hult-center".padEnd(24)} ${String(hultEvents.length).padStart(4)} future events`);
-
   const clusters = clusterEvents(all);
   const duplicates = clusters.filter((c) => c.length > 1);
   const deduped = dedupeEvents(all);
 
-  console.log("\n=== Eugene Source Dedup Report ===");
+  console.log("\n=== Feed source dedup report ===");
   console.log(`Raw source rows: ${all.length}`);
   console.log(`Duplicate clusters: ${duplicates.length}`);
   console.log(`Rows after read-time dedupe: ${deduped.length}`);

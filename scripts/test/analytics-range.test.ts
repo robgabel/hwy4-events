@@ -6,7 +6,7 @@ import {
   bucketSeries,
   bucketSizeFor,
   parseRange,
-} from "../../lib/analytics-range.ts";
+} from "../../lib/analytics-range";
 
 const days = (n: number, from = "2026-06-01") => {
   const out: { date: string; v: number }[] = [];

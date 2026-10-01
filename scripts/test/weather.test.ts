@@ -68,6 +68,7 @@ test("weather qualifier stays plain and conservative", () => {
 
 test("weather horizon returns null when a date is absent from forecast data", () => {
   const forecast: Forecast = {
+    byHour: {},
     byDate: {},
     sunrise: "2026-06-19T05:30:00-07:00",
     sunset: "2026-06-19T20:59:00-07:00",
