@@ -34,7 +34,7 @@ where ref = '$ARGUMENTS';
 ## 3. Implement
 - Build exactly what the ticket asks — scope to the ticket, file follow-ups for anything out of scope (a new ticket row is fine).
 - Respect this codebase's rules (see CLAUDE.md): voice rules + `withVoice()`/`voice-lint` for any user-facing copy; `cursor-pointer` on buttons; RLS-on + service-role policy in the same migration for any new table (never disable RLS); keep the client bundle light.
-- Run the relevant checks before opening the PR: `cd scripts && npx tsx test/<relevant>.test.ts` for any pure-core you touched, `cd scripts && npm run voice-lint` if you changed static copy, and a `next build` / typecheck if practical.
+- Run the locks before opening the PR, the same set the QA agent will run (CLAUDE.md → "PR workflow" step 1): `cd scripts && npm test`, `npx tsc --noEmit` at the root **and** `cd scripts && npx tsc --noEmit`, and `cd scripts && npm run voice-lint`. A `next build` is extra credit when the change touches `app/`.
 
 ## 4. Open a DRAFT PR (never merge)
 - `gh pr create --draft` with a body that includes **`Builds $ARGUMENTS`** on its own line (the merge webhook parses `Builds HWY-\d+` to auto-close the ticket) plus a short summary + test notes. End the PR body with the repo's standard Claude Code trailer.
