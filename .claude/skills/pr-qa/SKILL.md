@@ -28,9 +28,13 @@ The agent starts fresh: reads the PR body, the diff, the touched files, and CLAU
 
 1. `gh pr view <n> --json title,body,files` and `gh pr diff <n>`. Read every touched file in
    full, not just hunks — a hunk is where the bug is planted, the file is where it lands.
-2. **Run the locks.** `cd scripts && npm test`. If the PR touched static copy, `npm run
-   voice-lint`. If it touched `app/` or `lib/`, `npx tsc --noEmit` at the root **and** `cd
-   scripts && npx tsc --noEmit` (two typecheck roots; root tsc does not check `scripts/`).
+2. **Run the locks, all of them, on every PR.** `cd scripts && npm test`; `npx tsc --noEmit`
+   at the repo root **and** `cd scripts && npx tsc --noEmit` (two typecheck roots: root tsc
+   does not check `scripts/`, and CI runs no typecheck at all, so this is the only gate a
+   scripts-only scraper change ever passes through); `cd scripts && npm run voice-lint`.
+   No path heuristics. A conditional check that skips the case it exists for is the failure
+   shape this repo keeps paying for; a minute of tsc on a doc-only PR is the price of not
+   repeating it.
 3. **Judge against the repo's own rules**, in this order of severity:
    - **Correctness:** does the diff do what the PR body claims? Trace one concrete input
      through it. Look for the failure shapes this codebase has already paid for (CLAUDE.md
@@ -64,7 +68,7 @@ The agent starts fresh: reads the PR body, the diff, the touched files, and CLAU
 
 ```
 VERDICT: PASS | FINDINGS
-CHECKS RUN: tests <pass/fail>, tsc root <pass/fail/skipped>, tsc scripts <pass/fail/skipped>, voice-lint <pass/fail/skipped>
+CHECKS RUN: tests <pass/fail>, tsc root <pass/fail>, tsc scripts <pass/fail>, voice-lint <pass/fail>
 
 F1 [severity: blocker|major|minor] <one-line claim>
    file:line
