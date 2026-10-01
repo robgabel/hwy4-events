@@ -19,7 +19,7 @@ import {
   utcAddDays,
   type AnalyticsSnapshot,
   type CountRow,
-} from "../../lib/cloudflare-analytics.ts";
+} from "../../lib/cloudflare-analytics";
 
 const referrers = (visits: number): CountRow[] => [
   { key: "google.com", pageviews: visits, visits },
@@ -64,10 +64,7 @@ test("a normal day still sums: tens/hundreds of visits with matching referrers a
   const v = judgeRumSnapshot({
     pageviews: 120,
     visits: 80,
-    referrers: [
-      { key: "google.com", pageviews: 50, visits: 40 },
-      { key: "", pageviews: 70, visits: 40 },
-    ],
+    referrers: [{ visits: 40 }, { visits: 40 }],
   });
   assert.deepEqual(v, { reject: false });
 });
@@ -81,7 +78,7 @@ test("a 10k day whose referrers also sum to 10k is still the ceiling, never trus
   const v = judgeRumSnapshot({
     pageviews: 10_000,
     visits: 10_000,
-    referrers: [{ key: "google.com", pageviews: 10_000, visits: 10_000 }],
+    referrers: [{ visits: 10_000 }],
   });
   assert.deepEqual(v, { reject: true, reason: "adaptive_groups_ceiling" });
 });

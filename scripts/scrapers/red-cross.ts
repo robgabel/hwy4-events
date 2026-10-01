@@ -101,16 +101,15 @@ async function fetchDrives(
   url: string
 ): Promise<RcDrive[]> {
   // The drive page is a JS SPA; give it time to render. schema is a plain JSON
-  // Schema object — the SDK types want a Zod schema, but the API accepts JSON
-  // Schema, and scripts/ is not type-checked (root tsconfig excludes it; CI runs
-  // tsx without tsc). Cast keeps intent clear without pulling in zod.
+  // Schema object. The SDK types schema as Zod, but the API accepts JSON Schema,
+  // and the two don't overlap, so the cast goes through unknown.
   const params = {
     formats: ["json"],
     jsonOptions: { prompt: EXTRACT_PROMPT, schema: DRIVE_SCHEMA },
     waitFor: 9000,
     timeout: 60000,
     onlyMainContent: false,
-  } as Parameters<typeof firecrawl.scrapeUrl>[1];
+  } as unknown as Parameters<typeof firecrawl.scrapeUrl>[1];
 
   try {
     const result = await firecrawl.scrapeUrl(url, params);

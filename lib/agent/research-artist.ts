@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { findBannedPhrase, withVoice } from "@/lib/voice";
+import { findBannedPhrase, withVoice } from "../voice";
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";
 
