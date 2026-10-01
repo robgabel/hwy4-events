@@ -5,6 +5,18 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-10-01 — A temperature swing is not a cool-down, and hot is not patio weather
+
+Early October heat wave, Murphys highs about 93–96°F. Grape Stomp (all day) showed `75→95° · bring layers`. Several events at 86–95° showed `patio weather`.
+
+- **`patio weather` needs a ceiling.** It fired at temp ≥ 80° with no upper bound, so a heat wave was labeled pleasant. Patio is 80–89° and clear or partly cloudy. Event-hour temp or range high ≥ 92° is `hot, shade and water`. 90–91° stay unlabeled: the number is on the chip, and the tag must not sell the heat. Copy uses a comma, not an em dash (voice rule).
+- **`bring layers` means the window gets colder, or the floor is actually cool.** The range was min/max only, so a day that warms 20° looked like a day that cools 20°. Say it when the last hour is ≥12° cooler than the first, or the low is ≤60° and the spread is ≥12° (the morning-camp case, 60→85). `resolveEventWeather` stamps `start` and `end` in hour order. A ≤50° point reading stays `bring a layer`.
+- **A peak of 92° or more outranks the swing.** A day that climbs out of a cool morning and tops out at 95° is the heat warning. The chip still shows the spread.
+
+Locked by `scripts/test/weather.test.ts`.
+
+---
+
 ## 2026-09-27: The duplicate is in the merge, not just the matcher
 
 Rob's screenshot: "The Gathering on Murphys Main Street" (GoCalaveras, 11:00) beside "Murphys Gathering – A Celebration of All Things Magical" (Visit Murphys, 12:00, the organizer's own time). A full scan found 5 live pairs while the same day's audit read `same_event_duplicates: 0`. Plan: `PRD-dedup-merge-v2.md`.
