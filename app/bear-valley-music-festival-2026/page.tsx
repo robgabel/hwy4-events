@@ -16,6 +16,7 @@ import {
   buildItemList,
   buildWebPage,
 } from "@/lib/schema";
+import { BEAR_VALLEY_DISAMBIGUATION } from "@/lib/disambiguation";
 import NewsletterSignup from "@/components/NewsletterSignup";
 
 // Festival landing page (Roadmap ticket HWY-3, filed by the growth memo).
@@ -88,7 +89,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: "Where is the Bear Valley Music Festival 2026 held?",
-    a: "Under the Big White Tent in Bear Valley village, just off Highway 4 at about 7,000 feet, roughly 40 minutes above Arnold. It is an open-sided mountain venue, so bring a warm layer: even July evenings cool off fast at that elevation.",
+    a: `Under the Big White Tent in Bear Valley village, just off Highway 4 at about 7,000 feet, roughly 40 minutes above Arnold. ${BEAR_VALLEY_DISAMBIGUATION} It is an open-sided mountain venue, so bring a warm layer: even July evenings cool off fast at that elevation.`,
   },
   {
     q: "How do I get Bear Valley Music Festival 2026 tickets?",

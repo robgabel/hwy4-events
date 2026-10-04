@@ -21,6 +21,7 @@
  */
 
 import type { FaqEntry } from "@/lib/schema";
+import { BEAR_VALLEY_DISAMBIGUATION } from "@/lib/disambiguation";
 
 export interface TownContent {
   /** URL slug. Matches the dynamic route param. */
@@ -58,6 +59,10 @@ export interface TownContent {
    * Set false (or omit) only after every fact on the page is sourced and confirmed.
    */
   draft?: boolean;
+  /** One plain sentence telling readers (and answer engines) which place this
+   *  is when the name collides with a better-known one elsewhere (HWY-61:
+   *  Bear Valley vs Big Bear Lake). Rendered under the subhead. */
+  disambiguation?: string;
 }
 
 /**
@@ -349,6 +354,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     "metaDescription": "What's on at Bear Valley: the ski resort, the Music Festival, and Bear Valley Adventure Company's guided hikes, paddle rentals, and trail days. Updated daily by a neighbor.",
     "h1": "Bear Valley events: skiing, the Music Festival, and a real summer calendar",
     "subhead": "The top of the 4. 6,600 to 8,500 feet, snow half the year, music and mountain events in the summer.",
+    "disambiguation": BEAR_VALLEY_DISAMBIGUATION,
     "introTeaser": "Bear Valley Mountain Resort sits at the summit of Hwy 4 with 1,680 skiable acres, 75 trails, 9 lifts, and a base elevation of 8,495 ft. Season runs late November through mid-April, the Bear Valley Music Festival anchors the summer (2026 dates: July 17 to August 2), and Bear Valley Adventure Company, the village outfitter at the Hwy 4 turnoff, fills the rest of the calendar with guided hikes, trail days, and boat and bike rentals.",
     "intro": [
       "Bear Valley is the last stop on the 4 before the road closes for winter. About 30 minutes up from Arnold, a different climate, a different feel. Less Tahoe, more Sierra retro.",
@@ -379,6 +385,10 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "Cell service at the resort is workable but spotty along stretches of Hwy 4 between Arnold and the Mt Reba turnoff."
     ],
     "faqs": [
+      {
+        "question": "Is Bear Valley the same as Big Bear?",
+        "answer": "No. Bear Valley is in Alpine County, at the top of Highway 4 in the Sierra, about 30 minutes above Arnold. Big Bear Lake is a different mountain town in Southern California, about 400 miles south. Events on this page are the Highway 4 Bear Valley."
+      },
       {
         "question": "Is Bear Valley open this winter (25/26 season)?",
         "answer": "Yes, the mountain is open for skiing and snowboarding late November through mid-April. But on-mountain food and beverage is consolidated to the Village Lodge for the 25/26 season. Sky High Pizza, Kofi Haus, and the General Store are running. Monte Wolfe Saloon, Ebbetts Grill, and Basecamp Pizza return for 26/27. Confirm at bearvalley.com before you go."

@@ -18,6 +18,7 @@
 // Relative (not "@/") imports so the scripts/ test runner can import this.
 
 import type { Hwy4Event } from "./types";
+import { BEAR_VALLEY_DISAMBIGUATION } from "./disambiguation";
 
 export type PersonaHubKey =
   | "arnold-car-show"
@@ -177,7 +178,7 @@ export const PERSONA_HUBS: PersonaHub[] = [
       },
       {
         q: "Where is Hermitfest held?",
-        a: "Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, Alpine County, CA.",
+        a: `Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, Alpine County, CA. ${BEAR_VALLEY_DISAMBIGUATION}`,
       },
       {
         q: "What time does Hermitfest start?",
