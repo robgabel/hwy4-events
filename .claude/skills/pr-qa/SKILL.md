@@ -35,6 +35,14 @@ The agent starts fresh: reads the PR body, the diff, the touched files, and CLAU
    No path heuristics. A conditional check that skips the case it exists for is the failure
    shape this repo keeps paying for; a minute of tsc on a doc-only PR is the price of not
    repeating it.
+   **A lock means "no NEW errors", judged against `origin/main`.** `main` is not always
+   green (as of 2026-10-01 the scripts root carries ~12 pre-existing tsc errors, tracked as
+   HWY-55). So for tsc, run the same command twice, once on `origin/main` (`git stash` is
+   banned in worktrees; use `git worktree add /tmp/qa-base origin/main` or diff against the
+   file list) and once on the PR head, and fail only on errors the PR introduced: a new
+   error line, or an error in a file the PR touched. Report the baseline count separately
+   so it stays visible without becoming an alarm. A baseline-red check is never a finding
+   against the PR; a PR that ADDS an error to a red root is.
 3. **Judge against the repo's own rules**, in this order of severity:
    - **Correctness:** does the diff do what the PR body claims? Trace one concrete input
      through it. Look for the failure shapes this codebase has already paid for (CLAUDE.md
@@ -68,7 +76,7 @@ The agent starts fresh: reads the PR body, the diff, the touched files, and CLAU
 
 ```
 VERDICT: PASS | FINDINGS
-CHECKS RUN: tests <pass/fail>, tsc root <pass/fail>, tsc scripts <pass/fail>, voice-lint <pass/fail>
+CHECKS RUN: tests <pass/fail>, tsc root <pass/fail> (baseline N), tsc scripts <pass/fail> (baseline N), voice-lint <pass/fail>
 
 F1 [severity: blocker|major|minor] <one-line claim>
    file:line
@@ -85,7 +93,10 @@ style, naming, a nit that does not change behavior. Only blockers and majors tri
 
 ## What the builder does with the report
 
-- **PASS:** mark the PR ready for review, tell Rob it passed QA and what was checked.
+- **PASS, or minors only:** fix any minors, run the locks, push, mark the PR ready, and tell
+  Rob it passed QA and what was checked. A minor-only report does NOT trigger a fresh QA
+  round (decided 2026-10-01): the reviewer has already judged those changes non-behavioral,
+  the builder still runs every lock before pushing, and the next PR gets its own full round.
 - **FINDINGS (blocker/major):** do NOT fix yet. For each finding, write for Rob:
   1. the finding in one sentence, with the QA agent's failure scenario;
   2. **three distinct solutions** (not three phrasings of one), each with its cost and what
