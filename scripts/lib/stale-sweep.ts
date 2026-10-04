@@ -46,6 +46,10 @@
 
 import { STALE_SWEEP_LOCK_GUARDS } from "../../lib/lock-consumers.js";
 
+/** Lock columns the sweep reads. Each value is a field on SweepRow. */
+type SweepLockColumn =
+  (typeof STALE_SWEEP_LOCK_GUARDS)[keyof typeof STALE_SWEEP_LOCK_GUARDS];
+
 export interface SweepWindow {
   /** Inclusive YYYY-MM-DD bounds. */
   from: string;
@@ -218,10 +222,10 @@ export function isProtectedRow(row: SweepRow): string | null {
   // Any registered lock protects the whole row. The set lives in
   // STALE_SWEEP_LOCK_GUARDS so a new *_locked column cannot be omitted here
   // while the rest of the consumers are forced to take a stance (HWY-50).
-  const record = row as Record<string, unknown>;
-  if (
-    Object.values(STALE_SWEEP_LOCK_GUARDS).some((lock) => record[lock] === true)
-  ) {
+  // Index the row by that column union: every guard value is a SweepRow field,
+  // so a new column that isn't on the row fails here instead of reading `any`.
+  const locks = Object.values(STALE_SWEEP_LOCK_GUARDS) as readonly SweepLockColumn[];
+  if (locks.some((lock) => row[lock] === true)) {
     return "locked";
   }
   return null;

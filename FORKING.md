@@ -48,7 +48,7 @@ Sign up for these first; everything else hangs off them.
 | **Apify** | Facebook event discovery scraper | Optional | Paid; skip at first |
 | **A domain** | e.g. `eugeneevents.com` | Yes | ~$12/yr |
 
-**The Vercel cron gotcha:** `vercel.json` defines ~23 cron jobs. The Vercel
+**The Vercel cron gotcha:** `vercel.json` defines ~30 cron jobs. The Vercel
 Hobby plan allows only 2 (daily-granularity, imprecise timing). Either start
 on Pro, or trim `vercel.json` to the two you can't live without
 (`/api/generate-briefing` and `/api/check-events`) and run the rest by hand

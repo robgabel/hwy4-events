@@ -1,5 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 // The KB capture loop (the structured companion to docs/LOCAL-KNOWLEDGE-BASE.md).
 // When a human approves or corrects a venue blurb at /admin/venues, that is the
 // highest-trust knowledge the system ever sees — human-authored, about one named
@@ -8,7 +6,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // too so they can be unit-tested (scripts/test/local-facts.test.ts).
 //
 // Importable from both the Next app (@/lib/local-facts) and the tsx drafter
-// (../lib/local-facts.js) — it depends only on a passed-in SupabaseClient.
+// (../lib/local-facts.js). The client is structural, not the nominal
+// SupabaseClient: the Next app and scripts/ each install @supabase/supabase-js,
+// and a class from one install is not assignable to the other (protected
+// members). Same reason as ReconcileDbClient in lib/reconcile.ts.
+
+/** The minimal query surface capture/read use. A service-role client from either install satisfies it. */
+export interface LocalFactsDb {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  from(table: string): any;
+}
 
 export type LocalFact = {
   kind: string;
@@ -53,7 +60,7 @@ export function selectBlurbBackfill(
 // Best-effort by contract: the caller (saveBlurb) ignores failures — a capture
 // error must NEVER block the publish it rides on. Returns a result for tests/logs.
 export async function captureBlurbFact(
-  supabase: SupabaseClient,
+  supabase: LocalFactsDb,
   input: { venueKey: string; blurb: string; priorDraft: string | null }
 ): Promise<{ ok: boolean; was_edited: boolean | null; error?: string }> {
   const fact = input.blurb.trim();
@@ -91,7 +98,7 @@ export async function captureBlurbFact(
 // drafter to ground a regeneration in what a human already approved. Never
 // throws; returns [] on any error so generation degrades gracefully.
 export async function getActiveFacts(
-  supabase: SupabaseClient,
+  supabase: LocalFactsDb,
   subjectType: string,
   subjectKey: string
 ): Promise<LocalFact[]> {

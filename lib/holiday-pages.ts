@@ -32,6 +32,10 @@ export type HolidayGuide = {
   metaTitle: string;
   metaDescription: string;
   editorial: string[];
+  /** YYYY-MM-DD the editorial copy above was last edited. Hand-maintained:
+   *  bump it in the same commit as a copy change. Feeds WebPage dateModified
+   *  with the rendered events' updated_at (lib/date-modified.ts, HWY-60). */
+  editorialUpdated: string;
   /** The "placeholder for next year" block, shown year-round. */
   nextYear: string;
   qa: { q: string; a: string }[];
@@ -65,6 +69,7 @@ export const HOLIDAY_GUIDES: HolidayGuide[] = [
     metaTitle: "Arnold 4th of July Parade & Events (Arnold, CA)",
     metaDescription:
       "The Arnold Independence Day Parade: start time, the one-mile route from the Byway to Cedar Center, road closures, and the rest of the day's events in Arnold, CA.",
+    editorialUpdated: "2026-08-15",
     editorial: [
       "The parade is the anchor. In 2026 it stepped off at 10:00 AM sharp and rolled one mile, all downhill, from the upper Byway through town to Cedar Center, with the theme Stars, Stripes and 250 Years. Highway 4 closed to cars at 9:30 AM, so the move is to get up the hill early, grab a curb, and bring a chair. It's free to watch, and about as Arnold as it gets.",
       "The parade morning is just the start. In 2026 the Arnold Visitor Center ran a family celebration at 1 PM, Cedar Center hosted an Independence Day BBQ in the late afternoon, the Sierra Nevada Arts and Crafts Festival filled the lot at Bristol's over the whole weekend, and there was live music into the evening at Cameo Plaza and Sequoia Woods. Most years follow a similar shape, and the confirmed lineup lands on this page as organizers announce it.",
@@ -103,6 +108,7 @@ export const HOLIDAY_GUIDES: HolidayGuide[] = [
     metaTitle: "Murphys 4th of July Parade & Events (Murphys, CA)",
     metaDescription:
       "The Murphys 4th of July: the Main Street parade, the July 3rd Patriotic Car Cruise, the Murphys Historic Hotel celebration, and live music across town in Murphys, CA.",
+    editorialUpdated: "2026-08-15",
     editorial: [
       "In 2026 the parade rolled down Main Street at noon, and the Murphys Historic Hotel made an afternoon of it with its own celebration out front. The night before, the Patriotic Car Cruise (its third year in 2026) sent classic cars down Main Street at 6:30 PM, which has quickly become the way locals open the weekend.",
       "The rest of the day fills in around the parade: in 2026 there was live music at Jazz Cellars, the Murphys Wine and Beer Garden, the Irish Pub, and an evening show at Brice Station. Main Street stays walkable all day, so the usual play is parade at noon, a slow lap of the tasting rooms, and music until dark. The confirmed lineup for next year lands on this page as organizers announce it.",

@@ -51,6 +51,10 @@ export type IntentConfig = {
   metaDescription: string;
   windowDays: number;
   editorial: string[];
+  /** YYYY-MM-DD the editorial copy above was last edited. Hand-maintained:
+   *  bump it in the same commit as a copy change. Feeds WebPage dateModified
+   *  with the rendered events' updated_at (lib/date-modified.ts, HWY-60). */
+  editorialUpdated: string;
   qa: { q: string; a: string }[];
   filter: (e: Hwy4Event) => boolean;
 };
@@ -66,6 +70,7 @@ export const INTENT_CONFIG: Record<IntentKey, IntentConfig> = {
     metaDescription:
       "What's happening on the Hwy 4 corridor: live music, festivals, markets, and community events in Angels Camp, Murphys, Arnold, and Bear Valley. Updated daily.",
     windowDays: 14,
+    editorialUpdated: "2026-08-15",
     editorial: [
       "If you're driving up without a plan, the reliable moves: walk Murphys Main Street and its tasting rooms, give the giant sequoias at Calaveras Big Trees State Park a couple of hours, and check what's playing at Ironstone or up at Bear Valley before you commit to the drive.",
       "The list below is the live calendar for the whole corridor. It updates every day, and every event links back to its source so you can double-check the details.",
@@ -92,6 +97,7 @@ export const INTENT_CONFIG: Record<IntentKey, IntentConfig> = {
     metaDescription:
       "Free things to do on the Hwy 4 corridor: parades, markets, live music, trail days, and community events in Angels Camp, Murphys, Arnold, and Bear Valley.",
     windowDays: 30,
+    editorialUpdated: "2026-08-15",
     editorial: [
       "A lot of the best stuff up here doesn't cost a dime: parades, farmers markets, gallery nights, trail workdays, and plenty of patio music where the band plays and the hat maybe gets passed.",
       "One honest note on how this list works: an event only shows up here when the organizer states it's free. If a listing shows no price at all, that means unconfirmed, not free, so check the event page before you drive.",
@@ -118,6 +124,7 @@ export const INTENT_CONFIG: Record<IntentKey, IntentConfig> = {
     metaDescription:
       "Evening events on the Hwy 4 corridor: live music, winery evenings, theater, and shows in Murphys, Angels Camp, Arnold, and Bear Valley. Updated daily.",
     windowDays: 30,
+    editorialUpdated: "2026-08-15",
     editorial: [
       "The usual recipe works: dinner in Murphys, then whatever's on that night. Some evenings that's a band at the Lube Room in Arnold, some it's music at a winery, and in summer it's often a show up at Bear Valley.",
       "Everything below is an upcoming evening event in the live music, wine, fine arts, or festival lanes. Start times run mostly 5 to 7 up here; check the event page for details and the weather chip before you pick a patio.",

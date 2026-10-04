@@ -1,15 +1,22 @@
 // Agent Cockpit — submission reply drafts (the CRM loop).
 //
 // After the owner decides on a submission, draft a short, warm reply to the
-// submitter in the Hwy4Events neighbor voice. Three outcomes:
+// submitter in the Hwy4Events neighbor voice. Outcomes:
 //   - approved:  "your event is live, here's the link"
 //   - questions: targeted ask for the exact gaps the triage found (so the owner
 //                can publish once the submitter answers)
 //   - declined:  gracious "not a fit right now", invite future submissions
+//   - expired:   the date passed before anyone reviewed it (fixed copy, no model)
 //
-// This module only GENERATES copy (pure, no DB, no send). The caller stores it on
-// the submission and the admin UI offers a one-click Gmail compose deep-link; the
-// human edits and sends from their own Gmail. We never send mail from the app.
+// approved / questions / declined only GENERATE copy (no DB, no send). The caller
+// stores it on the submission and the admin UI offers a one-click Gmail compose
+// deep-link; the human edits and sends from their own Gmail.
+//
+// `expired` is the one exception: /api/agent/expire-submissions sends that copy
+// itself through Resend (the newsletter transactional stack) and stamps
+// `auto_sent` so the admin UI does not ask Rob to compose it again. The wording
+// is a template, not a model call, so a missing API key or a bad generation
+// cannot invent a fact or block the queue clear.
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { TriageAnalysis } from "@/lib/agent/submission-triage";
@@ -19,7 +26,7 @@ import { messageText } from "./message-text";
 
 const REPLY_MODEL = REASONER_MODEL;
 
-export type ReplyOutcome = "approved" | "questions" | "declined";
+export type ReplyOutcome = "approved" | "questions" | "declined" | "expired";
 
 export interface SubmissionReply {
   outcome: ReplyOutcome;
@@ -28,7 +35,13 @@ export interface SubmissionReply {
   to: string | null;
   generated_at: string;
   model: string;
+  /** Set only after /api/agent/expire-submissions actually sent this copy. */
+  auto_sent?: boolean;
+  sent_at?: string;
 }
+
+/** model value on the fixed expired template (no Anthropic call). */
+export const EXPIRED_REPLY_MODEL = "template";
 
 export interface SubmissionForReply {
   event_name: string;
@@ -107,12 +120,103 @@ function stripDashes(s: string): string {
   return s.replace(/\s*[—–]\s*/g, ", ").replace(/,\s*,/g, ", ");
 }
 
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** "2026-09-12" → "September 12, 2026". Null when the string is not a real calendar date. */
+export function formatSubmissionDate(iso: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso ?? "").trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const monthIndex = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  const month = MONTHS[monthIndex];
+  if (!month) return null;
+  const check = new Date(Date.UTC(year, monthIndex, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== monthIndex ||
+    check.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${month} ${day}, ${year}`;
+}
+
+function submissionFirstName(raw: string | null | undefined): string | null {
+  const token = raw?.trim().split(/\s+/)[0] ?? "";
+  if (!token || token.includes("@") || token.length > 40) return null;
+  if (!/[A-Za-z]/.test(token)) return null;
+  return token;
+}
+
+function submissionEventName(raw: string | null | undefined): string {
+  const name = (raw ?? "").replace(/\s+/g, " ").trim();
+  return name || "your event";
+}
+
+/**
+ * Fixed expired-submission email. Neighbor voice, no model: the only facts are
+ * the event name, its date (omitted when we cannot format it), and the public
+ * submit URL. Signs as Rob.
+ */
+export function buildExpiredReply(
+  sub: SubmissionForReply,
+  now: Date = new Date()
+): SubmissionReply {
+  const eventName = stripDashes(submissionEventName(sub.event_name));
+  const first = submissionFirstName(sub.submitter_name);
+  const dateLabel = formatSubmissionDate(sub.event_date);
+  const when = dateLabel
+    ? `It was dated ${dateLabel}, and that day has passed, so I couldn't get it on the calendar in time.`
+    : `The date on it has passed, so I couldn't get it on the calendar in time.`;
+  const greeting = first ? `Hi ${first},\n\n` : "";
+  const subject =
+    eventName === "your event"
+      ? "Your Hwy4Events submission"
+      : `Your Hwy4Events submission: ${eventName}`;
+
+  const body = `${greeting}Thanks for sending ${eventName} in. ${when}
+
+If you have another event along the Highway 4 corridor, send it in at ${SITE_URL}/submit and I'll take a look.
+
+Rob`;
+
+  return {
+    outcome: "expired",
+    subject: stripDashes(subject).slice(0, 200),
+    body: stripDashes(body).slice(0, 4000),
+    to: sub.submitter_email,
+    generated_at: now.toISOString(),
+    model: EXPIRED_REPLY_MODEL,
+  };
+}
+
+/** Stamp a generated reply after Resend accepted it. Drafts leave these off. */
+export function markReplyAutoSent(reply: SubmissionReply, sentAt: string): SubmissionReply {
+  return { ...reply, auto_sent: true, sent_at: sentAt };
+}
+
 export async function generateReply(
   sub: SubmissionForReply,
   analysis: TriageAnalysis | null,
   outcome: ReplyOutcome,
   ctx: ReplyContext = {}
 ): Promise<SubmissionReply> {
+  if (outcome === "expired") return buildExpiredReply(sub);
+
   const first = sub.submitter_name?.trim().split(/\s+/)[0] ?? null;
 
   const facts = {

@@ -1,11 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { findBannedPhrase, withVoice } from "@/lib/voice";
+import { findBannedPhrase, withVoice } from "../voice";
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";
 
 // Web research for the artist-blurb drafter (PRD-artist-descriptions.md, Phase 1).
 // Given a band/act name (as it appears in an event's `artists` field) plus the
-// corridor town it's playing, find the act's own site/social links and, ONLY when
+// listings where it is booked here (venue, date, link, description), find the act's own site/social links and, ONLY when
 // one act clearly matches, a short genre tag + a two-sentence local-voice blurb.
 //
 // This is the accuracy contract's hard part: a name like "Surf Creeps" or "Overdrive"
@@ -35,11 +35,27 @@ export type ArtistResearch = {
   confidence: "high" | "medium" | "low";
   notes: string | null;
   sources: { title: string; url: string }[];
+  /** True when the model wrote prose but the voice floor dropped it (an em
+   *  dash or a banned phrase). The act WAS identified, so the drafter retries
+   *  it instead of treating it as a dead end. */
+  voiceRejected: boolean;
+};
+
+/** One booking of the act, as our catalog lists it. This is the context that
+ *  turns "Overdrive, playing Murphys" (half a dozen bands) into "Overdrive at
+ *  Murphys Irish Pub on Oct 10, per this listing" (one band). */
+export type ArtistShow = {
+  date: string;
+  venue: string | null;
+  town: string | null;
+  title: string;
+  url: string | null;
+  description: string | null;
 };
 
 const BASE_SYSTEM = `You research a live-music act (band or solo performer) that is playing a show in the Highway 4 corridor of Calaveras County, California (towns: Angels Camp, Copperopolis, Murphys, Arnold, Avery, Camp Connell, Dorrington, White Pines, Bear Valley). These are mostly small local, regional, and cover acts.
 
-You are given the act's name (exactly as a venue listed it) and the town of the show. Find:
+You are given the act's name (exactly as a venue listed it) and the listings where it is booked here: venue, date, listing title, listing link, and the listing's own description when it has one. Find:
 1. The act's own website and/or social pages (Facebook, Spotify, Bandcamp, Instagram).
 2. A short genre tag (e.g. "Classic rock covers", "Americana", "Country", "Bluegrass").
 3. A two-sentence description in a warm, local, plain-spoken neighbor voice: who they are and what they sound like. Name real specifics (where they're from, the kind of songs they play) only if you actually found them.
@@ -57,6 +73,11 @@ The rule above governs WHETHER to write a blurb. This one governs what goes INSI
 - Prefer the act's OWN self-description (their site's wording for their genre and home region) over a third-party listing's paraphrase.
 - Only include a link you are confident belongs to THIS act (the one playing a Calaveras/Sierra show). When in doubt, omit the link.
 - Prefer acts that are clearly local or regional (Calaveras County, the Sierra foothills, the greater Sacramento/Bay Area/Tahoe orbit that tours here). If the only match you find is a famous unrelated national band with the same name, that's almost certainly NOT this act — return nothing.
+
+USE THE LISTINGS TO TELL BANDS APART:
+- Search the act's name together with a listed venue or town before concluding it is not findable. Most of these acts are identified by where they play, not by their name alone.
+- A page that ties this act name to one of the listed venues, to Calaveras County, or to the Sierra foothills is the corroborating signal. A same-named act elsewhere with no such tie is a different band.
+- A listing link is a valid source for the fact that the act plays here. If a listing's description describes the act (genre, hometown, members), you may use exactly what it says and cite that link. Never infer anything about the act from the venue itself.
 
 Confidence:
 - "high": the act's own site/socials found AND a listing corroborates it plays this region.
@@ -111,7 +132,7 @@ function coerceLinks(o: unknown): ArtistLinks {
   return out;
 }
 
-function coerce(o: unknown): ArtistResearch {
+export function coerceArtistResearch(o: unknown): ArtistResearch {
   const empty: ArtistResearch = {
     blurb: null,
     genre: null,
@@ -121,6 +142,7 @@ function coerce(o: unknown): ArtistResearch {
     confidence: "low",
     notes: null,
     sources: [],
+    voiceRejected: false,
   };
   if (!o || typeof o !== "object") return empty;
   const obj = o as Record<string, unknown>;
@@ -146,12 +168,14 @@ function coerce(o: unknown): ArtistResearch {
   const grounded = confidence !== "low" && sources.length > 0;
 
   let blurb = grounded && typeof obj.blurb === "string" ? obj.blurb.trim() || null : null;
+  const drafted = blurb !== null;
   // Defensive voice floor: an em dash is a hard voice violation — drop rather than ship.
   if (blurb && blurb.includes("—")) blurb = null;
   // Same floor for the banned-phrase list: this path can publish UNATTENDED at
   // high confidence (lib/agent/artist-autopublish.ts), so its code-level voice
   // check must be at least as strong as the human-gated venue drafter's.
   if (blurb && findBannedPhrase(blurb)) blurb = null;
+  const voiceRejected = drafted && blurb === null;
 
   const genre = grounded && typeof obj.genre === "string" ? obj.genre.trim() || null : null;
   const hometown = grounded && typeof obj.hometown === "string" ? obj.hometown.trim() || null : null;
@@ -168,17 +192,45 @@ function coerce(o: unknown): ArtistResearch {
     confidence,
     notes: typeof obj.notes === "string" ? obj.notes.trim() || null : null,
     sources,
+    voiceRejected,
   };
+}
+
+/** The user message: the act plus up to three listings, each description cut
+ *  to a snippet. Exported for the test that pins what the model is shown. */
+export function buildArtistResearchPrompt(
+  name: string,
+  shows: ArtistShow[],
+  town: string | null
+): string {
+  const where = town ? `${town}, CA` : "the Highway 4 corridor, Calaveras County, CA";
+  const lines = shows.slice(0, 3).map((s, i) => {
+    const desc = (s.description ?? "").replace(/\s+/g, " ").trim();
+    return [
+      `${i + 1}. ${s.date}${s.venue ? ` at ${s.venue}` : ""}${s.town ? `, ${s.town}` : ""}`,
+      `   Listing title: ${s.title}`,
+      s.url ? `   Listing link: ${s.url}` : null,
+      desc ? `   Listing description: ${desc.slice(0, 400)}${desc.length > 400 ? "..." : ""}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  });
+  return [
+    `Act: "${name}", playing in ${where}.`,
+    lines.length > 0 ? `Where it is booked:\n${lines.join("\n")}` : null,
+    "Research the web for this act's own site/socials, genre, and a two-sentence local-voice description. Remember: if you cannot confidently identify ONE specific act, return nulls. Return the JSON.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export async function researchArtist(
   name: string,
-  town: string | null
+  town: string | null,
+  shows: ArtistShow[] = []
 ): Promise<ArtistResearch> {
   const anthropic = new Anthropic();
-  const userMsg = `Act: "${name}", playing a show in ${
-    town ? `${town}, CA` : "the Highway 4 corridor, Calaveras County, CA"
-  }. Research the web for this act's own site/socials, genre, and a two-sentence local-voice description. Remember: if you cannot confidently identify ONE specific act, return nulls. Return the JSON.`;
+  const userMsg = buildArtistResearchPrompt(name, shows, town);
 
   const message = await anthropic.messages.create({
     model: RESEARCH_MODEL,
@@ -187,11 +239,11 @@ export async function researchArtist(
     system: SYSTEM,
     // web_search_20250305 is an Anthropic server tool executed during the call.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 } as any],
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 } as any],
     messages: [{ role: "user", content: userMsg }],
   });
 
   const text = messageText(message.content);
 
-  return coerce(safeJson(text));
+  return coerceArtistResearch(safeJson(text));
 }

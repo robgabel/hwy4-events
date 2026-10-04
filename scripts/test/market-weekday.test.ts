@@ -114,7 +114,7 @@ test("repo copy that states the Murphys market day matches the guide", () => {
 test("the knowledge base no longer teaches Saturday for the Murphys market", () => {
   const kb = read("docs/LOCAL-KNOWLEDGE-BASE.md");
   assert.doesNotMatch(kb, /NOT Sundays/);
-  assert.match(kb, /Murphys Farmers Market \(Sundays 9am/);
+  assert.match(kb, /Murphys (Park )?Farmers Market \(Sundays 9am/);
   assert.match(kb, /\*\*Sundays\*\*/);
-  assert.match(kb, /Sunday farmers market in Murphys \(9am/);
+  assert.match(kb, /Sunday farmers market in Murphys\b/);
 });

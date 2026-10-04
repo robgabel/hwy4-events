@@ -5,6 +5,32 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-10-04: "I couldn't reach it" is not "it's gone"
+
+On 2026-09-28 visitmurphys.com timed out from the GitHub runner, and the nightly link checker nulled 139 `event_url`s in one run. It read a thrown fetch, and every status ≥ 400 except 401/403/429, as a dead link. The same rule nulled two more live links on 09-30 and 10-04.
+
+- **A destructive write needs a definitive answer.** Now only a 404/410 that a GET confirms nulls a link; no answer, a bot wall, a 5xx or a refused HEAD is kept and reported. Same family as the stale sweep's "an empty batch can't be told apart from a broken fetch".
+- **A destructive cleanup's blast radius includes every rule that reads the field it clears.** Upcoming rows healed on the next Visit Murphys scrape, but past rows never would have (17 restored by hand). And while the links were gone, 18 GoCalaveras rows that Visit Murphys had merged into looked GoCalaveras-owned to the armed stale sweep, whose ownership test keys on `event_url`. The checker never knew that.
+- **`return` on a fatal precondition is a silent failure.** GoCalaveras's "no nonce" path logged a line and returned, so the run recorded no error and the health table said OK (it judges freshness by `last_scraped_at`, which other sources' merges keep bumping). Throw, and let the orchestrator record it.
+- **A fallback that only fires on the failure you expected isn't one.** Tribe's Firecrawl fallback covered a 403 and a challenge page, but not a fetch that threw, which is the case where a different network helps most.
+- **A list that claims to cover every source must page.** The independent review found the scrape health table had been silently missing ten of 26 sources, visit-murphys among them: one unpaged `select("org_slug")` hit PostgREST's 1000-row cap inside gocalaveras's rows. Nothing errors when that cap bites.
+- **A test that hangs is not a test that fails.** The first hung-fetch test held the event loop with an interval, so removing the timeout it guarded made the file hang instead of fail. Give a stub its own ref'd backstop that settles it, and assert on the abort reason.
+- **Read the job's env dump to check a secret.** A set secret renders as `***`; a blank value means it isn't set. The scrape Action's `SLACK_WEBHOOK_URL` is blank, so the scrape's loud alerts have never sent.
+
+---
+
+## 2026-10-01 — A temperature swing is not a cool-down, and hot is not patio weather
+
+Early October heat wave, Murphys highs about 93–96°F. Grape Stomp (all day) showed `75→95° · bring layers`. Several events at 86–95° showed `patio weather`.
+
+- **`patio weather` needs a ceiling.** It fired at temp ≥ 80° with no upper bound, so a heat wave was labeled pleasant. Patio is 80–89° and clear or partly cloudy. Event-hour temp or range high ≥ 92° is `hot, shade and water`. 90–91° stay unlabeled: the number is on the chip, and the tag must not sell the heat. Copy uses a comma, not an em dash (voice rule).
+- **`bring layers` means the window gets colder, or the floor is actually cool.** The range was min/max only, so a day that warms 20° looked like a day that cools 20°. Say it when the last hour is ≥12° cooler than the first, or the low is ≤60° and the spread is ≥12° (the morning-camp case, 60→85). `resolveEventWeather` stamps `start` and `end` in hour order. A ≤50° point reading stays `bring a layer`.
+- **A peak of 92° or more outranks the swing.** A day that climbs out of a cool morning and tops out at 95° is the heat warning. The chip still shows the spread.
+
+Locked by `scripts/test/weather.test.ts`.
+
+---
+
 ## 2026-09-27: The duplicate is in the merge, not just the matcher
 
 Rob's screenshot: "The Gathering on Murphys Main Street" (GoCalaveras, 11:00) beside "Murphys Gathering – A Celebration of All Things Magical" (Visit Murphys, 12:00, the organizer's own time). A full scan found 5 live pairs while the same day's audit read `same_event_duplicates: 0`. Plan: `PRD-dedup-merge-v2.md`.

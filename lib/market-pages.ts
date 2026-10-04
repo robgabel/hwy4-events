@@ -56,6 +56,10 @@ export type MarketGuide = {
    *  date year to year, and a stale hard date is worse than an honest range. */
   season: string;
   editorial: string[];
+  /** YYYY-MM-DD the editorial copy above was last edited. Hand-maintained:
+   *  bump it in the same commit as a copy change. Feeds WebPage dateModified
+   *  with the rendered events' updated_at (lib/date-modified.ts, HWY-60). */
+  editorialUpdated: string;
   qa: { q: string; a: string }[];
 };
 
@@ -79,6 +83,7 @@ export const MARKET_GUIDES: MarketGuide[] = [
     day: "Sunday",
     hours: "9:00 AM to 1:00 PM",
     season: "late May into late October",
+    editorialUpdated: "2026-09-05",
     editorial: [
       "It sits in the park along Murphys Creek, which is most of the appeal. There is shade, there is running water, and there is usually live music going while you shop, so it reads more like a Sunday morning in the park than an errand. Kids and dogs are a normal part of the scene.",
       "Go early if you want the good produce and a parking spot near the entrance. By late morning the lot fills and people start parking along the residential streets and walking in. If you are coming from out of town, the market pairs well with the rest of Main Street, which is a five-minute drive and open by the time the market winds down.",
@@ -130,6 +135,7 @@ export const MARKET_GUIDES: MarketGuide[] = [
     day: "Friday",
     hours: "4:30 PM to 7:30 PM",
     season: "June into late September",
+    editorialUpdated: "2026-09-05",
     editorial: [
       "This one is an evening market, which makes it a different animal from the Sunday morning market up the hill in Murphys. It is sponsored by the Angels Camp Business Association, it has been running for over twenty seasons, and it lands at the end of the work week, so it functions as much as a place to run into people as a place to buy tomatoes.",
       "Utica Park has real shade and room for kids to run, and there is normally music going. Come hungry, because a good share of the booths are prepared food rather than produce.",

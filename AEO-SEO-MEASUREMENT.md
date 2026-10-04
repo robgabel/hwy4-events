@@ -296,6 +296,40 @@ greps this file for a `### YYYY-MM` entry matching the current month and files a
 issue if it is missing after the 7th — a binding trigger, not a reminder. Clear it by
 logging the entry, not by closing the issue.
 
+## Crawler access + IndexNow (HWY-62, 2026-10-04)
+
+**IndexNow (built).** New events used to wait for a crawl, and a page indexed after the
+event is worthless. `/api/indexnow` (Vercel cron, `0 16 * * *`, after the 15:30 reconcile)
+submits every public event created in the last 24h, the hub pages those events change
+(`/`, `/this-weekend`, `/this-week`, `/this-month`, `/live-music`) and the town page of
+each town that gained one. The key is public by design and served at
+`/indexnow-key.txt` (`keyLocation`); it lives in region config (`seo.indexNowKey`),
+overridable with `INDEXNOW_KEY`. Best-effort: a failed POST is logged and reported in the
+route's JSON, never retried. Not keyed on `updated_at`, which changes on most rows daily.
+**Check:** Bing Webmaster Tools → IndexNow should show submissions within a day of deploy.
+Smoke-test: `curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/indexnow`.
+
+**AI crawler access (automated weekly, manual check still owed).** `robots.txt` allows
+`*`, but a firewall or bot-protection rule overrides it silently. Findings so far:
+- 2026-10-04: could not test from the dev container (its egress proxy denies
+  hwy4events.com), so the check runs from inside Vercel instead. The weekly
+  `/api/agent/qa-audit` now fetches `/this-weekend` as OAI-SearchBot, ChatGPT-User,
+  PerplexityBot, Perplexity-User, Claude-SearchBot, Claude-User, Bingbot and Googlebot,
+  and files one `proposed` ticket per crawler that gets a non-200, a challenge page, or
+  no HTML. Caveat: those requests carry the crawler's UA from Vercel's IPs, so a
+  verified-bot rule can challenge the spoof while letting the real crawler through. A
+  pass proves no UA rule blocks it; a hit means "check the firewall logs".
+- 2026-10-04, Vercel Firewall checked by Rob (dashboard + Vercel's agent reading the live
+  `hwy4-events` config): **Bot Protection: Off** (no challenge action), **AI Bots: Allow**
+  (the managed AI-bot ruleset is not blocking), **Attack Mode: off**, **no custom rules or
+  IP blocks**. So no firewall rule applies to OAI-SearchBot, ChatGPT-User, PerplexityBot,
+  Perplexity-User, Claude-SearchBot, Claude-User, Bingbot or Googlebot. Caveat: Vercel's
+  platform DDoS mitigation is always on and can't be turned off, so this is not a promise
+  that every crawler request succeeds. The weekly qa-audit check covers that from here.
+  If anyone turns Bot Protection on later, note that it exempts only *verified* bots.
+- **Still owed (Rob):** Bing Webmaster Tools: note crawl stats + indexed count, and confirm
+  IndexNow submissions show up the day after the first `/api/indexnow` run.
+
 ---
 
 ## Open items
@@ -308,3 +342,8 @@ logging the entry, not by closing the issue.
   2026-08 reconstructed from the collectors' banked data (their prompt audits were
   missed at the time and are marked NOT RUN), 2026-09 logged on schedule with a
   one-engine prompt audit. June 2026 predates reliable data and stays unlogged.
+- [x] IndexNow submissions wired (`/api/indexnow`, daily 16:00 UTC, HWY-62, 2026-10-04)
+- [x] Weekly AI-crawler access check in `/api/agent/qa-audit` (HWY-62, 2026-10-04)
+- [x] Vercel Firewall check for AI crawlers: Bot Protection off, AI Bots allowed, no custom rules (2026-10-04)
+- [ ] Bing Webmaster crawl stats + indexed count logged (manual, Rob)
+- [ ] Confirm IndexNow submissions appear in Bing Webmaster Tools (day after deploy)

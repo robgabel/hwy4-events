@@ -65,6 +65,10 @@
       "schedule": "30 15 * * *"
     },
     {
+      "path": "/api/indexnow",
+      "schedule": "0 16 * * *"
+    },
+    {
       "path": "/api/snapshot-analytics",
       "schedule": "0 9 * * *"
     },
@@ -99,6 +103,10 @@
     {
       "path": "/api/agent/triage-submissions",
       "schedule": "30 18 * * *"
+    },
+    {
+      "path": "/api/agent/expire-submissions",
+      "schedule": "30 14 * * *"
     },
     {
       "path": "/api/agent/collect-seo",

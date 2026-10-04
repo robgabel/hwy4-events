@@ -33,6 +33,8 @@ import {
   type MonthEnumeration,
 } from "../lib/gocalaveras-sweep.js";
 import { sweepStaleSourceRows } from "../lib/stale-sweep-exec.js";
+import { applyDiscoveredActs } from "../../lib/lineup-acts.js";
+import { readLineupPoster } from "../lib/lineup-poster.js";
 
 const EVENTS_URL = "https://www.gocalaveras.com/events/";
 const AJAX_URL = "https://www.gocalaveras.com/wp-admin/admin-ajax.php";
@@ -77,6 +79,18 @@ interface EventONResponse {
 
 // ---------- Main scraper ----------
 
+/** Why the events page gave the scraper nothing to work with. The status
+ *  explains most cases; a 200 with no config means the markup changed. */
+export function pageConfigFailure(missing: string, status: number): string {
+  const why =
+    status === 429
+      ? "rate-limited"
+      : status >= 400
+        ? "refused"
+        : "the page loaded, so the markup may have changed";
+  return `GoCalaveras events page gave no ${missing} (HTTP ${status}, ${why}). Nothing scraped, nothing swept.`;
+}
+
 export async function scrapeGoCalaveras(): Promise<void> {
   console.log("=== GoCalaveras Scraper ===");
 
@@ -94,15 +108,17 @@ export async function scrapeGoCalaveras(): Promise<void> {
 
   const nonceMatch = html.match(/postnonce["']?\s*:\s*["']([a-f0-9]+)["']/);
   const nonce = nonceMatch?.[1] || "";
+  // Throw, don't return. A return reads as a clean run: no scrape_runs error,
+  // and the health table says OK because other sources keep touching
+  // GoCalaveras rows. 2026-09-28 lost a whole run that way, the day after the
+  // site started rate-limiting us.
   if (!nonce) {
-    console.error("Could not extract nonce from page");
-    return;
+    throw new Error(pageConfigFailure("nonce", pageResp.status));
   }
 
   const dataSCMatch = html.match(/data-sc='([^']+)'/);
   if (!dataSCMatch) {
-    console.error("Could not extract data-sc shortcode from page");
-    return;
+    throw new Error(pageConfigFailure("data-sc shortcode", pageResp.status));
   }
   const baseShortcode = JSON.parse(dataSCMatch[1]);
   console.log(`Nonce: ${nonce}, Calendar: ${baseShortcode.cal_id}`);
@@ -211,6 +227,19 @@ export async function scrapeGoCalaveras(): Promise<void> {
   if (futureEvents.length === 0) {
     console.log("No future corridor events to upsert — nothing scraped, nothing swept.");
     return;
+  }
+
+  // Name the act off a weekly lineup poster or a source subtitle, onto the
+  // row that already exists for that date (HWY-59). The calendar title stays
+  // "Live Music" on the in-memory event so a later generic scrape still loses
+  // to the specific stored name. Does not insert a night the feed didn't list.
+  const appended = await applyDiscoveredActs(futureEvents, (url, hint) =>
+    readLineupPoster(anthropic, url, hint.years)
+  );
+  for (const a of appended) {
+    console.log(
+      `  LINEUP_ACT ${a.via} ${a.date} "${a.from}" → "${a.to}" [${a.artists.join(", ")}]`
+    );
   }
 
   // Step 5: Cross-source dedup
@@ -606,8 +635,10 @@ function parseEventONEvents(
       // Extract location info from PMV metadata.
       // NOTE: do NOT fall back to evcal_subtitle for venue — on GoCalaveras
       // the subtitle is artist/host info ("Featuring …", "Hosted by …"), not a venue.
-      // Using it as venue_name poisons downstream display + dedup.
+      // Using it as venue_name poisons downstream display + dedup. The act is
+      // read later by applyDiscoveredActs (HWY-59), which also reads a lineup poster.
       const locationName = pmv.evcal_location_name?.[0] || "";
+      const subtitle = pmv.evcal_subtitle?.[0]?.trim() || null;
       const locationAddress = pmv.evcal_location_address?.[0] || pmv.evcal_location?.[0] || null;
       const eventUrl = pmv._evcal_exlink?.[0] || null;
 
@@ -663,7 +694,8 @@ function parseEventONEvents(
         address: locationAddress,
         category: "other", // Will be classified by LLM
         price: price ? `$${price}` : null,
-        artists: null, // Will be classified by LLM if applicable
+        artists: null, // Classifier, then a poster/subtitle act (applyDiscoveredActs).
+        source_subtitle: subtitle,
         event_url: finalEventUrl,
         image_url: null,
         // EventON gives us a stable event_id — write it so the upsert path
