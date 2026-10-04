@@ -16,19 +16,35 @@ percent" line and the table row "Reach `/this-weekend`, the killer view is unuse
 control's error. The committee-of-controls point stands on its own; the usage claim does not.
 Score a treatment run down if it repeats the same misread.
 
-**Filed from the Musk paragraph**, on the roadmap board (`hwy4_tasks`, `status='backlog'`,
-`source='claude_code'`), per Rob on 2026-10-04:
+**Filed, same day.** First on the roadmap board (HWY-64 to HWY-71), then, after Rob retired the
+board in favor of GitHub Issues, mirrored and extended there. Every issue carries a t-shirt size,
+the Claude model to build it with, a Claude Code effort level, and named subagents in its header.
 
-| Ref | Ticket |
-|---|---|
-| HWY-71 | Umbrella: Delete week, a six-week feature freeze where only the deletion list ships |
-| HWY-66 | Cut CLAUDE.md from 66K tokens to a map under 15K, with a size check in CI |
-| HWY-69 | Dormant-flag nag: the daily audit reports every switch that is built but not flipped |
-| HWY-64 | Collapse the four venue-schedule watcher crons into one config-driven route |
-| HWY-67 | Retire the daily chief-of-staff digest; fold its deterministic nudges into the audit post |
-| HWY-70 | Move scrape-bls and scrape-moose-lodge into the scrape Action, through `upsertEvents` |
-| HWY-65 | Give hwy4 its own Supabase project |
-| HWY-68 | Design spike: model recurring series natively instead of a row per occurrence |
+| Issue | From | Title |
+|---|---|---|
+| #325 | Rob | Deprecate the hwy4_tasks roadmap board; GitHub Issues is the only backlog |
+| #326 | Musk, HWY-71 | Six-week freeze (Oct 6 to Nov 14): only three workstreams ship |
+| #327 | Gary Vee, HWY-42 | Distribution workstream: corridor-group posts, five host-kit handoffs |
+| #328 | Jobs | Picks runway: five Rob's Picks always queued |
+| #329 | Musk, HWY-66 | Cut CLAUDE.md to a map under 15K tokens, size check in CI |
+| #330 | Musk, HWY-69 | Dormant-flag nag in the daily audit |
+| #331 | Musk, HWY-64 | Collapse the four watcher crons into one route |
+| #332 | Musk, HWY-67 | Retire the daily chief-of-staff digest |
+| #333 | Musk, HWY-70 | Move scrape-bls and scrape-moose-lodge into the Action |
+| #334 | Musk, HWY-65 | Give hwy4 its own Supabase project |
+| #335 | Musk, HWY-68 | Design spike: native recurring-series model |
+| #336 | board, HWY-41 | Artist hubs (parked until after the freeze) |
+| #337 | Dario | Eval harness in CI |
+| #338 | Dario | Eval: dedup golden set on every PR |
+| #339 | Dario | Evals: classifier, triage replay, extraction contract |
+| #340 | Dario | Graduate qa_fix_event to auto-execute after its canary |
+| #341 | Monday 1 | Business referrals become the North Star |
+| #342 | Monday 2 | Gate 1 instrumentation: visitor id + Resend webhook |
+| #343 | Monday 4 | Dedup v2 Phase 2 only, plus the near-miss audit check |
+| #344 | Monday 5 | Refresh BUSINESS-PLAN and PERSONAS; redefine the gates |
+
+Monday item 3 (the freeze) is #326. Not filed: the Gary Vee reel idea and any Instagram presence,
+the Jobs homepage simplification, and Attia's items beyond what #342 and #344 cover.
 
 Two measurements taken while filing, not in §3: 224 upcoming rows collapse to 67 distinct
 name+venue groups (70% repeat instances), and of 125 chief-of-staff digests, 81 flagged anything
