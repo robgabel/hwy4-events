@@ -224,6 +224,32 @@ export function matchOrgForEvent<O extends LinkOrg>(
 }
 
 /**
+ * The org we can name as the event's ORGANIZER in structured data (HWY-60).
+ * Stricter than matchOrgForEvent, which picks the best outbound LINK: its
+ * patterns also match venue_name and description, so "held at Ironstone"
+ * would become "organized by Ironstone" (the Firewise festival, the Arnold
+ * Angels charity festival at Brice Station). Here only two things count: a
+ * direct org_slug on an org with a canonical page (we scraped that org's own
+ * calendar), or one of its patterns in the event's own NAME. Anything else is
+ * a guess and the caller omits the field.
+ */
+export function matchOrganizerForEvent<O extends LinkOrg>(
+  ev: OrgMatchEvent,
+  orgs: O[]
+): O | null {
+  if (ev.org_slug) {
+    const direct = orgs.find((o) => o.slug === ev.org_slug);
+    if (direct?.canonical_url) return direct;
+  }
+  const name = norm(ev.name);
+  for (const o of orgs) {
+    if (!o.match_patterns) continue;
+    if (o.match_patterns.some((p) => name.includes(norm(p)))) return o;
+  }
+  return null;
+}
+
+/**
  * The destination resolver. Pure: callers supply the matched org and any venue
  * URL. Use resolveEventLinkFromOrgs when you have the full org registry.
  */

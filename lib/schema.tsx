@@ -17,6 +17,9 @@ import { serializeJsonLd } from "./json-ld";
 import { REGION } from "./region";
 import { REGION_OPS } from "./region-ops";
 import { buildPerformers, type PublicArtist } from "./artists";
+import { posterImageUrl } from "./poster";
+import { isUnstableHost } from "./event-link";
+import { isHttpUrl } from "./url";
 
 // ----- shared component -----
 
@@ -151,7 +154,9 @@ export function buildWebPage(opts: {
   url: string;
   name: string;
   description?: string;
-  dateModified: string;
+  /** Omit when nothing on the page has a knowable modification date. Never
+   *  pass `new Date()`: see lib/date-modified.ts. */
+  dateModified?: string | null;
   primaryImage?: string;
 }) {
   return {
@@ -160,7 +165,7 @@ export function buildWebPage(opts: {
     url: opts.url,
     name: opts.name,
     ...(opts.description && { description: opts.description }),
-    dateModified: opts.dateModified,
+    ...(opts.dateModified && { dateModified: opts.dateModified }),
     ...(opts.primaryImage && {
       primaryImageOfPage: {
         "@type": "ImageObject",
@@ -227,27 +232,73 @@ export function buildEventOffer(event: Hwy4Event, url: string) {
   return null;
 }
 
-export function buildEvent(
-  event: Hwy4Event,
-  slug?: string,
-  artists: PublicArtist[] = []
-) {
+/** The organizer a page can PROVE: the org `matchOrgForEvent` resolved for
+ *  the event. We organize none of these events, so the old hard-coded
+ *  "Hwy 4 Events" organizer contradicted the organizer's own page, which is
+ *  exactly the corroboration check an answer engine runs. Unknown = omitted. */
+export type EventOrganizer = { name: string; url?: string | null };
+
+export type BuildEventOptions = {
+  /** Our canonical event slug; derived from the row when omitted. */
+  slug?: string;
+  /** Published artist rows (live music only) for MusicGroup performers. */
+  artists?: PublicArtist[];
+  /** The offer URL. Defaults to our own stable event page; the detail page
+   *  passes the resolved organizer/venue link when it is durable. */
+  offerUrl?: string;
+  /** The matched organizer, or null/absent to omit the field. Never guessed. */
+  organizer?: EventOrganizer | null;
+};
+
+/** Organizer node, or null when there is nothing we can stand behind. A name is
+ *  required (no slug-as-name guessing); a url rides along only when it is a
+ *  durable http(s) destination, never an aggregator permalink. */
+export function buildEventOrganizer(org: EventOrganizer | null | undefined) {
+  const name = org?.name?.trim();
+  if (!name || name === SITE_NAME) return null;
+  const url =
+    org?.url && isHttpUrl(org.url) && !isUnstableHost(org.url) ? org.url : null;
+  return {
+    "@type": "Organization",
+    name,
+    ...(url && { url }),
+  };
+}
+
+/** schema.org eventStatus for a row. `tentative` means "not yet confirmed",
+ *  not "the date moved", so it is never EventPostponed. */
+export function eventStatusUrl(status: Hwy4Event["status"] | null | undefined): string {
+  return status === "cancelled"
+    ? "https://schema.org/EventCancelled"
+    : "https://schema.org/EventScheduled";
+}
+
+/**
+ * The one Event builder. The detail page and every ItemList call this, so the
+ * shape cannot drift between them again (the detail page used to carry its own
+ * inline copy that hard-coded "CA").
+ */
+export function buildEvent(event: Hwy4Event, opts: BuildEventOptions = {}) {
   const eventSlug =
-    slug ?? generateEventSlug(event.name, event.date, event.town);
+    opts.slug ?? generateEventSlug(event.name, event.date, event.town);
+  const pageUrl = `${SITE_URL}/events/${eventSlug}`;
   const displayAddress = resolveDisplayAddress(event.address, event.town);
   // Offer URL points at our own stable event page, never the scraped
   // `event_url` (which for aggregator sources is a churning permalink). The
   // detail page passes a resolved organizer/venue URL when it has one.
-  const offer = buildEventOffer(event, `${SITE_URL}/events/${eventSlug}`);
+  const offer = buildEventOffer(event, opts.offerUrl ?? pageUrl);
   const performers = buildPerformers(
     event.artists,
-    event.category === "live_music" ? artists : []
+    event.category === "live_music" ? opts.artists ?? [] : []
   );
+  const organizer = buildEventOrganizer(opts.organizer);
 
   return {
     "@context": "https://schema.org",
     "@type": "Event",
     name: event.name,
+    url: pageUrl,
+    image: posterImageUrl(event, eventSlug),
     ...(event.description && { description: event.description }),
     startDate: event.start_time
       ? `${event.date}T${event.start_time}`
@@ -266,16 +317,9 @@ export function buildEvent(
     },
     ...(offer && { offers: offer }),
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-    eventStatus:
-      event.status === "tentative"
-        ? "https://schema.org/EventPostponed"
-        : "https://schema.org/EventScheduled",
+    eventStatus: eventStatusUrl(event.status),
     ...(performers && { performer: performers }),
-    organizer: {
-      "@type": "Organization",
-      name: SITE_NAME,
-      url: SITE_URL,
-    },
+    ...(organizer && { organizer }),
   };
 }
 
@@ -303,7 +347,7 @@ export function buildItemList(events: Hwy4Event[], opts?: {
         event.date,
         event.town
       )}`,
-      item: buildEvent(event, undefined, artists),
+      item: buildEvent(event, { artists }),
     })),
   };
 }

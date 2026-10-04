@@ -50,6 +50,17 @@ export interface ExtractedEvent {
    * (scripts/lib/degraded-hold.ts). Never written to the DB.
    */
   enrichment_failed?: boolean;
+  /**
+   * Artist/host line from the source (GoCalaveras `evcal_subtitle`). Not a
+   * column. Read by `applyDiscoveredActs`; never used as the venue.
+   */
+  source_subtitle?: string | null;
+  /**
+   * Act read off a lineup poster or subtitle this run (HWY-59). Not a column.
+   * The upsert turns it into the public title only while the calendar title
+   * is still an actless placeholder.
+   */
+  discovered_act?: string | null;
 }
 
 const client = new Anthropic();
@@ -93,6 +104,9 @@ export function decodeEventFields(event: ExtractedEvent): ExtractedEvent {
     venue_name: decodeHtmlEntities(event.venue_name),
     price: event.price ? decodeHtmlEntities(event.price) : null,
     artists: event.artists?.map(decodeHtmlEntities) ?? null,
+    source_subtitle: event.source_subtitle
+      ? decodeHtmlEntities(event.source_subtitle)
+      : event.source_subtitle,
   };
 }
 
