@@ -25,6 +25,8 @@ export const CALAVERAS_OPS: RegionOps = {
   // Moved from lib/agent/gsc.ts.
   seo: {
     gscPropertyDefault: "sc-domain:hwy4events.com",
+    // HWY-62. Not a secret: IndexNow keys are published at keyLocation.
+    indexNowKey: "e230279a6359ae78c9f769ef01f51303",
   },
   // Moved from lib/schema.tsx.
   schemaOrg: {

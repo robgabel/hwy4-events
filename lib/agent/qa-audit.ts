@@ -23,12 +23,19 @@ const DOUBLED_BRAND_RE = new RegExp(
 // One ticket per check-class (deduped by a stable check_key stored in ai_rationale)
 // so a recurring failure never floods the board.
 
-export type QaKind = "page" | "event" | "sitemap";
+export type QaKind = "page" | "event" | "sitemap" | "bot";
 
 // A page target. keyScope makes the dedup key stable: static routes key by path;
 // sampled dynamic routes (event/town, whose slugs rotate) key by a class label so
 // "event detail pages missing JSON-LD" is ONE ticket, not one per sampled slug.
-export type QaTarget = { path: string; kind: QaKind; keyScope: string; label: string };
+export type QaTarget = {
+  path: string;
+  kind: QaKind;
+  keyScope: string;
+  label: string;
+  /** Fetch as this User-Agent instead of the QA agent's own (bot-access checks). */
+  userAgent?: string;
+};
 
 export type QaFinding = { check: string; severity: TaskPriority; detail: string };
 
@@ -38,10 +45,52 @@ const SEV_LABEL: Record<string, { title: string; severity: TaskPriority }> = {
   jsonld: { title: "is missing JSON-LD structured data", severity: "p2" },
   title: { title: "is missing a <title>", severity: "p2" },
   title_doubled_brand: { title: "has a doubled brand suffix in its <title>", severity: "p2" },
+  bot_blocked: { title: "is blocked or challenged", severity: "p2" },
 };
+
+// HWY-62: AI search and answer-engine crawlers. robots.txt allows `*`, but a
+// firewall or bot-protection rule overrides robots.txt silently, so the weekly
+// audit fetches a money page as each of these and files a ticket on a block.
+// UA strings follow each vendor's published crawler documentation.
+export const AI_BOT_USER_AGENTS: { name: string; ua: string }[] = [
+  { name: "OAI-SearchBot", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; OAI-SearchBot/1.0; +https://openai.com/searchbot" },
+  { name: "ChatGPT-User", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot" },
+  { name: "PerplexityBot", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)" },
+  { name: "Perplexity-User", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Perplexity-User/1.0; +https://perplexity.ai/perplexity-user)" },
+  { name: "Claude-SearchBot", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-SearchBot/1.0; +Claude-SearchBot@anthropic.com)" },
+  { name: "Claude-User", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0; +Claude-User@anthropic.com)" },
+  { name: "Bingbot", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm) Chrome/116.0.1938.76 Safari/537.36" },
+  { name: "Googlebot", ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Googlebot/2.1; +http://www.google.com/bot.html) Chrome/120.0.0.0 Safari/537.36" },
+];
+
+const BOT_PAGE = "/this-weekend";
+
+// The audit sends the crawler's UA from Vercel's IPs, not the crawler's. A
+// verified-bot rule can challenge that spoof while letting the real crawler
+// through, so a hit means "go look", not "proven blocked". A pass is proof
+// that no UA-based rule blocks the crawler.
+const BOT_CAVEAT =
+  " Check Vercel Firewall logs for this user agent: a verified-bot rule can challenge this spoofed request while still allowing the real crawler.";
+
+// Challenge / interstitial markers a bot-protection layer serves with a 200.
+const CHALLENGE_RE = /vercel security checkpoint|attention required|just a moment\.\.\.|checking your browser|captcha/i;
 
 // PURE: given a fetched page, what's wrong with it. Locked by scripts/test/qa-audit.test.ts.
 export function checkPage(kind: QaKind, status: number, body: string): QaFinding[] {
+  if (kind === "bot") {
+    // A crawler that gets anything but the real page is blocked, whatever the
+    // status: a 403/429 wall, or a 200 challenge interstitial.
+    if (status !== 200) {
+      return [{ check: "bot_blocked", severity: "p2", detail: `returned HTTP ${status || "connection error"} to this crawler.${BOT_CAVEAT}` }];
+    }
+    if (CHALLENGE_RE.test(body)) {
+      return [{ check: "bot_blocked", severity: "p2", detail: `served a bot challenge page instead of the content.${BOT_CAVEAT}` }];
+    }
+    if (!/<title[^>]*>\s*[^<\s][\s\S]*?<\/title>/i.test(body)) {
+      return [{ check: "bot_blocked", severity: "p2", detail: `returned 200 without the page's HTML (no <title>).${BOT_CAVEAT}` }];
+    }
+    return [];
+  }
   // A non-200 is the whole story — don't also flag missing content on an error page.
   if (status !== 200) {
     return [{ check: "status", severity: "p1", detail: `returned HTTP ${status || "connection error"}` }];
@@ -86,13 +135,17 @@ function ticketTitle(check: string, label: string): string {
   return `QA: ${label} ${t}`;
 }
 
-async function fetchTarget(base: string, path: string): Promise<{ status: number; body: string }> {
+async function fetchTarget(
+  base: string,
+  path: string,
+  userAgent?: string
+): Promise<{ status: number; body: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
     const res = await fetch(`${base}${path}`, {
       signal: controller.signal,
-      headers: { "User-Agent": `${REGION_OPS.userAgents.qaName}/1.0` },
+      headers: { "User-Agent": userAgent ?? `${REGION_OPS.userAgents.qaName}/1.0` },
       cache: "no-store",
     });
     const body = await res.text();
@@ -120,6 +173,17 @@ const STATIC_TARGETS: QaTarget[] = [
   { path: "/sitemap.xml", kind: "sitemap", keyScope: "/sitemap.xml", label: "The sitemap index" },
   { path: "/sitemap-core.xml", kind: "sitemap", keyScope: "/sitemap-core.xml", label: "The core sitemap" },
   { path: "/sitemap-events.xml", kind: "sitemap", keyScope: "/sitemap-events.xml", label: "The events sitemap" },
+  // One ticket per crawler, so "Bingbot is challenged" and "PerplexityBot is
+  // challenged" are separate, actionable findings.
+  ...AI_BOT_USER_AGENTS.map(
+    (b): QaTarget => ({
+      path: BOT_PAGE,
+      kind: "bot",
+      keyScope: `bot:${b.name}`,
+      label: `The ${BOT_PAGE} page as ${b.name}`,
+      userAgent: b.ua,
+    })
+  ),
 ];
 
 export type QaAuditResult = {
@@ -171,7 +235,7 @@ export async function runQaAudit(supabase: SupabaseClient, baseUrl: string): Pro
   // Fetch + evaluate all targets in parallel.
   const perTarget = await Promise.all(
     targets.map(async (t) => {
-      const res = await fetchTarget(baseUrl, t.path);
+      const res = await fetchTarget(baseUrl, t.path, t.userAgent);
       return { target: t, findings: checkPage(t.kind, res.status, res.body), status: res.status };
     })
   );

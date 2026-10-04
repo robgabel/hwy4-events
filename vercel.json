@@ -65,6 +65,10 @@
       "schedule": "30 15 * * *"
     },
     {
+      "path": "/api/indexnow",
+      "schedule": "0 16 * * *"
+    },
+    {
       "path": "/api/snapshot-analytics",
       "schedule": "0 9 * * *"
     },
