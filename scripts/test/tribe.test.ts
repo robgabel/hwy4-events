@@ -8,6 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  fetchTribePage,
   htmlToText,
   joinAddress,
   normalizeCost,
@@ -92,5 +93,109 @@ test("htmlToText strips markup and decodes entities", () => {
   assert.equal(
     htmlToText("<p>Watch the sunset &amp; hike&nbsp;up.</p><p>It&#8217;s special!</p>"),
     "Watch the sunset & hike up.\n\nIt’s special!"
+  );
+});
+
+// 2026-09-28: visitmurphys.com timed out from the runner. The plain fetch
+// threw, the throw skipped the Firecrawl fallback, and the whole Visit Murphys
+// scrape died. With no FIRECRAWL_API_KEY the fallback's own refusal is the
+// proof the fallback was reached instead of the raw TypeError escaping.
+test("fetchTribePage falls back to Firecrawl when the plain fetch gets no answer", async () => {
+  const realFetch = globalThis.fetch;
+  const realKey = process.env.FIRECRAWL_API_KEY;
+  const { warn } = console;
+  delete process.env.FIRECRAWL_API_KEY;
+  globalThis.fetch = (async () => {
+    throw new TypeError("fetch failed", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } });
+  }) as typeof fetch;
+  console.warn = () => {};
+  try {
+    await assert.rejects(
+      fetchTribePage("https://visitmurphys.com/wp-json/tribe/events/v1/events?page=1", 1),
+      /no fallback available/
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+    console.warn = warn;
+    if (realKey === undefined) delete process.env.FIRECRAWL_API_KEY;
+    else process.env.FIRECRAWL_API_KEY = realKey;
+  }
+});
+
+async function withStubbedFetch<T>(
+  stub: (input: string | URL | Request, init?: RequestInit) => Promise<Response>,
+  run: () => Promise<T>
+): Promise<T> {
+  const realFetch = globalThis.fetch;
+  const realKey = process.env.FIRECRAWL_API_KEY;
+  const { warn } = console;
+  delete process.env.FIRECRAWL_API_KEY;
+  globalThis.fetch = stub as typeof fetch;
+  console.warn = () => {};
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = realFetch;
+    console.warn = warn;
+    if (realKey === undefined) delete process.env.FIRECRAWL_API_KEY;
+    else process.env.FIRECRAWL_API_KEY = realKey;
+  }
+}
+
+// A host that accepts the connection and never answers holds a fetch for
+// undici's 300s headers timeout, once per page. The direct fetch carries its
+// own short timeout so a hang costs seconds and still reaches the fallback.
+test("fetchTribePage gives up on a hung direct fetch and falls back", { timeout: 5000 }, async () => {
+  const started = Date.now();
+  await withStubbedFetch(
+    (_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        // A real hung socket keeps the event loop alive while it waits, and
+        // AbortSignal.timeout's own timer is unref'd. This ref'd backstop
+        // stands in for the socket, and settles the stub if no abort ever
+        // comes, so a missing timeout fails this test instead of hanging it.
+        const backstop = setTimeout(() => reject(new Error("STUB_NEVER_ABORTED")), 2000);
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(backstop);
+          reject(init.signal!.reason);
+        });
+      }),
+    () =>
+      assert.rejects(
+        fetchTribePage("https://visitmurphys.com/wp-json/tribe/events/v1/events?page=1", 1, 50),
+        /page 1 \(The operation was aborted due to timeout\) and FIRECRAWL_API_KEY is unset — no fallback available/
+      )
+  );
+  assert.ok(Date.now() - started < 1500, "the direct fetch was not abandoned on its timeout");
+});
+
+test("fetchTribePage puts a timeout on the direct fetch by default", async () => {
+  let signal: AbortSignal | null | undefined;
+  await withStubbedFetch(
+    async (_input, init) => {
+      signal = init?.signal;
+      return new Response(JSON.stringify({ events: [] }), { status: 200 });
+    },
+    () => fetchTribePage("https://arnoldrimtrail.org/wp-json/tribe/events/v1/events?page=1", 1)
+  );
+  assert.ok(signal instanceof AbortSignal, "direct fetch sent without a signal");
+});
+
+test("fetchTribePage falls back when the response body breaks off mid-read", async () => {
+  await withStubbedFetch(
+    async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new Error("socket hang up"));
+          },
+        }),
+        { status: 200 }
+      ),
+    () =>
+      assert.rejects(
+        fetchTribePage("https://visitmurphys.com/wp-json/tribe/events/v1/events?page=1", 1),
+        /\(socket hang up\) and FIRECRAWL_API_KEY is unset — no fallback available/
+      )
   );
 });

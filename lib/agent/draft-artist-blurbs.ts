@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { normalizeName } from "@/lib/event-identity";
 import { pacificToday } from "@/lib/date-windows";
 import { researchArtist, type ArtistResearch } from "./research-artist";
+import { buildArtistWorklist, type CatalogRow, type ShowRow } from "./artist-worklist";
 import { autoPublishColumns, shouldAutoPublishArtist } from "./artist-autopublish";
 
 // Self-healing artist/band-blurb drafter (PRD-artist-descriptions.md, Phase 1).
@@ -17,11 +17,14 @@ import { autoPublishColumns, shouldAutoPublishArtist } from "./artist-autopublis
 // /admin/artists publishes. See lib/agent/artist-autopublish.ts for the policy
 // and why artists (not venues) earned it.
 //
-// Idempotent + self-limiting, same gate shape as the address queue:
-//   no hwy4_artists row yet, OR a row with
-//     blurb IS NULL AND blurb_draft IS NULL AND blurb_draft_at IS NULL
-//   (blurb_draft_at is stamped even on an empty research result — the "already
-//    tried" marker — so a no-signal act isn't re-researched every day).
+// Idempotent + self-limiting. Who gets researched is decided by
+// ./artist-worklist.ts (2026-10-04): acts are grouped by identity so a variant
+// spelling never re-researches a covered act, a result lands on the act's
+// existing row, the researcher is handed the act's bookings, and a tried-blank
+// act is retried only on new evidence (a new venue, prose the voice floor
+// dropped, research that predates the listings context) or after 60 days.
+// blurb_draft_at is still stamped on every result, and never-researched acts
+// always take the batch first.
 // Steady state is a no-op; a burst of newly-scraped acts drains a few per run.
 
 export type DraftArtistsResult = {
@@ -46,16 +49,13 @@ function adminClient(): SupabaseClient | null {
   return createClient(url, key);
 }
 
-type Candidate = { artist_key: string; name: string; town: string | null };
-
-// Collect the distinct acts named across upcoming public live-music events, keyed
-// by normalizeName so "Star Dogs"/"StarDogs" collapse. Keeps the first-seen display
-// spelling and a town (for the research prompt's regional signal).
-async function collectCandidates(supabase: SupabaseClient): Promise<Candidate[]> {
+// Upcoming public live-music listings that name an act. The worklist rules
+// (identity grouping, show context, retries) live in ./artist-worklist.ts.
+async function fetchShows(supabase: SupabaseClient): Promise<ShowRow[]> {
   const today = pacificToday().iso;
   const { data, error } = await supabase
     .from("hwy4_events")
-    .select("artists, town")
+    .select("artists, name, town, venue_name, date, event_url, description")
     .eq("category", "live_music")
     .eq("visibility", "public")
     .gte("date", today)
@@ -63,18 +63,7 @@ async function collectCandidates(supabase: SupabaseClient): Promise<Candidate[]>
     .neq("is_routine", true) // match the public feed (live_music is never routine, but be exact)
     .not("artists", "is", null);
   if (error) throw error;
-
-  const byKey = new Map<string, Candidate>();
-  for (const row of (data ?? []) as { artists: string[] | null; town: string | null }[]) {
-    for (const raw of row.artists ?? []) {
-      const name = (raw ?? "").trim();
-      if (!name) continue;
-      const key = normalizeName(name);
-      if (!key) continue;
-      if (!byKey.has(key)) byKey.set(key, { artist_key: key, name, town: row.town ?? null });
-    }
-  }
-  return [...byKey.values()];
+  return (data ?? []) as ShowRow[];
 }
 
 export async function draftMissingArtistBlurbs(opts?: {
@@ -85,28 +74,13 @@ export async function draftMissingArtistBlurbs(opts?: {
   const supabase = opts?.client ?? adminClient();
   if (!supabase) throw new Error("Missing Supabase service credentials");
 
-  const candidates = await collectCandidates(supabase);
+  const shows = await fetchShows(supabase);
+  const { data: catalog, error: catErr } = await supabase
+    .from("hwy4_artists")
+    .select("artist_key, name, blurb, genre, links, blurb_draft, blurb_draft_at, blurb_draft_meta");
+  if (catErr) throw catErr;
 
-  // Which keys are already resolved (published, drafted, or tried-and-empty)?
-  const keys = candidates.map((c) => c.artist_key);
-  const handled = new Set<string>();
-  if (keys.length > 0) {
-    const { data: existing, error } = await supabase
-      .from("hwy4_artists")
-      .select("artist_key, blurb, blurb_draft, blurb_draft_at")
-      .in("artist_key", keys);
-    if (error) throw error;
-    for (const r of (existing ?? []) as {
-      artist_key: string;
-      blurb: string | null;
-      blurb_draft: string | null;
-      blurb_draft_at: string | null;
-    }[]) {
-      if (r.blurb || r.blurb_draft || r.blurb_draft_at) handled.add(r.artist_key);
-    }
-  }
-
-  const todo = candidates.filter((c) => !handled.has(c.artist_key));
+  const todo = buildArtistWorklist(shows, (catalog ?? []) as CatalogRow[], Date.now());
   const result: DraftArtistsResult = {
     scanned: todo.length,
     researched: 0,
@@ -119,7 +93,7 @@ export async function draftMissingArtistBlurbs(opts?: {
   for (const c of todo.slice(0, limit)) {
     let research: ArtistResearch;
     try {
-      research = await researchArtist(c.name, c.town);
+      research = await researchArtist(c.name, c.town, c.shows);
     } catch (err) {
       console.error(`[draft-artist-blurbs] research failed for "${c.name}":`, err);
       continue;
@@ -157,6 +131,11 @@ export async function draftMissingArtistBlurbs(opts?: {
       links: research.links,
       notes: research.notes,
       sources: research.sources,
+      // What the retry rules read next time (./artist-worklist.ts).
+      context_venues: c.venues,
+      voice_rejected: research.voiceRejected,
+      voice_retried: c.reason === "voice_retry",
+      reason: c.reason,
     };
 
     // Medium and below: upsert on artist_key as a PENDING draft — insert a fresh

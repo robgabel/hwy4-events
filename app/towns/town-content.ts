@@ -21,6 +21,7 @@
  */
 
 import type { FaqEntry } from "@/lib/schema";
+import { BEAR_VALLEY_DISAMBIGUATION } from "@/lib/disambiguation";
 
 export interface TownContent {
   /** URL slug. Matches the dynamic route param. */
@@ -58,6 +59,10 @@ export interface TownContent {
    * Set false (or omit) only after every fact on the page is sourced and confirmed.
    */
   draft?: boolean;
+  /** One plain sentence telling readers (and answer engines) which place this
+   *  is when the name collides with a better-known one elsewhere (HWY-61:
+   *  Bear Valley vs Big Bear Lake). Rendered under the subhead. */
+  disambiguation?: string;
 }
 
 /**
@@ -76,7 +81,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     // Published 2026-05-25 after Rob's review. Banner removed, sitemap includes the URL, search engines may index.
     metaTitle: "Murphys, CA Events: Wine, Live Music & Festivals | Hwy 4",
     metaDescription:
-      "What's on in Murphys this week. Main Street tasting rooms, weekly Open Mic at the Irish Pub, Saturday farmers market, and Gold Rush history. Updated daily by a local.",
+      "What's on in Murphys this week. Main Street tasting rooms, weekly Open Mic at the Irish Pub, Sunday farmers market, and Gold Rush history. Updated daily by a local.",
     h1: "What's happening in Murphys this week?",
     subhead:
       "Two dozen tasting rooms, weekly Open Mic at the Irish Pub, and a Main Street that runs on local-and-tourist time.",
@@ -103,7 +108,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "The Watering Hole is closed Wednesdays. The Irish Pub is closed Monday and Tuesday. Open Mic at the Pub is Wednesdays at 6pm.",
       "Aria Bakery opens at 7am. Their listed hours are Mon-Thu 7am to noon, Fri-Sun 7am to 3pm, but it's worth calling ahead for a Tuesday afternoon cinnamon roll.",
       "Gold Country Roasters' house blend is called the Angels Camp Blend, not the Murphys Blend. They're at 78 Scott Street, a block off Main, and close at 2:30pm.",
-      "The Murphys Farmers Market runs Saturdays 9am to 1pm at Murphys Park, May through Thanksgiving. If somebody tells you Sundays, they're working from old info.",
+      "The Murphys Park Farmers Market runs Sundays 9am to 1pm at Murphys Community Park on Algiers Street, usually late May into late October. Organizers shift the season, so check the market page for this year's dates.",
       "Murphys Irish Day in March is the town's biggest street event. Get there early because Main Street fills up. Book Murphy's Taxi (209.795.7777) ahead if you need a ride back.",
       "Sierra Hills Market on E Highway 4 has the deli sandwiches locals actually pack for picnics. Better than the wine-bar charcuterie boards.",
       "Sierra Nevada Adventure Company at 448 Main Street is the outdoor-gear stop on Main, locally owned since 1994 with a second store up in Arnold. Useful when half your group came for wine and the other half came for the trail.",
@@ -349,6 +354,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     "metaDescription": "What's on at Bear Valley: the ski resort, the Music Festival, and Bear Valley Adventure Company's guided hikes, paddle rentals, and trail days. Updated daily by a neighbor.",
     "h1": "Bear Valley events: skiing, the Music Festival, and a real summer calendar",
     "subhead": "The top of the 4. 6,600 to 8,500 feet, snow half the year, music and mountain events in the summer.",
+    "disambiguation": BEAR_VALLEY_DISAMBIGUATION,
     "introTeaser": "Bear Valley Mountain Resort sits at the summit of Hwy 4 with 1,680 skiable acres, 75 trails, 9 lifts, a base elevation of about 6,600 ft, and a summit around 8,500 ft. Season runs late November through mid-April, the Bear Valley Music Festival anchors the summer (2026 dates: July 17 to August 2), and Bear Valley Adventure Company, the village outfitter at the Hwy 4 turnoff, fills the rest of the calendar with guided hikes, trail days, and boat and bike rentals.",
     "intro": [
       "Bear Valley is the last stop on the 4 before the road closes for winter. About 30 minutes up from Arnold, a different climate, a different feel. Less Tahoe, more Sierra retro.",
@@ -379,6 +385,10 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "Cell service at the resort is workable but spotty along stretches of Hwy 4 between Arnold and the Mt Reba turnoff."
     ],
     "faqs": [
+      {
+        "question": "Is Bear Valley the same as Big Bear?",
+        "answer": "No. Bear Valley is in Alpine County, on Highway 4 in the Sierra, about 30 to 40 minutes above Arnold. Big Bear Lake is a different mountain town in Southern California, more than 300 miles south. Events on this page are the Highway 4 Bear Valley."
+      },
       {
         "question": "Is Bear Valley open this winter (25/26 season)?",
         "answer": "Yes, the mountain is open for skiing and snowboarding late November through mid-April. But on-mountain food and beverage is consolidated to the Village Lodge for the 25/26 season. Sky High Pizza, Kofi Haus, and the General Store are running. Monte Wolfe Saloon, Ebbetts Grill, and Basecamp Pizza return for 26/27. Confirm at bearvalley.com before you go."

@@ -13,6 +13,13 @@ import {
 } from "@/lib/verify-times";
 import { HAIKU_MODEL } from "@/lib/agent/models";
 import { messageText } from "@/lib/agent/message-text";
+import {
+  CANONICAL_FETCH_FAILURE_REASON,
+  canonicalFetchAlert,
+  canonicalUnreachableLog,
+  fetchCanonicalPage,
+  type CanonicalFetchResult,
+} from "@/lib/verify-fetch";
 
 export const maxDuration = 120;
 
@@ -59,6 +66,7 @@ Return ONLY a JSON object, no markdown fences:
 
 interface OrgRow {
   slug: string;
+  display_name?: string | null;
   canonical_url: string | null;
   match_patterns: string[] | null;
 }
@@ -85,34 +93,6 @@ function plusDaysISO(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().split("T")[0];
-}
-
-async function fetchCanonicalText(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": `${REGION_OPS.userAgents.verifierName}/1.0 (+${REGION.defaultSiteUrl})` },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) {
-      console.error(`[verify-events] ${url} returned ${res.status}`);
-      return null;
-    }
-    const html = await res.text();
-    const text = html
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
-      .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&amp;/gi, "&")
-      .replace(/\s+/g, " ")
-      .trim();
-    // Cap to keep Haiku prompts cheap; organizer events pages are normally well under this.
-    return text.length > 12_000 ? text.slice(0, 12_000) + "…" : text;
-  } catch (err) {
-    console.error(`[verify-events] fetch failed for ${url}:`, err);
-    return null;
-  }
 }
 
 // The public site shows NO "Date unconfirmed" badge (removed 2026-07-05 — it
@@ -153,7 +133,7 @@ export async function GET(request: Request) {
 
   const { data: orgsRaw, error: orgsErr } = await supabase
     .from("hwy4_orgs")
-    .select("slug, canonical_url, match_patterns")
+    .select("slug, display_name, canonical_url, match_patterns")
     .eq("canonical_check_enabled", true)
     .not("canonical_url", "is", null);
   if (orgsErr) return NextResponse.json({ error: orgsErr.message }, { status: 500 });
@@ -176,6 +156,9 @@ export async function GET(request: Request) {
   //
   // `needs_verification` and `dismissed` rows are deliberately excluded — those
   // are awaiting a human, and re-checking them would just re-flag them.
+  // Exception: the pre-HWY-52 fetch-failure reason. That stamp was an outage,
+  // not a verdict, and it used to sit in the queue forever. Those rows are
+  // pulled back in so a recovered page can clear them.
   const RECHECK_WINDOW_DAYS = 10;
   const RECHECK_STALE_DAYS = 3;
   const recheckHorizon = plusDaysISO(RECHECK_WINDOW_DAYS);
@@ -198,7 +181,7 @@ export async function GET(request: Request) {
   const FETCH_LIMIT = 1000;
   const MAX_CHECKS_PER_RUN = 40;
 
-  const [uncheckedRes, recheckRes] = await Promise.all([
+  const [uncheckedRes, recheckRes, fetchFailureRes] = await Promise.all([
     supabase
       .from("hwy4_events")
       .select(SELECT_COLS)
@@ -216,14 +199,28 @@ export async function GET(request: Request) {
       .or(`verification_checked_at.is.null,verification_checked_at.lt.${staleBefore}`)
       .order("date", { ascending: true })
       .limit(FETCH_LIMIT),
+    supabase
+      .from("hwy4_events")
+      .select(SELECT_COLS)
+      .eq("verification_status", "needs_verification")
+      .eq("verification_reason", CANONICAL_FETCH_FAILURE_REASON)
+      .gte("date", today)
+      .lte("date", horizon)
+      .order("date", { ascending: true })
+      .limit(FETCH_LIMIT),
   ]);
-  const evErr = uncheckedRes.error ?? recheckRes.error;
+  const evErr = uncheckedRes.error ?? recheckRes.error ?? fetchFailureRes.error;
   if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 });
 
-  // Re-checks first: an event whose time may have moved under a reader is more
-  // urgent than one we've never looked at. Both cohorts are date-ordered, so
-  // the soonest events win the budget.
-  const eventsRaw = [...(recheckRes.data ?? []), ...(uncheckedRes.data ?? [])];
+  // Fetch-failure retries first (they are false flags sitting in the human
+  // queue), then re-checks: an event whose time may have moved under a reader
+  // is more urgent than one we've never looked at. Cohorts are date-ordered,
+  // so the soonest events win the budget.
+  const eventsRaw = [
+    ...(fetchFailureRes.data ?? []),
+    ...(recheckRes.data ?? []),
+    ...(uncheckedRes.data ?? []),
+  ];
 
   const events = (eventsRaw ?? []) as EventRow[];
   const eligible = events
@@ -243,11 +240,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ checked: 0, message: "No unchecked events matched any enabled org", events_scanned: events.length });
   }
 
-  // Fetch each canonical URL once per run.
-  const cache = new Map<string, string | null>();
+  // Fetch each canonical URL once per run. A failure is remembered so every
+  // event for that org is skipped, not stamped needs_verification.
+  const cache = new Map<string, CanonicalFetchResult>();
+  const failures: Array<{
+    slug: string;
+    displayName: string;
+    url: string;
+    failure: Extract<CanonicalFetchResult, { ok: false }>;
+  }> = [];
   for (const o of orgs) {
     if (!o.canonical_url) continue;
-    if (!cache.has(o.slug)) cache.set(o.slug, await fetchCanonicalText(o.canonical_url));
+    if (cache.has(o.slug)) continue;
+    const result = await fetchCanonicalPage(o.canonical_url, {
+      userAgent: `${REGION_OPS.userAgents.verifierName}/1.0 (+${REGION.defaultSiteUrl})`,
+    });
+    cache.set(o.slug, result);
+    if (!result.ok) {
+      const displayName = o.display_name?.trim() || o.slug;
+      console.error(
+        canonicalUnreachableLog({ slug: o.slug, url: o.canonical_url, failure: result })
+      );
+      failures.push({ slug: o.slug, displayName, url: o.canonical_url, failure: result });
+    }
   }
 
   const results: Array<{
@@ -257,23 +272,14 @@ export async function GET(request: Request) {
     time_verdict?: string;
   }> = [];
   for (const { ev, org } of pairs) {
-    const canonicalText = cache.get(org.slug) ?? null;
+    const fetched = cache.get(org.slug);
     const checkedAt = new Date().toISOString();
 
-    if (!canonicalText) {
-      const reason = "Could not fetch canonical events page; flag for manual review.";
-      await supabase
-        .from("hwy4_events")
-        .update({
-          verification_status: "needs_verification",
-          verification_reason: reason,
-          verification_checked_at: checkedAt,
-          verification_snapshot: null,
-        })
-        .eq("id", ev.id);
-      results.push({ id: ev.id, status: "needs_verification", reason });
-      continue;
-    }
+    // Unreachable or date-less page: already logged and queued for the Slack
+    // alert below. Leave the row as it is. Writing needs_verification here is
+    // what stuck the Wine & Beer Garden events in the queue after one blip.
+    if (!fetched?.ok) continue;
+    const canonicalText = fetched.text;
 
     const prompt = VERIFICATION_PROMPT
       .replace("{NAME}", ev.name)
@@ -374,6 +380,76 @@ export async function GET(request: Request) {
     );
   }
 
+  if (failures.length > 0) {
+    await postToSlack(
+      failures
+        .map((f) =>
+          canonicalFetchAlert({
+            displayName: f.displayName,
+            url: f.url,
+            failure: f.failure,
+          })
+        )
+        .join("\n")
+    );
+  }
+
+  // A page that loaded again can retire the old outage stamps. Upcoming rows
+  // already re-judged this run stay as the model left them; everything else
+  // (including past events still sitting in /admin/verification) goes back to
+  // unchecked so a one-day blip does not wait on a human.
+  const recovered = new Set(
+    [...cache.entries()].filter(([, result]) => result.ok).map(([slug]) => slug)
+  );
+  let releasedFetchFailures = 0;
+  if (recovered.size > 0) {
+    const { data: stuck, error: stuckErr } = await supabase
+      .from("hwy4_events")
+      .select("id, name, description, venue_name, org_slug")
+      .eq("verification_status", "needs_verification")
+      .eq("verification_reason", CANONICAL_FETCH_FAILURE_REASON);
+    if (stuckErr) {
+      console.error("[verify-events] could not read fetch-failure flags:", stuckErr.message);
+    } else {
+      const judged = new Set(results.map((r) => r.id));
+      const releaseIds = (
+        (stuck ?? []) as Array<{
+          id: string;
+          name: string;
+          description: string | null;
+          venue_name: string;
+          org_slug: string | null;
+        }>
+      )
+        .filter((row) => {
+          if (judged.has(row.id)) return false;
+          const owner = matchOrgForEvent(row, orgs);
+          return owner ? recovered.has(owner.slug) : false;
+        })
+        .map((row) => row.id);
+      if (releaseIds.length > 0) {
+        const { error: releaseErr } = await supabase
+          .from("hwy4_events")
+          .update({
+            verification_status: "unchecked",
+            verification_reason: null,
+          })
+          .in("id", releaseIds);
+        if (releaseErr) {
+          console.error(
+            "[verify-events] failed to release fetch-failure flags:",
+            releaseErr.message
+          );
+        } else {
+          releasedFetchFailures = releaseIds.length;
+          console.log(
+            `[verify-events] released ${releasedFetchFailures} fetch-failure flag(s) after the canonical page loaded`
+          );
+        }
+      }
+    }
+  }
+
   return NextResponse.json({
     checked: results.length,
     verified: results.filter((r) => r.status === "verified").length,
@@ -384,6 +460,15 @@ export async function GET(request: Request) {
     events_scanned: events.length,
     eligible: eligible.length,
     deferred_to_next_run: eligible.length - pairs.length,
+    canonical_unreachable: failures.map((f) => ({
+      slug: f.slug,
+      url: f.url,
+      kind: f.failure.kind,
+      error: f.failure.error,
+      attempts: f.failure.attempts,
+      status: f.failure.status ?? null,
+    })),
+    released_fetch_failures: releasedFetchFailures,
     results,
   });
 }

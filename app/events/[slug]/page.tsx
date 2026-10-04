@@ -2,20 +2,18 @@ import { cache, Suspense } from "react";
 import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { Hwy4Event, CATEGORY_LABELS } from "@/lib/types";
-import { SITE_URL, SITE_NAME } from "@/lib/constants";
+import { SITE_URL } from "@/lib/constants";
 import { TOWN_INFO } from "@/lib/towns";
 import { getForecast, resolveEventWeather } from "@/lib/weather";
 import { weatherQualifier } from "@/lib/weather-conditions";
-import { serializeJsonLd } from "@/lib/json-ld";
 import WeatherChip from "@/components/WeatherChip";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
-import { buildEventOffer } from "@/lib/schema";
+import { buildEvent, JsonLd, type EventOrganizer } from "@/lib/schema";
 import {
   artistChipLabel,
   artistGenreMap,
-  artistKey,
-  buildPerformers,
+  genreForArtist,
   matchPublishedArtists,
   type PublicArtist,
 } from "@/lib/artists";
@@ -33,6 +31,7 @@ import VenueInfo from "@/components/VenueInfo";
 import ArtistInfo from "@/components/ArtistInfo";
 import ConfidenceNote from "@/components/ConfidenceNote";
 import { eventConfidence } from "@/lib/confidence";
+import { buildEventAnswer, buildVerifiedLine } from "@/lib/event-answer";
 import LinkifiedText from "@/components/LinkifiedText";
 import LiveBadge from "@/components/LiveBadge";
 import ShareButton from "@/components/ShareButton";
@@ -47,8 +46,9 @@ import TwoFiftyBanner from "@/components/TwoFiftyBanner";
 import AdoptAPetBanner from "@/components/AdoptAPetBanner";
 import ClassicRockBanner from "@/components/ClassicRockBanner";
 import { isParadeEvent, isFourthFeatureEvent, isTwoFiftyEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
-import { resolveEventLinkFromOrgs, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
+import { resolveEventLink, matchOrgForEvent, matchOrganizerForEvent, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
 import { nameWithArtists } from "@/lib/venue-pages";
+import { hermitFestPageSeo } from "@/lib/hermit-fest-page";
 
 export const revalidate = 3600;
 
@@ -65,13 +65,17 @@ const findVenue = cache(async (venueKey: string): Promise<Hwy4Venue | null> => {
   return (data as unknown as Hwy4Venue) ?? null;
 });
 
-const getCanonicalOrgs = cache(async (): Promise<LinkOrg[]> => {
+type PageOrg = LinkOrg & { canonical_check_enabled?: boolean | null };
+
+const getCanonicalOrgs = cache(async (): Promise<PageOrg[]> => {
   const { supabase } = await import("@/lib/supabase");
   const { data } = await supabase
     .from("hwy4_orgs")
-    .select("slug, display_name, canonical_url, match_patterns")
-    .not("canonical_url", "is", null);
-  return (data as LinkOrg[] | null) ?? [];
+    .select("slug, display_name, canonical_url, match_patterns, canonical_check_enabled")
+    .not("canonical_url", "is", null)
+    // Deterministic: the first matching org wins, so it must not vary per render.
+    .order("slug");
+  return (data as PageOrg[] | null) ?? [];
 });
 
 function formatTime(time: string | null): string | null {
@@ -116,7 +120,12 @@ export async function generateMetadata({
   // Fold the headline act(s) into the title tag when a series row's name
   // doesn't carry them ("Ironstone Summer Concert Series" + artists) — the
   // generic series title is what searchers skip in a SERP (HWY-7).
-  const title = `${nameWithArtists(event.name, event.artists)} — ${dateStr} in ${event.town}`;
+  // HWY-53: the Hermit Fest ranking URL uses an absolute title that carries
+  // both spellings. Every other event keeps the name + date title.
+  const hermitSeo = hermitFestPageSeo(slug);
+  const title = hermitSeo
+    ? hermitSeo.title
+    : `${nameWithArtists(event.name, event.artists)} — ${dateStr} in ${event.town}`;
   // event.description is already gated (sanitized clean text or null) by
   // findEventBySlug. truncateMeta guarantees we never cut mid-word in the SERP.
   const description = event.description
@@ -128,7 +137,7 @@ export async function generateMetadata({
   const posterUrl = posterImageUrl(event, slug);
 
   return {
-    title,
+    title: hermitSeo ? { absolute: hermitSeo.title } : title,
     description,
     alternates: { canonical: `/events/${slug}` },
     openGraph: {
@@ -149,58 +158,20 @@ export async function generateMetadata({
 
 function EventJsonLd({
   event,
+  slug,
   offerUrl,
+  organizer,
   artists = [],
 }: {
   event: Hwy4Event;
   slug: string;
   offerUrl: string;
+  organizer: EventOrganizer | null;
   artists?: PublicArtist[];
 }) {
-  const displayAddress = resolveDisplayAddress(event.address, event.town);
-  const offer = buildEventOffer(event, offerUrl);
-  const performers = buildPerformers(
-    event.artists,
-    event.category === "live_music" ? artists : []
-  );
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Event",
-    name: event.name,
-    ...(event.description && { description: event.description }),
-    startDate: event.start_time
-      ? `${event.date}T${event.start_time}`
-      : event.date,
-    ...(event.end_time && { endDate: `${event.date}T${event.end_time}` }),
-    location: {
-      "@type": "Place",
-      name: event.venue_name,
-      address: {
-        "@type": "PostalAddress",
-        ...(displayAddress && { streetAddress: displayAddress }),
-        addressLocality: event.town,
-        addressRegion: "CA",
-        addressCountry: "US",
-      },
-    },
-    ...(offer && { offers: offer }),
-    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-    eventStatus:
-      event.status === "tentative"
-        ? "https://schema.org/EventPostponed"
-        : "https://schema.org/EventScheduled",
-    ...(performers && { performer: performers }),
-    organizer: {
-      "@type": "Organization",
-      name: SITE_NAME,
-      url: SITE_URL,
-    },
-  };
-
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
+    <JsonLd
+      data={buildEvent(event, { slug, offerUrl, organizer, artists })}
     />
   );
 }
@@ -233,15 +204,39 @@ export default async function EventPage({ params }: PageProps) {
   const matchedArtists = matchPublishedArtists(event.artists, publishedArtists);
   const genreByKey = artistGenreMap(publishedArtists);
   const orgs = await getCanonicalOrgs();
-  const link = resolveEventLinkFromOrgs(event, orgs, {
+  const org = matchOrgForEvent(event, orgs);
+  const link = resolveEventLink(event, {
+    org,
     venueUrl: promotableVenueUrl(venue?.canonical, venue?.website),
     venueName: venue?.canonical,
   });
+  // JSON-LD organizer: a direct org_slug or name-pattern match only (a venue
+  // match means "held at", not "organized by"). Else absent; never Hwy 4 Events.
+  const organizerOrg = matchOrganizerForEvent(event, orgs);
+  const organizer: EventOrganizer | null = organizerOrg?.display_name
+    ? { name: organizerOrg.display_name, url: organizerOrg.canonical_url }
+    : null;
+  // The trust line names the org /api/verify-events actually checked against,
+  // which matches only among enrolled orgs (same matcher, narrower registry).
+  const verifiedBy = matchOrgForEvent(
+    event,
+    orgs.filter((o) => o.canonical_check_enabled)
+  );
   // JSON-LD offer.url uses the resolved link only when it's durable (organizer/
   // venue/stable source). A non-durable aggregator fallback (GoCalaveras) renders
   // as the visible CTA but never enters structured data — point schema at our own
   // stable page instead, so a churnable permalink can't leak into JSON-LD.
   const offerUrl = link.durable && link.href ? link.href : `${SITE_URL}/events/${slug}`;
+
+  // HWY-60: one quotable, template-built lead (no LLM; unknown clauses drop)
+  // and a dated trust line when the organizer's page confirmed the listing.
+  const answer = buildEventAnswer(event, pacificToday().iso);
+  const verifiedLine = buildVerifiedLine({
+    verificationStatus: event.verification_status,
+    verificationReason: event.verification_reason,
+    checkedAt: event.verification_checked_at,
+    orgName: verifiedBy?.display_name,
+  });
 
   // WS-8: honest-uncertainty disclosure, derived from structured fields.
   const confidence = eventConfidence(event);
@@ -287,6 +282,7 @@ export default async function EventPage({ params }: PageProps) {
           event={event}
           slug={slug}
           offerUrl={offerUrl}
+          organizer={organizer}
           artists={publishedArtists}
         />
         <PatrioticEventDetail
@@ -315,6 +311,7 @@ export default async function EventPage({ params }: PageProps) {
   const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     geocodeQuery || `${event.venue_name}, ${event.town}, CA`
   )}`;
+  const hermitSeo = hermitFestPageSeo(slug);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
@@ -322,6 +319,7 @@ export default async function EventPage({ params }: PageProps) {
         event={event}
         slug={slug}
         offerUrl={offerUrl}
+        organizer={organizer}
         artists={publishedArtists}
       />
       <Suspense fallback={null}>
@@ -413,11 +411,26 @@ export default async function EventPage({ params }: PageProps) {
             </div>
 
             <h1 className="font-display text-3xl font-bold leading-tight text-forest sm:text-4xl">
-              {event.name}
+              {hermitSeo?.h1 ?? event.name}
             </h1>
+            {hermitSeo && (
+              <p className="mt-3 leading-relaxed text-stone">{hermitSeo.whenLine}</p>
+            )}
             {humanizeHost(event.source_name, event.name) && (
               <p className="mt-2 text-sm font-semibold uppercase tracking-wide text-earth">
                 {humanizeHost(event.source_name, event.name)}
+              </p>
+            )}
+
+            {answer && (
+              <p className="mt-4 leading-relaxed text-forest">{answer}</p>
+            )}
+            {verifiedLine && (
+              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-pine">
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                {verifiedLine}
               </p>
             )}
 
@@ -598,7 +611,7 @@ export default async function EventPage({ params }: PageProps) {
                   className="rounded-md bg-sunset/8 px-3 py-1 text-sm font-medium text-earth"
                 >
                   {event.category === "live_music"
-                    ? artistChipLabel(artist, genreByKey[artistKey(artist)])
+                    ? artistChipLabel(artist, genreForArtist(genreByKey, artist))
                     : artist}
                 </li>
               ))}

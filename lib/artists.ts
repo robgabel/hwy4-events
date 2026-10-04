@@ -1,4 +1,5 @@
 import { normalizeName } from "./event-identity";
+import { artistIdentityKey } from "./artist-identity";
 import { isHttpUrl } from "./url";
 
 // Public artist helpers (PRD-artist-descriptions.md Phase 2 / HWY-36).
@@ -127,12 +128,39 @@ export function toPublicArtist(row: ArtistRowInput | null | undefined): PublicAr
   return hasPublishedFields(artist) ? artist : null;
 }
 
+/** Second-chance lookup key: the act's identity (lib/artist-identity.ts), so
+ *  "Rod Harris" on a listing finds the published "Rod Harris and Friends" row.
+ *  Prefixed so it can never collide with a stored artist_key. */
+export function artistMatchKey(name: string): string {
+  return `~${artistIdentityKey(name)}`;
+}
+
+/** How much a published row says, to pick one when variants share an identity. */
+function richness(a: PublicArtist): number {
+  return (a.blurb ? 4 : 0) + (a.genre ? 2 : 0) + Object.keys(a.links).length;
+}
+
+/** Index by exact artist_key, plus each act's identity key pointing at its
+ *  richest published variant. Exact keys always win at lookup. */
 export function indexPublicArtists(
   catalog: PublicArtist[]
 ): Map<string, PublicArtist> {
   const map = new Map<string, PublicArtist>();
   for (const artist of catalog) map.set(artist.artist_key, artist);
+  for (const artist of catalog) {
+    const key = artistMatchKey(artist.name || artist.artist_key);
+    const prior = map.get(key);
+    if (!prior || richness(artist) > richness(prior)) map.set(key, artist);
+  }
   return map;
+}
+
+/** Exact name first, then the act's identity. */
+function lookupArtist(
+  byKey: Map<string, PublicArtist>,
+  name: string
+): PublicArtist | undefined {
+  return byKey.get(artistKey(name)) ?? byKey.get(artistMatchKey(name));
 }
 
 /**
@@ -148,8 +176,7 @@ export function matchPublishedArtists(
   const out: PublicArtist[] = [];
   const seen = new Set<string>();
   for (const name of names) {
-    const key = artistKey(name);
-    const hit = byKey.get(key);
+    const hit = lookupArtist(byKey, name);
     if (hit && !seen.has(hit.artist_key)) {
       seen.add(hit.artist_key);
       out.push(hit);
@@ -158,15 +185,25 @@ export function matchPublishedArtists(
   return out;
 }
 
-/** artist_key → published genre, for the EventCard chip. */
+/** artist_key (and identity key) → published genre, for the EventCard chip.
+ *  Read it with `genreForArtist`, which applies the same exact-then-identity
+ *  lookup as the detail page. */
 export function artistGenreMap(
   catalog: PublicArtist[]
 ): Record<string, string> {
   const map: Record<string, string> = {};
-  for (const artist of catalog) {
-    if (artist.genre) map[artist.artist_key] = artist.genre;
+  for (const [key, artist] of indexPublicArtists(catalog)) {
+    if (artist.genre) map[key] = artist.genre;
   }
   return map;
+}
+
+export function genreForArtist(
+  genres: Record<string, string> | null | undefined,
+  name: string
+): string | undefined {
+  if (!genres) return undefined;
+  return genres[artistKey(name)] ?? genres[artistMatchKey(name)];
 }
 
 export function artistChipLabel(
@@ -215,7 +252,7 @@ export function buildPerformers(
   if (!names?.length) return undefined;
   const byKey = indexPublicArtists(catalog);
   return names.map((name) => {
-    const hit = byKey.get(artistKey(name));
+    const hit = lookupArtist(byKey, name);
     return hit ? buildMusicGroup(hit, name) : { "@type": "Person", name };
   });
 }

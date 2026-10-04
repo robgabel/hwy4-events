@@ -3,6 +3,11 @@
  * scraper write path uses (resolveVenueKey). Links each event to its
  * hwy4_venues row so the detail page can show the venue blurb + live facts.
  *
+ * HWY-48: a row that a scraper rewrites picks the key up on the next run
+ * (upgrade-only, never nulls a stored key). This script is what remains for
+ * rows no writer will touch again — BLS skips existing dedup keys, and past
+ * rows fall out of the scrape window.
+ *
  * Dry-run by default; apply with --apply. By default only future events are
  * touched (the detail pages that matter); pass --all to include past rows.
  *

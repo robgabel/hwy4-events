@@ -782,6 +782,20 @@ export const KNOWN_VENUES: Record<string, KnownVenue> = {
     town: "Arnold",
     address: "925 Highway 4, Ste 2, Arnold, CA 95223",
   },
+  // Pottery studio on Highway 4 in Arnold. GoCalaveras lists the classes with
+  // no external ticket URL; the durable booking page is the org canonical
+  // (https://www.lacklerceramics.com/workshops), not the Google Business
+  // Profile homepage that page links as the location. Address is the one
+  // printed on the studio site (728 Hwy 4, Arnold 95223).
+  "lackler-ceramics": {
+    canonical: "Lackler Ceramics",
+    aliases: [
+      "lackler ceramics",
+      "lackler",
+    ],
+    town: "Arnold",
+    address: "728 Hwy 4, Arnold, CA 95223",
+  },
   // Maker/pottery studio in Arnold (Cameo Plaza). It already has a live
   // hwy4_venues row + 40+ keyed events but had fallen out of this registry, so
   // a venue-key backfill would have stripped those links — re-registered here

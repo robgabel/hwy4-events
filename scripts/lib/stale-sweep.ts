@@ -23,6 +23,9 @@
  *    other sources (an aggregator's URL or source_event_id) are untouchable.
  *  - Human work is untouchable: robs_pick, community_sourced,
  *    series_umbrella, and any *_locked row is skipped and logged, never swept.
+ *    The lock set is STALE_SWEEP_LOCK_GUARDS (lib/lock-consumers.ts), not a
+ *    hand-written OR — a new lock column has to be guarded or acknowledged
+ *    there or CI fails (HWY-50). visibility_locked is guarded (HWY-49).
  *  - MAX_SWEEP_PER_RUN aborts the whole sweep when a run wants to delete more
  *    rows than any legitimate calendar edit would produce.
  *  - Reversible: the executor (stale-sweep-exec.ts) archives every row to
@@ -40,6 +43,12 @@
  * This module is pure (no Supabase import) so tests run without env; the
  * DB-touching half lives in stale-sweep-exec.ts.
  */
+
+import { STALE_SWEEP_LOCK_GUARDS } from "../../lib/lock-consumers.js";
+
+/** Lock columns the sweep reads. Each value is a field on SweepRow. */
+type SweepLockColumn =
+  (typeof STALE_SWEEP_LOCK_GUARDS)[keyof typeof STALE_SWEEP_LOCK_GUARDS];
 
 export interface SweepWindow {
   /** Inclusive YYYY-MM-DD bounds. */
@@ -87,6 +96,7 @@ export interface SweepRow {
   times_locked?: boolean | null;
   notability_locked?: boolean | null;
   family_friendly_locked?: boolean | null;
+  visibility_locked?: boolean | null;
 }
 
 /** Hard ceiling on per-run deletions regardless of venue size. */
@@ -209,15 +219,15 @@ export function isProtectedRow(row: SweepRow): string | null {
   if (row.robs_pick) return "robs_pick";
   if (row.community_sourced) return "community_sourced";
   if (row.series_umbrella) return "series_umbrella";
-  if (
-    row.price_locked ||
-    row.description_locked ||
-    row.poster_locked ||
-    row.times_locked ||
-    row.notability_locked ||
-    row.family_friendly_locked
-  )
+  // Any registered lock protects the whole row. The set lives in
+  // STALE_SWEEP_LOCK_GUARDS so a new *_locked column cannot be omitted here
+  // while the rest of the consumers are forced to take a stance (HWY-50).
+  // Index the row by that column union: every guard value is a SweepRow field,
+  // so a new column that isn't on the row fails here instead of reading `any`.
+  const locks = Object.values(STALE_SWEEP_LOCK_GUARDS) as readonly SweepLockColumn[];
+  if (locks.some((lock) => row[lock] === true)) {
     return "locked";
+  }
   return null;
 }
 

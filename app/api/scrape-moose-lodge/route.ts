@@ -35,6 +35,9 @@ export const maxDuration = 120; // Vision/PDF document API can be slow
 
 const LODGE = {
   venue: "Ebbetts Pass Moose Lodge",
+  // HWY-48. This route raw-inserts, so the registry key has to be stamped
+  // here. scripts/test/scraper-venue-literals.test.ts pins it to venues.ts.
+  venueKey: "ebbetts-pass-moose-lodge",
   town: "Arnold",
   orgSlug: "moose-lodge",
   // The lodge is on Blagen Rd at White Pines Lake, NOT out on Highway 4. Must
@@ -455,6 +458,7 @@ export async function GET(request: Request) {
         start_time: evt.start_time || null,
         end_time: evt.end_time || null,
         venue_name: LODGE.venue,
+        venue_key: LODGE.venueKey,
         town: LODGE.town,
         address: LODGE.address,
         category: normalizeCategory(evt.category),

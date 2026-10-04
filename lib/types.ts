@@ -85,6 +85,12 @@ export interface Hwy4Event {
   sold_out?: boolean;
   is_weekly: boolean;
   verification_status?: EventVerificationStatus;
+  /** When /api/verify-events last checked the row against the organizer's
+   *  page. Drives the detail page's "Checked against … on …" line. */
+  verification_checked_at?: string | null;
+  /** Why the row has its verification_status (verifier rationale or the admin
+   *  action that set it). Gates the trust line: lib/event-answer.ts. */
+  verification_reason?: string | null;
   community_sourced?: boolean;
   venue_key?: string | null;
   /** Curated festival umbrella card — see CLAUDE.md "Festival umbrella rows"

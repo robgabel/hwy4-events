@@ -53,6 +53,18 @@ test("a bare Gun Club Rd address keys the fair organization's venue string to th
   );
 });
 
+test("Lackler Ceramics keys by its own venue name", () => {
+  assert.equal(
+    resolveVenueKey({
+      name: "Lackler Ceramics – Kids Clay",
+      description: null,
+      venue_name: "Lackler Ceramics",
+      address: "728 Hwy-4",
+    }),
+    "lackler-ceramics"
+  );
+});
+
 test("the primary fairgrounds address still resolves", () => {
   assert.equal(
     resolveVenueKey({

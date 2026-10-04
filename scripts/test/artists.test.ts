@@ -14,6 +14,7 @@ import {
   artistGenreMap,
   artistKey,
   buildPerformers,
+  genreForArtist,
   hasPublishedFields,
   matchPublishedArtists,
   publishedLinkEntries,
@@ -172,7 +173,7 @@ test("artistChipLabel: appends published genre; blank genre stays the name", () 
   assert.equal(artistChipLabel("Jill Warren", "  "), "Jill Warren");
 });
 
-test("artistGenreMap: only published genres, keyed by artist_key", () => {
+test("artistGenreMap: only published genres, keyed by artist_key + identity key", () => {
   const map = artistGenreMap([
     published(),
     published({
@@ -185,7 +186,10 @@ test("artistGenreMap: only published genres, keyed by artist_key", () => {
       hometown: null,
     }),
   ]);
-  assert.deepEqual(map, { "poison oakies": "Hardcore country" });
+  // The "~" entry is the identity-key fallback (lib/artist-identity.ts) that
+  // lets a variant listing ("Poison Oakies Band") find the same genre.
+  assert.deepEqual(map, { "poison oakies": "Hardcore country", "~poisonoakies": "Hardcore country" });
+  assert.equal(genreForArtist(map, "Poison Oakies Band"), "Hardcore country");
 });
 
 test("buildPerformers: MusicGroup when a published row matches, Person otherwise", () => {
@@ -228,4 +232,21 @@ test("buildPerformers: MusicGroup JSON-LD never carries draft copy", () => {
 test("buildPerformers: no names → undefined (omit the property)", () => {
   assert.equal(buildPerformers(null, [published()]), undefined);
   assert.equal(buildPerformers([], [published()]), undefined);
+});
+
+test("a listed variant finds the act's published row (identity fallback)", () => {
+  const rod = published({
+    artist_key: "rod harris and friends",
+    name: "Rod Harris and Friends",
+    genre: "Jazz / swing",
+  });
+  const exact = published({ artist_key: "rod harris", name: "Rod Harris", genre: "Exact wins" });
+  // Variant only: identity fallback.
+  assert.deepEqual(matchPublishedArtists(["Rod Harris"], [rod]).map((a) => a.name), ["Rod Harris and Friends"]);
+  assert.equal(genreForArtist(artistGenreMap([rod]), "Rod Harris"), "Jazz / swing");
+  assert.equal(buildPerformers(["Rod Harris"], [rod])?.[0]["@type"], "MusicGroup");
+  // An exact row always beats a variant.
+  assert.equal(genreForArtist(artistGenreMap([rod, exact]), "Rod Harris"), "Exact wins");
+  // Different acts stay blank (Tier C).
+  assert.deepEqual(matchPublishedArtists(["Gregory Sutton"], [published({ artist_key: "greg sutton and friends", name: "Greg Sutton and Friends" })]), []);
 });

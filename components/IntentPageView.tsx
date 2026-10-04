@@ -15,6 +15,7 @@ import {
   buildItemList,
   buildWebPage,
 } from "@/lib/schema";
+import { pageDateModified } from "@/lib/date-modified";
 import SimpleEventList from "@/components/SimpleEventList";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecastsByTown } from "@/lib/weather";
@@ -81,7 +82,7 @@ export default async function IntentPageView({
           url: `${SITE_URL}${cfg.path}`,
           name: cfg.metaTitle,
           description: cfg.metaDescription,
-          dateModified: new Date().toISOString().split("T")[0],
+          dateModified: pageDateModified(events, cfg.editorialUpdated),
         })}
       />
       {events.length > 0 && (

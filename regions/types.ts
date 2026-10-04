@@ -168,6 +168,10 @@ export interface RegionOps {
   seo: {
     /** GSC property fallback when GOOGLE_SEARCH_CONSOLE_SITE_URL is unset. */
     gscPropertyDefault: string;
+    /** IndexNow key (8-128 chars of [A-Za-z0-9-]) when INDEXNOW_KEY is unset.
+     *  Public by design: it is served at /indexnow-key.txt so search engines
+     *  can confirm we own the host. Omit to disable IndexNow for a region. */
+    indexNowKey?: string;
   };
   schemaOrg: {
     orgDescription: string;

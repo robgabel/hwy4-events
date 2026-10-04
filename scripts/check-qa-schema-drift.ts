@@ -1,10 +1,13 @@
 /**
- * QA whitelist ↔ schema drift check.
+ * QA whitelist + lock-consumer schema drift check.
  *
  * `lib/agent/qa-fix-event.ts` decides which hwy4_events columns the persona-QA
- * agent may propose changing. That list is plain strings — the unit tests can
- * assert its shape but not its truth, so a column dropped by a migration leaves
- * the whitelist green and wrong until an approved fix explodes on UPDATE.
+ * agent may propose changing. `lib/lock-consumers.ts` records, for each of the
+ * five `*_locked` consumers, whether that lock guards a field or is
+ * acknowledged. Both are plain strings — the unit tests can assert their shape
+ * but not the live table, so a column dropped by a migration (or an eighth
+ * lock added in the dashboard) leaves them green and wrong until this job
+ * reads prod.
  *
  * That is exactly what happened: HWY-19 dropped `importance` on 2026-08-18 while
  * PR #221 sat open, and the stale whitelist merged seven weeks later with 647
@@ -22,6 +25,12 @@ import {
   hasQaSchemaDrift,
   describeQaSchemaDrift,
 } from "../lib/agent/qa-fix-event.js";
+import {
+  LOCK_CONSUMERS,
+  findLockConsumerDrift,
+  hasLockConsumerDrift,
+  describeLockConsumerDrift,
+} from "../lib/lock-consumers.js";
 
 const warnOnly = process.argv.includes("--warn-only");
 
@@ -58,26 +67,31 @@ async function liveEventColumns(): Promise<string[]> {
 
 async function main() {
   const live = await liveEventColumns();
-  const drift = findQaSchemaDrift(live);
+  const qaDrift = findQaSchemaDrift(live);
+  const lockDrift = findLockConsumerDrift(live);
 
   console.log(`hwy4_events live columns: ${live.length}`);
   console.log(`QA-fixable whitelist:     ${QA_FIXABLE_COLUMNS.length}`);
+  console.log(`Lock consumers:           ${LOCK_CONSUMERS.length}`);
 
-  if (!hasQaSchemaDrift(drift)) {
-    console.log("✓ No drift — every whitelisted column and lock flag exists.");
+  if (!hasQaSchemaDrift(qaDrift) && !hasLockConsumerDrift(lockDrift)) {
+    console.log(
+      "✓ No drift — every whitelisted column exists and every lock consumer has a stance on every live *_locked column."
+    );
     return;
   }
 
-  const detail = describeQaSchemaDrift(drift);
+  const detail = [describeQaSchemaDrift(qaDrift), describeLockConsumerDrift(lockDrift)]
+    .filter(Boolean)
+    .join(" | ");
   console.error(`✗ SCHEMA DRIFT: ${detail}`);
   console.error(
-    "Fix lib/agent/qa-fix-event.ts — a QA fix touching a dropped column fails at UPDATE time."
+    "Fix lib/agent/qa-fix-event.ts and lib/lock-consumers.ts — a new *_locked column needs a guard or an acknowledgement on every consumer, and a QA fix touching a dropped column fails at UPDATE time."
   );
 
   await postSlack(
-    `:rotating_light: *QA whitelist schema drift* — ${detail}\n` +
-      "`lib/agent/qa-fix-event.ts` lets the persona-QA agent propose fixes to a column " +
-      "that no longer exists; an approved fix will fail on UPDATE. Fix the whitelist."
+    `:rotating_light: *Lock / QA schema drift* — ${detail}\n` +
+      "Every `*_locked` consumer in `lib/lock-consumers.ts` must guard the field or acknowledge the lock, and `lib/agent/qa-fix-event.ts` must only name columns that still exist."
   );
 
   if (!warnOnly) process.exitCode = 1;

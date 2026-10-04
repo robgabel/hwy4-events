@@ -28,6 +28,7 @@ const storedRow = {
   name: "Cameo Plaza Summer Concert: Flashback",
   date: "2026-07-25",
   venue_name: "Cameo Plaza",
+  venue_key: "cameo-plaza",
   description: "Free outdoor concert. Dogs and kids welcome.",
   start_time: "18:00",
   end_time: "20:00",

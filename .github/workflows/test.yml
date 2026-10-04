@@ -4,6 +4,10 @@ name: Tests
 # the shared identity logic or the scraper scripts. The rule lives in exactly
 # one place (lib/event-identity.ts); this keeps the read-time and write-time
 # callers from ever drifting apart again.
+#
+# The typecheck job runs both trees. Root tsconfig.json excludes scripts/, so
+# `tsc` at the repo root never sees the scraper package, and scripts/tsconfig.json
+# only pulls in the lib files that package imports. One command cannot cover both.
 
 on:
   pull_request:
@@ -12,6 +16,7 @@ on:
       - 'content/**'
       - 'lib/**'
       - 'scripts/**'
+      - 'supabase/**'
       - '.github/workflows/test.yml'
   workflow_dispatch: # Manual trigger
 
@@ -50,4 +55,33 @@ jobs:
       # same hard-fail gate also runs inside `npm test` (voice-lint.test.ts).
       - name: Voice lint (content/VOICE.md)
         run: npx tsx voice-lint.ts --warn
+        working-directory: scripts
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Same install as the test job. scripts/ tsc follows imports into root
+      # lib/ modules, and some of those import app deps (react) resolved from
+      # the repo-root node_modules. A scripts-only install fails with
+      # "Cannot find module 'react'".
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install scripts dependencies
+        run: npm install
+        working-directory: scripts
+
+      - name: Typecheck root
+        run: npx tsc --noEmit
+
+      - name: Typecheck scripts
+        run: npx tsc --noEmit
         working-directory: scripts
