@@ -319,9 +319,16 @@ Smoke-test: `curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com
   no HTML. Caveat: those requests carry the crawler's UA from Vercel's IPs, so a
   verified-bot rule can challenge the spoof while letting the real crawler through. A
   pass proves no UA rule blocks it; a hit means "check the firewall logs".
-- **Owed (Rob, ~15 min):** Vercel → Firewall: confirm no AI-bot managed ruleset or Bot
-  Protection challenge applies to the crawlers above. Bing Webmaster Tools: note crawl
-  stats + indexed count. Log the result here.
+- 2026-10-04, Vercel Firewall checked by Rob (dashboard + Vercel's agent reading the live
+  `hwy4-events` config): **Bot Protection: Off** (no challenge action), **AI Bots: Allow**
+  (the managed AI-bot ruleset is not blocking), **Attack Mode: off**, **no custom rules or
+  IP blocks**. So no firewall rule applies to OAI-SearchBot, ChatGPT-User, PerplexityBot,
+  Perplexity-User, Claude-SearchBot, Claude-User, Bingbot or Googlebot. Caveat: Vercel's
+  platform DDoS mitigation is always on and can't be turned off, so this is not a promise
+  that every crawler request succeeds. The weekly qa-audit check covers that from here.
+  If anyone turns Bot Protection on later, note that it exempts only *verified* bots.
+- **Still owed (Rob):** Bing Webmaster Tools: note crawl stats + indexed count, and confirm
+  IndexNow submissions show up the day after the first `/api/indexnow` run.
 
 ---
 
@@ -337,5 +344,6 @@ Smoke-test: `curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com
   one-engine prompt audit. June 2026 predates reliable data and stays unlogged.
 - [x] IndexNow submissions wired (`/api/indexnow`, daily 16:00 UTC, HWY-62, 2026-10-04)
 - [x] Weekly AI-crawler access check in `/api/agent/qa-audit` (HWY-62, 2026-10-04)
-- [ ] Vercel Firewall + Bing Webmaster crawl-stats check for AI crawlers (manual, Rob)
+- [x] Vercel Firewall check for AI crawlers: Bot Protection off, AI Bots allowed, no custom rules (2026-10-04)
+- [ ] Bing Webmaster crawl stats + indexed count logged (manual, Rob)
 - [ ] Confirm IndexNow submissions appear in Bing Webmaster Tools (day after deploy)
