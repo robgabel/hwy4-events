@@ -70,7 +70,7 @@ const BOT_PAGE = "/this-weekend";
 // through, so a hit means "go look", not "proven blocked". A pass is proof
 // that no UA-based rule blocks the crawler.
 const BOT_CAVEAT =
-  " Check Vercel Firewall logs for this user agent: a verified-bot rule can challenge this spoofed request while still allowing the real crawler.";
+  " Check Vercel Firewall logs for this user agent: a verified-bot rule can challenge this spoofed request while still allowing the real crawler";
 
 // Challenge / interstitial markers a bot-protection layer serves with a 200.
 const CHALLENGE_RE = /vercel security checkpoint|attention required|just a moment\.\.\.|checking your browser|captcha/i;
@@ -240,6 +240,16 @@ export async function runQaAudit(supabase: SupabaseClient, baseUrl: string): Pro
     })
   );
 
+  // If the page itself is down for the QA agent's own UA, every crawler fetch
+  // fails too; that is one outage (already a status ticket), not eight firewall
+  // problems, so the bot findings are dropped for this run.
+  const botPageDown = perTarget.some(
+    (r) => r.target.kind === "page" && r.target.path === BOT_PAGE && r.findings.length > 0
+  );
+  if (botPageDown) {
+    for (const r of perTarget) if (r.target.kind === "bot") r.findings = [];
+  }
+
   // Collapse to one entry per check_key, collecting example paths (dedup a class
   // that fails on multiple sampled slugs into a single ticket).
   type Agg = { key: string; check: string; severity: TaskPriority; title: string; examples: string[]; detail: string };
@@ -298,7 +308,11 @@ export async function runQaAudit(supabase: SupabaseClient, baseUrl: string): Pro
     const examples = a.examples.slice(0, 5).join(", ");
     rows.push({
       title: a.title,
-      body: `The QA audit found a problem on the live site: ${a.detail}.\n\nAffected: ${examples}.\n\nReproduce by loading the URL(s) above and confirming, then fix the underlying page/route. (Filed automatically by the QA agent; if it is a false alarm or already fixed, Dismiss it.)`,
+      body: `The QA audit found a problem on the live site: ${a.detail}.\n\nAffected: ${examples}.\n\n${
+        a.check === "bot_blocked"
+          ? "Reproduce in the Vercel Firewall logs for that crawler, then remove or relax the rule that blocks it."
+          : "Reproduce by loading the URL(s) above and confirming, then fix the underlying page/route."
+      } (Filed automatically by the QA agent; if it is a false alarm or already fixed, Dismiss it.)`,
       type: "bug",
       priority: a.severity,
       status: "proposed",

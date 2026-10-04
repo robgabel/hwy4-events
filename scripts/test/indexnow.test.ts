@@ -145,6 +145,7 @@ test("bot access: the real page passes, walls and challenges are flagged", () =>
     assert.equal(f.length, 1, `${status} ${body}`);
     assert.equal(f[0].check, "bot_blocked");
     assert.match(f[0].detail, /Vercel Firewall logs/, "says to verify, since the UA is spoofed");
+    assert.ok(!f[0].detail.endsWith("."), "the ticket template adds the period");
   }
   assert.equal(checkKey("bot_blocked", "bot:OAI-SearchBot"), "qa:bot_blocked:bot:OAI-SearchBot");
   const names = AI_BOT_USER_AGENTS.map((b) => b.name);

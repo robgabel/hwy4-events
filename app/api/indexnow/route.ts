@@ -21,7 +21,9 @@ export const maxDuration = 30;
 // change. Best-effort: a failed submission is logged and reported, never
 // retried here (tomorrow's run covers only tomorrow's events, by design;
 // Bing still finds missed pages through the sitemap). CRON_SECRET-gated.
-const WINDOW_HOURS = 24;
+// 25h, not 24h: a cron that fires a few minutes late must not drop events
+// created just before the previous run. A double submission is harmless.
+const WINDOW_HOURS = 25;
 
 export async function GET(request: Request) {
   const denied = requireCronAuth(request);
