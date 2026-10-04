@@ -77,6 +77,18 @@ interface EventONResponse {
 
 // ---------- Main scraper ----------
 
+/** Why the events page gave the scraper nothing to work with. The status
+ *  explains most cases; a 200 with no config means the markup changed. */
+export function pageConfigFailure(missing: string, status: number): string {
+  const why =
+    status === 429
+      ? "rate-limited"
+      : status >= 400
+        ? "refused"
+        : "the page loaded, so the markup may have changed";
+  return `GoCalaveras events page gave no ${missing} (HTTP ${status}, ${why}). Nothing scraped, nothing swept.`;
+}
+
 export async function scrapeGoCalaveras(): Promise<void> {
   console.log("=== GoCalaveras Scraper ===");
 
@@ -94,15 +106,17 @@ export async function scrapeGoCalaveras(): Promise<void> {
 
   const nonceMatch = html.match(/postnonce["']?\s*:\s*["']([a-f0-9]+)["']/);
   const nonce = nonceMatch?.[1] || "";
+  // Throw, don't return. A return reads as a clean run: no scrape_runs error,
+  // and the health table says OK because other sources keep touching
+  // GoCalaveras rows. 2026-09-28 lost a whole run that way, the day after the
+  // site started rate-limiting us.
   if (!nonce) {
-    console.error("Could not extract nonce from page");
-    return;
+    throw new Error(pageConfigFailure("nonce", pageResp.status));
   }
 
   const dataSCMatch = html.match(/data-sc='([^']+)'/);
   if (!dataSCMatch) {
-    console.error("Could not extract data-sc shortcode from page");
-    return;
+    throw new Error(pageConfigFailure("data-sc shortcode", pageResp.status));
   }
   const baseShortcode = JSON.parse(dataSCMatch[1]);
   console.log(`Nonce: ${nonce}, Calendar: ${baseShortcode.cal_id}`);

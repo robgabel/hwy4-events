@@ -5,6 +5,18 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-10-04: "I couldn't reach it" is not "it's gone"
+
+On 2026-09-28 visitmurphys.com timed out from the GitHub runner, and the nightly link checker nulled 139 `event_url`s in one run. It read a thrown fetch and every status ≥ 400 as a dead link. The same rule nulled two more live links on 09-30 and 10-04.
+
+- **A destructive write needs a definitive answer.** Now only a 404/410 that a GET confirms nulls a link; no answer, a bot wall, a 5xx or a refused HEAD is kept and reported. Same family as the stale sweep's "an empty batch can't be told apart from a broken fetch".
+- **A destructive cleanup's blast radius includes every rule that reads the field it clears.** Upcoming rows healed on the next Visit Murphys scrape, but past rows never would have (17 restored by hand). And while the links were gone, 18 GoCalaveras rows that Visit Murphys had merged into looked GoCalaveras-owned to the armed stale sweep, whose ownership test keys on `event_url`. The checker never knew that.
+- **`return` on a fatal precondition is a silent failure.** GoCalaveras's "no nonce" path logged a line and returned, so the run recorded no error and the health table said OK (it judges freshness by `last_scraped_at`, which other sources' merges keep bumping). Throw, and let the orchestrator record it.
+- **A fallback that only fires on the failure you expected isn't one.** Tribe's Firecrawl fallback covered a 403 and a challenge page, but not a fetch that threw, which is the case where a different network helps most.
+- **Read the job's env dump to check a secret.** A set secret renders as `***`; a blank value means it isn't set. The scrape Action's `SLACK_WEBHOOK_URL` is blank, so the scrape's loud alerts have never sent.
+
+---
+
 ## 2026-10-01 — A temperature swing is not a cool-down, and hot is not patio weather
 
 Early October heat wave, Murphys highs about 93–96°F. Grape Stomp (all day) showed `75→95° · bring layers`. Several events at 86–95° showed `patio weather`.

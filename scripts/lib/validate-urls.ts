@@ -1,37 +1,96 @@
 import { supabaseAdmin } from "./supabase-admin.js";
 import { isUnstableHost } from "../../lib/event-link.js";
+import {
+  classifyLinkStatus,
+  confirmedVerdict,
+  planLinkNulls,
+  summarizeUnconfirmed,
+  type LinkCheck,
+} from "./url-check.js";
 
-const BATCH_SIZE = 5; // concurrent HEAD requests
+const BATCH_SIZE = 5; // concurrent requests
 const TIMEOUT_MS = 10000;
 const BATCH_DELAY_MS = 500; // delay between batches to avoid rate limiting
+const USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
+
+/** The HTTP status of one request, or null when no answer came back at all. */
+async function requestStatus(
+  url: string,
+  method: "HEAD" | "GET"
+): Promise<number | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      method,
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { "User-Agent": USER_AGENT },
+    });
+    // Only the status matters; don't download the page.
+    await resp.body?.cancel().catch(() => {});
+    return resp.status;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function checkLink(event: {
+  id: string;
+  name: string;
+  event_url: string;
+}): Promise<LinkCheck> {
+  const headStatus = await requestStatus(event.event_url, "HEAD");
+  const headSaysDead = classifyLinkStatus(headStatus) === "dead";
+  const getStatus = headSaysDead
+    ? await requestStatus(event.event_url, "GET")
+    : null;
+  return {
+    id: event.id,
+    name: event.name,
+    url: event.event_url,
+    status: headSaysDead ? getStatus : headStatus,
+    verdict: confirmedVerdict(headStatus, getStatus),
+  };
+}
 
 /**
- * Validate all event_url values in the database.
- * If a URL returns 404 or errors, set event_url to null.
- * This prevents broken links from appearing in the briefing and UI.
+ * Check the links on upcoming events and null the ones that are provably
+ * gone, so a dead page doesn't reach the briefing or the detail page.
+ *
+ * The rules live in url-check.ts: only a 404 or 410 that a GET confirms
+ * counts as dead. No answer, a bot wall, a rate limit or a 5xx never nulls a
+ * link, and a host that answers "not found" for half or more of its links is
+ * spared as a host problem. Past events are not checked: no scraper rewrites
+ * their links, so a wrong null there is permanent.
  */
 export async function validateEventUrls(): Promise<{
   checked: number;
   broken: number;
   nulled: number;
+  unconfirmed: number;
 }> {
   console.log("\n=== URL Validation ===");
 
-  // Fetch all future events that have a URL
+  const today = new Date().toISOString().slice(0, 10);
   const { data: events, error } = await supabaseAdmin
     .from("hwy4_events")
     .select("id, name, event_url")
     .not("event_url", "is", null)
+    .gte("date", today)
     .order("date", { ascending: true });
 
   if (error) {
     console.error("Failed to fetch events for URL validation:", error.message);
-    return { checked: 0, broken: 0, nulled: 0 };
+    return { checked: 0, broken: 0, nulled: 0, unconfirmed: 0 };
   }
 
   if (!events || events.length === 0) {
-    console.log("No events with URLs to validate");
-    return { checked: 0, broken: 0, nulled: 0 };
+    console.log("No upcoming events with URLs to validate");
+    return { checked: 0, broken: 0, nulled: 0, unconfirmed: 0 };
   }
 
   // Skip hosts we can't server-validate and don't render anyway (bot-walled
@@ -42,93 +101,70 @@ export async function validateEventUrls(): Promise<{
     (e) => e.event_url && isUnstableHost(e.event_url)
   ).length;
   const checkable = events.filter(
-    (e) => e.event_url && !isUnstableHost(e.event_url)
+    (e): e is { id: string; name: string; event_url: string } =>
+      !!e.event_url && !isUnstableHost(e.event_url)
   );
 
   console.log(
-    `Checking ${checkable.length} event URLs (${skippedAggregator} aggregator URLs skipped)...`
+    `Checking ${checkable.length} upcoming event URLs (${skippedAggregator} aggregator URLs skipped)...`
   );
 
-  let broken = 0;
-  let nulled = 0;
-  let rateLimited = 0;
-  const brokenIds: string[] = [];
-
   // Process in batches to avoid overwhelming servers
+  const checks: LinkCheck[] = [];
   for (let i = 0; i < checkable.length; i += BATCH_SIZE) {
     const batch = checkable.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(async (event) => {
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    checks.push(...(await Promise.all(batch.map(checkLink))));
 
-          const resp = await fetch(event.event_url, {
-            method: "HEAD",
-            redirect: "follow",
-            signal: controller.signal,
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            },
-          });
-
-          clearTimeout(timeout);
-
-          // 401/403/429 = access-denied or rate-limited, NOT a dead link. A
-          // server-side HEAD often gets bot-walled (Akamai etc.) on pages that
-          // load fine in a real browser — e.g. redcrossblood.org drive pages
-          // 403 every non-browser request. Treat as not-broken so we never null
-          // a live link. Genuinely dead links return 404/410/DNS-fail/timeout.
-          if (resp.status === 401 || resp.status === 403 || resp.status === 429) {
-            return { id: event.id, name: event.name, url: event.event_url, ok: true, status: resp.status, rateLimited: true };
-          }
-          if (resp.status >= 400) {
-            return { id: event.id, name: event.name, url: event.event_url, ok: false, status: resp.status };
-          }
-          return { id: event.id, name: event.name, url: event.event_url, ok: true, status: resp.status };
-        } catch (err) {
-          return { id: event.id, name: event.name, url: event.event_url, ok: false, status: 0 };
-        }
-      })
-    );
-
-    for (const r of results) {
-      if ((r as any).rateLimited) {
-        rateLimited++;
-      } else if (!r.ok) {
-        broken++;
-        brokenIds.push(r.id);
-        console.log(`  BROKEN (${r.status}): ${r.name} → ${r.url}`);
-      }
-    }
-
-    // Delay between batches to avoid rate limiting
     if (i + BATCH_SIZE < checkable.length) {
       await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
     }
   }
 
-  // Null out broken URLs in the database
-  if (brokenIds.length > 0) {
-    for (const id of brokenIds) {
-      const { error: updateError } = await supabaseAdmin
-        .from("hwy4_events")
-        .update({ event_url: null })
-        .eq("id", id);
+  const dead = checks.filter((c) => c.verdict === "dead");
+  const unconfirmed = checks.filter((c) => c.verdict === "unconfirmed");
+  const plan = planLinkNulls(checks);
 
-      if (!updateError) {
-        nulled++;
-      } else {
-        console.warn(`  Failed to null URL for event ${id}:`, updateError.message);
-      }
+  for (const h of plan.sparedHosts) {
+    console.warn(
+      `  HOST_ANOMALY ${h.host}: ${h.dead} of ${h.checked} links answered not-found this run. ` +
+        "Treating it as a host problem, not dead pages; none nulled."
+    );
+  }
+
+  let nulled = 0;
+  for (const c of plan.toNull) {
+    console.log(`  DEAD (${c.status}): ${c.name} → ${c.url}`);
+    // Only null the link we checked; if anything rewrote it since, leave it.
+    // Count rows actually changed, not calls that didn't error (HWY-33).
+    const { data: changed, error: updateError } = await supabaseAdmin
+      .from("hwy4_events")
+      .update({ event_url: null })
+      .eq("id", c.id)
+      .eq("event_url", c.url)
+      .select("id");
+    if (updateError) {
+      console.warn(`  Failed to null URL for event ${c.id}:`, updateError.message);
+    } else if ((changed ?? []).length > 0) {
+      nulled++;
     }
   }
 
+  for (const line of summarizeUnconfirmed(checks)) {
+    console.log(`  Unconfirmed, kept: ${line}`);
+  }
+
   console.log(
-    `URL validation: ${checkable.length} checked, ${broken} broken, ${nulled} nulled` +
-    (rateLimited > 0 ? `, ${rateLimited} skipped (blocked or rate-limited)` : "") +
-    (skippedAggregator > 0 ? `, ${skippedAggregator} aggregator URLs skipped` : "")
+    `URL validation: ${checks.length} checked, ${dead.length} dead, ${nulled} nulled, ` +
+      `${unconfirmed.length} unconfirmed (kept)` +
+      (plan.sparedHosts.length > 0
+        ? `, ${plan.sparedHosts.length} host(s) spared by the anomaly guard`
+        : "") +
+      (skippedAggregator > 0 ? `, ${skippedAggregator} aggregator URLs skipped` : "")
   );
-  return { checked: checkable.length, broken, nulled };
+  return {
+    checked: checks.length,
+    broken: dead.length,
+    nulled,
+    unconfirmed: unconfirmed.length,
+  };
 }

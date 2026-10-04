@@ -100,6 +100,11 @@ async function main() {
 
   beginScrapeRun();
 
+  // Sources that threw this run, for the health table: it judges freshness by
+  // last_scraped_at, which other sources' merges keep bumping, so a source
+  // that failed outright would otherwise still read "OK".
+  const sourceErrors = new Map<string, string>();
+
   for (const source of sources) {
     const scraper = SCRAPERS[source];
     if (!scraper) {
@@ -112,7 +117,9 @@ async function main() {
       await scraper();
     } catch (err) {
       console.error(`\nError scraping ${source}:`, err);
-      recordSourceError(source, err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      recordSourceError(source, message);
+      sourceErrors.set(source, message);
       // Continue with other sources
     }
   }
@@ -136,7 +143,7 @@ async function main() {
   const skipHealth = args.includes("--skip-health");
   if (!skipHealth) {
     try {
-      await runHealthCheck(sources);
+      await runHealthCheck(sources, sourceErrors);
     } catch (err) {
       console.error("Health check failed:", err);
     }

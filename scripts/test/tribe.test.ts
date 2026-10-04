@@ -8,6 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  fetchTribePage,
   htmlToText,
   joinAddress,
   normalizeCost,
@@ -93,4 +94,30 @@ test("htmlToText strips markup and decodes entities", () => {
     htmlToText("<p>Watch the sunset &amp; hike&nbsp;up.</p><p>It&#8217;s special!</p>"),
     "Watch the sunset & hike up.\n\nIt’s special!"
   );
+});
+
+// 2026-09-28: visitmurphys.com timed out from the runner. The plain fetch
+// threw, the throw skipped the Firecrawl fallback, and the whole Visit Murphys
+// scrape died. With no FIRECRAWL_API_KEY the fallback's own refusal is the
+// proof the fallback was reached instead of the raw TypeError escaping.
+test("fetchTribePage falls back to Firecrawl when the plain fetch gets no answer", async () => {
+  const realFetch = globalThis.fetch;
+  const realKey = process.env.FIRECRAWL_API_KEY;
+  const { warn } = console;
+  delete process.env.FIRECRAWL_API_KEY;
+  globalThis.fetch = (async () => {
+    throw new TypeError("fetch failed", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } });
+  }) as typeof fetch;
+  console.warn = () => {};
+  try {
+    await assert.rejects(
+      fetchTribePage("https://visitmurphys.com/wp-json/tribe/events/v1/events?page=1", 1),
+      /no fallback available/
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+    console.warn = warn;
+    if (realKey === undefined) delete process.env.FIRECRAWL_API_KEY;
+    else process.env.FIRECRAWL_API_KEY = realKey;
+  }
 });

@@ -34,7 +34,8 @@ interface SourceHealth {
  * Flags sources with zero future events or stale scrape timestamps.
  */
 export async function runHealthCheck(
-  scrapedSources?: string[]
+  scrapedSources?: string[],
+  sourceErrors?: ReadonlyMap<string, string>
 ): Promise<void> {
   console.log("\n=== Scrape Health Report ===\n");
 
@@ -139,12 +140,29 @@ export async function runHealthCheck(
       warnings.push(`${h.org_slug}: Has events but no last_scraped_at timestamp.`);
     }
 
+    // A source that threw this run outranks every freshness read above:
+    // last_scraped_at moves whenever another source merges into its rows.
+    const runError = sourceErrors?.get(h.org_slug);
+    if (runError !== undefined) {
+      status = "ERROR this run";
+      warnings.push(`${h.org_slug}: Scraper failed this run: ${runError.slice(0, 200)}`);
+    }
+
     console.log(
       h.org_slug.padEnd(30) +
       String(h.future_event_count).padEnd(16) +
       scrapedStr.padEnd(24) +
       status
     );
+  }
+
+  // A failed source whose key names no org row (the Facebook bundles write
+  // per-page and per-town slugs) still gets a warning, so every failure this
+  // run is listed somewhere.
+  for (const [source, message] of sourceErrors ?? []) {
+    if (!orgSlugs.includes(source)) {
+      warnings.push(`${source}: Scraper failed this run: ${message.slice(0, 200)}`);
+    }
   }
 
   // Facebook scraper status — every Apify events source (town explore feeds,

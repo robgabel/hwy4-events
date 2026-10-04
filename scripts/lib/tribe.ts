@@ -149,18 +149,31 @@ export function normalizeCost(cost: string | null | undefined): string | null {
 
 /**
  * Fetch one Tribe API page, falling back to Firecrawl when the site's bot wall
- * blocks a plain fetch. Returns null on the natural end-of-results 400.
+ * blocks a plain fetch or the plain fetch gets no answer at all. Returns null
+ * on the natural end-of-results 400.
  */
 export async function fetchTribePage(
   url: string,
   page: number
 ): Promise<TribeResponse | null> {
-  const resp = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
-      Accept: "application/json",
-    },
-  });
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
+        Accept: "application/json",
+      },
+    });
+  } catch (err) {
+    // 2026-09-28: visitmurphys.com timed out from the runner and the thrown
+    // TypeError skipped the fallback, so the whole Visit Murphys scrape died.
+    // Firecrawl fetches from its own network, which is the point of having it.
+    const cause = (err as { cause?: { code?: string } })?.cause?.code;
+    console.warn(
+      `  page ${page}: direct fetch got no answer (${cause ?? (err instanceof Error ? err.message : String(err))}) — retrying via Firecrawl`
+    );
+    return fetchTribePageViaFirecrawl(url, page);
+  }
 
   if (resp.ok) {
     const text = await resp.text();
