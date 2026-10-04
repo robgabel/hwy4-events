@@ -81,7 +81,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     // Published 2026-05-25 after Rob's review. Banner removed, sitemap includes the URL, search engines may index.
     metaTitle: "Murphys, CA Events: Wine, Live Music & Festivals | Hwy 4",
     metaDescription:
-      "What's on in Murphys this week. Main Street tasting rooms, weekly Open Mic at the Irish Pub, Saturday farmers market, and Gold Rush history. Updated daily by a local.",
+      "What's on in Murphys this week. Main Street tasting rooms, weekly Open Mic at the Irish Pub, Sunday farmers market, and Gold Rush history. Updated daily by a local.",
     h1: "What's happening in Murphys this week?",
     subhead:
       "Two dozen tasting rooms, weekly Open Mic at the Irish Pub, and a Main Street that runs on local-and-tourist time.",
