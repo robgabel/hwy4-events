@@ -10,7 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { artistIdentityKey, isNonActName, tidyArtistList } from "../../lib/artist-identity.js";
-import { extractActFromTitle, mergeArtistLists } from "../../lib/event-identity.js";
+import { extractActFromTitle, isSameEvent, mergeArtistLists, type EventIdentity } from "../../lib/event-identity.js";
 
 test("variants of one act share an identity key", () => {
   const same: [string, string][] = [
@@ -125,4 +125,103 @@ test("extractActFromTitle refuses placeholders, places, events and ambiguity", (
   for (const [title, venue] of refused) {
     assert.equal(extractActFromTitle(title, venue), null, title);
   }
+});
+
+// Review of PR #324, finding 1: every one of these returned an "act" in the
+// first cut. Blank beats wrong: a fake act is a wrong chip, a wrong bio, and
+// (via actNamedInOther) a possible false merge.
+test("extractActFromTitle refuses events, statuses, amenities, genres and places", () => {
+  const titles = [
+    "Live Music - Happy Hour", "Live Music - Wine Tasting", "Live Music - Cancelled",
+    "Live Music - Postponed", "Live Music - Sold Out", "Live Music - Private Event",
+    "Live Music - Closed", "Live Music - Rescheduled", "Live Music - Members Only",
+    "Live Music - Fundraiser", "Live Music - Benefit Concert", "Live Music - Halloween Party",
+    "Live Music - 4th of July", "Live Music - Oktoberfest", "Live Music - Free",
+    "Live Music - No Cover", "Live Music - All Ages", "Live Music - $10 Cover",
+    "Live Music - Jazz", "Live Music - Acoustic", "Live Music - Classic Rock",
+    "Live Music - Tribute Band", "Live Music - Cover Band", "Live Music - Duo",
+    "Live Music - Special Guest", "Live Music - Local Band", "Live Music - Various Artists",
+    "Live Music - Coming Soon", "Live Music - TBA Soon", "Live Music with Dinner",
+    "Live Music w/ Food Truck", "Live Music with Sunset Views", "Live Music by the Pool",
+    "Live Music by the Creek", "Live Music by the Fire Pit", "Live Music (Outdoors)",
+    "Live Music (Weather Permitting)", "Live Music (Free)", "Music in the Park - Bring a Chair",
+    "Music in the Square - Week 3", "Music in the Square - Season Finale",
+    "Live Music - Bear Valley Lodge", "Live Music - Calaveras Big Trees State Park",
+    "Live Music - Sonora", "Live Music - San Andreas", "Live Music: Jill Warren & Dinner Special",
+    "Bagpipes Live Music @ Murphys Irish Pub", "CANCELLED Live Music @ Murphys Irish Pub",
+    "Late Night Live Music @ Murphys Irish Pub",
+    "Halloween Costume Contest Live Music @ Murphys Irish Pub",
+  ];
+  for (const t of titles) assert.equal(extractActFromTitle(t, "Somewhere"), null, t);
+});
+
+test("extractActFromTitle trims trailing setting, separators and dates off a real act", () => {
+  assert.equal(extractActFromTitle("Live Music - Jill Warren on the Patio", "X"), "Jill Warren");
+  assert.equal(extractActFromTitle("Live Music - Jill Warren | 6-9pm", "X"), "Jill Warren");
+  assert.equal(extractActFromTitle("Live Music - Jill Warren 10/12", "X"), "Jill Warren");
+  // Real acts carrying a soft word still pass on their name words.
+  assert.equal(extractActFromTitle("Live Music - Bob Eisenman Jazz Band", "X"), "Bob Eisenman Jazz Band");
+  assert.equal(extractActFromTitle("Live Music - Private Reserve Band", "X"), "Private Reserve Band");
+  assert.equal(extractActFromTitle("Live Music with The Yacht Rockers", "X"), "The Yacht Rockers");
+});
+
+const row = (over: Partial<EventIdentity>): EventIdentity => ({
+  name: "x",
+  date: "2026-10-10",
+  town: "Arnold",
+  venue_name: "Sequoia Woods Country Club",
+  venue_key: "sequoia-woods",
+  start_time: "18:00",
+  end_time: "21:00",
+  description: null,
+  artists: null,
+  ...over,
+});
+
+test("a refused title cannot manufacture a merge (review finding 1)", () => {
+  // Before the fix, "Live Music with Dinner" filled artists ["Dinner"], which
+  // actNamedInOther then matched against "Thursday Night Dinner".
+  const act = extractActFromTitle("Live Music with Dinner", "Sequoia Woods Country Club");
+  assert.equal(act, null);
+  assert.equal(
+    isSameEvent(
+      row({ name: "Live Music with Dinner", artists: act ? [act] : null, end_time: null }),
+      row({ name: "Thursday Night Dinner", end_time: null })
+    ),
+    false
+  );
+});
+
+test("variant spellings of one act do not trip the different-acts veto (review finding 2)", () => {
+  const venue = { venue_name: "Copperopolis Town Square", venue_key: "copperopolis-town-square", town: "Copperopolis" };
+  assert.equal(
+    isSameEvent(
+      row({ ...venue, name: "Music In The Square- Bad Jovi", artists: ["Bad Jovi"] }),
+      row({ ...venue, name: "Saturday Night Music in Copper Valley Town Square", artists: ["Bad Jovi Band"] })
+    ),
+    true
+  );
+  // Two genuinely different acts in the same window still split.
+  assert.equal(
+    isSameEvent(
+      row({ ...venue, name: "Music In The Square- Bad Jovi", artists: ["Bad Jovi"] }),
+      row({ ...venue, name: "Music In The Square- Hired Gunn", artists: ["Hired Gunn"] })
+    ),
+    false
+  );
+});
+
+test("tidyArtistList keeps names with no ASCII letters (review finding 4)", () => {
+  assert.deepEqual(tidyArtistList(["東京事変", "Sigur Rós", "!!!"]), ["東京事変", "Sigur Rós", "!!!"]);
+  assert.notEqual(artistIdentityKey("東京事変"), artistIdentityKey("!!!"));
+});
+
+test("a compound billing absorbs its listed parts, by design (review finding 5)", () => {
+  // "Alison Krauss & Union Station" is one act, and a bare "Union Station" is
+  // a famous name the researcher would get wrong. The cost is a true co-bill
+  // listed three ways; none exists in the catalog (checked 2026-10-04).
+  assert.deepEqual(
+    tidyArtistList(["Jill Warren", "Greg Sutton", "Jill Warren & Greg Sutton"]),
+    ["Jill Warren & Greg Sutton"]
+  );
 });

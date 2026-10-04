@@ -199,3 +199,30 @@ test("coerce flags prose the voice floor dropped, and only that", () => {
   const none = coerceArtistResearch({ ...base, blurb: null });
   assert.equal(none.voiceRejected, false);
 });
+
+test("an act rotating through 4+ venues is not re-researched forever (review finding 3)", () => {
+  // Researched once with three venues; the next run's top 3 includes a 4th.
+  const researched = row({
+    blurb_draft_meta: { confidence: "low", context_venues: ["a", "b", "c"] },
+  });
+  const [item] = buildArtistWorklist(
+    [show({ venue_name: "b" }), show({ venue_name: "c", date: "2026-10-11" }), show({ venue_name: "d", date: "2026-10-12" })],
+    [researched],
+    NOW
+  );
+  assert.equal(item.reason, "new_venue");
+  // The stored context is the union, so venue "a" is not forgotten...
+  assert.deepEqual([...item.venues].sort(), ["a", "b", "c", "d"]);
+  // ...and once stored, rotating back to "a" is not new evidence.
+  const after = row({ blurb_draft_meta: { confidence: "low", context_venues: item.venues } });
+  assert.equal(buildArtistWorklist([show({ venue_name: "a" })], [after], NOW).length, 0);
+});
+
+test("a never-tried row with human-set fields is not researched (review finding 8)", () => {
+  const items = buildArtistWorklist(
+    [show()],
+    [row({ blurb_draft_at: null, blurb_draft_meta: null, genre: "Rock" })],
+    NOW
+  );
+  assert.equal(items.length, 0);
+});

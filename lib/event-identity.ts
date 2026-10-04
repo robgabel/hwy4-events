@@ -20,8 +20,9 @@
 // to back.
 
 import { createHash } from "node:crypto";
-import { isNonActName, tidyArtistList } from "./artist-identity";
+import { artistIdentityKey, isNonActName, tidyArtistList } from "./artist-identity";
 import { CORRIDOR_TOWNS } from "./towns";
+import { REGION } from "./region";
 
 /** The minimal shape the matching predicate reads. Both the app's `Hwy4Event`
  *  and the scraper's `ExtractedEvent` are structural supersets of this. `date`
@@ -252,6 +253,20 @@ function artistsOverlap(
   if (!a?.length || !b?.length) return false;
   const setA = new Set(a.map((x) => x.toLowerCase().trim()).filter(Boolean));
   return b.some((x) => setA.has(x.toLowerCase().trim()));
+}
+
+/** `artistsOverlap` by act identity (lib/artist-identity.ts). Used ONLY to
+ *  narrow the different-acts veto, so it can restore merges main already
+ *  made and never adds one; the positive identity signal stays the exact
+ *  compare. */
+function artistsShareIdentity(
+  a: string[] | null | undefined,
+  b: string[] | null | undefined
+): boolean {
+  if (artistsOverlap(a, b)) return true;
+  if (!a?.length || !b?.length) return false;
+  const keysA = new Set(a.map((x) => artistIdentityKey(x)).filter(Boolean));
+  return b.some((x) => keysA.has(artistIdentityKey(x)));
 }
 
 /** True when a row is a curated festival umbrella card. Umbrella cards are the
@@ -684,9 +699,14 @@ const TRAILING_SHOW_TIME =
 
 function cleanActCapture(raw: string): string {
   let a = raw
+    .replace(/\s*[|•·].*$/, "")
     .replace(/\s+@\s+.*$/, "")
     .replace(TRAILING_SHOW_TIME, "")
     .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/[\s,]+\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\s*$/, "")
+    // "Jill Warren on the Patio". Only "on the": "in the" and "at the" live
+    // inside real band names ("Lost in the Shuffle").
+    .replace(/\s+on the\s+[a-z]+(?:\s+[a-z]+)?\s*$/i, "")
     .replace(/^["“”'‘’\s]+|["“”'‘’\s]+$/g, "")
     .replace(/[\s,;:!.-]+$/, "")
     .replace(/^[\s,;:-]+/, "")
@@ -697,18 +717,85 @@ function cleanActCapture(raw: string): string {
   return a;
 }
 
+/** A word that makes the capture an event, a status or an amenity rather than
+ *  a band, wherever it appears: "Live Music - Happy Hour", "- Cancelled",
+ *  "with Dinner", "w/ Food Truck", "- 4th of July", "- Season Finale". The
+ *  adversarial review of PR #324 showed every one of these returning an "act",
+ *  and a fake act is not cosmetic: `actNamedInOther` reads it, so "Live Music
+ *  with Dinner" (artists ["Dinner"]) merged with "Thursday Night Dinner" at
+ *  the same venue and hour. Checked against every act in the live catalog:
+ *  none contains one of these words. "private" and "special" are deliberately
+ *  NOT here ("Private Reserve Band", "Bay Area Special Bluegrass"). */
+const ACT_VETO_WORDS = new Set([
+  "cancelled", "canceled", "postponed", "rescheduled", "closed", "sold",
+  "members", "happy", "hour", "tasting", "dinner", "lunch", "brunch",
+  "breakfast", "food", "truck", "party", "fundraiser", "benefit", "concert",
+  "concerts", "series", "festival", "fest", "oktoberfest", "halloween", "july",
+  "christmas", "thanksgiving", "holiday", "celebration", "kickoff", "finale",
+  "week", "season", "contest", "costume", "raffle", "auction", "potluck",
+]);
+
+/** Words that describe the music or the setting, not who plays it. A capture
+ *  made only of these (plus filler and numbers) is not an act: "Jazz",
+ *  "Classic Rock", "Tribute Band", "Special Guest", "Local Band", "Various
+ *  Artists", "All Ages", "No Cover", "$10 Cover", "Bagpipes", "Late Night",
+ *  "Coming Soon", "Private Event", "(Weather Permitting)". One real name word
+ *  rescues it ("Bob Eisenman Jazz Band", "Black Irish Band", "Harp Twins"). */
+const ACT_SOFT_WORDS = new Set([
+  "jazz", "blues", "rock", "roll", "classic", "acoustic", "electric",
+  "tribute", "cover", "covers", "band", "bands", "duo", "trio", "quartet",
+  "local", "various", "artist", "artists", "guest", "guests", "special",
+  "music", "live", "country", "bluegrass", "folk", "americana", "reggae",
+  "dj", "singer", "songwriter", "solo", "outdoors", "outdoor", "indoors",
+  "weather", "permitting", "permitted", "all", "ages", "no", "free", "coming",
+  "soon", "late", "early", "private", "event", "events", "bagpipes",
+  "bagpiper", "piano", "guitar", "fiddle", "sax", "saxophone", "harp",
+  "sunset", "view", "views", "bring", "chair", "chairs", "blanket", "tba",
+  "tbd", "more", "fun", "entertainment", "show", "shows", "featured", "a",
+  "an", "your", "own",
+]);
+
+/** A place a band is not named after: "Live Music by the Pool", "with the
+ *  Creek", "- Bear Valley Lodge", "- Calaveras Big Trees State Park". */
+const PLACE_TAIL_WORDS = new Set([
+  "pool", "creek", "lake", "pond", "fountain", "pit", "firepit", "fireplace", "lawn",
+  "garden", "gardens", "park", "plaza", "square", "lodge", "winery",
+  "vineyard", "vineyards", "saloon", "resort", "club", "center", "hall",
+  "inn", "hotel", "cellars", "brewery", "taproom", "stage", "barn",
+]);
+
+/** Corridor towns plus the region's nearby IP-city names ("Sonora", "San
+ *  Andreas"): a capture that is only a place name names no band. Region data,
+ *  so another deployment brings its own. */
+const PLACE_NAMES = new Set(
+  [
+    ...CORRIDOR_TOWNS.map((t) => t.name),
+    ...REGION.geo.localIpCities,
+    ...(REGION.geo.hubIpCities ?? []),
+  ].map((n) => n.toLowerCase().replace(/'/g, "").replace(/[^a-z0-9]+/g, " ").trim())
+);
+
 /** A capture that reads as one act's name: short, has letters, not filler,
+ *  not an event/status/amenity, not only genre or setting words, not a place,
  *  not a TBD marker, not a karaoke/theme-night name, not a restatement of the
- *  venue, and not itself a placeholder title. */
+ *  venue, and not itself a placeholder title. Blank beats wrong: a refused
+ *  real act only costs a chip, an accepted fake one costs a wrong bio and can
+ *  change a dedup outcome. */
 function isPlausibleAct(act: string, venueName: string | null | undefined): boolean {
   if (!act || act.length > 60) return false;
   const words = tailWords(act);
   if (words.length === 0 || words.length > 8) return false;
   if (words.every((w) => NON_ACT_TAIL_WORDS.has(w))) return false;
   if (isNonActName(act) || isGenericTitle(act)) return false;
-  // A place, not a band: "Live Music @ Sierra Nevada Adventure Company (Arnold)".
+  if (words.some((w) => ACT_VETO_WORDS.has(w))) return false;
+  if (words.every((w) => ACT_SOFT_WORDS.has(w) || NON_ACT_TAIL_WORDS.has(w) || /^\d+$/.test(w))) {
+    return false;
+  }
+  // A place, not a band: a town ("(Arnold)", "Sonora"), a venue-shaped name
+  // ("Bear Valley Lodge"), or "the Pool" after a "by"/"with" connector.
   const lower = words.join(" ");
-  if (CORRIDOR_TOWNS.some((t) => t.name.toLowerCase().replace(/'/g, "") === lower)) return false;
+  if (PLACE_NAMES.has(lower)) return false;
+  if (PLACE_TAIL_WORDS.has(words[words.length - 1])) return false;
   const venueWords = normalizeVenue(venueName).split(" ").filter(Boolean);
   if (venueWords.length > 0 && words.every((w) => venueWords.includes(w) || NON_ACT_TAIL_WORDS.has(w))) {
     return false;
@@ -939,7 +1026,9 @@ function sameExactWindow(a: EventIdentity, b: EventIdentity): boolean {
   if (!sa || !sb || !ea || !eb) return false;
   if (sa !== sb || ea !== eb) return false;
   const namesAct = (e: EventIdentity) => (e.artists ?? []).some((x) => (x ?? "").trim());
-  if (namesAct(a) && namesAct(b)) return false;
+  // Two DIFFERENT named acts veto. Variant spellings of one act ("Bad Jovi"
+  // vs "Bad Jovi Band") are not different acts (lib/artist-identity.ts).
+  if (namesAct(a) && namesAct(b) && !artistsShareIdentity(a.artists, b.artists)) return false;
   return true;
 }
 
@@ -985,7 +1074,9 @@ function sharedPressRelease(a: EventIdentity, b: EventIdentity): boolean {
   }
   const namesAct = (e: EventIdentity) =>
     (e.artists ?? []).some((x) => (x ?? "").trim());
-  if (namesAct(a) && namesAct(b) && !artistsOverlap(a.artists, b.artists)) {
+  // Identity-aware: "Bad Jovi" and "Bad Jovi Band" are one act (the review
+  // of PR #324 found the plain string compare vetoing that real duplicate).
+  if (namesAct(a) && namesAct(b) && !artistsShareIdentity(a.artists, b.artists)) {
     return false;
   }
   return textSimilarity(da, db) >= PRESS_RELEASE_SIMILARITY;

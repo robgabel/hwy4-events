@@ -69,3 +69,10 @@ test("an actless placeholder title never donates its scraped list (EventON lefto
   assert.equal(rowChanged(existing, event as never), false);
   assert.equal("artists" in buildExactMatchUpdate(existing, event as never, "k", NOW), false);
 });
+
+test("a 'Live Music Upstairs'-style placeholder never donates its list (review finding 6)", async () => {
+  const { buildExactMatchUpdate } = await load();
+  const existing = { ...base, name: "Live Music Upstairs", venue_name: "Boyle MacDonald Wines", artists: null };
+  const event = { ...existing, artists: ["Leftover Act"] };
+  assert.equal("artists" in buildExactMatchUpdate(existing, event as never, "k", NOW), false);
+});

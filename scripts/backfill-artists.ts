@@ -24,6 +24,7 @@
  *   npx tsx backfill-artists.ts --catalog                       # + catalog pass
  *   npx tsx backfill-artists.ts --all --catalog --apply
  */
+import { writeFileSync } from "node:fs";
 import { supabaseAdmin } from "./lib/supabase-admin.js";
 import { extractActFromTitle } from "../lib/event-identity.js";
 import { artistIdentityKey, tidyArtistList } from "../lib/artist-identity.js";
@@ -61,9 +62,12 @@ async function eventsPass() {
   let filled = 0;
   let tidied = 0;
   let errors = 0;
+  // Every write's before/after, saved before anything is applied, so a tidy
+  // (which overwrites a non-empty list) is as reversible as a fill.
+  const snapshot: { id: string; before: string[] | null; after: string[] }[] = [];
   for (const row of rows) {
     const current = row.artists && row.artists.length > 0 ? row.artists : null;
-    let next: string[] | null;
+    let next: string[];
     let kind: "fill" | "tidy";
     if (!current) {
       const act = extractActFromTitle(row.name, row.venue_name);
@@ -71,8 +75,9 @@ async function eventsPass() {
       next = [act];
       kind = "fill";
     } else {
-      next = tidyArtistList(current);
-      if (!next || sameList(current, next)) continue;
+      const cleaned = tidyArtistList(current);
+      if (!cleaned || sameList(current, cleaned)) continue;
+      next = cleaned;
       kind = "tidy";
     }
     console.log(
@@ -81,12 +86,18 @@ async function eventsPass() {
     );
     if (kind === "fill") filled++;
     else tidied++;
-    if (APPLY) {
-      const { error } = await supabaseAdmin.from("hwy4_events").update({ artists: next }).eq("id", row.id);
-      if (error) {
-        errors++;
-        console.error(`    ! ${error.message}`);
-      }
+    snapshot.push({ id: row.id, before: row.artists, after: next });
+  }
+  if (APPLY && snapshot.length > 0) {
+    const file = `backfill-artists-snapshot-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    writeFileSync(file, JSON.stringify(snapshot, null, 2));
+    console.log(`Snapshot of ${snapshot.length} rows written to ${file} (revert: set artists = before by id).`);
+  }
+  for (const { id, after } of APPLY ? snapshot : []) {
+    const { error } = await supabaseAdmin.from("hwy4_events").update({ artists: after }).eq("id", id);
+    if (error) {
+      errors++;
+      console.error(`    ! ${error.message}`);
     }
   }
   console.log(

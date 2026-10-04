@@ -137,6 +137,11 @@ export function collectActs(rows: ShowRow[]): Map<string, Act> {
   return out;
 }
 
+function priorContextVenues(row: CatalogRow): string[] {
+  const ctx = metaOf(row).context_venues;
+  return Array.isArray(ctx) ? ctx.map((v) => venueKey(String(v))).filter(Boolean) : [];
+}
+
 /** Why a tried-and-blank row should be researched again, or null. */
 export function retryReason(
   row: CatalogRow,
@@ -189,16 +194,22 @@ export function buildArtistWorklist(
       exact ??
       [...group].sort((a, b) => (b.blurb_draft_at ?? "").localeCompare(a.blurb_draft_at ?? ""))[0];
 
+    // Any live field on any variant means a human or the auto-publisher
+    // already spoke for this act. Checked before the never-tried branch, so
+    // "a row with live fields is never researched" holds by construction.
+    if (group.some(hasLiveFields)) continue;
     if (!target.blurb_draft_at) {
       items.push({ ...base, artist_key: target.artist_key, name: target.name, isNewRow: false, reason: "new" });
       continue;
     }
-    // Any live field on any variant means a human or the auto-publisher
-    // already spoke for this act.
-    if (group.some(hasLiveFields)) continue;
     const reason = retryReason(target, venues, nowMs);
     if (reason) {
-      items.push({ ...base, artist_key: target.artist_key, name: target.name, isNewRow: false, reason });
+      // Record every venue this act has ever been researched with, not just
+      // this run's top 3: an act rotating through four venues would otherwise
+      // trip new_venue on a venue it was already researched with, forever
+      // (review of PR #324, finding 3).
+      const union = [...new Set([...priorContextVenues(target), ...venues])];
+      items.push({ ...base, venues: union, artist_key: target.artist_key, name: target.name, isNewRow: false, reason });
     }
   }
 

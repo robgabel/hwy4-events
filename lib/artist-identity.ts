@@ -48,8 +48,13 @@ export function artistIdentityKey(name: string): string {
     n = stripped;
   }
   const key = n.replace(/[^a-z0-9]+/g, "");
+  if (key) return key;
   // A name that is nothing but a suffix ("The Band") keeps its own letters.
-  return key || baseForm(name).replace(/[^a-z0-9]+/g, "");
+  const bare = baseForm(name).replace(/[^a-z0-9]+/g, "");
+  if (bare) return bare;
+  // No ASCII letters at all ("東京事変", "!!!"): the folded form itself, so the
+  // act is kept and never collides with every other such name on "".
+  return baseForm(name).replace(/\s+/g, " ");
 }
 
 /** Names that are not a performing act: a karaoke host, a weekly theme night,

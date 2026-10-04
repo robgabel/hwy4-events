@@ -18,6 +18,7 @@ import {
   isActlessPlaceholderTitle,
   mergeArtistLists,
   extractActFromTitle,
+  isPlaceholderForMatch,
   namedActTakesPrecedence,
   type EventIdentity,
 } from "../../lib/event-identity.js";
@@ -1007,7 +1008,15 @@ function artistsFill(existing: ExistingRow, event: ExtractedEvent): string[] | n
   if (discovered) return discovered;
   if (existing.artists === undefined) return null;
   if (existing.artists && existing.artists.some((a) => a?.trim())) return null;
-  if (isActlessPlaceholderTitle(event.name ?? "")) return null;
+  // Broader than isActlessPlaceholderTitle on purpose: "Live Music Upstairs"
+  // and "Music in the Parks" are placeholders too, and this path never wrote
+  // scraped artists before 2026-10-04 (review of PR #324, finding 6).
+  if (
+    isActlessPlaceholderTitle(event.name ?? "") ||
+    isPlaceholderForMatch({ name: event.name, venue_name: event.venue_name })
+  ) {
+    return null;
+  }
   return event.artists && event.artists.length > 0 ? event.artists : null;
 }
 
