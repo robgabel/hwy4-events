@@ -29,12 +29,13 @@ export function shouldAutoPublishArtist(
  * saveArtist), with three named divergences:
  *
  *  - links / hometown / is_local are written from the research verbatim, where
- *    saveArtist preserves a pre-existing value when the draft has none. The
- *    difference is unreachable today — every in-app writer stamps
- *    blurb_draft_at, so an existing row never re-enters the drafter's worklist
- *    (0 of 82 prod rows lack the stamp) — but a future link-only writer (the
- *    PRD's Phase 3 artist-link layer is that shape) would reach it; revisit
- *    then.
+ *    saveArtist preserves a pre-existing value when the draft has none. Since
+ *    2026-10-04 a tried-blank row CAN re-enter the drafter's worklist (the
+ *    retry rules in artist-worklist.ts), so the difference is reachable in
+ *    principle; the worklist therefore never retries a row (or any variant of
+ *    its act) that carries a live blurb, genre or links, which keeps it
+ *    unreachable in practice. A future link-only writer (the PRD's Phase 3
+ *    artist-link layer) must revisit this.
  *  - blurb_draft_meta is KEPT, not cleared: it is the only place the research
  *    sources/confidence/notes live, and an UNREVIEWED publish must keep its
  *    evidence at rest ("why did we say this?" needs an answer; Clear-and-fix

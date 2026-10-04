@@ -14,7 +14,7 @@ import { buildEventOffer } from "@/lib/schema";
 import {
   artistChipLabel,
   artistGenreMap,
-  artistKey,
+  genreForArtist,
   buildPerformers,
   matchPublishedArtists,
   type PublicArtist,
@@ -608,7 +608,7 @@ export default async function EventPage({ params }: PageProps) {
                   className="rounded-md bg-sunset/8 px-3 py-1 text-sm font-medium text-earth"
                 >
                   {event.category === "live_music"
-                    ? artistChipLabel(artist, genreByKey[artistKey(artist)])
+                    ? artistChipLabel(artist, genreForArtist(genreByKey, artist))
                     : artist}
                 </li>
               ))}

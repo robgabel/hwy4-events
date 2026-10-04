@@ -17,6 +17,7 @@ import {
   generateDedupKey,
   isActlessPlaceholderTitle,
   mergeArtistLists,
+  extractActFromTitle,
   namedActTakesPrecedence,
   type EventIdentity,
 } from "../../lib/event-identity.js";
@@ -24,6 +25,7 @@ import { sanitizeDescriptionDetailed } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
 import { resolveFamilyFriendly } from "../../lib/family-friendly.js";
 import { isHttpUrl } from "../../lib/url.js";
+import { tidyArtistList } from "../../lib/artist-identity.js";
 import { recordSourceResult } from "./scrape-run-log.js";
 
 /**
@@ -368,9 +370,20 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
     event.description = stripTagLike(event.description);
   }
   if (event.artists && event.artists.length > 0) {
-    event.artists = event.artists
-      .map((a) => stripTagLike(a))
-      .filter((a): a is string => !!a);
+    // One entry per act, compound billings kept whole (lib/artist-identity.ts).
+    event.artists = tidyArtistList(
+      event.artists.map((a) => stripTagLike(a)).filter((a): a is string => !!a)
+    );
+  }
+  // Most sources leave `artists` empty even when the title names the act
+  // ("Live Music - Carlos Castillo"), and the artist-blurb drafter only
+  // researches the field. Fill an empty one from the title, never guessing:
+  // extractActFromTitle returns null on anything ambiguous, and a source that
+  // did list artists is never overridden. After the name cleanup above, so it
+  // reads the title that will actually be stored.
+  if (!event.artists || event.artists.length === 0) {
+    const act = extractActFromTitle(event.name, event.venue_name);
+    if (act) event.artists = [act];
   }
   if (event.event_url && !isHttpUrl(event.event_url)) {
     event.event_url = null;
@@ -677,7 +690,7 @@ export function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, date, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked";
+  "id, name, date, venue_name, venue_key, description, artists, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked";
 
 type ExistingRow = {
   id: string;
@@ -692,6 +705,9 @@ type ExistingRow = {
    *  re-mark the row updated on every run. */
   venue_key?: string | null;
   description: string | null;
+  /** Selected on every exact-match read. Absent (undefined) only in test
+   *  fixtures, where it is treated as unknown: never a fill, never a change. */
+  artists?: string[] | null;
   start_time: string | null;
   end_time: string | null;
   price: string | null;
@@ -840,6 +856,17 @@ export function placeholderVenueSteal(
   );
 }
 
+/** Fill-only artists for the exact-match path. The payload never wrote
+ *  `artists` before 2026-10-04, so a row inserted with an empty list stayed
+ *  empty forever even once the title named the act. Upgrade-only, the keepStr
+ *  rule for a list: an empty stored list takes a scraped one, a stored list is
+ *  never replaced (a merge already unioned it; a re-scrape must not shrink it). */
+function artistsFill(existing: ExistingRow, event: ExtractedEvent): string[] | null {
+  if (existing.artists === undefined) return null;
+  if (existing.artists && existing.artists.length > 0) return null;
+  return event.artists && event.artists.length > 0 ? event.artists : null;
+}
+
 export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
   // Same venue name the exact-match payload will store, so the key diff below
   // is "what we WOULD write", not "what the scrape resolved in isolation".
@@ -867,6 +894,8 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
     // key on a specific-name row was backfill-only — an alias added after
     // insert never reached that backfill on the daily scrape.
     nextVenueKey !== (existing.venue_key ?? null) ||
+    // An empty stored artists list the scrape can now fill is a change.
+    artistsFill(existing, event) !== null ||
     // A locked field can't be written, so a diff there is not a change. For
     // the keepStr-guarded display fields, "changed" is defined as "what the
     // payload WOULD write differs from what is stored" — the exact same
@@ -976,6 +1005,7 @@ export function buildExactMatchUpdate(
       name: writtenName,
       description: writtenDescription,
     }),
+    ...(artistsFill(existing, event) ? { artists: artistsFill(existing, event) } : {}),
     // Keep dedup_key in sync with the (possibly-changed) date/town so key
     // lookups still find this row if source_event_id ever disappears. When
     // either steal-guard keeps a stored value, the key is recomputed from
@@ -1499,7 +1529,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, date, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
+          "id, name, date, venue_name, venue_key, description, artists, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
         )
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
@@ -1510,7 +1540,7 @@ export async function upsertEvents(
       const { data } = await supabaseAdmin
         .from("hwy4_events")
         .select(
-          "id, name, date, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
+          "id, name, date, venue_name, venue_key, description, artists, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
         )
         .eq("dedup_key", dedupKey)
         .maybeSingle();

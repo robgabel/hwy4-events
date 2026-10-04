@@ -20,6 +20,8 @@
 // to back.
 
 import { createHash } from "node:crypto";
+import { isNonActName, tidyArtistList } from "./artist-identity";
+import { CORRIDOR_TOWNS } from "./towns";
 
 /** The minimal shape the matching predicate reads. Both the app's `Hwy4Event`
  *  and the scraper's `ExtractedEvent` are structural supersets of this. `date`
@@ -664,6 +666,158 @@ export function isPlaceholderForMatch(e: {
   return namesNoAct(tailWords(parts.tail));
 }
 
+/** Words that make the text BEFORE "Live Music" an event, not an act
+ *  ("Vintage Car Show, Hatcher Wine & Live Music", "Rib Feed and Live Band"). */
+const EVENT_HEAD_WORDS = new Set([
+  "show", "festival", "fest", "party", "fundraiser", "market", "feed", "dinner",
+  "brunch", "lunch", "breakfast", "bbq", "tasting", "celebration", "concert",
+  "concerts", "series", "open", "mic", "karaoke", "trivia", "dance", "wine",
+  "beer", "food", "summer", "fall", "winter", "spring", "annual", "free",
+  "happy", "hour", "special", "event", "events", "music",
+]);
+
+/** Cut a captured act down to the act: a trailing "@ venue", a trailing show
+ *  time ("7pm", "6:00 - 9:00 PM"), wrapping quotes, stray punctuation. An
+ *  ALL-CAPS capture ("SEQUOIA BLUE") is title-cased so a chip doesn't shout. */
+const TRAILING_SHOW_TIME =
+  /[\s,]+\d{1,2}(?::\d{2})?\s*(?:-\s*\d{1,2}(?::\d{2})?\s*)?(?:am|pm)\b.*$/i;
+
+function cleanActCapture(raw: string): string {
+  let a = raw
+    .replace(/\s+@\s+.*$/, "")
+    .replace(TRAILING_SHOW_TIME, "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/^["“”'‘’\s]+|["“”'‘’\s]+$/g, "")
+    .replace(/[\s,;:!.-]+$/, "")
+    .replace(/^[\s,;:-]+/, "")
+    .trim();
+  if (a.length > 3 && a === a.toUpperCase() && /[A-Z]/.test(a)) {
+    a = a.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase());
+  }
+  return a;
+}
+
+/** A capture that reads as one act's name: short, has letters, not filler,
+ *  not a TBD marker, not a karaoke/theme-night name, not a restatement of the
+ *  venue, and not itself a placeholder title. */
+function isPlausibleAct(act: string, venueName: string | null | undefined): boolean {
+  if (!act || act.length > 60) return false;
+  const words = tailWords(act);
+  if (words.length === 0 || words.length > 8) return false;
+  if (words.every((w) => NON_ACT_TAIL_WORDS.has(w))) return false;
+  if (isNonActName(act) || isGenericTitle(act)) return false;
+  // A place, not a band: "Live Music @ Sierra Nevada Adventure Company (Arnold)".
+  const lower = words.join(" ");
+  if (CORRIDOR_TOWNS.some((t) => t.name.toLowerCase().replace(/'/g, "") === lower)) return false;
+  const venueWords = normalizeVenue(venueName).split(" ").filter(Boolean);
+  if (venueWords.length > 0 && words.every((w) => venueWords.includes(w) || NON_ACT_TAIL_WORDS.has(w))) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * The act a title names, when the title states it in one of the shapes the
+ * corridor's sources actually use, else null. Never guesses: an ambiguous
+ * title yields nothing.
+ *
+ * Why this exists: the artist-blurb drafter only researches acts in the
+ * `artists` field, and most sources leave it empty even when the title says
+ * who is playing. Measured 2026-10-04 over 60 days of public live music:
+ * Sequoia Woods titled 13 rows "Live Music - Carlos Castillo" and similar with
+ * none tagged, GoCalaveras 15 of 21 Irish Pub rows ("Ali & Heidi Crooks Live
+ * Music @ Murphys Irish Pub"), plus Copperopolis Square ("Music In The
+ * Square- Bad Jovi") and the Beer Garden ("Live Music – Beer Garden Concert
+ * Series – Dirty Cello"). Those acts were invisible to research.
+ *
+ * Shapes, in order:
+ *  1. Generic prefix + act separator + act: "Live Music - X", "Live Music
+ *     with X", "Music in the Square- X", "Live Music @ The Lube Room: X".
+ *     Gated on `isPlaceholderForMatch` being false, so every title the dedup
+ *     layer reads as a placeholder ("Live Music - Friday Night", "Live Music -
+ *     Stevenot Winery", "... (TBD)") is refused by the same rule. A tail that
+ *     still holds a dash is taken only when everything before the last dash
+ *     is series/night filler ("Beer Garden Concert Series – Dirty Cello");
+ *     any other multi-dash tail is ambiguous and refused.
+ *  2. A parenthetical: "Halloween Party (LIVE MUSIC - SEQUOIA BLUE)", or a
+ *     "featuring live music" tail: "Patio Party #4 featuring live music by
+ *     Flashback".
+ *  3. A quoted act after "Live Band"/"Live Music": 'Rib Feed and Live Band
+ *     "Blue Monday"'.
+ *  4. Act BEFORE "Live Music @ venue": "Ali & Heidi Crooks Live Music @
+ *     Murphys Irish Pub". The head must not read as an event ("Vintage Car
+ *     Show, Hatcher Wine & Live Music") or a night ("Friday Night Live Music").
+ *
+ * Locked by scripts/test/event-identity.test.ts.
+ */
+export function extractActFromTitle(
+  name: string | null | undefined,
+  venueName?: string | null
+): string | null {
+  const title = (name ?? "")
+    .replace(/[‐-―−﹘﹣－]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!title) return null;
+
+  const accept = (raw: string | undefined): string | null => {
+    if (!raw) return null;
+    const act = cleanActCapture(raw);
+    return isPlausibleAct(act, venueName) ? act : null;
+  };
+
+  // 1. Generic prefix + separator + act.
+  const prefix = title.match(/^(?:live (?:music|entertainment|tunes)|music (?:in|at|on) the)\b/i);
+  if (prefix && isGenericTitle(title) && !isPlaceholderForMatch({ name: title, venue_name: venueName })) {
+    const rest = title.slice(prefix[0].length);
+    const sep = new RegExp(ACT_SEPARATOR.source, "i").exec(rest);
+    if (sep) {
+      let tail = rest.slice(sep.index + sep[0].length).trim();
+      if (sep[0].includes("(")) tail = tail.replace(/\).*$/, "");
+      // A time trailing the act ("X - 7pm") is not a second segment.
+      tail = tail.replace(/\s*-?\s*\d{1,2}(?::\d{2})?\s*(?:-\s*\d{1,2}(?::\d{2})?\s*)?(?:am|pm)\b.*$/i, "").trim();
+      const segments = tail.split(/\s+-\s+|\s-|-\s/).map((s) => s.trim()).filter(Boolean);
+      if (segments.length > 1) {
+        const lead = segments.slice(0, -1);
+        const leadIsFiller = lead.every(
+          (seg) =>
+            /\b(?:series|concerts?|nights?)\b/i.test(seg) ||
+            tailWords(seg).every((w) => NON_ACT_TAIL_WORDS.has(w))
+        );
+        return leadIsFiller ? accept(segments[segments.length - 1]) : null;
+      }
+      return accept(tail);
+    }
+  }
+
+  // 2. Parenthetical "(Live Music - X)".
+  const paren = title.match(
+    /\(\s*live (?:music|band)\s*(?:[-:]|by\b|with\b|featuring\b|feat\.?|ft\.?)\s*([^)]+)\)/i
+  );
+  if (paren) return accept(paren[1]);
+
+  // 2b. "… featuring live music - X" / "… featuring live music by X" (the
+  // Sequoia Woods patio-party shape). Narrow on purpose: a bare mid-title
+  // "live music by" also reads "Wine Tasting with Live Music by the Pool".
+  const featuring = title.match(/\bfeaturing live (?:music|band)\s*(?:-|:|by\b)\s*(.+)$/i);
+  if (featuring) return accept(featuring[1]);
+
+  // 3. Quoted act after "Live Band" / "Live Music".
+  const quoted = title.match(/\blive (?:music|band)\b[^"“]*["“]([^"”]+)["”]/i);
+  if (quoted) return accept(quoted[1]);
+
+  // 4. Act before "Live Music @ / at venue".
+  const head = title.match(/^(.+?)\s*(?:-\s*)?live music\s*(?:@|\bat\b)\s+\S/i);
+  if (head) {
+    const h = head[1].trim();
+    if (/[,&]$|\band$/i.test(h) || h.includes(",")) return null;
+    if (tailWords(h).some((w) => EVENT_HEAD_WORDS.has(w))) return null;
+    return accept(h);
+  }
+
+  return null;
+}
+
 /** Aggregator placeholder shapes that carry NO act information. Deliberately
  *  NARROWER than `isGenericTitle` (adversarial review of #264, finding B1):
  *  the TBD/TBA tail is an organizer retraction that must land, and the
@@ -698,10 +852,9 @@ export function mergeArtistLists(
   if (collected.length === 0) {
     for (const r of rows) collected.push(...(r.artists ?? []));
   }
-  const set = new Set(
-    collected.map((x) => x?.trim()).filter((x): x is string => !!x)
-  );
-  return set.size > 0 ? [...set] : null;
+  // One entry per act: "Greg Sutton & Friends" and "Greg Sutton and Friends"
+  // from two sources are the same billing (lib/artist-identity.ts).
+  return tidyArtistList(collected);
 }
 
 /** An aggregator's series-placeholder listing defers to a named-act row
