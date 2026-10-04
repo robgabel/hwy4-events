@@ -40,10 +40,15 @@ import {
   buildWeekendAnswer,
   nearestTownWithEvents,
   selectWeekendEvents,
+  weekdayName,
+  weekendEmptyLine,
   weekendHeading,
 } from "@/lib/town-weekend";
 
 export const revalidate = 3600;
+
+// Weekend-block list length before it hands off to /this-weekend.
+const WEEKEND_LIST_CAP = 8;
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -272,9 +277,13 @@ export default async function TownPage({ params }: PageProps) {
         {weekendAnswer ? (
           <>
             <p className="speakable leading-relaxed text-stone">{weekendAnswer}</p>
+            {/* Every weekend event, so "Plus N more" is never a promise the
+             * page can't keep (the upcoming list below starts from today and
+             * fills with weekday rows first). */}
             <ul className="mt-3 space-y-1 text-sm">
-              {weekendEvents.slice(0, 3).map((e) => (
-                <li key={e.id}>
+              {weekendEvents.slice(0, WEEKEND_LIST_CAP).map((e) => (
+                <li key={e.id} className="text-stone">
+                  <span className="text-stone-light">{weekdayName(e.date)}: </span>
                   <Link
                     href={`/events/${generateEventSlug(e.name, e.date, e.town)}`}
                     className="font-medium text-pine hover:underline"
@@ -284,10 +293,17 @@ export default async function TownPage({ params }: PageProps) {
                 </li>
               ))}
             </ul>
+            {weekendEvents.length > WEEKEND_LIST_CAP && (
+              <p className="mt-2 text-sm">
+                <Link href="/this-weekend" className="font-medium text-pine hover:underline">
+                  See all {weekendEvents.length} on the weekend page &rarr;
+                </Link>
+              </p>
+            )}
           </>
         ) : (
           <p className="speakable leading-relaxed text-stone">
-            Nothing is listed in {town.name} this weekend yet.{" "}
+            {weekendEmptyLine(town.name, weekend, pacificToday().iso)}{" "}
             {weekendFallback ? (
               <>
                 The nearest town with something on is{" "}
@@ -363,7 +379,7 @@ export default async function TownPage({ params }: PageProps) {
        * visitors want "what's tonight" first. */}
       <section className="mb-10">
         <h2 className="font-display mb-4 text-xl font-semibold text-forest">
-          What&apos;s happening in {town.name}
+          Coming up in {town.name}
         </h2>
         {events.length > 0 ? (
           <>

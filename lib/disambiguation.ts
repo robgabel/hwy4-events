@@ -5,4 +5,4 @@
  * once so the town page and the guide Q&As cannot drift. Voice rules apply.
  */
 export const BEAR_VALLEY_DISAMBIGUATION =
-  "This is Bear Valley in Alpine County, at the top of Highway 4 in the Sierra, not Big Bear Lake in Southern California.";
+  "This is Bear Valley in Alpine County, on Highway 4 in the Sierra just below Ebbetts Pass, not Big Bear Lake in Southern California.";

@@ -13,6 +13,7 @@ import {
   selectWeekendEvents,
   weekendHeading,
   weekendLabel,
+  weekendEmptyLine,
   type WeekendEvent,
 } from "../../lib/town-weekend.js";
 import { thisWeekendRange } from "../../lib/date-windows.js";
@@ -80,11 +81,11 @@ test("many events: top three named in order, remainder counted", () => {
   const sel = selectWeekendEvents(rows, "Arnold", WEEKEND, THU_NOON);
   assert.equal(
     buildWeekendAnswer("Arnold", sel),
-    "This weekend in Arnold: Friday Rock Show on Friday at Snowshoe Brewing, Saturday Market on Saturday, and Saturday Night Live Music on Saturday at Snowshoe Brewing. Plus 2 more events below."
+    "This weekend in Arnold: Friday Rock Show on Friday at Snowshoe Brewing, Saturday Market on Saturday, and Saturday Night Live Music on Saturday at Snowshoe Brewing. Plus 2 more events this weekend."
   );
   const two = buildWeekendAnswer("Arnold", sel.slice(0, 2));
   assert.equal(two, "This weekend in Arnold: Friday Rock Show on Friday at Snowshoe Brewing and Saturday Market on Saturday.");
-  assert.match(buildWeekendAnswer("Arnold", sel.slice(0, 4))!, /Plus 1 more event below\.$/);
+  assert.match(buildWeekendAnswer("Arnold", sel.slice(0, 4))!, /Plus 1 more event this weekend\.$/);
 });
 
 test("selection: other towns, private, out-of-window and finished events drop", () => {
@@ -99,6 +100,34 @@ test("selection: other towns, private, out-of-window and finished events drop", 
   const satNoon = minutes(2026, 10, 10, 12);
   const names = selectWeekendEvents(rows, "Arnold", WEEKEND, satNoon).map((e) => e.name);
   assert.deepEqual(names, ["Keeper"], "Sunday-of view never lists Friday's finished show");
+});
+
+test("empty state says 'nothing else' once the weekend has started", () => {
+  assert.equal(weekendEmptyLine("Arnold", WEEKEND, "2026-10-08"), "Nothing is listed in Arnold this weekend yet.");
+  for (const today of ["2026-10-09", "2026-10-10", "2026-10-11"]) {
+    assert.equal(
+      weekendEmptyLine("Arnold", WEEKEND, today),
+      "Nothing else is on in Arnold for the rest of this weekend."
+    );
+  }
+});
+
+test("venue already in the name is not repeated; same name at two venues stays two", () => {
+  const sel = selectWeekendEvents(
+    [
+      ev({ name: "Live Music @ Prospect 772", venue_name: "Prospect 772 Winery", date: "2026-10-10" }),
+      ev({ name: "Live Music", venue_name: "Stevenot Winery", date: "2026-10-10", start_time: "13:00" }),
+      ev({ name: "Live Music", venue_name: "Snowshoe Brewing", date: "2026-10-10", start_time: "15:00" }),
+    ],
+    "Arnold",
+    WEEKEND,
+    THU_NOON
+  );
+  assert.equal(sel.length, 3);
+  assert.equal(
+    buildWeekendAnswer("Arnold", sel),
+    "This weekend in Arnold: Live Music on Saturday at Stevenot Winery, Live Music on Saturday at Snowshoe Brewing, and Live Music @ Prospect 772 on Saturday."
+  );
 });
 
 test("a series with a row per night is one happening; picks float up", () => {
@@ -144,4 +173,6 @@ test("town page renders the weekend block for every town page", () => {
   assert.ok(page.includes("weekendHeading(town.name, weekend)"));
   assert.ok(page.includes("buildWeekendAnswer(town.name, weekendEvents)"));
   assert.ok(page.includes('href="/this-weekend"'), "empty state points to /this-weekend");
+  assert.ok(page.includes("weekendEvents.slice(0, WEEKEND_LIST_CAP)"), "block lists the weekend itself");
+  assert.ok(!page.includes("What&apos;s happening in {town.name}\n"), "no duplicate evergreen heading");
 });

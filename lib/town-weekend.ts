@@ -75,7 +75,9 @@ export function selectWeekendEvents<E extends WeekendEvent>(
   const seen = new Set<string>();
   const distinct: E[] = [];
   for (const e of live) {
-    const key = e.name.trim().toLowerCase();
+    // Name + venue: a festival's nightly rows collapse, but two different
+    // generic "Live Music" listings at different venues stay two events.
+    const key = `${e.name.trim().toLowerCase()}|${(e.venue_name ?? "").trim().toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
     distinct.push(e);
@@ -84,11 +86,35 @@ export function selectWeekendEvents<E extends WeekendEvent>(
   return [...distinct.filter((e) => e.robs_pick), ...distinct.filter((e) => !e.robs_pick)];
 }
 
+const GENERIC_VENUE_WORDS = new Set([
+  "the", "and", "winery", "vineyards", "vineyard", "saloon", "bar", "restaurant",
+  "lodge", "park", "company", "brewing", "tasting", "room", "cellars", "cafe",
+]);
+
+/** True when the event name already names the venue ("Live Music @ Prospect
+ *  772" at "Prospect 772 Winery"), so repeating it would read twice. */
+function nameCarriesVenue(name: string, venue: string): boolean {
+  const n = ` ${name.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+  const distinctive = venue
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && !GENERIC_VENUE_WORDS.has(w));
+  return distinctive.length > 0 && distinctive.every((w) => n.includes(` ${w} `));
+}
+
+/** Day name for an ISO date ("Saturday"). */
+export function weekdayName(iso: string): string {
+  return WEEKDAYS[parts(iso).dow];
+}
+
 function clause(e: WeekendEvent): string {
-  const day = WEEKDAYS[parts(e.date).dow];
+  const name = e.name.trim().replace(/[.:;,]+$/, "");
   const venue = e.venue_name?.trim();
-  const showVenue = venue && venue.toLowerCase() !== e.town.trim().toLowerCase();
-  return `${e.name.trim().replace(/[.:;,]+$/, "")} on ${day}${showVenue ? ` at ${venue}` : ""}`;
+  const showVenue =
+    venue &&
+    venue.toLowerCase() !== e.town.trim().toLowerCase() &&
+    !nameCarriesVenue(name, venue);
+  return `${name} on ${weekdayName(e.date)}${showVenue ? ` at ${venue}` : ""}`;
 }
 
 function joinClauses(items: string[]): string {
@@ -99,8 +125,9 @@ function joinClauses(items: string[]): string {
 
 /**
  * The answer sentence(s). Names at most `max` events; a remainder becomes
- * "Plus N more below." Returns null for an empty weekend, which the page
- * renders as its own honest empty state (with links) instead.
+ * "Plus N more this weekend." (the block lists every one of them right under
+ * the sentence). Returns null for an empty weekend, which the page renders as
+ * its own honest empty state instead (see weekendEmptyLine).
  */
 export function buildWeekendAnswer(
   town: string,
@@ -112,7 +139,19 @@ export function buildWeekendAnswer(
   const rest = selected.length - named.length;
   const lead = `This weekend in ${town}: ${joinClauses(named)}.`;
   if (rest <= 0) return lead;
-  return `${lead} Plus ${rest} more ${rest === 1 ? "event" : "events"} below.`;
+  return `${lead} Plus ${rest} more ${rest === 1 ? "event" : "events"} this weekend.`;
+}
+
+/**
+ * The empty-state lead. Once the weekend has begun, earlier days have left the
+ * feed and finished events are filtered, so an empty list means "nothing left",
+ * not "nothing was listed". Saying "nothing is listed" on a Sunday afternoon
+ * would be false about a Friday that had events.
+ */
+export function weekendEmptyLine(town: string, range: DateWindow, todayIso: string): string {
+  return todayIso >= range.start
+    ? `Nothing else is on in ${town} for the rest of this weekend.`
+    : `Nothing is listed in ${town} this weekend yet.`;
 }
 
 /**

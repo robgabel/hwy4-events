@@ -178,7 +178,7 @@ export const PERSONA_HUBS: PersonaHub[] = [
       },
       {
         q: "Where is Hermitfest held?",
-        a: `Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, Alpine County, CA. ${BEAR_VALLEY_DISAMBIGUATION}`,
+        a: `Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, CA. ${BEAR_VALLEY_DISAMBIGUATION}`,
       },
       {
         q: "What time does Hermitfest start?",

@@ -387,7 +387,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     "faqs": [
       {
         "question": "Is Bear Valley the same as Big Bear?",
-        "answer": "No. Bear Valley is in Alpine County, at the top of Highway 4 in the Sierra, about 30 minutes above Arnold. Big Bear Lake is a different mountain town in Southern California, about 400 miles south. Events on this page are the Highway 4 Bear Valley."
+        "answer": "No. Bear Valley is in Alpine County, on Highway 4 in the Sierra, about 30 to 40 minutes above Arnold. Big Bear Lake is a different mountain town in Southern California, more than 300 miles south. Events on this page are the Highway 4 Bear Valley."
       },
       {
         "question": "Is Bear Valley open this winter (25/26 season)?",
