@@ -30,27 +30,62 @@ interface SourceHealth {
 }
 
 /**
+ * Every org_slug that has ever written an event, read in pages. PostgREST
+ * caps one response at 1000 rows and says nothing; the single unpaged select
+ * this replaces was cut off inside gocalaveras's rows, so ten sources
+ * (visit-murphys, red-cross, sequoia-woods and the pub among them) never
+ * appeared in the table. Pages advance by what came back and stop on an
+ * empty one, so a lower server cap can't truncate it either.
+ */
+async function fetchAllOrgSlugs(): Promise<string[]> {
+  const PAGE = 1000;
+  // ~100k rows; the table holds ~2k. Only a server that ignores the range
+  // (and so never returns an empty page) could reach it, and that must end
+  // the loop rather than hang the scrape job.
+  const MAX_PAGES = 100;
+  const slugs = new Set<string>();
+  for (let from = 0, page = 0; ; page++) {
+    if (page === MAX_PAGES) {
+      console.warn(`  Source list stopped after ${MAX_PAGES} pages; is the range being ignored?`);
+      break;
+    }
+    const { data, error } = await supabaseAdmin
+      .from("hwy4_events")
+      .select("org_slug")
+      .not("org_slug", "is", null)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.warn(`  Could not list every source: ${error.message}`);
+      break;
+    }
+    if (!data || data.length === 0) break;
+    for (const r of data) if (r.org_slug) slugs.add(r.org_slug);
+    from += data.length;
+  }
+  return [...slugs];
+}
+
+/**
  * Run post-scrape health checks and print a summary report.
  * Flags sources with zero future events or stale scrape timestamps.
  */
 export async function runHealthCheck(
-  scrapedSources?: string[]
+  scrapedSources?: string[],
+  sourceErrors?: ReadonlyMap<string, string>
 ): Promise<void> {
   console.log("\n=== Scrape Health Report ===\n");
 
   const today = new Date().toISOString().slice(0, 10);
   const now = Date.now();
 
-  // Get all org_slugs that have ever had events
-  const { data: allOrgs } = await supabaseAdmin
-    .from("hwy4_events")
-    .select("org_slug")
-    .not("org_slug", "is", null);
-
-  const orgSlugs = [...new Set((allOrgs || []).map((r) => r.org_slug))];
+  const orgSlugs = await fetchAllOrgSlugs();
 
   if (orgSlugs.length === 0) {
     console.log("No sources found in database.");
+    for (const [source, message] of sourceErrors ?? []) {
+      console.log(`  ⚠ ${source}: Scraper failed this run: ${message.slice(0, 200)}`);
+    }
     return;
   }
 
@@ -139,12 +174,29 @@ export async function runHealthCheck(
       warnings.push(`${h.org_slug}: Has events but no last_scraped_at timestamp.`);
     }
 
+    // A source that threw this run outranks every freshness read above:
+    // last_scraped_at moves whenever another source merges into its rows.
+    const runError = sourceErrors?.get(h.org_slug);
+    if (runError !== undefined) {
+      status = "ERROR this run";
+      warnings.push(`${h.org_slug}: Scraper failed this run: ${runError.slice(0, 200)}`);
+    }
+
     console.log(
       h.org_slug.padEnd(30) +
       String(h.future_event_count).padEnd(16) +
       scrapedStr.padEnd(24) +
       status
     );
+  }
+
+  // A failed source whose key names no org row (the Facebook bundles write
+  // per-page and per-town slugs) still gets a warning, so every failure this
+  // run is listed somewhere.
+  for (const [source, message] of sourceErrors ?? []) {
+    if (!orgSlugs.includes(source)) {
+      warnings.push(`${source}: Scraper failed this run: ${message.slice(0, 200)}`);
+    }
   }
 
   // Facebook scraper status — every Apify events source (town explore feeds,
