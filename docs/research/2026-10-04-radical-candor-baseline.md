@@ -6,6 +6,35 @@
 > run should be compared against §2 (inputs), §3 (the exact measurements) and §4 (the output),
 > in that order. Nothing here was acted on. Nothing was committed by the session that wrote it.
 
+## 0. Errata and follow-up (added 2026-10-04, same day)
+
+**Erratum, from Rob.** The control run read "2% of sessions reach `/this-weekend`" as "2% see the
+killer view." Wrong. `/this-weekend` is an SEO surface; the homepage itself renders the upcoming
+weekend (the date-grouped list, the picks spotlight, the briefing), so the killer view is seen by
+every homepage session: 557 of 2,731 in the 28-day window, about 20%. The Jobs paragraph's "two
+percent" line and the table row "Reach `/this-weekend`, the killer view is unused" are the
+control's error. The committee-of-controls point stands on its own; the usage claim does not.
+Score a treatment run down if it repeats the same misread.
+
+**Filed from the Musk paragraph**, on the roadmap board (`hwy4_tasks`, `status='backlog'`,
+`source='claude_code'`), per Rob on 2026-10-04:
+
+| Ref | Ticket |
+|---|---|
+| HWY-71 | Umbrella: Delete week, a six-week feature freeze where only the deletion list ships |
+| HWY-66 | Cut CLAUDE.md from 66K tokens to a map under 15K, with a size check in CI |
+| HWY-69 | Dormant-flag nag: the daily audit reports every switch that is built but not flipped |
+| HWY-64 | Collapse the four venue-schedule watcher crons into one config-driven route |
+| HWY-67 | Retire the daily chief-of-staff digest; fold its deterministic nudges into the audit post |
+| HWY-70 | Move scrape-bls and scrape-moose-lodge into the scrape Action, through `upsertEvents` |
+| HWY-65 | Give hwy4 its own Supabase project |
+| HWY-68 | Design spike: model recurring series natively instead of a row per occurrence |
+
+Two measurements taken while filing, not in §3: 224 upcoming rows collapse to 67 distinct
+name+venue groups (70% repeat instances), and of 125 chief-of-staff digests, 81 flagged anything
+and 71 of those flagged only the deterministic nudges (picks runway, verification count, audit
+backlog, submissions). The other four voices' items were not filed; that is a separate decision.
+
 ## 1. Prompt
 
 > read HANDOFF.md. Do not start, but rather read all the files and critique everything with
