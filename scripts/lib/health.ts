@@ -39,8 +39,16 @@ interface SourceHealth {
  */
 async function fetchAllOrgSlugs(): Promise<string[]> {
   const PAGE = 1000;
+  // ~100k rows; the table holds ~2k. Only a server that ignores the range
+  // (and so never returns an empty page) could reach it, and that must end
+  // the loop rather than hang the scrape job.
+  const MAX_PAGES = 100;
   const slugs = new Set<string>();
-  for (let from = 0; ; ) {
+  for (let from = 0, page = 0; ; page++) {
+    if (page === MAX_PAGES) {
+      console.warn(`  Source list stopped after ${MAX_PAGES} pages; is the range being ignored?`);
+      break;
+    }
     const { data, error } = await supabaseAdmin
       .from("hwy4_events")
       .select("org_slug")

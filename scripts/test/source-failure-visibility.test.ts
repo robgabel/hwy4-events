@@ -59,8 +59,10 @@ test("a page with a nonce but no calendar shortcode fails loudly too", async () 
 // ---------------------------------------------------------------------------
 
 // PostgREST's server cap: one response never carries more than this many
-// rows, whatever range was asked for, and nothing says it was cut.
-const SERVER_MAX_ROWS = 1000;
+// rows, whatever range was asked for, and nothing says it was cut. Kept
+// below health.ts's page size on purpose, so a loop that steps by the page
+// size instead of by what came back skips rows and fails the paging test.
+const SERVER_MAX_ROWS = 400;
 let orgRows: Array<{ org_slug: string }> = [];
 
 function fakeFrom() {
@@ -140,11 +142,14 @@ test("a failed source whose key names no org row still gets a warning", async ()
 
 // 2026-10-04 review: the source list was one unpaged select, so PostgREST's
 // 1000-row cap cut it off inside gocalaveras's rows and visit-murphys, the
-// source that actually failed on 09-28, never got a row at all.
-test("the health table lists a source past the first 1000 rows", async () => {
+// source that actually failed on 09-28, never got a row at all. The target
+// rows sit mid-list: an unpaged read stops before them, and so does a loop
+// that steps by its page size when the server returned fewer rows.
+test("the health table lists a source past the server's row cap", { timeout: 20000 }, async () => {
   const rows = [
-    ...Array.from({ length: 1100 }, () => ({ org_slug: "gocalaveras" })),
+    ...Array.from({ length: 500 }, () => ({ org_slug: "gocalaveras" })),
     ...Array.from({ length: 100 }, () => ({ org_slug: "visit-murphys" })),
+    ...Array.from({ length: 700 }, () => ({ org_slug: "gocalaveras" })),
   ];
   const out = await healthOutput(
     new Map([["visit-murphys", "fetch failed (UND_ERR_CONNECT_TIMEOUT)"]]),
@@ -153,4 +158,10 @@ test("the health table lists a source past the first 1000 rows", async () => {
   const row = out.split("\n").find((l) => l.startsWith("visit-murphys"));
   assert.ok(row, out);
   assert.match(row, /ERROR this run/);
+});
+
+test("source failures still print when the source list comes back empty", async () => {
+  const out = await healthOutput(new Map([["gocalaveras", "no nonce (HTTP 429)"]]), []);
+  assert.match(out, /No sources found in database/);
+  assert.match(out, /gocalaveras: Scraper failed this run: no nonce \(HTTP 429\)/);
 });
