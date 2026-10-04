@@ -147,30 +147,57 @@ export function normalizeCost(cost: string | null | undefined): string | null {
 
 // ---------- Transport ----------
 
+/** A direct request that hangs must not hold the job. undici's own headers
+ *  timeout is 300s, and every page tries the direct fetch before Firecrawl,
+ *  so a host that accepts the connection and never answers would cost five
+ *  pages x 300s and push the 20-minute scrape job past its limit. */
+export const DIRECT_FETCH_TIMEOUT_MS = 15_000;
+
+function describeFailure(err: unknown): string {
+  const code = (err as { cause?: { code?: string } })?.cause?.code;
+  if (code) return code;
+  return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * Fetch one Tribe API page, falling back to Firecrawl when the site's bot wall
- * blocks a plain fetch. Returns null on the natural end-of-results 400.
+ * blocks a plain fetch or the plain fetch gets no answer at all. Returns null
+ * on the natural end-of-results 400.
  */
 export async function fetchTribePage(
   url: string,
-  page: number
+  page: number,
+  directTimeoutMs: number = DIRECT_FETCH_TIMEOUT_MS
 ): Promise<TribeResponse | null> {
-  const resp = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
-      Accept: "application/json",
-    },
-  });
+  let resp: Response;
+  let text: string | null = null;
+  try {
+    resp = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; Hwy4EventsScraper/1.0)",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(directTimeoutMs),
+    });
+    if (resp.ok) text = await resp.text();
+  } catch (err) {
+    // 2026-09-28: visitmurphys.com timed out from the runner and the thrown
+    // TypeError skipped the fallback, so the whole Visit Murphys scrape died.
+    // Firecrawl fetches from its own network, which is the point of having it.
+    console.warn(
+      `  page ${page}: direct fetch failed (${describeFailure(err)}) — retrying via Firecrawl`
+    );
+    return fetchTribePageViaFirecrawl(url, page, err);
+  }
 
-  if (resp.ok) {
-    const text = await resp.text();
+  if (text !== null) {
     try {
       return JSON.parse(text) as TribeResponse;
     } catch {
       console.warn(
         `  page ${page}: 200 but not JSON (bot-wall challenge page) — retrying via Firecrawl`
       );
-      return fetchTribePageViaFirecrawl(url, page);
+      return fetchTribePageViaFirecrawl(url, page, new Error("200 but not JSON"));
     }
   }
 
@@ -182,30 +209,44 @@ export async function fetchTribePage(
   console.warn(
     `  page ${page}: direct fetch failed (${resp.status}) — retrying via Firecrawl`
   );
-  return fetchTribePageViaFirecrawl(url, page);
+  return fetchTribePageViaFirecrawl(url, page, new Error(`HTTP ${resp.status}`));
 }
 
+/** `directFailure` is why the direct fetch was abandoned; it rides along in
+ *  every error so scrape_runs records the real cause, not just Firecrawl's. */
 async function fetchTribePageViaFirecrawl(
   url: string,
-  page: number
+  page: number,
+  directFailure: unknown
 ): Promise<TribeResponse | null> {
+  const direct = describeFailure(directFailure);
   const apiKey = process.env.FIRECRAWL_API_KEY;
   if (!apiKey) {
     throw new Error(
-      `Tribe API request blocked on page ${page} and FIRECRAWL_API_KEY is unset — no fallback available`
+      `Tribe API direct fetch failed on page ${page} (${direct}) and FIRECRAWL_API_KEY is unset — no fallback available`,
+      { cause: directFailure }
     );
   }
 
   const firecrawl = new FirecrawlApp({ apiKey });
-  const result = await firecrawl.scrapeUrl(url, {
-    formats: ["rawHtml"],
-    onlyMainContent: false,
-    timeout: 30000,
-  });
+  let result: Awaited<ReturnType<typeof firecrawl.scrapeUrl>>;
+  try {
+    result = await firecrawl.scrapeUrl(url, {
+      formats: ["rawHtml"],
+      onlyMainContent: false,
+      timeout: 30000,
+    });
+  } catch (err) {
+    throw new Error(
+      `Tribe API request failed on page ${page}: direct fetch (${direct}) and the Firecrawl fallback (${describeFailure(err)}) both failed`,
+      { cause: err }
+    );
+  }
 
   if (!result.success || !result.rawHtml) {
     throw new Error(
-      `Tribe API request failed on page ${page}: Firecrawl fallback also failed`
+      `Tribe API request failed on page ${page}: direct fetch (${direct}) and the Firecrawl fallback both failed`,
+      { cause: directFailure }
     );
   }
 
@@ -213,7 +254,8 @@ async function fetchTribePageViaFirecrawl(
     return JSON.parse(result.rawHtml) as TribeResponse;
   } catch {
     throw new Error(
-      `Tribe API request failed on page ${page}: Firecrawl fallback did not return valid JSON`
+      `Tribe API request failed on page ${page} (direct: ${direct}): Firecrawl fallback did not return valid JSON`,
+      { cause: directFailure }
     );
   }
 }

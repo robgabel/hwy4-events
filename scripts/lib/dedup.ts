@@ -24,6 +24,11 @@ import {
 import { sanitizeDescriptionDetailed } from "../../lib/description-quality.js";
 import { classifyNotabilityDetailed } from "../../lib/notability.js";
 import { resolveFamilyFriendly } from "../../lib/family-friendly.js";
+import {
+  displayActName,
+  isNamedAct,
+  titleWithNamedAct,
+} from "../../lib/lineup-acts.js";
 import { isHttpUrl } from "../../lib/url.js";
 import { tidyArtistList } from "../../lib/artist-identity.js";
 import { recordSourceResult } from "./scrape-run-log.js";
@@ -613,7 +618,9 @@ export function buildStrongMatchUpdate(
   // pre-existing name↔key mismatch, review finding N5).
   const keepName =
     placeholderNameSteal(existing, event) || !(event.name && event.name.trim());
-  const writtenName = keepName ? existing.name : pick(event.name, existing.name);
+  // A discovered act retitles a stored placeholder. A stored specific name
+  // (keepName) is left alone, including against a different act read this run.
+  const writtenName = keepName ? existing.name : resolveWrittenName(existing, event);
   const writtenVenue = pickVenue(event.venue_name, existing.venue_name);
   // Incoming actless placeholder must not donate its series-default clock,
   // leftover artists, EventON description, aggregator URL, or EventON sid
@@ -625,13 +632,33 @@ export function buildStrongMatchUpdate(
     : keepSpecific
       ? pick(existing.description, event.description)
       : pick(event.description, existing.description);
-  const writtenArtists = mergeArtistLists(existing, event);
+  let writtenArtists = mergeArtistLists(existing, event);
+  if (keepSpecific) {
+    // A stored specific title keeps its artists. A blank list backfills only
+    // when this act already leads that title. mergeArtistLists' last-resort
+    // union would otherwise donate an actless incoming list onto the row.
+    const filled = resolveWrittenArtists(existing, event);
+    if (filled) {
+      writtenArtists = filled;
+    } else if (
+      event.discovered_act &&
+      !(existing.artists ?? []).some((a) => a?.trim())
+    ) {
+      writtenArtists = null;
+    }
+  } else if ((!writtenArtists || writtenArtists.length === 0) && !keepName) {
+    // Both titles actless: mergeArtistLists falls through to a plain union, but
+    // a discovered act that never landed on `artists` still has to be the list.
+    const filled = resolveWrittenArtists(existing, event);
+    if (filled) writtenArtists = filled;
+  }
 
   return {
     name: writtenName,
-    dedup_key: keepName
-      ? generateDedupKey(existing.name, event.date, event.town)
-      : dedupKey,
+    dedup_key:
+      keepName || writtenName !== event.name
+        ? generateDedupKey(writtenName, event.date, event.town)
+        : dedupKey,
     venue_name: writtenVenue,
     // HWY-48. A strong match used to leave venue_key untouched, so a resident
     // NULL (the key is not part of isSameEvent's required signals) stayed NULL
@@ -690,7 +717,13 @@ export function buildStrongMatchUpdate(
 }
 
 const EXISTING_ROW_SELECT =
-  "id, name, date, venue_name, venue_key, description, artists, start_time, end_time, price, event_url, address, town, image_url, category, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked";
+  "id, name, date, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, category, artists, dedup_key, source_event_id, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked";
+
+// Serial exact-match reads omit dedup_key / source_event_id (the lookup
+// already used them). `artists` is required: a missing column looks empty and
+// a discovered-act fill would rewrite the list on every run.
+const SERIAL_EXISTING_SELECT =
+  "id, name, date, venue_name, venue_key, description, start_time, end_time, price, event_url, address, town, image_url, category, artists, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked";
 
 type ExistingRow = {
   id: string;
@@ -705,9 +738,6 @@ type ExistingRow = {
    *  re-mark the row updated on every run. */
   venue_key?: string | null;
   description: string | null;
-  /** Selected on every exact-match read. Absent (undefined) only in test
-   *  fixtures, where it is treated as unknown: never a fill, never a change. */
-  artists?: string[] | null;
   start_time: string | null;
   end_time: string | null;
   price: string | null;
@@ -716,6 +746,10 @@ type ExistingRow = {
   town: string;
   image_url: string | null;
   category?: string | null;
+  /** Selected on every exact-match read. Absent only in test fixtures; a
+   *  production row that omitted it would look empty and a discovered-act
+   *  fill would re-mark the row updated on every run. */
+  artists?: string[] | null;
   dedup_key?: string | null;
   source_event_id?: string | null;
   // When true, the field is human-set — no scrape write may touch it.
@@ -808,6 +842,104 @@ export function placeholderNameSteal(
 }
 
 /**
+ * Name an update or insert will store (HWY-59).
+ *
+ * A discovered act (lineup poster or source subtitle) retitles an actless
+ * calendar row ("Live Music @ Murphys Irish Pub" → "Kiana Chanelle Live Music
+ * @ Murphys Irish Pub") on the way in. Once that specific name is stored, a
+ * later scrape whose calendar title is still the placeholder keeps it —
+ * `placeholderNameSteal` — even when this run read a different act. A flaky
+ * poster re-read therefore cannot rename the night every morning, and there
+ * is no name_locked column. A specific incoming title (the organizer's own
+ * name) still writes; the discovered act is ignored unless the calendar
+ * title itself is actless.
+ *
+ * `existing` null is the insert path: the first write carries the act.
+ */
+export function resolveWrittenName(
+  existing: { name: string } | null,
+  event: {
+    name: string;
+    venue_name?: string | null;
+    town?: string | null;
+    discovered_act?: string | null;
+  }
+): string {
+  if (existing && placeholderNameSteal(existing, event)) return existing.name;
+  if (existing && !(event.name && event.name.trim())) return existing.name;
+  const act = event.discovered_act?.trim();
+  if (act && isActlessPlaceholderTitle(event.name ?? "")) {
+    const titled = titleWithNamedAct(
+      act,
+      event.name,
+      event.venue_name ?? "",
+      event.town
+    );
+    if (titled) return titled;
+  }
+  return event.name;
+}
+
+/** Artists an exact-match update should fill. Undefined = omit the column.
+ *  A stored list is never replaced. An actless calendar title with no
+ *  discovered act does not donate artists. A stored specific title only
+ *  backfills artists when this act already leads it, so a later poster
+ *  reading cannot attach a different band to a night that already has a name. */
+export function resolveWrittenArtists(
+  existing: { name?: string; artists?: string[] | null } | null,
+  event: {
+    name: string;
+    artists?: string[] | null;
+    discovered_act?: string | null;
+  }
+): string[] | undefined {
+  const stored = (existing?.artists ?? [])
+    .map((a) => a?.trim())
+    .filter((a): a is string => !!a);
+  if (stored.length > 0) return undefined;
+  const act = event.discovered_act?.trim();
+  if (!act || !isActlessPlaceholderTitle(event.name ?? "")) return undefined;
+  const named = displayActName(act);
+  if (!isNamedAct(named)) return undefined;
+  const storedName = existing?.name?.trim() ?? "";
+  if (
+    storedName &&
+    !isActlessPlaceholderTitle(storedName) &&
+    !normalizeName(storedName).startsWith(normalizeName(named))
+  ) {
+    return undefined;
+  }
+  return [named];
+}
+
+/** Name, artists, and dedup_key an INSERT will store. The calendar title
+ *  stays on the in-memory event; the row carries the titled form. */
+function fieldsForInsert(event: ExtractedEvent): {
+  name: string;
+  artists: string[] | null;
+  dedupKey: string;
+} {
+  const name = resolveWrittenName(null, event);
+  const filled = resolveWrittenArtists(null, event);
+  const artists =
+    filled ?? (event.artists && event.artists.length > 0 ? event.artists : null);
+  return {
+    name,
+    artists,
+    dedupKey: generateDedupKey(name, event.date, event.town),
+  };
+}
+
+function eventDedupKeys(event: ExtractedEvent): { calendar: string; written: string } {
+  const calendar = generateDedupKey(event.name, event.date, event.town);
+  const writtenName = resolveWrittenName(null, event);
+  return {
+    calendar,
+    written: generateDedupKey(writtenName, event.date, event.town),
+  };
+}
+
+/**
  * The VENUE-level twin of `placeholderNameSteal`: a generic venue placeholder
  * ("Unknown Venue", a bare town, a poisoned "Featuring …" string) never
  * overwrites a specific stored venue on the update paths — and the town label
@@ -856,14 +988,26 @@ export function placeholderVenueSteal(
   );
 }
 
-/** Fill-only artists for the exact-match path. The payload never wrote
- *  `artists` before 2026-10-04, so a row inserted with an empty list stayed
- *  empty forever even once the title named the act. Upgrade-only, the keepStr
- *  rule for a list: an empty stored list takes a scraped one, a stored list is
- *  never replaced (a merge already unioned it; a re-scrape must not shrink it). */
+/** Artists the exact-match payload writes, or null to omit the column.
+ *
+ *  Two fills, both upgrade-only (a stored list is never replaced, the keepStr
+ *  rule for a list): HWY-59's discovered act (`resolveWrittenArtists`, a
+ *  lineup poster or subtitle naming the act on an actless calendar row), then
+ *  the scraped list itself (2026-10-04), which `normalizeEventLocation` now
+ *  fills from a title that names the act ("Live Music - Carlos Castillo").
+ *  Before that second fill, a row inserted with an empty list stayed empty
+ *  forever even once its title named the act.
+ *
+ *  An actless placeholder title never donates its scraped list: EventON
+ *  recycles a prior occurrence's act onto the series row (the 2026-09-19 Brice
+ *  Hilltop "Earth Tones" leftover), which is exactly why HWY-59 gates on the
+ *  title. A fixture without the column (undefined) is unknown: no fill. */
 function artistsFill(existing: ExistingRow, event: ExtractedEvent): string[] | null {
+  const discovered = resolveWrittenArtists(existing, event);
+  if (discovered) return discovered;
   if (existing.artists === undefined) return null;
-  if (existing.artists && existing.artists.length > 0) return null;
+  if (existing.artists && existing.artists.some((a) => a?.trim())) return null;
+  if (isActlessPlaceholderTitle(event.name ?? "")) return null;
   return event.artists && event.artists.length > 0 ? event.artists : null;
 }
 
@@ -873,10 +1017,15 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
   const keepVenue = placeholderVenueSteal(existing, event);
   const writtenVenueName = keepVenue ? existing.venue_name : event.venue_name;
   const nextVenueKey = writtenVenueKey(existing, event, writtenVenueName);
+  // Same name the payload stores: a discovered act retitles a placeholder,
+  // and a placeholder scrape does not count as a change of a specific name.
+  const writtenName = resolveWrittenName(existing, event);
   return (
-    // A placeholder name would not be written over a specific one
-    // (placeholderNameSteal), so that diff is not a change.
-    (!placeholderNameSteal(existing, event) && existing.name !== event.name) ||
+    writtenName !== existing.name ||
+    // Filling a blank artists list (a discovered act, or a title that names
+    // the act) is a real write. A stored list is never replaced, so this is
+    // false once the act is in.
+    artistsFill(existing, event) !== null ||
     // A rescheduled event keeps its stable source_event_id but changes date.
     // (For sources whose source_event_id or dedup_key already embeds the date,
     // the matched row's date equals the incoming date, so this is a no-op.)
@@ -894,8 +1043,6 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
     // key on a specific-name row was backfill-only — an alias added after
     // insert never reached that backfill on the daily scrape.
     nextVenueKey !== (existing.venue_key ?? null) ||
-    // An empty stored artists list the scrape can now fill is a change.
-    artistsFill(existing, event) !== null ||
     // A locked field can't be written, so a diff there is not a change. For
     // the keepStr-guarded display fields, "changed" is defined as "what the
     // payload WOULD write differs from what is stored" — the exact same
@@ -929,7 +1076,7 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
     // next scrape). Locked diffs are not a change.
     (!existing.family_friendly_locked &&
       resolveFamilyFriendly({
-        name: placeholderNameSteal(existing, event) ? existing.name : event.name,
+        name: writtenName,
         description: existing.description_locked
           ? existing.description
           : keepStr(event.description, existing.description),
@@ -966,7 +1113,10 @@ export function buildExactMatchUpdate(
   // (writtenVenueKey), not from the degraded incoming shape.
   const keepName = placeholderNameSteal(existing, event);
   const keepVenue = placeholderVenueSteal(existing, event);
-  const writtenName = keepName ? existing.name : event.name;
+  // A discovered act retitles a stored placeholder. keepName (and a blank
+  // incoming name) still return the stored title via resolveWrittenName.
+  const writtenName = resolveWrittenName(existing, event);
+  const writtenArtists = artistsFill(existing, event);
   const writtenTown = keepVenue ? existing.town : event.town;
   const writtenVenueName = keepVenue ? existing.venue_name : event.venue_name;
   const writtenDescription = existing.description_locked
@@ -974,6 +1124,7 @@ export function buildExactMatchUpdate(
     : keepStr(event.description, existing.description);
   return {
     name: writtenName,
+    ...(writtenArtists ? { artists: writtenArtists } : {}),
     // Propagate a rescheduled date (dedup_key below stays consistent with it).
     date: event.date,
     venue_name: writtenVenueName,
@@ -1005,7 +1156,6 @@ export function buildExactMatchUpdate(
       name: writtenName,
       description: writtenDescription,
     }),
-    ...(artistsFill(existing, event) ? { artists: artistsFill(existing, event) } : {}),
     // Keep dedup_key in sync with the (possibly-changed) date/town so key
     // lookups still find this row if source_event_id ever disappears. When
     // either steal-guard keeps a stored value, the key is recomputed from
@@ -1020,7 +1170,7 @@ export function buildExactMatchUpdate(
     // and the sid-less seed sources all agree with their venues' registry
     // towns); worst case is a one-day transient dup that reconcile heals.
     dedup_key:
-      keepName || keepVenue
+      keepName || keepVenue || writtenName !== event.name
         ? generateDedupKey(writtenName, event.date, writtenTown)
         : dedupKey,
     ...(event.source_event_id && { source_event_id: event.source_event_id }),
@@ -1185,12 +1335,20 @@ async function upsertEventsBatched(
   normalizeBatch(events, sourceName, orgSlug);
   events = guardUnpinned(events, sourceName, unpinnedPolicy, result);
 
-  const prepared = events.map((event) => ({
-    event,
-    dedupKey: generateDedupKey(event.name, event.date, event.town),
-  }));
+  const prepared = events.map((event) => {
+    const keys = eventDedupKeys(event);
+    return { event, dedupKey: keys.calendar, writtenKey: keys.written };
+  });
 
-  const dedupKeys = prepared.map((p) => p.dedupKey);
+  // Calendar key finds a row that has not been retitled yet. Written key
+  // finds one whose public title already carries the act (HWY-59).
+  const dedupKeys = [
+    ...new Set(
+      prepared.flatMap((p) =>
+        p.writtenKey === p.dedupKey ? [p.dedupKey] : [p.dedupKey, p.writtenKey]
+      )
+    ),
+  ];
   const sourceEventIds = prepared
     .map((p) => p.event.source_event_id)
     .filter((v): v is string => !!v);
@@ -1223,18 +1381,31 @@ async function upsertEventsBatched(
   }
 
   // Partition events into matched (will UPDATE) vs unmatched (fuzzy or INSERT)
-  let matched: { event: ExtractedEvent; existing: ExistingRow; dedupKey: string; changed: boolean }[] = [];
-  const unmatched: { event: ExtractedEvent; dedupKey: string }[] = [];
+  let matched: {
+    event: ExtractedEvent;
+    existing: ExistingRow;
+    dedupKey: string;
+    writtenKey: string;
+    changed: boolean;
+  }[] = [];
+  const unmatched: { event: ExtractedEvent; dedupKey: string; writtenKey: string }[] = [];
 
-  for (const { event, dedupKey } of prepared) {
+  for (const { event, dedupKey, writtenKey } of prepared) {
     const existing =
       (event.source_event_id && existingBySourceEventId.get(event.source_event_id)) ||
       existingByDedupKey.get(dedupKey) ||
+      (writtenKey !== dedupKey ? existingByDedupKey.get(writtenKey) : undefined) ||
       null;
     if (existing) {
-      matched.push({ event, existing, dedupKey, changed: rowChanged(existing, event) });
+      matched.push({
+        event,
+        existing,
+        dedupKey,
+        writtenKey,
+        changed: rowChanged(existing, event),
+      });
     } else {
-      unmatched.push({ event, dedupKey });
+      unmatched.push({ event, dedupKey, writtenKey });
     }
   }
 
@@ -1384,49 +1555,54 @@ async function upsertEventsBatched(
     // Held before the in-batch key check, so a held degraded copy can never
     // claim the key ahead of an enriched twin in the same batch.
     if (holdDegradedInsert(u.event, runDate, result)) continue;
-    if (seenKeys.has(u.dedupKey)) {
+    // The stored key is the titled name's, so two calendar titles that
+    // resolve to one act collide here instead of both inserting.
+    if (seenKeys.has(u.writtenKey)) {
       console.warn(
         `  Dropped in-batch duplicate (same dedup_key): "${u.event.name}" | ${u.event.date} | ${u.event.town}`
       );
       continue;
     }
-    seenKeys.add(u.dedupKey);
+    seenKeys.add(u.writtenKey);
     toInsert.push(u);
   }
 
   if (toInsert.length > 0) {
-    const insertPayloads = toInsert.map(({ event, dedupKey }) => ({
-      name: event.name,
-      description: event.description,
-      date: event.date,
-      start_time: event.start_time,
-      end_time: event.end_time,
-      venue_name: event.venue_name,
-      venue_key: resolveVenueKey(event),
-      town: event.town,
-      address: event.address,
-      category: event.category,
-      artists: event.artists,
-      status: "confirmed",
-      is_past: false,
-      price: event.price,
-      event_url: event.event_url,
-      image_url: event.image_url ?? null,
-      source_url: sourceUrl,
-      source_name: sourceName,
-      visibility,
-      org_slug: orgSlug,
-      dedup_key: dedupKey,
-      source_event_id: event.source_event_id ?? null,
-      is_routine: event.is_routine ?? false,
-      routine_reason: event.routine_reason ?? null,
-      family_friendly: resolveFamilyFriendly({
-        name: event.name,
+    const insertPayloads = toInsert.map(({ event }) => {
+      const written = fieldsForInsert(event);
+      return {
+        name: written.name,
         description: event.description,
+        date: event.date,
+        start_time: event.start_time,
+        end_time: event.end_time,
+        venue_name: event.venue_name,
+        venue_key: resolveVenueKey(event),
+        town: event.town,
+        address: event.address,
         category: event.category,
-      }),
-      last_scraped_at: now,
-    }));
+        artists: written.artists,
+        status: "confirmed",
+        is_past: false,
+        price: event.price,
+        event_url: event.event_url,
+        image_url: event.image_url ?? null,
+        source_url: sourceUrl,
+        source_name: sourceName,
+        visibility,
+        org_slug: orgSlug,
+        dedup_key: written.dedupKey,
+        source_event_id: event.source_event_id ?? null,
+        is_routine: event.is_routine ?? false,
+        routine_reason: event.routine_reason ?? null,
+        family_friendly: resolveFamilyFriendly({
+          name: written.name,
+          description: event.description,
+          category: event.category,
+        }),
+        last_scraped_at: now,
+      };
+    });
     const { data, error } = await supabaseAdmin
       .from("hwy4_events")
       .insert(insertPayloads)
@@ -1495,11 +1671,13 @@ export async function upsertEvents(
   events = guardUnpinned(events, sourceName, unpinnedPolicy, result);
 
   for (const event of events) {
-    const dedupKey = generateDedupKey(event.name, event.date, event.town);
+    const { calendar: dedupKey, written: writtenKey } = eventDedupKeys(event);
 
     // Prefer the source-side stable id when the scraper provided one — this
     // survives town/venue/name changes so re-scrapes can update in place.
     // Falls back to dedup_key for sources that don't have a stable id.
+    // The written key is the titled name's hash, so a row already carrying
+    // the act is found when the calendar title's key no longer matches.
     let existing: {
       id: string;
       name: string;
@@ -1515,6 +1693,7 @@ export async function upsertEvents(
       town: string;
       image_url: string | null;
       category?: string | null;
+      artists?: string[] | null;
       price_locked?: boolean | null;
       description_locked?: boolean | null;
       poster_locked?: boolean | null;
@@ -1528,9 +1707,7 @@ export async function upsertEvents(
     if (event.source_event_id) {
       const { data } = await supabaseAdmin
         .from("hwy4_events")
-        .select(
-          "id, name, date, venue_name, venue_key, description, artists, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
-        )
+        .select(SERIAL_EXISTING_SELECT)
         .eq("source_name", sourceName)
         .eq("source_event_id", event.source_event_id)
         .maybeSingle();
@@ -1539,10 +1716,16 @@ export async function upsertEvents(
     if (!existing) {
       const { data } = await supabaseAdmin
         .from("hwy4_events")
-        .select(
-          "id, name, date, venue_name, venue_key, description, artists, start_time, end_time, price, event_url, address, town, image_url, category, price_locked, description_locked, poster_locked, is_routine, notability_locked, times_locked, family_friendly, family_friendly_locked"
-        )
+        .select(SERIAL_EXISTING_SELECT)
         .eq("dedup_key", dedupKey)
+        .maybeSingle();
+      existing = data ?? null;
+    }
+    if (!existing && writtenKey !== dedupKey) {
+      const { data } = await supabaseAdmin
+        .from("hwy4_events")
+        .select(SERIAL_EXISTING_SELECT)
+        .eq("dedup_key", writtenKey)
         .maybeSingle();
       existing = data ?? null;
     }
@@ -1639,9 +1822,11 @@ export async function upsertEvents(
       // run that enriches it insert it properly (dedup v2 0.4).
       if (holdDegradedInsert(event, runDate, result)) continue;
 
-      // Insert new event
+      // Insert new event. A discovered act is stored in the public title;
+      // the in-memory calendar title stays generic for the next scrape.
+      const written = fieldsForInsert(event);
       const { error } = await supabaseAdmin.from("hwy4_events").insert({
-        name: event.name,
+        name: written.name,
         description: event.description,
         date: event.date,
         start_time: event.start_time,
@@ -1651,7 +1836,7 @@ export async function upsertEvents(
         town: event.town,
         address: event.address,
         category: event.category,
-        artists: event.artists,
+        artists: written.artists,
         status: "confirmed",
         is_past: false,
         price: event.price,
@@ -1661,12 +1846,12 @@ export async function upsertEvents(
         source_name: sourceName,
         visibility,
         org_slug: orgSlug,
-        dedup_key: dedupKey,
+        dedup_key: written.dedupKey,
         source_event_id: event.source_event_id ?? null,
         is_routine: event.is_routine ?? false,
         routine_reason: event.routine_reason ?? null,
         family_friendly: resolveFamilyFriendly({
-          name: event.name,
+          name: written.name,
           description: event.description,
           category: event.category,
         }),

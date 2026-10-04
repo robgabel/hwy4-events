@@ -57,3 +57,15 @@ test("an unselected artists column is unknown: no fill, no change", async () => 
   assert.equal(rowChanged(base as never, event as never), false);
   assert.equal("artists" in buildExactMatchUpdate(base as never, event as never, "k", NOW), false);
 });
+
+test("an actless placeholder title never donates its scraped list (EventON leftovers)", async () => {
+  const { rowChanged, buildExactMatchUpdate } = await load();
+  const existing = { ...base, name: "Greg Sutton and Friends", artists: null };
+  const event = {
+    ...base,
+    name: "Brice Station Vineyards – Hilltop Concert Series",
+    artists: ["Earth Tones Trio & Band"],
+  };
+  assert.equal(rowChanged(existing, event as never), false);
+  assert.equal("artists" in buildExactMatchUpdate(existing, event as never, "k", NOW), false);
+});

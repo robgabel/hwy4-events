@@ -7,7 +7,7 @@ import { SITE_URL } from "@/lib/constants";
 import { CORRIDOR_TOWNS, TOWN_INFO, TownInfo } from "@/lib/towns";
 import { townSlug } from "@/lib/slugs";
 import { getSupabase } from "@/lib/supabase";
-import { getEventsInTown } from "@/lib/events-data";
+import { getEventsInTown, getEventsInRange } from "@/lib/events-data";
 import { filterListableEvents } from "@/lib/list-visibility";
 import { getPublishedArtists } from "@/lib/artists-data";
 import { artistGenreMap } from "@/lib/artists";
@@ -33,9 +33,22 @@ import { holidayGuideForTown } from "@/lib/holiday-pages";
 import { marketGuideForTown } from "@/lib/market-pages";
 import { meetMeGuideForTown } from "@/lib/meet-me-pages";
 import { personaHubsForTown } from "@/lib/persona-hubs";
-import { pacificToday } from "@/lib/date-windows";
+import { pacificToday, thisWeekendRange } from "@/lib/date-windows";
+import { nowPacificMinutes } from "@/lib/event-time";
+import { generateEventSlug } from "@/lib/slugs";
+import {
+  buildWeekendAnswer,
+  nearestTownWithEvents,
+  selectWeekendEvents,
+  weekdayName,
+  weekendEmptyLine,
+  weekendHeading,
+} from "@/lib/town-weekend";
 
 export const revalidate = 3600;
+
+// Weekend-block list length before it hands off to /this-weekend.
+const WEEKEND_LIST_CAP = 8;
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -107,11 +120,13 @@ export default async function TownPage({ params }: PageProps) {
   const town: TownInfo | undefined = TOWN_INFO[content.townName];
   if (!town) notFound();
 
-  const [townEvents, venues, townForecast, artists] = await Promise.all([
+  const weekend = thisWeekendRange();
+  const [townEvents, venues, townForecast, artists, weekendRows] = await Promise.all([
     getEventsInTown(content.townName),
     getVenuesInTown(content.townName),
     getForecast(town.lat, town.lng),
     getPublishedArtists(),
+    getEventsInRange(weekend.start, weekend.end),
   ]);
   // Public feed. Town pages have no Clubs toggle, so members-only rows stay
   // hidden. getEventsInTown already applies this gate before its cap; calling
@@ -121,6 +136,22 @@ export default async function TownPage({ params }: PageProps) {
   // Every event on this page is in one town, so a one-entry map is all the
   // cards need (and keeps the client payload to a single town's forecast).
   const forecastsByTown: TownForecasts = { [town.name]: townForecast };
+
+  // HWY-61: the dated "this weekend" answer, shaped like the question people
+  // actually ask an engine. Live rows only; ISR (revalidate above) keeps it
+  // current, and already-finished events drop so Sunday doesn't list Friday.
+  const nowMinutes = nowPacificMinutes();
+  const weekendListable = filterListableEvents(weekendRows);
+  const weekendEvents = selectWeekendEvents(weekendListable, town.name, weekend, nowMinutes);
+  const weekendAnswer = buildWeekendAnswer(town.name, weekendEvents);
+  const weekendFallback = weekendAnswer
+    ? null
+    : nearestTownWithEvents(
+        townsByDistance(town).map((t) => t.name),
+        weekendListable,
+        weekend,
+        nowMinutes
+      );
 
   const nearby = pickNearbyTowns(town, 3);
   // Guide callouts this town hosts: seasonal festival guide(s) (hideAfter-gated,
@@ -226,11 +257,78 @@ export default async function TownPage({ params }: PageProps) {
           <p className="text-center text-lg leading-relaxed text-stone sm:text-left">
             {content.subhead}
           </p>
+          {content.disambiguation && (
+            <p className="speakable mt-2 text-center text-sm leading-relaxed text-stone sm:text-left">
+              {content.disambiguation}
+            </p>
+          )}
           <p className="mt-2 text-center text-xs uppercase tracking-wide text-stone-light sm:text-left">
             {town.elevation.toLocaleString()} ft
           </p>
         </div>
       </div>
+
+      {/* This weekend (HWY-61): a dated, question-shaped answer above the
+       * evergreen copy, naming real listings. Empty weekends say so. */}
+      <section className="mb-8">
+        <h2 className="font-display mb-2 text-xl font-semibold text-forest">
+          {weekendHeading(town.name, weekend)}
+        </h2>
+        {weekendAnswer ? (
+          <>
+            <p className="speakable leading-relaxed text-stone">{weekendAnswer}</p>
+            {/* Every weekend event, so "Plus N more" is never a promise the
+             * page can't keep (the upcoming list below starts from today and
+             * fills with weekday rows first). */}
+            <ul className="mt-3 space-y-1 text-sm">
+              {weekendEvents.slice(0, WEEKEND_LIST_CAP).map((e) => (
+                <li key={e.id} className="text-stone">
+                  <span className="text-stone-light">{weekdayName(e.date)}: </span>
+                  <Link
+                    href={`/events/${generateEventSlug(e.name, e.date, e.town)}`}
+                    className="font-medium text-pine hover:underline"
+                  >
+                    {e.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            {weekendEvents.length > WEEKEND_LIST_CAP && (
+              <p className="mt-2 text-sm">
+                <Link href="/this-weekend" className="font-medium text-pine hover:underline">
+                  See all {weekendEvents.length} on the weekend page &rarr;
+                </Link>
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="speakable leading-relaxed text-stone">
+            {weekendEmptyLine(town.name, weekend, pacificToday().iso)}{" "}
+            {weekendFallback ? (
+              <>
+                The nearest town with something on is{" "}
+                <Link
+                  href={
+                    getTownContent(townSlug(weekendFallback.town))
+                      ? `/towns/${townSlug(weekendFallback.town)}`
+                      : `/?town=${encodeURIComponent(weekendFallback.town)}`
+                  }
+                  className="font-medium text-pine hover:underline"
+                >
+                  {weekendFallback.town}
+                </Link>
+                , or see{" "}
+              </>
+            ) : (
+              <>See </>
+            )}
+            <Link href="/this-weekend" className="font-medium text-pine hover:underline">
+              everything on the corridor this weekend
+            </Link>
+            .
+          </p>
+        )}
+      </section>
 
       {/* Lead: always-visible teaser + collapsed full intro behind a Read
        * more toggle. The teaser carries the highest-AEO answer text above
@@ -281,7 +379,7 @@ export default async function TownPage({ params }: PageProps) {
        * visitors want "what's tonight" first. */}
       <section className="mb-10">
         <h2 className="font-display mb-4 text-xl font-semibold text-forest">
-          What&apos;s happening in {town.name}
+          Coming up in {town.name}
         </h2>
         {events.length > 0 ? (
           <>
@@ -464,6 +562,16 @@ export default async function TownPage({ params }: PageProps) {
 }
 
 // ---------- helpers ----------
+
+/** Every other corridor town, nearest first by straight-line distance. */
+function townsByDistance(self: TownInfo): TownInfo[] {
+  const cos = Math.cos((self.lat * Math.PI) / 180);
+  return CORRIDOR_TOWNS.filter((t) => t.name !== self.name).sort(
+    (a, b) =>
+      ((a.lat - self.lat) ** 2 + ((a.lng - self.lng) * cos) ** 2) -
+      ((b.lat - self.lat) ** 2 + ((b.lng - self.lng) * cos) ** 2)
+  );
+}
 
 function pickNearbyTowns(self: TownInfo, count: number): TownInfo[] {
   const ordered = CORRIDOR_TOWNS.map((t) => ({
