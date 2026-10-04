@@ -67,15 +67,17 @@ export function linkHost(url: string): string {
   }
 }
 
-/** A host needs at least this many links checked before the guard can judge it. */
+/** A host needs at least this many distinct answered links before the guard can judge it. */
 export const HOST_ANOMALY_MIN_LINKS = 3;
-/** At or above this share of a host's links answering "not found", spare the host. */
+/** At or above this share of a host's answered links answering "not found", spare the host. */
 export const HOST_ANOMALY_DEAD_SHARE = 0.5;
 
 export interface SparedHost {
   host: string;
+  /** Distinct URLs that came back not-found. */
   dead: number;
-  checked: number;
+  /** Distinct URLs that got an answer at all (ok or not-found). */
+  answered: number;
 }
 
 export interface NullPlan {
@@ -88,7 +90,12 @@ export interface NullPlan {
  * of its links in one run has a problem (a bot wall that 404s, a site move in
  * flight), not that many dead pages, so none of its links are nulled. Every
  * event it lists that is still real gets its link rewritten by the next
- * scrape anyway; a wrong null on a past row is permanent.
+ * scrape anyway; a wrong null on a row no scraper rewrites is permanent.
+ *
+ * The share is over distinct URLs that got an answer. Several rows can share
+ * one listing page (four Red Cross drives share one), and a link that got no
+ * answer says nothing about whether the host's pages exist: counting it would
+ * let a half-down host dilute its own 404s below the line.
  */
 export function planLinkNulls(checks: readonly LinkCheck[]): NullPlan {
   const byHost = new Map<string, LinkCheck[]>();
@@ -104,11 +111,15 @@ export function planLinkNulls(checks: readonly LinkCheck[]): NullPlan {
   for (const [host, list] of byHost) {
     const dead = list.filter((c) => c.verdict === "dead");
     if (dead.length === 0) continue;
+    const answered = new Set(
+      list.filter((c) => c.verdict !== "unconfirmed").map((c) => c.url)
+    );
+    const deadUrls = new Set(dead.map((c) => c.url));
     if (
-      list.length >= HOST_ANOMALY_MIN_LINKS &&
-      dead.length / list.length >= HOST_ANOMALY_DEAD_SHARE
+      answered.size >= HOST_ANOMALY_MIN_LINKS &&
+      deadUrls.size / answered.size >= HOST_ANOMALY_DEAD_SHARE
     ) {
-      sparedHosts.push({ host, dead: dead.length, checked: list.length });
+      sparedHosts.push({ host, dead: deadUrls.size, answered: answered.size });
       continue;
     }
     toNull.push(...dead);

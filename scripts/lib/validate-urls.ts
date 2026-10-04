@@ -6,6 +6,7 @@ import {
   planLinkNulls,
   summarizeUnconfirmed,
   type LinkCheck,
+  type LinkVerdict,
 } from "./url-check.js";
 
 const BATCH_SIZE = 5; // concurrent requests
@@ -38,20 +39,14 @@ async function requestStatus(
   }
 }
 
-async function checkLink(event: {
-  id: string;
-  name: string;
-  event_url: string;
-}): Promise<LinkCheck> {
-  const headStatus = await requestStatus(event.event_url, "HEAD");
+/** One link's verdict. A HEAD that says dead is only believed once a GET agrees. */
+async function checkUrl(
+  url: string
+): Promise<{ status: number | null; verdict: LinkVerdict }> {
+  const headStatus = await requestStatus(url, "HEAD");
   const headSaysDead = classifyLinkStatus(headStatus) === "dead";
-  const getStatus = headSaysDead
-    ? await requestStatus(event.event_url, "GET")
-    : null;
+  const getStatus = headSaysDead ? await requestStatus(url, "GET") : null;
   return {
-    id: event.id,
-    name: event.name,
-    url: event.event_url,
     status: headSaysDead ? getStatus : headStatus,
     verdict: confirmedVerdict(headStatus, getStatus),
   };
@@ -63,9 +58,9 @@ async function checkLink(event: {
  *
  * The rules live in url-check.ts: only a 404 or 410 that a GET confirms
  * counts as dead. No answer, a bot wall, a rate limit or a 5xx never nulls a
- * link, and a host that answers "not found" for half or more of its links is
- * spared as a host problem. Past events are not checked: no scraper rewrites
- * their links, so a wrong null there is permanent.
+ * link, and a host where half or more of its answered links come back "not
+ * found" is spared as a host problem. Past events are not checked: no scraper
+ * rewrites their links, so a wrong null there is permanent.
  */
 export async function validateEventUrls(): Promise<{
   checked: number;
@@ -106,19 +101,28 @@ export async function validateEventUrls(): Promise<{
   );
 
   console.log(
-    `Checking ${checkable.length} upcoming event URLs (${skippedAggregator} aggregator URLs skipped)...`
+    `Checking ${checkable.length} upcoming event links (${skippedAggregator} aggregator URLs skipped)...`
   );
 
-  // Process in batches to avoid overwhelming servers
-  const checks: LinkCheck[] = [];
-  for (let i = 0; i < checkable.length; i += BATCH_SIZE) {
-    const batch = checkable.slice(i, i + BATCH_SIZE);
-    checks.push(...(await Promise.all(batch.map(checkLink))));
+  // One request per distinct URL (several rows can share a listing page),
+  // in batches to avoid overwhelming servers.
+  const urls = [...new Set(checkable.map((e) => e.event_url))];
+  const byUrl = new Map<string, { status: number | null; verdict: LinkVerdict }>();
+  for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+    const batch = urls.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(batch.map(checkUrl));
+    batch.forEach((url, j) => byUrl.set(url, results[j]));
 
-    if (i + BATCH_SIZE < checkable.length) {
+    if (i + BATCH_SIZE < urls.length) {
       await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
     }
   }
+  const checks: LinkCheck[] = checkable.map((e) => ({
+    id: e.id,
+    name: e.name,
+    url: e.event_url,
+    ...byUrl.get(e.event_url)!,
+  }));
 
   const dead = checks.filter((c) => c.verdict === "dead");
   const unconfirmed = checks.filter((c) => c.verdict === "unconfirmed");
@@ -126,7 +130,7 @@ export async function validateEventUrls(): Promise<{
 
   for (const h of plan.sparedHosts) {
     console.warn(
-      `  HOST_ANOMALY ${h.host}: ${h.dead} of ${h.checked} links answered not-found this run. ` +
+      `  HOST_ANOMALY ${h.host}: ${h.dead} of ${h.answered} answered links came back not-found this run. ` +
         "Treating it as a host problem, not dead pages; none nulled."
     );
   }
@@ -154,7 +158,7 @@ export async function validateEventUrls(): Promise<{
   }
 
   console.log(
-    `URL validation: ${checks.length} checked, ${dead.length} dead, ${nulled} nulled, ` +
+    `URL validation: ${checks.length} checked (${urls.length} distinct URLs), ${dead.length} dead, ${nulled} nulled, ` +
       `${unconfirmed.length} unconfirmed (kept)` +
       (plan.sparedHosts.length > 0
         ? `, ${plan.sparedHosts.length} host(s) spared by the anomaly guard`

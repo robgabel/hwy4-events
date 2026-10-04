@@ -58,13 +58,23 @@ test("a page with a nonce but no calendar shortcode fails loudly too", async () 
 // (scraped today, 5 future events): exactly the shape that printed "OK".
 // ---------------------------------------------------------------------------
 
+// PostgREST's server cap: one response never carries more than this many
+// rows, whatever range was asked for, and nothing says it was cut.
+const SERVER_MAX_ROWS = 1000;
+let orgRows: Array<{ org_slug: string }> = [];
+
 function fakeFrom() {
   let cols = "";
   let head = false;
   let single = false;
+  let range: [number, number] | null = null;
   const run = () => {
     if (head) return { data: null, count: 5, error: null };
-    if (cols === "org_slug") return { data: [{ org_slug: "gocalaveras" }], error: null };
+    if (cols === "org_slug") {
+      const [from, to] = range ?? [0, orgRows.length - 1];
+      const end = Math.min(to + 1, from + SERVER_MAX_ROWS);
+      return { data: orgRows.slice(from, end), error: null };
+    }
     if (cols === "last_scraped_at") {
       const row = { last_scraped_at: new Date().toISOString() };
       return { data: single ? row : [row], error: null };
@@ -78,6 +88,7 @@ function fakeFrom() {
     gte: () => q,
     order: () => q,
     limit: () => q,
+    range: (from: number, to: number) => ((range = [from, to]), q),
     maybeSingle: () => ((single = true), q),
     then: (ok: (v: unknown) => unknown, fail?: (e: unknown) => unknown) =>
       Promise.resolve(run()).then(ok, fail),
@@ -85,7 +96,11 @@ function fakeFrom() {
   return q;
 }
 
-async function healthOutput(sourceErrors?: Map<string, string>): Promise<string> {
+async function healthOutput(
+  sourceErrors?: Map<string, string>,
+  rows: Array<{ org_slug: string }> = [{ org_slug: "gocalaveras" }]
+): Promise<string> {
+  orgRows = rows;
   const { supabaseAdmin } = await import("../lib/supabase-admin.js");
   (supabaseAdmin as unknown as { from: () => unknown }).from = fakeFrom;
   const { runHealthCheck } = await import("../lib/health.js");
@@ -121,4 +136,21 @@ test("without an error the same fresh source still reads OK", async () => {
 test("a failed source whose key names no org row still gets a warning", async () => {
   const out = await healthOutput(new Map([["hwy4-fb-discover", "Apify 400"]]));
   assert.match(out, /hwy4-fb-discover: Scraper failed this run: Apify 400/);
+});
+
+// 2026-10-04 review: the source list was one unpaged select, so PostgREST's
+// 1000-row cap cut it off inside gocalaveras's rows and visit-murphys, the
+// source that actually failed on 09-28, never got a row at all.
+test("the health table lists a source past the first 1000 rows", async () => {
+  const rows = [
+    ...Array.from({ length: 1100 }, () => ({ org_slug: "gocalaveras" })),
+    ...Array.from({ length: 100 }, () => ({ org_slug: "visit-murphys" })),
+  ];
+  const out = await healthOutput(
+    new Map([["visit-murphys", "fetch failed (UND_ERR_CONNECT_TIMEOUT)"]]),
+    rows
+  );
+  const row = out.split("\n").find((l) => l.startsWith("visit-murphys"));
+  assert.ok(row, out);
+  assert.match(row, /ERROR this run/);
 });

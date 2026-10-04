@@ -30,6 +30,35 @@ interface SourceHealth {
 }
 
 /**
+ * Every org_slug that has ever written an event, read in pages. PostgREST
+ * caps one response at 1000 rows and says nothing; the single unpaged select
+ * this replaces was cut off inside gocalaveras's rows, so ten sources
+ * (visit-murphys, red-cross, sequoia-woods and the pub among them) never
+ * appeared in the table. Pages advance by what came back and stop on an
+ * empty one, so a lower server cap can't truncate it either.
+ */
+async function fetchAllOrgSlugs(): Promise<string[]> {
+  const PAGE = 1000;
+  const slugs = new Set<string>();
+  for (let from = 0; ; ) {
+    const { data, error } = await supabaseAdmin
+      .from("hwy4_events")
+      .select("org_slug")
+      .not("org_slug", "is", null)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.warn(`  Could not list every source: ${error.message}`);
+      break;
+    }
+    if (!data || data.length === 0) break;
+    for (const r of data) if (r.org_slug) slugs.add(r.org_slug);
+    from += data.length;
+  }
+  return [...slugs];
+}
+
+/**
  * Run post-scrape health checks and print a summary report.
  * Flags sources with zero future events or stale scrape timestamps.
  */
@@ -42,16 +71,13 @@ export async function runHealthCheck(
   const today = new Date().toISOString().slice(0, 10);
   const now = Date.now();
 
-  // Get all org_slugs that have ever had events
-  const { data: allOrgs } = await supabaseAdmin
-    .from("hwy4_events")
-    .select("org_slug")
-    .not("org_slug", "is", null);
-
-  const orgSlugs = [...new Set((allOrgs || []).map((r) => r.org_slug))];
+  const orgSlugs = await fetchAllOrgSlugs();
 
   if (orgSlugs.length === 0) {
     console.log("No sources found in database.");
+    for (const [source, message] of sourceErrors ?? []) {
+      console.log(`  ⚠ ${source}: Scraper failed this run: ${message.slice(0, 200)}`);
+    }
     return;
   }
 

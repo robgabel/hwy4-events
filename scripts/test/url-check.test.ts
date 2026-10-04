@@ -103,7 +103,7 @@ test("a host answering not-found for half or more of its links is spared whole",
     check("https://other.example/x", "dead", 410, 5),
   ];
   const plan = planLinkNulls(checks);
-  assert.deepEqual(plan.sparedHosts, [{ host: "walled.example", dead: 2, checked: 4 }]);
+  assert.deepEqual(plan.sparedHosts, [{ host: "walled.example", dead: 2, answered: 4 }]);
   assert.deepEqual(plan.toNull.map((c) => c.id), ["https://other.example/x#5"]);
 });
 
@@ -122,6 +122,48 @@ test("just under half dead is still a per-page call", () => {
     check("https://busy.example/c", "ok", 200, 3),
   ];
   assert.equal(planLinkNulls(checks).toNull.length, 1);
+});
+
+test("three answered links with two dead is the guard's smallest spare", () => {
+  const checks = [
+    check("https://three.example/a", "dead", 404, 1),
+    check("https://three.example/b", "dead", 410, 2),
+    check("https://three.example/c", "ok", 200, 3),
+  ];
+  const plan = planLinkNulls(checks);
+  assert.deepEqual(plan.toNull, []);
+  assert.deepEqual(plan.sparedHosts, [{ host: "three.example", dead: 2, answered: 3 }]);
+});
+
+test("rows sharing one dead page count as one link, and all of them are nulled", () => {
+  // Four Red Cross drives share one drive-results page. Counted per row they
+  // would read as "the whole host is down" and be spared forever.
+  const url = "https://www.redcrossblood.org/give.html/drive-results?zipSponsor=95247";
+  const checks = [1, 2, 3, 4].map((i) => check(url, "dead", 404, i));
+  const plan = planLinkNulls(checks);
+  assert.equal(plan.toNull.length, 4);
+  assert.deepEqual(plan.sparedHosts, []);
+});
+
+test("links that got no answer can't dilute a host's 404s below the line", () => {
+  // Half-down host: 61 links time out, 59 come back GET-confirmed 404. Over
+  // every link that is 49%; over the links that answered it is 100%.
+  const checks = [
+    ...Array.from({ length: 61 }, (_, i) => check(`https://half.example/t-${i}`, "unconfirmed", null, i)),
+    ...Array.from({ length: 59 }, (_, i) => check(`https://half.example/d-${i}`, "dead", 404, 100 + i)),
+  ];
+  const plan = planLinkNulls(checks);
+  assert.deepEqual(plan.toNull, []);
+  assert.deepEqual(plan.sparedHosts, [{ host: "half.example", dead: 59, answered: 59 }]);
+});
+
+test("unanswered links don't count toward the guard's minimum either", () => {
+  const checks = [
+    check("https://quiet.example/dead", "dead", 404, 1),
+    check("https://quiet.example/ok", "ok", 200, 2),
+    ...Array.from({ length: 50 }, (_, i) => check(`https://quiet.example/t-${i}`, "unconfirmed", null, 10 + i)),
+  ];
+  assert.deepEqual(planLinkNulls(checks).toNull.map((c) => c.id), ["https://quiet.example/dead#1"]);
 });
 
 test("unconfirmed links are summarized per host so an outage reads as one", () => {
@@ -158,7 +200,7 @@ const plusDays = (n: number): string => {
 
 async function runValidation(
   rows: Row[],
-  answer: (url: string, method: string) => Answer
+  answer: (url: string, method: string, db: Row[]) => Answer
 ) {
   const db = rows.map((r) => ({ ...r }));
   const updates: Array<{ id: unknown; url: unknown }> = [];
@@ -200,7 +242,7 @@ async function runValidation(
     const url = String(input);
     const method = init?.method ?? "GET";
     requested.push({ url, method });
-    const a = answer(url, method);
+    const a = answer(url, method, db);
     if (a === "throw") {
       throw new TypeError("fetch failed", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } });
     }
@@ -286,4 +328,43 @@ test("validateEventUrls: past events are not checked at all", async () => {
   );
   assert.equal(updates.length, 0);
   assert.ok(!requested.some((r) => r.url.includes("/past")), "a past row was fetched");
+});
+
+test("validateEventUrls: a host 404ing most of its links is spared in the real wiring", async () => {
+  const rows: Row[] = ["a", "b", "c"].map((k) => ({
+    id: k,
+    name: k,
+    event_url: `https://walled.example/${k}`,
+    date: plusDays(4),
+  }));
+  const { result, updates } = await runValidation(rows, () => 404);
+  assert.equal(updates.length, 0);
+  assert.equal(result.broken, 3);
+  assert.equal(result.nulled, 0);
+});
+
+test("validateEventUrls: a link rewritten during the check is left alone and not counted", async () => {
+  const rows: Row[] = [
+    { id: "moved", name: "Moved", event_url: "https://venue.example/old", date: plusDays(2) },
+  ];
+  const { result, db, updates } = await runValidation(rows, (_url, method, live) => {
+    // A scraper writes a new link between the check and the update.
+    if (method === "GET") live[0].event_url = "https://venue.example/new";
+    return 404;
+  });
+  assert.equal(updates.length, 1, "the guarded update should still be attempted");
+  assert.equal(result.nulled, 0);
+  assert.equal(db[0].event_url, "https://venue.example/new");
+});
+
+test("validateEventUrls: rows sharing one URL cost one request", async () => {
+  const url = "https://www.redcrossblood.org/give.html/drive-results?zipSponsor=95247";
+  const rows: Row[] = [1, 2, 3, 4].map((i) => ({
+    id: `drive-${i}`,
+    name: "Red Cross Blood Drive",
+    event_url: url,
+    date: plusDays(i),
+  }));
+  const { requested } = await runValidation(rows, () => 200);
+  assert.equal(requested.length, 1);
 });
