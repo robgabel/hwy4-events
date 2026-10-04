@@ -30,19 +30,31 @@ The agent starts fresh: reads the PR body, the diff, the touched files, and CLAU
    full, not just hunks — a hunk is where the bug is planted, the file is where it lands.
 2. **Run the locks, all of them, on every PR.** `cd scripts && npm test`; `npx tsc --noEmit`
    at the repo root **and** `cd scripts && npx tsc --noEmit` (two typecheck roots: root tsc
-   does not check `scripts/`, and CI runs no typecheck at all, so this is the only gate a
-   scripts-only scraper change ever passes through); `cd scripts && npm run voice-lint`.
-   No path heuristics. A conditional check that skips the case it exists for is the failure
-   shape this repo keeps paying for; a minute of tsc on a doc-only PR is the price of not
-   repeating it.
-   **A lock means "no NEW errors", judged against `origin/main`.** `main` is not always
-   green (as of 2026-10-01 the scripts root carries ~12 pre-existing tsc errors, tracked as
-   HWY-55). So for tsc, run the same command twice, once on `origin/main` (`git stash` is
-   banned in worktrees; use `git worktree add /tmp/qa-base origin/main` or diff against the
-   file list) and once on the PR head, and fail only on errors the PR introduced: a new
-   error line, or an error in a file the PR touched. Report the baseline count separately
-   so it stays visible without becoming an alarm. A baseline-red check is never a finding
-   against the PR; a PR that ADDS an error to a red root is.
+   does not check `scripts/`); `cd scripts && npm run voice-lint`. CI has a typecheck job
+   too, but its workflow is path-filtered (`app/`, `content/`, `lib/`, `scripts/`,
+   `supabase/`), so a doc-only or `.claude/`-only PR runs no CI at all, and the reviewer's
+   local run is the only gate those PRs ever pass through. No path heuristics. A conditional
+   check that skips the case it exists for is the failure shape this repo keeps paying for;
+   a minute of tsc on a doc-only PR is the price of not repeating it.
+   **A lock means "no NEW errors", judged against `origin/main`.** Main is not always green,
+   so never assume the baseline; measure it. For tsc, run the same command on `origin/main`
+   and on the PR head, and fail only on errors the PR introduced: a new error line, or an
+   error in a file the PR touched. Baseline recipe (no `git stash`, it is banned in
+   worktrees):
+
+   ```sh
+   BASE="$TMPDIR/qa-base-$$"                      # per-session path, never a shared /tmp name
+   git worktree add --detach "$BASE" origin/main
+   ln -s "$PWD/node_modules" "$BASE/node_modules"          # a bare worktree has no deps;
+   ln -s "$PWD/scripts/node_modules" "$BASE/scripts/node_modules"  # without them npx installs a stub "tsc"
+   (cd "$BASE" && npx tsc --noEmit | grep -c 'error TS'); (cd "$BASE/scripts" && npx tsc --noEmit | grep -c 'error TS')
+   git worktree remove --force "$BASE"
+   ```
+
+   Report the baseline count separately so it stays visible without becoming an alarm. A
+   baseline-red check is never a finding against the PR; a PR that ADDS an error to a red
+   root is.
+
 3. **Judge against the repo's own rules**, in this order of severity:
    - **Correctness:** does the diff do what the PR body claims? Trace one concrete input
      through it. Look for the failure shapes this codebase has already paid for (CLAUDE.md
