@@ -81,7 +81,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     // Published 2026-05-25 after Rob's review. Banner removed, sitemap includes the URL, search engines may index.
     metaTitle: "Murphys, CA Events: Wine, Live Music & Festivals | Hwy 4",
     metaDescription:
-      "What's on in Murphys this week. Main Street tasting rooms, weekly Open Mic at the Irish Pub, Saturday farmers market, and Gold Rush history. Updated daily by a local.",
+      "What's on in Murphys this week. Main Street tasting rooms, weekly Open Mic at the Irish Pub, Sunday farmers market, and Gold Rush history. Updated daily by a local.",
     h1: "What's happening in Murphys this week?",
     subhead:
       "Two dozen tasting rooms, weekly Open Mic at the Irish Pub, and a Main Street that runs on local-and-tourist time.",
@@ -108,7 +108,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "The Watering Hole is closed Wednesdays. The Irish Pub is closed Monday and Tuesday. Open Mic at the Pub is Wednesdays at 6pm.",
       "Aria Bakery opens at 7am. Their listed hours are Mon-Thu 7am to noon, Fri-Sun 7am to 3pm, but it's worth calling ahead for a Tuesday afternoon cinnamon roll.",
       "Gold Country Roasters' house blend is called the Angels Camp Blend, not the Murphys Blend. They're at 78 Scott Street, a block off Main, and close at 2:30pm.",
-      "The Murphys Farmers Market runs Saturdays 9am to 1pm at Murphys Park, May through Thanksgiving. If somebody tells you Sundays, they're working from old info.",
+      "The Murphys Park Farmers Market runs Sundays 9am to 1pm at Murphys Community Park on Algiers Street, usually late May into late October. Organizers shift the season, so check the market page for this year's dates.",
       "Murphys Irish Day in March is the town's biggest street event. Get there early because Main Street fills up. Book Murphy's Taxi (209.795.7777) ahead if you need a ride back.",
       "Sierra Hills Market on E Highway 4 has the deli sandwiches locals actually pack for picnics. Better than the wine-bar charcuterie boards.",
       "Sierra Nevada Adventure Company at 448 Main Street is the outdoor-gear stop on Main, locally owned since 1994 with a second store up in Arnold. Useful when half your group came for wine and the other half came for the trail.",
