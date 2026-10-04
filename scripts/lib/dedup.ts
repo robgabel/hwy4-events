@@ -17,6 +17,8 @@ import {
   generateDedupKey,
   isActlessPlaceholderTitle,
   mergeArtistLists,
+  extractActFromTitle,
+  isPlaceholderForMatch,
   namedActTakesPrecedence,
   type EventIdentity,
 } from "../../lib/event-identity.js";
@@ -29,6 +31,7 @@ import {
   titleWithNamedAct,
 } from "../../lib/lineup-acts.js";
 import { isHttpUrl } from "../../lib/url.js";
+import { tidyArtistList } from "../../lib/artist-identity.js";
 import { recordSourceResult } from "./scrape-run-log.js";
 
 /**
@@ -373,9 +376,20 @@ export function normalizeEventLocation(event: ExtractedEvent): void {
     event.description = stripTagLike(event.description);
   }
   if (event.artists && event.artists.length > 0) {
-    event.artists = event.artists
-      .map((a) => stripTagLike(a))
-      .filter((a): a is string => !!a);
+    // One entry per act, compound billings kept whole (lib/artist-identity.ts).
+    event.artists = tidyArtistList(
+      event.artists.map((a) => stripTagLike(a)).filter((a): a is string => !!a)
+    );
+  }
+  // Most sources leave `artists` empty even when the title names the act
+  // ("Live Music - Carlos Castillo"), and the artist-blurb drafter only
+  // researches the field. Fill an empty one from the title, never guessing:
+  // extractActFromTitle returns null on anything ambiguous, and a source that
+  // did list artists is never overridden. After the name cleanup above, so it
+  // reads the title that will actually be stored.
+  if (!event.artists || event.artists.length === 0) {
+    const act = extractActFromTitle(event.name, event.venue_name);
+    if (act) event.artists = [act];
   }
   if (event.event_url && !isHttpUrl(event.event_url)) {
     event.event_url = null;
@@ -975,6 +989,37 @@ export function placeholderVenueSteal(
   );
 }
 
+/** Artists the exact-match payload writes, or null to omit the column.
+ *
+ *  Two fills, both upgrade-only (a stored list is never replaced, the keepStr
+ *  rule for a list): HWY-59's discovered act (`resolveWrittenArtists`, a
+ *  lineup poster or subtitle naming the act on an actless calendar row), then
+ *  the scraped list itself (2026-10-04), which `normalizeEventLocation` now
+ *  fills from a title that names the act ("Live Music - Carlos Castillo").
+ *  Before that second fill, a row inserted with an empty list stayed empty
+ *  forever even once its title named the act.
+ *
+ *  An actless placeholder title never donates its scraped list: EventON
+ *  recycles a prior occurrence's act onto the series row (the 2026-09-19 Brice
+ *  Hilltop "Earth Tones" leftover), which is exactly why HWY-59 gates on the
+ *  title. A fixture without the column (undefined) is unknown: no fill. */
+function artistsFill(existing: ExistingRow, event: ExtractedEvent): string[] | null {
+  const discovered = resolveWrittenArtists(existing, event);
+  if (discovered) return discovered;
+  if (existing.artists === undefined) return null;
+  if (existing.artists && existing.artists.some((a) => a?.trim())) return null;
+  // Broader than isActlessPlaceholderTitle on purpose: "Live Music Upstairs"
+  // and "Music in the Parks" are placeholders too, and this path never wrote
+  // scraped artists before 2026-10-04 (review of PR #324, finding 6).
+  if (
+    isActlessPlaceholderTitle(event.name ?? "") ||
+    isPlaceholderForMatch({ name: event.name, venue_name: event.venue_name })
+  ) {
+    return null;
+  }
+  return event.artists && event.artists.length > 0 ? event.artists : null;
+}
+
 export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolean {
   // Same venue name the exact-match payload will store, so the key diff below
   // is "what we WOULD write", not "what the scrape resolved in isolation".
@@ -984,12 +1029,12 @@ export function rowChanged(existing: ExistingRow, event: ExtractedEvent): boolea
   // Same name the payload stores: a discovered act retitles a placeholder,
   // and a placeholder scrape does not count as a change of a specific name.
   const writtenName = resolveWrittenName(existing, event);
-  const nextArtists = resolveWrittenArtists(existing, event);
   return (
     writtenName !== existing.name ||
-    // Filling a blank artists list from a discovered act is a real write.
-    // A stored list is never replaced, so this is false once the act is in.
-    nextArtists != null ||
+    // Filling a blank artists list (a discovered act, or a title that names
+    // the act) is a real write. A stored list is never replaced, so this is
+    // false once the act is in.
+    artistsFill(existing, event) !== null ||
     // A rescheduled event keeps its stable source_event_id but changes date.
     // (For sources whose source_event_id or dedup_key already embeds the date,
     // the matched row's date equals the incoming date, so this is a no-op.)
@@ -1080,7 +1125,7 @@ export function buildExactMatchUpdate(
   // A discovered act retitles a stored placeholder. keepName (and a blank
   // incoming name) still return the stored title via resolveWrittenName.
   const writtenName = resolveWrittenName(existing, event);
-  const writtenArtists = resolveWrittenArtists(existing, event);
+  const writtenArtists = artistsFill(existing, event);
   const writtenTown = keepVenue ? existing.town : event.town;
   const writtenVenueName = keepVenue ? existing.venue_name : event.venue_name;
   const writtenDescription = existing.description_locked

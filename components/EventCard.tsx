@@ -1,5 +1,5 @@
 import { CollapsedEvent, CATEGORY_LABELS, EventCategory } from "@/lib/types";
-import { artistChipLabel, artistKey } from "@/lib/artists";
+import { artistChipLabel, genreForArtist } from "@/lib/artists";
 import { REGION } from "@/lib/region";
 import { generateEventSlug, townSlug } from "@/lib/slugs";
 import { isPatrioticCard, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
@@ -426,7 +426,7 @@ export default function EventCard({
             {event.artists.map((artist) => {
               const genre =
                 event.category === "live_music"
-                  ? artistGenres[artistKey(artist)]
+                  ? genreForArtist(artistGenres, artist)
                   : undefined;
               return (
                 <span

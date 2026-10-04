@@ -25,6 +25,7 @@ const research = (over: Record<string, unknown> = {}) => ({
   confidence: "high" as const,
   notes: null,
   sources: [{ title: "Band site", url: "https://example-band.com" }],
+  voiceRejected: false,
   ...over,
 });
 
