@@ -72,6 +72,9 @@ test("the event page applies the override to the title tag and the H1 only", () 
   assert.ok(pageSource.includes('from "@/lib/hermit-fest-page"'));
   assert.equal(pageSource.split("hermitFestPageSeo(").length - 1, 2);
   assert.match(pageSource, /title: hermitSeo \? \{ absolute: hermitSeo\.title \} : title/);
-  assert.match(pageSource, /\{hermitSeo\?\.h1 \?\? event\.name\}/);
+  assert.match(
+    pageSource,
+    /\{hermitSeo\?\.h1 \?\? concoursPage\?\.h1 \?\? event\.name\}/,
+  );
   assert.match(pageSource, /\{hermitSeo\.whenLine\}/);
 });
