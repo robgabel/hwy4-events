@@ -1,4 +1,4 @@
-import { TOWN_INFO } from "@/lib/towns";
+import { TOWN_INFO } from "./towns";
 
 /**
  * Three-tier address cascade used to drive the map pin, directions URL,

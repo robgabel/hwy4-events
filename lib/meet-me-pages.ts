@@ -47,6 +47,10 @@ export type MeetMeGuide = {
   listedStatus: "cancelled";
   officialUrl: string;
   editorial: string[];
+  /** YYYY-MM-DD the editorial copy above was last edited. Hand-maintained:
+   *  bump it in the same commit as a copy change. Feeds WebPage dateModified
+   *  with the rendered events' updated_at (lib/date-modified.ts, HWY-60). */
+  editorialUpdated: string;
   qa: { q: string; a: string }[];
 };
 
@@ -70,6 +74,7 @@ export const MEET_ME_GUIDES: MeetMeGuide[] = [
     listedTime: "2:00 PM",
     listedStatus: "cancelled",
     officialUrl: "https://meetmeinmurphys.com",
+    editorialUpdated: "2026-09-11",
     editorial: [
       "Meet Me in Murphys is the name on a summer concert listing in Murphys, not a Main Street venue. The only row we have carried is the 2026 summer concert, listed for Saturday, September 5 at 2:00 PM at 236 Crestview Drive. That listing was later cancelled.",
       "If the organizers announce another date, it will show in the list below as soon as it hits our calendar. We do not have a ticket price on file, and we will not guess one. The 2026 listing pointed people to meetmeinmurphys.com for tickets and details.",
