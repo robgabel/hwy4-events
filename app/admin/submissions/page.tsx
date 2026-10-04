@@ -12,6 +12,7 @@ import {
   draftReplyForReviewed,
 } from "./actions";
 import type { SubmissionReply } from "@/lib/agent/submission-reply";
+import { EXPIRED_REVIEW_NOTE } from "@/lib/agent/expire-submissions";
 import EditableReplyPanel from "@/components/admin/EditableReplyPanel";
 import { formatPhone, telHref } from "@/lib/submitter-contact";
 import { readFlash } from "@/lib/admin/flash";
@@ -99,6 +100,7 @@ type ReviewedSubmission = {
   status: string;
   submitter_name: string | null;
   submitter_email: string | null;
+  review_note: string | null;
   ai_reply: SubmissionReply | null;
 };
 
@@ -144,7 +146,7 @@ async function loadRecentlyReviewed(): Promise<ReviewedSubmission[]> {
   if (!supabase) return [];
   const { data } = await supabase
     .from("event_submissions")
-    .select("id, event_name, status, submitter_name, submitter_email, ai_reply")
+    .select("id, event_name, status, submitter_name, submitter_email, review_note, ai_reply")
     .neq("status", "pending")
     .order("reviewed_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -219,8 +221,8 @@ export default async function SubmissionsAdminPage({
         <section style={{ marginTop: 36 }}>
           <h2 style={{ color: "#1B3A2D", fontSize: 18, margin: "0 0 4px" }}>Recently reviewed</h2>
           <p style={{ color: "#777", fontSize: 14, margin: "0 0 14px", lineHeight: 1.5 }}>
-            Published or dismissed submissions. Draft or re-open the reply to the submitter here, any
-            time.
+            Published, dismissed, or cleared after the date passed. Draft or re-open a reply here any
+            time. A row the daily job already emailed does not need another send.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {reviewed.map((r) => (
@@ -235,7 +237,15 @@ export default async function SubmissionsAdminPage({
 
 function ReviewedRow({ sub }: { sub: ReviewedSubmission }) {
   const isApproved = sub.status === "approved";
-  const statusLabel = isApproved ? "Published" : sub.status === "rejected" ? "Dismissed" : sub.status;
+  const expired = sub.review_note === EXPIRED_REVIEW_NOTE;
+  const autoSent = sub.ai_reply?.auto_sent === true;
+  const statusLabel = isApproved
+    ? "Published"
+    : expired
+      ? "Expired"
+      : sub.status === "rejected"
+        ? "Dismissed"
+        : sub.status;
   return (
     <article
       style={{
@@ -277,8 +287,15 @@ function ReviewedRow({ sub }: { sub: ReviewedSubmission }) {
 
       {sub.ai_reply ? (
         <div style={{ marginTop: 12 }}>
-          <EditableReplyPanel reply={sub.ai_reply} heading="✉ Drafted reply" />
+          <EditableReplyPanel
+            reply={sub.ai_reply}
+            heading={autoSent ? "✉ Sent automatically" : "✉ Drafted reply"}
+          />
         </div>
+      ) : expired ? (
+        <p style={{ margin: "10px 0 0", fontSize: 13, color: "#999" }}>
+          Cleared automatically. No email sent.
+        </p>
       ) : sub.submitter_email ? (
         <form action={draftReplyForReviewed} style={{ marginTop: 12 }}>
           <input type="hidden" name="id" value={sub.id} />
