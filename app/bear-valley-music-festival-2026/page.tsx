@@ -16,6 +16,7 @@ import {
   buildItemList,
   buildWebPage,
 } from "@/lib/schema";
+import { BEAR_VALLEY_DISAMBIGUATION } from "@/lib/disambiguation";
 import { pageDateModified } from "@/lib/date-modified";
 import NewsletterSignup from "@/components/NewsletterSignup";
 
@@ -45,7 +46,7 @@ const FEST_START = "2026-07-17";
 const FEST_END = "2026-08-02";
 // YYYY-MM-DD this page's hand-written copy last changed. Bump with any copy edit;
 // it feeds WebPage dateModified with the shows' updated_at (HWY-60).
-const EDITORIAL_UPDATED = "2026-09-11";
+const EDITORIAL_UPDATED = "2026-10-04";
 const OFFICIAL_URL = "https://www.bearvalleymusicfestival.org/2026-festival";
 
 export const revalidate = 3600;
@@ -92,7 +93,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: "Where is the Bear Valley Music Festival 2026 held?",
-    a: "Under the Big White Tent in Bear Valley village, just off Highway 4 at about 7,000 feet, roughly 40 minutes above Arnold. It is an open-sided mountain venue, so bring a warm layer: even July evenings cool off fast at that elevation.",
+    a: `Under the Big White Tent in Bear Valley village, just off Highway 4 at about 7,000 feet, roughly 40 minutes above Arnold. ${BEAR_VALLEY_DISAMBIGUATION} It is an open-sided mountain venue, so bring a warm layer: even July evenings cool off fast at that elevation.`,
   },
   {
     q: "How do I get Bear Valley Music Festival 2026 tickets?",
