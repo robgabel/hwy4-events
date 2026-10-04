@@ -225,3 +225,43 @@ test("a compound billing absorbs its listed parts, by design (review finding 5)"
     ["Jill Warren & Greg Sutton"]
   );
 });
+
+test("second review of #324: night/day, food, promo and activity heads are not acts", () => {
+  const titles = [
+    "Live Music - Taco Tuesday", "Live Music - Ladies Night", "Live Music - Date Night",
+    "Live Music - Opening Night", "Live Music - Comedy Night", "Live Music - Wine Down Wednesday",
+    "Live Music - Mimosa Sunday", "Live Music - Labor Day Weekend", "Live Music - Summer Nights",
+    "Labor Day Live Music @ Murphys Irish Pub", "St. Patrick's Day Live Music @ Murphys Irish Pub",
+    "Live Music - BBQ", "Live Music - Pizza", "Live Music - Wine Pairing",
+    "Live Music - Hit Collective & Taco Bar", "Live Music - Kids Eat Free",
+    "Live Music - Free Admission", "Live Music - Reservations Recommended",
+    "Live Music - Cornhole Tournament", "Live Music - Sip & Paint", "Live Music - Magic Show",
+    "Live Music - Friends", "Live Music - Local Talent", "Live Music - Local Musicians",
+    "Irish Session Live Music @ Murphys Irish Pub", "Live Music - Pool Party",
+    "Live Music - Thirsty Thursday",
+  ];
+  for (const t of titles) assert.equal(extractActFromTitle(t, "Somewhere"), null, t);
+  // Real acts carrying those words mid-name still pass.
+  assert.equal(extractActFromTitle("Live Music - Them Party Dolls", "X"), "Them Party Dolls");
+  assert.equal(extractActFromTitle("Live Music - Blue Monday Band", "X"), "Blue Monday Band");
+  assert.equal(extractActFromTitle("Live Music - Blue Monday", "X"), "Blue Monday");
+  assert.equal(extractActFromTitle("Live Music - James Michael Day", "X"), "James Michael Day");
+  assert.equal(extractActFromTitle("Live Music - Poor Man's Whiskey", "X"), "Poor Man's Whiskey");
+  assert.equal(extractActFromTitle("Live Music - Scott Patrick", "X"), "Scott Patrick");
+  // Act-before-"Live Music @" shape: real acts with event-ish words.
+  for (const act of ["Kruel Summer", "Them Party Dolls", "Bay Area Special Bluegrass"]) {
+    assert.equal(extractActFromTitle(`${act} Live Music @ Murphys Irish Pub`, "Murphys Irish Pub"), act);
+  }
+});
+
+test("'Live Music - Taco Tuesday' cannot manufacture a merge with 'Taco Tuesday Trivia'", () => {
+  const act = extractActFromTitle("Live Music - Taco Tuesday", "Sequoia Woods Country Club");
+  assert.equal(act, null);
+  assert.equal(
+    isSameEvent(
+      row({ name: "Live Music - Taco Tuesday", artists: null, end_time: null }),
+      row({ name: "Taco Tuesday Trivia", end_time: null })
+    ),
+    false
+  );
+});

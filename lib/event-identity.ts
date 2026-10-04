@@ -256,9 +256,11 @@ function artistsOverlap(
 }
 
 /** `artistsOverlap` by act identity (lib/artist-identity.ts). Used ONLY to
- *  narrow the different-acts veto, so it can restore merges main already
- *  made and never adds one; the positive identity signal stays the exact
- *  compare. */
+ *  narrow the different-acts veto to truly different acts; the positive
+ *  identity signal stays the exact compare. Narrowing a veto can admit a pair
+ *  whose rows spell one act two ways ("Big Band" vs "Big") that the exact
+ *  compare used to veto, on the same identical-window or shared-press-release
+ *  paths an identical spelling already merges on. */
 function artistsShareIdentity(
   a: string[] | null | undefined,
   b: string[] | null | undefined
@@ -684,11 +686,10 @@ export function isPlaceholderForMatch(e: {
 /** Words that make the text BEFORE "Live Music" an event, not an act
  *  ("Vintage Car Show, Hatcher Wine & Live Music", "Rib Feed and Live Band"). */
 const EVENT_HEAD_WORDS = new Set([
-  "show", "festival", "fest", "party", "fundraiser", "market", "feed", "dinner",
+  "show", "festival", "fest", "fundraiser", "market", "feed", "dinner",
   "brunch", "lunch", "breakfast", "bbq", "tasting", "celebration", "concert",
   "concerts", "series", "open", "mic", "karaoke", "trivia", "dance", "wine",
-  "beer", "food", "summer", "fall", "winter", "spring", "annual", "free",
-  "happy", "hour", "special", "event", "events", "music",
+  "beer", "food", "annual", "free", "happy", "hour", "event", "events", "music",
 ]);
 
 /** Cut a captured act down to the act: a trailing "@ venue", a trailing show
@@ -729,11 +730,25 @@ function cleanActCapture(raw: string): string {
 const ACT_VETO_WORDS = new Set([
   "cancelled", "canceled", "postponed", "rescheduled", "closed", "sold",
   "members", "happy", "hour", "tasting", "dinner", "lunch", "brunch",
-  "breakfast", "food", "truck", "party", "fundraiser", "benefit", "concert",
+  "breakfast", "food", "truck", "fundraiser", "benefit", "concert",
   "concerts", "series", "festival", "fest", "oktoberfest", "halloween", "july",
   "christmas", "thanksgiving", "holiday", "celebration", "kickoff", "finale",
   "week", "season", "contest", "costume", "raffle", "auction", "potluck",
+  // Second review of #324: food, promo and activity heads.
+  "bbq", "taco", "tacos", "pizza", "oyster", "oysters", "wine", "mimosa",
+  "pairing", "admission", "reservations", "eat", "kids", "tournament",
+  "cornhole", "paint", "sip", "showcase", "recital", "magic", "comedy",
+  // "patricks" only (St. Patrick's Day): "Scott Patrick" is a real act.
+  "labor", "patricks", "thirsty",
 ]);
+
+/** Vetoes only as the LAST word: "Ladies Night", "Labor Day Weekend", "Pool
+ *  Party". Not anywhere, because real acts carry them mid-name ("Them Party
+ *  Dolls"). Weekdays are deliberately NOT here: "Blue Monday" is a real
+ *  corridor band, and the day-themed nights are caught by their other word
+ *  ("Taco Tuesday", "Mimosa Sunday", "Wine Down Wednesday", "Thirsty
+ *  Thursday"). Bare "day" is left out too: "James Michael Day" is real. */
+const ACT_VETO_LAST_WORDS = new Set(["night", "nights", "weekend", "party"]);
 
 /** Words that describe the music or the setting, not who plays it. A capture
  *  made only of these (plus filler and numbers) is not an act: "Jazz",
@@ -751,6 +766,7 @@ const ACT_SOFT_WORDS = new Set([
   "soon", "late", "early", "private", "event", "events", "bagpipes",
   "bagpiper", "piano", "guitar", "fiddle", "sax", "saxophone", "harp",
   "sunset", "view", "views", "bring", "chair", "chairs", "blanket", "tba",
+  "friends", "talent", "musicians", "session", "celtic", "irish",
   "tbd", "more", "fun", "entertainment", "show", "shows", "featured", "a",
   "an", "your", "own",
 ]);
@@ -788,6 +804,7 @@ function isPlausibleAct(act: string, venueName: string | null | undefined): bool
   if (words.every((w) => NON_ACT_TAIL_WORDS.has(w))) return false;
   if (isNonActName(act) || isGenericTitle(act)) return false;
   if (words.some((w) => ACT_VETO_WORDS.has(w))) return false;
+  if (ACT_VETO_LAST_WORDS.has(words[words.length - 1])) return false;
   if (words.every((w) => ACT_SOFT_WORDS.has(w) || NON_ACT_TAIL_WORDS.has(w) || /^\d+$/.test(w))) {
     return false;
   }
