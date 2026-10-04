@@ -588,18 +588,7 @@ The engine is region-parameterized so it can run as N deployments off one repo (
 
 ## Dev Workflow
 
-### PR workflow: build → independent QA → options → Rob approves (standing rule, 2026-09-24)
-
-Every code change on this repo ships through this loop. No exceptions for "small" changes.
-
-1. **Build on a branch, open a draft PR** (`gh pr create --draft`). Branch from a fresh `origin/main`, never from whatever is checked out. Run the locks first: `cd scripts && npm test`, `npx tsc --noEmit` at the root **and** in `scripts/` (two typecheck roots), `cd scripts && npm run voice-lint`. All of them, every PR, no path heuristics (the reviewer runs the same set).
-2. **Spawn a separate QA agent on the PR** — a fresh Agent-tool subagent with no memory of the build session, briefed only with the PR number and [.claude/skills/pr-qa/SKILL.md](.claude/skills/pr-qa/SKILL.md). The builder never QAs its own diff and never pre-briefs the reviewer with intent. The QA agent is read-only: it runs the locks, reads every touched file in full, judges against this doc's rules, and returns `PASS` or a severity-ranked findings list with a concrete failure scenario per finding.
-3. **On a blocker/major finding, do not fix it.** Write Rob, per finding: the finding in one sentence, **three distinct solutions** with their costs, and **one recommendation** with the reason. Then stop and wait for Rob's pick. (Minors are fixed silently and noted in the PR.) If the builder thinks a finding is wrong, "leave as is, because …" is one of the three options with evidence, never a silent drop.
-4. **Apply the approved fix, push, spawn a fresh QA agent** on the updated PR. Repeat until PASS. A report with only minors counts as PASS: fix them, run the locks, push, no fresh round. Every lock means "no NEW errors versus `origin/main`": main is not always green, so the reviewer measures the baseline rather than assuming it, and a baseline-red check is never a finding against the PR.
-5. **On PASS, mark the PR ready** and tell Rob what was checked. **Rob's merge is always the last click** — the builder never merges. After merge, verify the Vercel deploy (standing rule).
-
-`/build-ticket HWY-N` ([.claude/commands/build-ticket.md](.claude/commands/build-ticket.md)) feeds step 1 and hands off to this loop after the draft PR exists.
-
+- **PR workflow (standing rule, 2026-09-24):** branch from a fresh `origin/main`, open a draft PR, then a separate subagent QAs it per [.claude/skills/pr-qa/SKILL.md](.claude/skills/pr-qa/SKILL.md). Any finding goes to Rob as three options plus one recommendation and the builder waits for his pick; fix, re-QA until PASS. Rob merges, never Claude, never auto-merge.
 - `npm run dev` for local development
 - Vercel auto-deploys from `main`
 - Migrations in `supabase/migrations/` — apply via Supabase dashboard or CLI
