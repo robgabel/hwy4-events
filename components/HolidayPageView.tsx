@@ -14,6 +14,7 @@ import {
   buildItemList,
   buildWebPage,
 } from "@/lib/schema";
+import { pageDateModified } from "@/lib/date-modified";
 import SimpleEventList from "@/components/SimpleEventList";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecastsByTown } from "@/lib/weather";
@@ -73,7 +74,7 @@ export default async function HolidayPageView({ guide }: { guide: HolidayGuide }
           url: `${SITE_URL}${guide.path}`,
           name: guide.metaTitle,
           description: guide.metaDescription,
-          dateModified: new Date().toISOString().split("T")[0],
+          dateModified: pageDateModified(events, guide.editorialUpdated),
         })}
       />
       <JsonLd

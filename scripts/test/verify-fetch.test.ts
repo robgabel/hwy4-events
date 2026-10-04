@@ -41,7 +41,7 @@ const NAV_ONLY_HTML = `
 <p>Open Oct 2026. Wednesday 11am-5pm (Except Sept 30th). Copyright 2026.</p>
 </body></html>`;
 
-function okHtml(html: string, status = 200): Awaited<ReturnType<CanonicalFetcher>> {
+function okHtml(html: string, status = 200): ReturnType<CanonicalFetcher> {
   return Promise.resolve({
     ok: status >= 200 && status < 300,
     status,

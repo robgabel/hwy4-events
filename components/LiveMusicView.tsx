@@ -15,6 +15,7 @@ import {
   buildItemList,
   buildWebPage,
 } from "@/lib/schema";
+import { pageDateModified } from "@/lib/date-modified";
 import SimpleEventList from "@/components/SimpleEventList";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecastsByTown } from "@/lib/weather";
@@ -103,7 +104,7 @@ export default async function LiveMusicView({
           url: `${SITE_URL}${LIVE_MUSIC_PATH}`,
           name: cfg.metaTitle,
           description: cfg.metaDescription,
-          dateModified: new Date().toISOString().split("T")[0],
+          dateModified: pageDateModified(events),
         })}
       />
       {events.length > 0 && (
