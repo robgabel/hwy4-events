@@ -20,6 +20,7 @@ import {
   buildItemList,
   buildWebPage,
 } from "@/lib/schema";
+import { pageDateModified } from "@/lib/date-modified";
 import SimpleEventList from "@/components/SimpleEventList";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import VenueInfo from "@/components/VenueInfo";
@@ -121,7 +122,7 @@ export default async function VenuePage({ params }: PageProps) {
           url: `${SITE_URL}/venues/${slug}`,
           name: venueMetaTitle(venue, events, year),
           description: venueMetaDescription(venue, events),
-          dateModified: pacificToday().iso,
+          dateModified: pageDateModified(events),
         })}
       />
       {events.length > 0 && (

@@ -18,6 +18,7 @@
 // Relative (not "@/") imports so the scripts/ test runner can import this.
 
 import type { Hwy4Event } from "./types";
+import { BEAR_VALLEY_DISAMBIGUATION } from "./disambiguation";
 
 export type PersonaHubKey =
   | "arnold-car-show"
@@ -60,6 +61,10 @@ export type PersonaHub = {
   emptyUpcoming: string;
   newsletterHeading: string;
   editorial: string[];
+  /** YYYY-MM-DD the editorial copy above was last edited. Hand-maintained:
+   *  bump it in the same commit as a copy change. Feeds WebPage dateModified
+   *  with the rendered events' updated_at (lib/date-modified.ts, HWY-60). */
+  editorialUpdated: string;
   qa: { q: string; a: string }[];
 };
 
@@ -101,6 +106,7 @@ export const PERSONA_HUBS: PersonaHub[] = [
     emptyUpcoming:
       "No upcoming Arnold car show dates are on the calendar. The 2026 Classic Car Show listing was September 19. If organizers announce another date, it will show here.",
     newsletterHeading: "Want a heads-up when next year's show is listed?",
+    editorialUpdated: "2026-09-13",
     editorial: [
       "The Arnold Classic Car Show is the September show at White Pines Lake Park. The 2026 listing is the 21st year: Saturday, September 19, from 10:00 AM to 4:00 PM at 1965 Blagen Road. The listing names classic cars, hot rods, customs, motorcycles, and 4x4s, and says proceeds support White Pines Park maintenance.",
       "The listing does not state an admission price, and we will not guess one. It notes that food vendors and live music have been staples of past events. Confirmed dates land in the list below as soon as they hit the calendar.",
@@ -166,6 +172,7 @@ export const PERSONA_HUBS: PersonaHub[] = [
     emptyUpcoming:
       "No upcoming Hermitfest dates are on the calendar. The 2026 festival was September 12 and 13 in Bear Valley. If next year's dates are confirmed, they will show here.",
     newsletterHeading: "Want a heads-up when next year's Hermitfest lands?",
+    editorialUpdated: "2026-10-04",
     editorial: [
       "Hermitfest West is the Bear Valley edition of Hermitfest, put on by the Ebbetts Pass National Scenic Byway Association. The official page puts the 2026 festival at Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, Alpine County, CA, on Saturday, September 12 and Sunday, September 13. Admission is free.",
       "Saturday on the official schedule starts noonish with Deep Thicket Dwellers, then Grover Anderson & The Lampoliers at 1:30, The HighLife Band at 3:30, a dinner break at 5:30, Greg Sutton & Friends at 6:30, and The Hermitfest All Stars at 7:30. Sunday lists yoga with Alex Mannos at 9:00, guided bike rides with Bear Valley Adventure Company at 10:00, then music from about 10:10 to 2:00: Kiana at 10:10, Lainy McGreen at 10:45, West Muir at 11:25, Dominick Restivo at 12:05, Desiree & Cyrus at 12:45, and Ty & Connor at 1:25. The official page does not publish a Saturday end time.",
@@ -177,7 +184,7 @@ export const PERSONA_HUBS: PersonaHub[] = [
       },
       {
         q: "Where is Hermitfest held?",
-        a: "Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, Alpine County, CA.",
+        a: `Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, CA. ${BEAR_VALLEY_DISAMBIGUATION}`,
       },
       {
         q: "What time does Hermitfest start?",
@@ -235,6 +242,7 @@ export const PERSONA_HUBS: PersonaHub[] = [
     emptyUpcoming:
       "No upcoming concerts at Brice Station are on the calendar right now. New dates show here as the venue lists them.",
     newsletterHeading: "Want Thursday's Brice and corridor lineup?",
+    editorialUpdated: "2026-09-13",
     editorial: [
       "Brice Station Vineyards sits on Highway 4 between Murphys and Avery, at 3353 East Highway 4, Murphys, CA 95247. It is a tasting room with an outdoor concert venue on the property. Several listings use the name Hilltop Concert Series.",
       "Concert dates and ticket prices vary by show. We only print a price when a listing states one. Tickets are sold on the venue's own site, bricestation.com. The list below is every upcoming public concert on our calendar at this venue.",
