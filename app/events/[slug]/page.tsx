@@ -46,7 +46,7 @@ import TwoFiftyBanner from "@/components/TwoFiftyBanner";
 import AdoptAPetBanner from "@/components/AdoptAPetBanner";
 import ClassicRockBanner from "@/components/ClassicRockBanner";
 import { isParadeEvent, isFourthFeatureEvent, isTwoFiftyEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
-import { resolveEventLink, matchOrgForEvent, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
+import { resolveEventLink, matchOrgForEvent, matchOrganizerForEvent, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
 import { nameWithArtists } from "@/lib/venue-pages";
 import { hermitFestPageSeo } from "@/lib/hermit-fest-page";
 
@@ -72,7 +72,9 @@ const getCanonicalOrgs = cache(async (): Promise<PageOrg[]> => {
   const { data } = await supabase
     .from("hwy4_orgs")
     .select("slug, display_name, canonical_url, match_patterns, canonical_check_enabled")
-    .not("canonical_url", "is", null);
+    .not("canonical_url", "is", null)
+    // Deterministic: the first matching org wins, so it must not vary per render.
+    .order("slug");
   return (data as PageOrg[] | null) ?? [];
 });
 
@@ -208,9 +210,11 @@ export default async function EventPage({ params }: PageProps) {
     venueUrl: promotableVenueUrl(venue?.canonical, venue?.website),
     venueName: venue?.canonical,
   });
-  // JSON-LD organizer: the matched org, or absent. Never Hwy 4 Events.
-  const organizer: EventOrganizer | null = org?.display_name
-    ? { name: org.display_name, url: org.canonical_url }
+  // JSON-LD organizer: a direct org_slug or name-pattern match only (a venue
+  // match means "held at", not "organized by"). Else absent; never Hwy 4 Events.
+  const organizerOrg = matchOrganizerForEvent(event, orgs);
+  const organizer: EventOrganizer | null = organizerOrg?.display_name
+    ? { name: organizerOrg.display_name, url: organizerOrg.canonical_url }
     : null;
   // The trust line names the org /api/verify-events actually checked against,
   // which matches only among enrolled orgs (same matcher, narrower registry).
@@ -226,9 +230,10 @@ export default async function EventPage({ params }: PageProps) {
 
   // HWY-60: one quotable, template-built lead (no LLM; unknown clauses drop)
   // and a dated trust line when the organizer's page confirmed the listing.
-  const answer = buildEventAnswer(event);
+  const answer = buildEventAnswer(event, pacificToday().iso);
   const verifiedLine = buildVerifiedLine({
     verificationStatus: event.verification_status,
+    verificationReason: event.verification_reason,
     checkedAt: event.verification_checked_at,
     orgName: verifiedBy?.display_name,
   });

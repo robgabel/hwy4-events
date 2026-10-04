@@ -78,6 +78,34 @@ export function spokenTime(time: string | null | undefined): string | null {
   return min === 0 ? `${h12} ${meridiem}` : `${h12}:${m[2]} ${meridiem}`;
 }
 
+const ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&quot;": '"',
+  "&#039;": "'",
+  "&#39;": "'",
+  "&apos;": "'",
+  "&rsquo;": "\u2019",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&nbsp;": " ",
+};
+
+/** Scraped names sometimes arrive HTML-escaped ("Diggin&#039;s"). */
+export function decodeEntities(s: string): string {
+  return s.replace(/&(?:amp|quot|#0?39|apos|rsquo|lt|gt|nbsp);/g, (m) => ENTITIES[m] ?? m);
+}
+
+/** A trailing "– October 17, 2026" (organizers date their occurrence titles)
+ *  repeats the date the sentence already states, so it comes off the name. */
+function stripTitleDate(name: string): string {
+  return name
+    .replace(
+      new RegExp(`\\s*[-\u2013\u2014:,]?\\s*(?:${MONTHS.join("|")})\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+\\d{4}\\s*$`, "i"),
+      ""
+    )
+    .trim();
+}
+
 /** "A", "A and B", "A, B and C", capped with "and more". */
 function listActs(acts: string[], max = 3): string {
   const shown = acts.slice(0, max);
@@ -91,37 +119,46 @@ function listActs(acts: string[], max = 3): string {
  *  need to repeat it). Word-bounded, so a short act like "Ty" doesn't match
  *  inside "Party". */
 function nameCarriesActs(name: string, acts: string[]): boolean {
-  const lower = ` ${name.toLowerCase().replace(/[^a-z0-9&']+/g, " ")} `;
+  const lower = ` ${name.toLowerCase().replace(/['\u2019]s\b/g, "").replace(/[^a-z0-9&']+/g, " ")} `;
   return acts.some((a) => {
     const phrase = a.toLowerCase().replace(/[^a-z0-9&']+/g, " ").trim();
     return phrase.length > 0 && lower.includes(` ${phrase} `);
   });
 }
 
-/** Dollar amounts stated in a free-text price, in order of appearance. */
-function dollarAmounts(price: string): number[] {
-  const out: number[] = [];
-  for (const m of price.replace(/,/g, "").matchAll(/\$\s*(\d+(?:\.\d+)?)/g)) {
-    out.push(Number(m[1]));
-  }
-  return out;
-}
-
 function money(n: number): string {
   return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
 }
 
-/** The price clause, or null when we can't state one honestly. */
+const TICKETED = new Set(["live_music", "festival", "fine_arts"]);
+const BARE_AMOUNT = /^\$\s*(\d+(?:\.\d{1,2})?)$/;
+const RANGE = /^\$\s*(\d+(?:\.\d{1,2})?)\s*(?:-|\u2013|to)\s*\$?\s*(\d+(?:\.\d{1,2})?)$/i;
+
+/**
+ * The price clause, or null when we can't state one honestly. Only a bare
+ * amount ("$25") or a bare range ("$59 - $129") becomes a sentence; anything
+ * with words around the number ("$20 to register a car, free to spectators",
+ * "$25+", "$5 parking") is left to the Price row, which shows it verbatim.
+ */
 export function priceClause(e: AnswerEvent): string | null {
   if (e.sold_out) return "Tickets are sold out.";
   if (e.cost_tier === "free") return "Admission is free.";
   if (e.cost_tier === "donation") return "Admission is by donation.";
-  if (e.cost_tier === "paid" && e.price) {
-    const amounts = dollarAmounts(e.price);
-    if (amounts.length === 0) return null;
-    const low = Math.min(...amounts);
-    const distinct = new Set(amounts).size;
-    return distinct === 1 ? `Tickets are ${money(low)}.` : `Tickets from ${money(low)}.`;
+  if (e.cost_tier !== "paid" || !e.price) return null;
+  const price = e.price.replace(/,/g, "").trim();
+  const noun = TICKETED.has(e.category ?? "") ? "Tickets" : "Cost";
+  const bare = BARE_AMOUNT.exec(price);
+  if (bare) {
+    return noun === "Tickets"
+      ? `Tickets are ${money(Number(bare[1]))}.`
+      : `Cost is ${money(Number(bare[1]))}.`;
+  }
+  const range = RANGE.exec(price);
+  if (range) {
+    const lo = Math.min(Number(range[1]), Number(range[2]));
+    const hi = Math.max(Number(range[1]), Number(range[2]));
+    if (lo === hi) return noun === "Tickets" ? `Tickets are ${money(lo)}.` : `Cost is ${money(lo)}.`;
+    return `${noun} from ${money(lo)} to ${money(hi)}.`;
   }
   return null;
 }
@@ -130,15 +167,22 @@ export function priceClause(e: AnswerEvent): string | null {
  * The lead passage. Returns null only when even the core sentence can't be
  * built (no usable date), so the page renders nothing rather than a fragment.
  */
-export function buildEventAnswer(e: AnswerEvent): string | null {
-  const name = e.name.trim().replace(/[.:;,]+$/, "");
+export function buildEventAnswer(e: AnswerEvent, today?: string): string | null {
+  const name = stripTitleDate(decodeEntities(e.name).trim()).replace(/[.:;,\-\u2013]+$/, "").trim();
   const when = longDate(e.date);
   if (!name || !when) return null;
 
   const town = e.town.trim();
-  const venue = e.venue_name?.trim() ?? "";
+  const venue = decodeEntities(e.venue_name ?? "").trim();
   const place = town ? `${town}, ${REGION.stateCode}` : null;
-  const showVenue = venue && venue.toLowerCase() !== town.toLowerCase();
+  // A venue that is just the town ("Arnold", "Arnold, California") is a
+  // locality, not a venue, and would read "at Arnold, California in Arnold, CA".
+  const venueLower = venue.toLowerCase();
+  const townLower = town.toLowerCase();
+  const showVenue =
+    venue && venueLower !== townLower && !venueLower.startsWith(`${townLower},`);
+  // Detail pages stay up after the date; don't describe a past event as upcoming.
+  const verb = today && e.date < today ? "was" : "is";
 
   let where = "";
   if (showVenue && place) where = ` at ${venue} in ${place}`;
@@ -149,20 +193,35 @@ export function buildEventAnswer(e: AnswerEvent): string | null {
   const end = spokenTime(e.end_time);
   const clock = start ? (end && end !== start ? ` from ${start} to ${end}` : ` at ${start}`) : "";
 
-  const parts = [`${name} is${where} on ${when}${clock}.`];
+  const parts = [`${name} ${verb}${where} on ${when}${clock}.`];
 
-  if (e.status === "tentative") parts.push("The date is tentative.");
+  if (e.status === "tentative" && verb === "is") parts.push("The date is tentative.");
 
   const acts = (e.artists ?? []).map((a) => a.trim()).filter(Boolean);
   if (e.category === "live_music" && acts.length > 0 && !nameCarriesActs(name, acts)) {
-    const verb = acts.length === 1 ? "is" : "are";
-    parts.push(`${listActs(acts)} ${verb} on the bill.`);
+    const be = verb === "was" ? (acts.length === 1 ? "was" : "were") : acts.length === 1 ? "is" : "are";
+    parts.push(`${listActs(acts.map(decodeEntities))} ${be} on the bill.`);
   }
 
-  const price = priceClause(e);
+  const price = verb === "is" ? priceClause(e) : null;
   if (price) parts.push(price);
 
   return parts.join(" ");
+}
+
+/**
+ * Was this "verified" earned against the organizer's page? `verified` is also
+ * written by a human Confirm in /admin/verification (often on an event the
+ * page did NOT list, like weekly trivia), by publishing a community
+ * submission, and by seed scripts. None of those checked a site, so only a
+ * reason the verifier or the apply-organizer-time action wrote counts. A null
+ * reason is ambiguous (seeds, submissions) and never counts.
+ */
+export function isOrganizerPageCheck(reason: string | null | undefined): boolean {
+  const r = reason?.trim();
+  if (!r) return false;
+  if (/^(manually confirmed|confirmed by|dismissed|hidden)/i.test(r)) return false;
+  return true;
 }
 
 /** Possessive that reads right for names ending in "s" ("Murphys' site"). */
@@ -190,10 +249,12 @@ export function civilDate(ts: string | null | undefined, timeZone = REGION.timez
  */
 export function buildVerifiedLine(opts: {
   verificationStatus: string | null | undefined;
+  verificationReason: string | null | undefined;
   checkedAt: string | null | undefined;
   orgName: string | null | undefined;
 }): string | null {
   if (opts.verificationStatus !== "verified") return null;
+  if (!isOrganizerPageCheck(opts.verificationReason)) return null;
   const when = civilDate(opts.checkedAt);
   if (!when) return null;
   const org = opts.orgName?.trim();

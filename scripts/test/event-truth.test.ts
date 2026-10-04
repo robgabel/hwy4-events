@@ -19,12 +19,15 @@ import { REGION } from "../../lib/region.js";
 import {
   buildEventAnswer,
   buildVerifiedLine,
+  decodeEntities,
+  isOrganizerPageCheck,
   longDate,
   priceClause,
   spokenTime,
   type AnswerEvent,
 } from "../../lib/event-answer.js";
 import { pageDateModified } from "../../lib/date-modified.js";
+import { matchOrganizerForEvent, type LinkOrg } from "../../lib/event-link.js";
 import { INTENT_CONFIG } from "../../lib/intent-pages.js";
 import { HOLIDAY_GUIDES } from "../../lib/holiday-pages.js";
 import { MARKET_GUIDES } from "../../lib/market-pages.js";
@@ -157,7 +160,7 @@ const base: AnswerEvent = {
 test("full lead sentence", () => {
   assert.equal(
     buildEventAnswer(base),
-    "Ironstone Summer Concert Series is at Ironstone Amphitheatre in Murphys, CA on Sunday, August 16, 2026 at 7 PM. Kane Brown is on the bill. Tickets from $59."
+    "Ironstone Summer Concert Series is at Ironstone Amphitheatre in Murphys, CA on Sunday, August 16, 2026 at 7 PM. Kane Brown is on the bill. Tickets from $59 to $129."
   );
 });
 
@@ -209,11 +212,62 @@ test("price clause never overstates", () => {
   assert.equal(priceClause({ ...base, cost_tier: "free", price: null }), "Admission is free.");
   assert.equal(priceClause({ ...base, cost_tier: "donation" }), "Admission is by donation.");
   assert.equal(priceClause({ ...base, price: "$25" }), "Tickets are $25.");
-  assert.equal(priceClause({ ...base, price: "$25 / $25 at door" }), "Tickets are $25.");
-  assert.equal(priceClause({ ...base, price: "$40 GA, $25 kids" }), "Tickets from $25.");
-  assert.equal(priceClause({ ...base, price: "Ticketed" }), null);
+  assert.equal(priceClause({ ...base, price: "$1,250" }), "Tickets are $1250.");
+  assert.equal(priceClause({ ...base, price: "$40 to $25" }), "Tickets from $25 to $40.");
+  assert.equal(priceClause({ ...base, price: "$25-$25" }), "Tickets are $25.");
+  assert.equal(priceClause({ ...base, category: "community", price: "$25" }), "Cost is $25.");
+  assert.equal(priceClause({ ...base, category: "community", price: "$10 - $20" }), "Cost from $10 to $20.");
+  // words around a number: left to the verbatim Price row, never summarized
+  for (const price of [
+    "$20 to register a car, free to spectators",
+    "Free for kids, $10 adults",
+    "$25+",
+    "$5 parking",
+    "$40 GA, $25 kids",
+    "Ticketed",
+  ]) {
+    assert.equal(priceClause({ ...base, price }), null, price);
+  }
   assert.equal(priceClause({ ...base, cost_tier: "varies", price: "Pay what you can" }), null);
   assert.equal(priceClause({ ...base, cost_tier: "unknown", price: "$15 each" }), null);
+});
+
+test("past events read in the past tense with no price or tentative clause", () => {
+  const out = buildEventAnswer({ ...base, status: "tentative", artists: ["A", "B"] }, "2026-09-01")!;
+  assert.match(out, /^Ironstone Summer Concert Series was at /);
+  assert.match(out, /A and B were on the bill\./);
+  assert.doesNotMatch(out, /Tickets|tentative/);
+  assert.match(buildEventAnswer(base, "2026-08-16")!, / is at /, "today is still present tense");
+});
+
+test("dated titles, HTML entities, locality venues and possessives", () => {
+  assert.equal(
+    buildEventAnswer({
+      ...base,
+      name: "Volunteer Trail Workday \u2013 October 17, 2026",
+      date: "2026-10-17",
+      venue_name: "Hathaway Pines",
+      town: "Arnold",
+      category: "hike",
+      artists: null,
+      cost_tier: "free",
+      price: null,
+    }),
+    "Volunteer Trail Workday is at Hathaway Pines in Arnold, CA on Saturday, October 17, 2026 at 7 PM. Admission is free."
+  );
+  assert.match(
+    buildEventAnswer({ ...base, venue_name: "Murphys Diggin&#039;s Club House", artists: null })!,
+    /at Murphys Diggin's Club House in/
+  );
+  assert.equal(decodeEntities("Rock &amp; Roll"), "Rock & Roll");
+  assert.match(
+    buildEventAnswer({ ...base, venue_name: "Murphys, California", artists: null })!,
+    /Series is in Murphys, CA on/
+  );
+  assert.doesNotMatch(
+    buildEventAnswer({ ...base, name: "Ty's Party", artists: ["Ty"] })!,
+    /on the bill/
+  );
 });
 
 test("lead sentence and trust line carry no em dashes", () => {
@@ -221,6 +275,7 @@ test("lead sentence and trust line carry no em dashes", () => {
   assert.ok(!out.includes("—"));
   const line = buildVerifiedLine({
     verificationStatus: "verified",
+    verificationReason: "The event appears on the canonical page.",
     checkedAt: "2026-09-30T15:00:00Z",
     orgName: "Brice Station",
   })!;
@@ -236,10 +291,13 @@ test("date and time helpers", () => {
   assert.equal(spokenTime(null), null);
 });
 
-test("verified line renders only for a dated verified row", () => {
+const AUTO = "The event 'Deep Thicket Dwellers' appears on the canonical page with the same date.";
+
+test("verified line renders only for a dated, organizer-page verification", () => {
   assert.equal(
     buildVerifiedLine({
       verificationStatus: "verified",
+      verificationReason: AUTO,
       checkedAt: "2026-09-30T15:00:00Z",
       orgName: "Arnold Rim Trail",
     }),
@@ -249,18 +307,50 @@ test("verified line renders only for a dated verified row", () => {
   assert.equal(
     buildVerifiedLine({
       verificationStatus: "verified",
+      verificationReason: "Time applied from the organizer's page and locked.",
       checkedAt: "2026-10-01T03:00:00Z",
       orgName: null,
     }),
     "Checked against the organizer's site on September 30, 2026."
   );
   assert.match(
-    buildVerifiedLine({ verificationStatus: "verified", checkedAt: "2026-09-30T15:00:00Z", orgName: "Friends of Big Trees" })!,
+    buildVerifiedLine({ verificationStatus: "verified", verificationReason: AUTO, checkedAt: "2026-09-30T15:00:00Z", orgName: "Friends of Big Trees" })!,
     /Friends of Big Trees' site/
   );
-  assert.equal(buildVerifiedLine({ verificationStatus: "unchecked", checkedAt: "2026-09-30", orgName: "X" }), null);
-  assert.equal(buildVerifiedLine({ verificationStatus: "needs_verification", checkedAt: "2026-09-30", orgName: "X" }), null);
-  assert.equal(buildVerifiedLine({ verificationStatus: "verified", checkedAt: null, orgName: "X" }), null);
+  const v = (over: Record<string, unknown>) =>
+    buildVerifiedLine({ verificationStatus: "verified", verificationReason: AUTO, checkedAt: "2026-09-30", orgName: "X", ...over });
+  assert.equal(v({ verificationStatus: "unchecked" }), null);
+  assert.equal(v({ verificationStatus: "needs_verification" }), null);
+  assert.equal(v({ checkedAt: null }), null);
+});
+
+test("a human Confirm, a published submission or a seed never claims a site check", () => {
+  for (const reason of ["Manually confirmed by admin.", "Confirmed by Rob", null, "", "  "]) {
+    assert.equal(isOrganizerPageCheck(reason), false, String(reason));
+    assert.equal(
+      buildVerifiedLine({ verificationStatus: "verified", verificationReason: reason, checkedAt: "2026-09-30T15:00:00Z", orgName: "Murphys Wine & Beer Garden" }),
+      null
+    );
+  }
+  assert.equal(isOrganizerPageCheck(AUTO), true);
+  assert.equal(isOrganizerPageCheck("Times corrected from arnoldrimtrail.org (organizer canonical)"), true);
+});
+
+test("organizer: direct org_slug or a pattern in the NAME, never the venue", () => {
+  const orgs: LinkOrg[] = [
+    { slug: "brice-station", display_name: "Brice Station Vineyards", canonical_url: "https://bricestation.com/", match_patterns: ["brice station", "hilltop concert"] },
+    { slug: "ironstone-vineyards", display_name: "Ironstone Vineyards", canonical_url: "https://ironstonevineyards.com/", match_patterns: ["ironstone"] },
+    { slug: "arnold-rim-trail", display_name: "Arnold Rim Trail", canonical_url: "https://arnoldrimtrail.org/events/", match_patterns: ["arnold rim trail"] },
+  ];
+  const e = (name: string, venue: string, org_slug: string | null = "gocalaveras", description: string | null = null) => ({ name, venue_name: venue, org_slug, description });
+  // held at a venue is not organized by it
+  assert.equal(matchOrganizerForEvent(e("Arnold Angels Music Festival", "Brice Station Vineyards"), orgs), null);
+  assert.equal(matchOrganizerForEvent(e("Firewise Calaveras Festival", "Ironstone Vineyards"), orgs), null);
+  assert.equal(matchOrganizerForEvent(e("Trail Day", "Somewhere", "gocalaveras", "Hosted by Arnold Rim Trail volunteers"), orgs), null);
+  // name names the org, or we scraped the org's own calendar
+  assert.equal(matchOrganizerForEvent(e("Brice Station Hilltop Concert Series", "Brice Station Vineyards"), orgs)?.slug, "brice-station");
+  assert.equal(matchOrganizerForEvent(e("Mimosa Sundays at Ironstone", "Ironstone Vineyards"), orgs)?.slug, "ironstone-vineyards");
+  assert.equal(matchOrganizerForEvent(e("Guided Sunset Hike", "Cougar Rock", "arnold-rim-trail"), orgs)?.slug, "arnold-rim-trail");
 });
 
 // ---------- 3. dateModified ----------
