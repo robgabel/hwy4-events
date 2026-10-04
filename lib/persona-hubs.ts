@@ -172,7 +172,7 @@ export const PERSONA_HUBS: PersonaHub[] = [
     emptyUpcoming:
       "No upcoming Hermitfest dates are on the calendar. The 2026 festival was September 12 and 13 in Bear Valley. If next year's dates are confirmed, they will show here.",
     newsletterHeading: "Want a heads-up when next year's Hermitfest lands?",
-    editorialUpdated: "2026-09-13",
+    editorialUpdated: "2026-10-04",
     editorial: [
       "Hermitfest West is the Bear Valley edition of Hermitfest, put on by the Ebbetts Pass National Scenic Byway Association. The official page puts the 2026 festival at Grizzly Ballfield (also called Bear Valley Ballfield) in Bear Valley, Alpine County, CA, on Saturday, September 12 and Sunday, September 13. Admission is free.",
       "Saturday on the official schedule starts noonish with Deep Thicket Dwellers, then Grover Anderson & The Lampoliers at 1:30, The HighLife Band at 3:30, a dinner break at 5:30, Greg Sutton & Friends at 6:30, and The Hermitfest All Stars at 7:30. Sunday lists yoga with Alex Mannos at 9:00, guided bike rides with Bear Valley Adventure Company at 10:00, then music from about 10:10 to 2:00: Kiana at 10:10, Lainy McGreen at 10:45, West Muir at 11:25, Dominick Restivo at 12:05, Desiree & Cyrus at 12:45, and Ty & Connor at 1:25. The official page does not publish a Saturday end time.",

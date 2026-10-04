@@ -46,7 +46,7 @@ const FEST_START = "2026-07-17";
 const FEST_END = "2026-08-02";
 // YYYY-MM-DD this page's hand-written copy last changed. Bump with any copy edit;
 // it feeds WebPage dateModified with the shows' updated_at (HWY-60).
-const EDITORIAL_UPDATED = "2026-09-11";
+const EDITORIAL_UPDATED = "2026-10-04";
 const OFFICIAL_URL = "https://www.bearvalleymusicfestival.org/2026-festival";
 
 export const revalidate = 3600;
