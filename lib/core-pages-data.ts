@@ -28,9 +28,9 @@ async function getAdvertisedVenues(): Promise<CorePageInput["venues"]> {
 }
 
 export async function getCorePageInput(): Promise<CorePageInput> {
-  const towns = getPublishedTownSlugs().map((slug) => ({
-    slug,
-    name: getTownContent(slug)?.townName ?? slug,
-  }));
+  const towns = getPublishedTownSlugs().map((slug) => {
+    const content = getTownContent(slug);
+    return { slug, name: content?.townName ?? slug, description: content?.metaDescription ?? null };
+  });
   return { towns, venues: await getAdvertisedVenues() };
 }

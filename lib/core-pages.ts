@@ -48,8 +48,9 @@ export type CorePage = {
 };
 
 export type CorePageInput = {
-  /** Published (non-draft) town pages. */
-  towns: { slug: string; name: string }[];
+  /** Published (non-draft) town pages; `description` is the page's own meta
+   *  description when known (a generic line is used otherwise). */
+  towns: { slug: string; name: string; description?: string | null }[];
   /** Venue hubs that clear the sitemap gate (lib/venue-pages.ts). */
   venues: { slug: string; name: string }[];
 };
@@ -83,7 +84,9 @@ export function corePages({ towns, venues }: CorePageInput): CorePage[] {
         path: `/towns/${t.slug}`,
         family: "town",
         title: t.name,
-        answers: `What's happening in ${t.name} this weekend, and what is the town like? Upcoming events, venues, and local facts.`,
+        answers:
+          t.description?.trim() ||
+          `What's happening in ${t.name}, and what is the town like? Upcoming events, venues, and local facts.`,
         changefreq: "weekly",
         priority: 0.9,
         live: true,
@@ -147,13 +150,14 @@ export function corePages({ towns, venues }: CorePageInput): CorePage[] {
         live: true,
       })
     ),
-    // Persona SEO hubs (HWY-39).
+    // Persona SEO hubs (HWY-39). Their meta descriptions name one year's
+    // dates, which go stale the day after; llms.txt gets a dateless line.
     ...PERSONA_HUBS.map(
       (g): CorePage => ({
         path: g.path,
         family: "persona-hub",
         title: g.label,
-        answers: g.metaDescription,
+        answers: `${g.label}: dates, times, location, and any confirmed upcoming listings.`,
         changefreq: "weekly",
         priority: 0.8,
         live: true,

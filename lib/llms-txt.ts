@@ -6,6 +6,18 @@
  */
 
 import type { CoreFamily, CorePage } from "./core-pages";
+import { REGION } from "./region";
+
+/** "Copperopolis (850 ft), Angels Camp (1,300 ft), …" from the region's own
+ *  town list, low to high, so elevations can't drift from regions/<slug>. */
+export function townElevationList(
+  towns: readonly { name: string; elevation: number }[] = REGION.geo.towns
+): string {
+  return [...towns]
+    .sort((a, b) => a.elevation - b.elevation)
+    .map((t) => `${t.name} (${t.elevation.toLocaleString("en-US")} ft)`)
+    .join(", ");
+}
 
 /** Section order and headings. Every CoreFamily must appear here (the test
  *  pins it), so a new family can't silently vanish from llms.txt. */
@@ -41,7 +53,7 @@ export function renderLlmsTxt({ siteName, siteUrl, pages }: LlmsTxtInput): strin
     "",
     "## Coverage area",
     "",
-    "Nine towns along about 50 miles of Highway 4, ordered west to east by elevation: Copperopolis (850 ft), Angels Camp (1,300 ft), Murphys (2,100 ft), Avery (2,800 ft), White Pines (3,500 ft), Arnold (4,000 ft), Dorrington (4,800 ft), Camp Connell (5,000 ft), Bear Valley (7,000 ft). Bear Valley is in Alpine County; the rest are in Calaveras County, California. This Bear Valley is not Big Bear Lake in Southern California.",
+    `The towns along Highway 4 we cover, lowest to highest: ${townElevationList()}. Bear Valley is in Alpine County; the rest are in Calaveras County, California. This Bear Valley is not Big Bear Lake in Southern California.`,
   ];
 
   for (const section of LLMS_SECTIONS) {

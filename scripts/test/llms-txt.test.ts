@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { corePages, type CoreFamily } from "../../lib/core-pages.js";
-import { LLMS_SECTIONS, renderLlmsTxt } from "../../lib/llms-txt.js";
+import { LLMS_SECTIONS, renderLlmsTxt, townElevationList } from "../../lib/llms-txt.js";
+import { REGION } from "../../lib/region.js";
 
 const INPUT = {
   towns: [
@@ -93,6 +94,24 @@ test("sitemap-core and llms.txt both read the shared registry", () => {
     false,
     "a static public/llms.txt would shadow the generated route"
   );
+});
+
+test("guide lines never carry one year's dates; towns use their own description", () => {
+  for (const p of pages.filter((x) => x.family === "persona-hub")) {
+    assert.doesNotMatch(p.answers, /20\d\d/, `${p.path} is dateless`);
+  }
+  const withDesc = corePages({
+    towns: [{ slug: "arnold", name: "Arnold", description: "Arnold's own meta description." }],
+    venues: [],
+  });
+  assert.equal(withDesc.find((p) => p.path === "/towns/arnold")!.answers, "Arnold's own meta description.");
+});
+
+test("coverage line comes from the region's town list", () => {
+  for (const t of REGION.geo.towns) {
+    assert.ok(txt.includes(`${t.name} (${t.elevation.toLocaleString("en-US")} ft)`), t.name);
+  }
+  assert.equal(townElevationList([{ name: "B", elevation: 2000 }, { name: "A", elevation: 900 }]), "A (900 ft), B (2,000 ft)");
 });
 
 test("sitemap priorities and freshness policy are unchanged", () => {
