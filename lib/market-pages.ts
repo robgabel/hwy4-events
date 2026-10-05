@@ -190,3 +190,155 @@ export function marketGuideForEvent(
 ): MarketGuide | null {
   return MARKET_GUIDES.find((g) => isMarketEvent(g, e)) ?? null;
 }
+
+/**
+ * A weekday named next to "farmers market" that disagrees with MARKET_GUIDES.
+ * HWY-56: the Murphys market is Sunday, and a Saturday claim kept surviving in
+ * the knowledge base and the town page after the guide was corrected. The check
+ * is local on purpose. A Saturday concert in the same paragraph is a different
+ * fact and must not fail the market.
+ */
+export type MarketWeekdayMismatch = {
+  /** Weekday the text asserts, e.g. "Saturday". */
+  weekday: string;
+  /** Weekday `MARKET_GUIDES` records for that market. */
+  expected: string;
+  guideKey: string;
+  /** The words the check actually judged, so a failure is readable. */
+  excerpt: string;
+};
+
+export type MarketWeekdayContext = {
+  /** Venue the blurb belongs to, when the prose itself never names it. */
+  venue?: string | null;
+  town?: string | null;
+};
+
+const WEEKDAY_NAMES = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+] as const;
+
+/** Words around "farmers market" that still count as "next to" it. */
+const WEEKDAY_RADIUS = 4;
+/**
+ * Wider than the weekday window so "Murphys" a sentence earlier still
+ * attributes the claim, without reaching an unrelated Saturday pages away.
+ */
+const GUIDE_RADIUS = 24;
+
+function tokens(text: string): string[] {
+  return text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+}
+
+function canonicalWeekday(word: string): string | null {
+  const base = word.endsWith("s") ? word.slice(0, -1) : word;
+  if (!(WEEKDAY_NAMES as readonly string[]).includes(base)) return null;
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+function containsSequence(
+  hay: string[],
+  needle: string[],
+  from: number,
+  to: number
+): boolean {
+  if (needle.length === 0) return false;
+  const start = Math.max(0, from);
+  const end = Math.min(hay.length, to);
+  for (let i = start; i <= end - needle.length; i++) {
+    let ok = true;
+    for (let j = 0; j < needle.length; j++) {
+      if (hay[i + j] !== needle[j]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
+/** "Murphys Community Park" and "Murphys Park" are the same lot here. */
+function normalizePlace(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\bcommunity\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function guideFromContext(context?: MarketWeekdayContext): MarketGuide | null {
+  if (!context) return null;
+  const town = (context.town ?? "").trim().toLowerCase();
+  const venue = normalizePlace(context.venue ?? "");
+  const hits = MARKET_GUIDES.filter((g) => {
+    if (town && g.town.toLowerCase() === town) return true;
+    if (venue && normalizePlace(g.venue) === venue) return true;
+    return false;
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+
+function guideInWindow(
+  words: string[],
+  from: number,
+  to: number
+): MarketGuide | null {
+  const hits = MARKET_GUIDES.filter((g) => {
+    return (
+      containsSequence(words, tokens(g.venue), from, to) ||
+      containsSequence(words, tokens(g.label), from, to) ||
+      containsSequence(words, tokens(g.town), from, to)
+    );
+  });
+  // Two guides in one window (Murphys and Angels Camp both named) is ambiguous.
+  // Guessing would let a real mismatch through or flag the wrong market.
+  return hits.length === 1 ? hits[0] : null;
+}
+
+export function marketWeekdayMismatches(
+  text: string,
+  context?: MarketWeekdayContext
+): MarketWeekdayMismatch[] {
+  const words = tokens(text);
+  const out: MarketWeekdayMismatch[] = [];
+  for (let i = 0; i < words.length - 1; i++) {
+    if (words[i] !== "farmers" || words[i + 1] !== "market") continue;
+
+    const dayFrom = Math.max(0, i - WEEKDAY_RADIUS);
+    const dayTo = Math.min(words.length, i + 2 + WEEKDAY_RADIUS);
+    const dayWords = words.slice(dayFrom, dayTo);
+    const weekdays: string[] = [];
+    for (const w of dayWords) {
+      const day = canonicalWeekday(w);
+      if (day && !weekdays.includes(day)) weekdays.push(day);
+    }
+    if (weekdays.length === 0) continue;
+
+    const guide =
+      guideInWindow(
+        words,
+        Math.max(0, i - GUIDE_RADIUS),
+        Math.min(words.length, i + 2 + GUIDE_RADIUS)
+      ) ?? guideFromContext(context);
+    if (!guide) continue;
+
+    for (const weekday of weekdays) {
+      if (weekday === guide.day) continue;
+      out.push({
+        weekday,
+        expected: guide.day,
+        guideKey: guide.key,
+        excerpt: dayWords.join(" "),
+      });
+    }
+  }
+  return out;
+}
