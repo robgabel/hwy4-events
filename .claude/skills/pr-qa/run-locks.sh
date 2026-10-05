@@ -10,7 +10,9 @@
 # Exit codes:
 #   0 all locks pass       1 a lock failed       2 merge conflict
 #   3 fork PR (refused)    4 setup error (fetch, install, bad args)
-# The last line is always "RESULT ..." naming the commit that was checked.
+# Every exit the script controls ends with a "RESULT ..." line naming the main
+# commit (base=) and PR head (head=) checked. A killed run (SIGTERM, SIGHUP,
+# SIGKILL) prints none; the caller must treat a missing RESULT as a failure.
 
 set -uo pipefail
 

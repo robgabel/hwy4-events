@@ -31,9 +31,14 @@ this; independence rests on the builder keeping to it.
 2. **Run the locks with the script, never by hand:**
 
    ```sh
-   git fetch origin main && git show origin/main:.claude/skills/pr-qa/run-locks.sh > "<scratchpad>/run-locks.sh"
-   bash "<scratchpad>/run-locks.sh" <n> "<scratchpad>"
+   RL="<scratchpad>/run-locks-$$.sh"   # a fresh name, so a stale copy from an earlier round never runs
+   git fetch origin main && git show origin/main:.claude/skills/pr-qa/run-locks.sh > "$RL" \
+     && [ -s "$RL" ] && bash "$RL" <n> "<scratchpad>"
    ```
+
+   One chained command on purpose: if the fetch or the copy fails, nothing runs. (Run as
+   two lines, a failed copy leaves an empty file, and bash runs an empty file silently and
+   exits 0.)
 
    It takes several minutes (two installs, the test suite, two typechecks), longer than a
    default 2-minute command timeout. Run it in the background, or with a timeout of 15
@@ -63,7 +68,8 @@ this; independence rests on the builder keeping to it.
    1 and 2 are findings. On 3, report "fork PR: needs Rob's OK" and review by reading only.
    On 4, retry once; if it fails again, report the setup error and do not claim any lock
    result. Read only the `RESULT` line and `grep` a log for the failing lines; never read a
-   log whole. Copy the `RESULT` line into your report.
+   log whole. Copy the `RESULT` line into your report. **No `RESULT` line means the run
+   failed, whatever the exit code**: report it as a setup error, never as a pass.
 
    All locks, every PR, no path heuristics. CI's test workflow is path-filtered and runs on
    pull requests only, so a `.claude/`- or docs-only PR gets no CI, and main itself is never
