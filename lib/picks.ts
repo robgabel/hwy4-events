@@ -52,12 +52,19 @@ export function addDaysIso(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function selectPicks<T extends PickCandidate>(
+/**
+ * Every pick entry that is eligible right now, date-sorted, uncapped: the one
+ * definition of "this is a Rob's Pick" (public, not sold out, not ended, not
+ * absorbed by a live festival guide, plus the live guides themselves).
+ * selectPicks shapes it for the homepage; lib/briefing-picks.ts windows it for
+ * the briefings and newsletter, so the site cannot disagree with itself.
+ */
+export function eligiblePickEntries<T extends PickCandidate>(
   events: T[],
   todayIso: string,
   nowMinutes: number,
   guides: FestivalGuide[] = []
-): { spotlight: PickEntry<T> | null; picks: PickEntry<T>[] } {
+): PickEntry<T>[] {
   const liveGuides = guides.filter((g) => todayIso <= g.hideAfter);
 
   const eventEntries: PickEntry<T>[] = events
@@ -99,9 +106,18 @@ export function selectPicks<T extends PickCandidate>(
   // Guides listed first so an in-progress festival outranks a same-date event
   // pick (the sort is stable, so ties keep this order). The shared feed arrives
   // date-sorted; sort defensively anyway.
-  const sorted = [...guideEntries, ...eventEntries].sort((a, b) =>
+  return [...guideEntries, ...eventEntries].sort((a, b) =>
     a.date < b.date ? -1 : a.date > b.date ? 1 : 0
   );
+}
+
+export function selectPicks<T extends PickCandidate>(
+  events: T[],
+  todayIso: string,
+  nowMinutes: number,
+  guides: FestivalGuide[] = []
+): { spotlight: PickEntry<T> | null; picks: PickEntry<T>[] } {
+  const sorted = eligiblePickEntries(events, todayIso, nowMinutes, guides);
 
   const horizon = addDaysIso(todayIso, SPOTLIGHT_WINDOW_DAYS);
   const spotlight =

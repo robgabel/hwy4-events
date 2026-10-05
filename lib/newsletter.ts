@@ -25,6 +25,20 @@ import {
   type HrefResolver,
 } from "./newsletter-render";
 import { withVoice } from "./voice";
+import {
+  selectBriefingPicks,
+  pickTag,
+  formatPicksSection,
+  missingPicks,
+  logMissingPicks,
+  ROB_PICKS_RULE,
+  type BriefingPickRow,
+} from "./briefing-picks";
+import { getPickRowsBetween } from "./briefing-picks-data";
+import { FESTIVAL_GUIDES } from "./event-guides";
+import { addDaysIso } from "./picks";
+import { pacificToday } from "./date-windows";
+import { nowPacificMinutes } from "./event-time";
 import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "./agent/models";
 import { messageText } from "./agent/message-text";
 
@@ -63,7 +77,7 @@ Rules:
 - P1: Quick hello and weekend highlights — what's worth showing up for.
 - P2: Saturday/Sunday specifics. Name-drop venues and artists.
 - P3: Next week preview — anything notable coming up Mon-Thu.
-- P4 (optional): Rob's Picks or standout events.
+- P4: Rob's Picks whenever the ROB'S PICKS list has any (it is not optional then). With no picks, standout events or skip it.
 - P5: One-line invitation in Millie's voice, then the sign-off on its own line. Vary the invitation each week — examples (do NOT copy verbatim): "Forward this to the buddy who always asks what's happening up here." / "Got an event we missed? Email Rob at robgabel@gmail.com." / "Send this to the friend coming up next weekend." Do NOT say "hit reply" — replies aren't monitored. End with: — Millie 🐾
 - Use day names with dates on first mention: "Friday, March 27" or "Saturday the 28th". After that, just day names.
 - Name-drop specific events and venues. Be honest if it's a quiet week.
@@ -71,7 +85,8 @@ Rules:
 - FRESHNESS: Never reuse jokes, openers, closers, structural patterns, OR closing invitations from recent briefings below.
 - LINKS: Include event links as [event text](url). Keep natural — don't link every single event.
 - URLS ARE NOT YOURS TO WRITE: when you link an event, copy its "URL:" value from the event list above character for character. Never construct, guess, or edit a URL, and never reuse a URL from RECENT BRIEFINGS — those may be stale.
-- FORMAT: Output plain text with markdown-style links. No HTML tags. No JSON. No code fences. No preamble. Paragraphs separated by ONE blank line. Just the newsletter body — nothing else.`;
+- FORMAT: Output plain text with markdown-style links. No HTML tags. No JSON. No code fences. No preamble. Paragraphs separated by ONE blank line. Just the newsletter body — nothing else.
+${ROB_PICKS_RULE}`;
 
 export function getServiceClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -136,7 +151,7 @@ export async function getUpcomingEvents() {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "id, name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url"
+      "id, name, date, start_time, end_time, venue_name, venue_key, town, category, artists, price, robs_pick, pick_reason, sold_out, status, description, event_url, visibility"
     )
     .gte("date", today)
     .lte("date", tenDaysOut)
@@ -184,11 +199,38 @@ export async function getActiveSubscribers() {
   return data || [];
 }
 
+// The newsletter's own window (getUpcomingEvents reads the next 10 days) and
+// how far past it to look for a mark-your-calendar pick.
+const NEWSLETTER_WINDOW_DAYS = 10;
+const PICK_LOOKAHEAD_DAYS = 21;
+const PICK_LOOKAHEAD_MAX = 2;
+
 export async function generateNewsletter(
   events: Record<string, unknown>[],
   recentBriefings: { briefing_date: string; text: string }[]
 ): Promise<string> {
   const anthropic = new Anthropic();
+
+  // Rob's Picks under the homepage's own rule (issue #356).
+  const windowStart = pacificToday().iso;
+  const windowEnd = addDaysIso(windowStart, NEWSLETTER_WINDOW_DAYS);
+  const lookaheadRows = await getPickRowsBetween(
+    getServiceClient(),
+    addDaysIso(windowEnd, 1),
+    addDaysIso(windowEnd, PICK_LOOKAHEAD_DAYS)
+  );
+  const picks = selectBriefingPicks(
+    [...(events as unknown as BriefingPickRow[]), ...lookaheadRows],
+    {
+      todayIso: windowStart,
+      nowMinutes: nowPacificMinutes(),
+      windowStart,
+      windowEnd,
+      guides: FESTIVAL_GUIDES,
+      lookaheadDays: PICK_LOOKAHEAD_DAYS,
+      maxLookahead: PICK_LOOKAHEAD_MAX,
+    }
+  );
 
   const today = new Date();
   const dayOfWeek = today.toLocaleDateString("en-US", { weekday: "long" });
@@ -211,7 +253,7 @@ export async function generateNewsletter(
       e.start_time ? `at ${e.start_time}` : "",
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
-      e.robs_pick ? "[ROB'S PICK]" : "",
+      pickTag(e as { name: string; date: string; town: string }, picks.inWindow),
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
       `URL: ${internalUrl}`,
     ].filter(Boolean);
@@ -249,7 +291,7 @@ export async function generateNewsletter(
     messages: [
       {
         role: "user",
-        content: `Today is ${dayOfWeek}, ${dateStr}. Write the weekly newsletter for Hwy4Events.com.\n\nUPCOMING EVENTS (next 10 days):\n${eventList}${historySection}`,
+        content: `Today is ${dayOfWeek}, ${dateStr}. Write the weekly newsletter for Hwy4Events.com.\n\nUPCOMING EVENTS (next 10 days):\n${eventList}${formatPicksSection(picks.inWindow, picks.lookahead)}${historySection}`,
       },
     ],
   });
@@ -266,6 +308,7 @@ export async function generateNewsletter(
   // known slugs) and ship as a permanent dead link in an immutable email.
   const repair = repairEventLinks(body, events as unknown as LinkableEvent[]);
   logLinkRepairs("newsletter", repair);
+  logMissingPicks("newsletter", missingPicks(repair.text, picks.inWindow));
   return repair.text;
 }
 

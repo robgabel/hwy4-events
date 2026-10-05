@@ -11,6 +11,20 @@ import {
   type LinkableEvent,
 } from "@/lib/briefing-links";
 import { withVoice } from "@/lib/voice";
+import {
+  selectBriefingPicks,
+  pickTag,
+  formatPicksSection,
+  missingPicks,
+  logMissingPicks,
+  ROB_PICKS_RULE,
+  type BriefingPick,
+  type BriefingPickRow,
+} from "@/lib/briefing-picks";
+import { FESTIVAL_GUIDES } from "@/lib/event-guides";
+import { addDaysIso } from "@/lib/picks";
+import { pacificToday } from "@/lib/date-windows";
+import { nowPacificMinutes } from "@/lib/event-time";
 import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "@/lib/agent/models";
 import { messageText } from "@/lib/agent/message-text";
 import {
@@ -41,7 +55,7 @@ Rules:
 - URLS ARE NOT YOURS TO WRITE: when you link an event, copy its "URL:" value from the event lists above character for character. Never construct, guess, or edit a URL, and never reuse a URL from RECENT BRIEFINGS — those may be stale.
 - Events marked [MEMBERS ONLY] are for private clubs (like Blue Lake Springs). Mention them naturally but note they're for members/guests. Example: "Over at Blue Lake Springs, members can catch..."
 - Do NOT link members-only events — they don't have public event pages.
-- ROB'S PICKS: an event tagged [ROB'S PICK: reason] should lead with that reason, in your own words. A plain [ROB'S PICK] with no reason gets a plain mention, no invented enthusiasm.`;
+${ROB_PICKS_RULE}`;
 
 async function getEventsForBriefing() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -60,7 +74,7 @@ async function getEventsForBriefing() {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, pick_reason, status, description, event_url, visibility"
+      "name, date, start_time, end_time, venue_name, venue_key, town, category, artists, price, robs_pick, pick_reason, sold_out, status, description, event_url, visibility"
     )
     .gte("date", today)
     .lte("date", nextWeek)
@@ -101,7 +115,8 @@ async function getRecentBriefings() {
 
 async function generateBriefing(
   events: Record<string, unknown>[],
-  recentBriefings: { briefing_date: string; text: string }[]
+  recentBriefings: { briefing_date: string; text: string }[],
+  picks: BriefingPick[]
 ) {
   const anthropic = new Anthropic();
 
@@ -122,11 +137,7 @@ async function generateBriefing(
       e.start_time ? `at ${e.start_time}` : "",
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
-      e.robs_pick
-        ? e.pick_reason
-          ? `[ROB'S PICK: ${e.pick_reason}]`
-          : "[ROB'S PICK]"
-        : "",
+      pickTag(e as { name: string; date: string; town: string }, picks),
       e.visibility === "private" ? "[MEMBERS ONLY]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
       e.visibility !== "private" ? `URL: ${internalUrl}` : "",
@@ -190,7 +201,7 @@ async function generateBriefing(
     messages: [
       {
         role: "user",
-        content: `Today is ${dayOfWeek}, ${dateStr}. Write the daily briefing for Hwy4Events.com.\n\nTODAY'S EVENTS:\n${todaySummary}\n\nTOMORROW'S EVENTS:\n${tomorrowSummary}\n\nREST OF THE WEEK:\n${restOfWeekSummary}${historySection}${shapeGuidance}`,
+        content: `Today is ${dayOfWeek}, ${dateStr}. Write the daily briefing for Hwy4Events.com.\n\nTODAY'S EVENTS:\n${todaySummary}\n\nTOMORROW'S EVENTS:\n${tomorrowSummary}\n\nREST OF THE WEEK:\n${restOfWeekSummary}${formatPicksSection(picks)}${historySection}${shapeGuidance}`,
       },
     ],
   });
@@ -268,13 +279,42 @@ export async function GET(request: Request) {
       getEventsForBriefing(),
       getRecentBriefings(),
     ]);
-    const raw = await generateBriefing(events, recentBriefings);
+    // Rob's Picks under the homepage's own rule (issue #356). No lookahead: the
+    // daily is 60-100 words about today and tomorrow, and the weekend briefing
+    // and newsletter carry the mark-your-calendar line.
+    const todayIso = pacificToday().iso;
+    const { inWindow: picks } = selectBriefingPicks(
+      events as unknown as BriefingPickRow[],
+      {
+        todayIso,
+        nowMinutes: nowPacificMinutes(),
+        windowStart: todayIso,
+        windowEnd: addDaysIso(todayIso, 7),
+        guides: FESTIVAL_GUIDES,
+      }
+    );
+    const raw = await generateBriefing(events, recentBriefings, picks);
     // The model is handed exact URLs but sometimes reconstructs them from its
     // prose instead (the 2026-08-15 Kane Brown 404). Enforce deterministically:
     // every event link must resolve against the list it was generated from.
     const repair = repairEventLinks(raw, events as unknown as LinkableEvent[]);
     logLinkRepairs("daily-briefing", repair);
     const briefing = repair.text;
+    // Today's and tomorrow's picks must make the briefing; midweek ones are the
+    // model's call (P3 is optional). A festival counts on its opening day or
+    // the day before, not on every day of a two-week run.
+    const tomorrowIso = addDaysIso(todayIso, 1);
+    logMissingPicks(
+      "daily-briefing",
+      missingPicks(
+        briefing,
+        picks.filter(
+          (p) =>
+            p.startDate <= tomorrowIso &&
+            (p.kind === "event" || p.startDate >= todayIso)
+        )
+      )
+    );
     await saveBriefing(briefing, events.length);
 
     // Invalidate the home page cache so the new briefing appears immediately
