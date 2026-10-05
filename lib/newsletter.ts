@@ -253,7 +253,7 @@ export async function generateNewsletter(
       e.start_time ? `at ${e.start_time}` : "",
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
-      pickTag(e as { name: string; date: string; town: string }, picks.inWindow),
+      pickTag(e as { name: string; date: string; town: string; start_time?: string | null }, picks.inWindow),
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
       `URL: ${internalUrl}`,
     ].filter(Boolean);

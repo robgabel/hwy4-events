@@ -39,7 +39,7 @@ export type BriefingPick = {
   url: string;
   /** Site path the output must link to for the pick to count as mentioned. */
   path: string;
-  /** name|date|town for an event pick, so its row in the day lists can be tagged. */
+  /** pickKey of an event pick, so its row in the day lists can be tagged. */
   key: string | null;
 };
 
@@ -56,9 +56,14 @@ export type BriefingPickWindow = {
   maxLookahead?: number;
 };
 
-/** The identity a row is tagged by. Name + date + town is what the slug uses. */
-export function pickKey(e: { name: string; date: string; town: string }): string {
-  return `${e.name}|${e.date}|${e.town}`;
+type KeyedRow = { name: string; date: string; town: string; start_time?: string | null };
+
+/** The identity a row is tagged and deduped by: name + date + town (what the
+ *  slug uses) plus the start time, so a matinee and an evening performance of
+ *  one production stay two picks and a sold-out one can't stand in for the
+ *  other. */
+export function pickKey(e: KeyedRow): string {
+  return `${e.name}|${e.date}|${e.town}|${e.start_time ?? ""}`;
 }
 
 function cleanReason(reason: string | null | undefined): string | null {
@@ -202,7 +207,7 @@ export function dailyBriefingPicks<T extends BriefingPickRow>(
  *  under the shared rule. A sold-out, ended, members-only or festival-absorbed
  *  robs_pick row gets no tag. */
 export function pickTag(
-  e: { name: string; date: string; town: string },
+  e: KeyedRow,
   inWindow: BriefingPick[]
 ): string {
   const key = pickKey(e);

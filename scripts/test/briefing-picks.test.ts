@@ -14,6 +14,7 @@ import {
   missingPicks,
   ROB_PICKS_RULE,
   DAILY_PICKS_NOTE,
+  pickKey,
   type BriefingPickRow,
 } from "../../lib/briefing-picks.js";
 import { selectPicks } from "../../lib/picks.js";
@@ -303,4 +304,18 @@ test("a nightly pick inside the festival's run is still absorbed", () => {
   const night = row({ name: "Night", venue_key: "big-white-tent", date: "2026-10-10" });
   const { inWindow } = selectBriefingPicks([night], win({ guides: [g] }));
   assert.deepEqual(inWindow.map((p) => p.kind), ["guide"]);
+});
+
+test("a matinee and an evening of one production are two picks; sold-out one drops alone", () => {
+  // QA round 5 on #357: dedupe and tagging keyed on name+date+town let a
+  // sold-out performance hide the other, or carry its tag.
+  const base = { name: "An Act of God", date: "2026-10-10", town: "Murphys", pick_reason: "go" };
+  const matinee = row({ ...base, start_time: "14:00", end_time: "15:30", sold_out: true });
+  const evening = row({ ...base, start_time: "19:30", end_time: "21:00" });
+  for (const order of [[matinee, evening], [evening, matinee]]) {
+    const { inWindow } = selectBriefingPicks(order, win());
+    assert.deepEqual(inWindow.map((p) => p.key), [pickKey(evening)]);
+    assert.equal(pickTag(evening, inWindow), "[ROB'S PICK: go]");
+    assert.equal(pickTag(matinee, inWindow), "");
+  }
 });

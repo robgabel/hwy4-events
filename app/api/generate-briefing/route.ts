@@ -138,7 +138,7 @@ async function generateBriefing(
       e.start_time ? `at ${e.start_time}` : "",
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
-      pickTag(e as { name: string; date: string; town: string }, picks),
+      pickTag(e as { name: string; date: string; town: string; start_time?: string | null }, picks),
       e.visibility === "private" ? "[MEMBERS ONLY]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
       e.visibility !== "private" ? `URL: ${internalUrl}` : "",
