@@ -214,3 +214,22 @@ test("the shared prompt rule has no em dashes", () => {
   assert.ok(!ROB_PICKS_RULE.includes("\u2014"));
   assert.ok(!formatPicksSection(selectBriefingPicks([row()], win()).inWindow).includes("\u2014"));
 });
+
+test("a lookahead pick's link survives repair when its row is in the repair set", async () => {
+  // QA finding on #357: the generators repaired against in-window rows only,
+  // so a correctly copied mark-your-calendar URL was unlinked.
+  const { repairEventLinks } = await import("../../lib/briefing-links.js");
+  const inWindow = [row({ robs_pick: false })];
+  const later = row({ name: "Harvest Gala", date: "2026-10-17", town: "Arnold" });
+  const { lookahead } = selectBriefingPicks([...inWindow, later], win({ lookaheadDays: 14 }));
+  const text = `Mark your calendar: [Harvest Gala](${lookahead[0].url}).`;
+
+  assert.equal(
+    repairEventLinks(text, inWindow).unlinked.length,
+    1,
+    "without the lookahead row the repair unlinks a correct URL"
+  );
+  const fixed = repairEventLinks(text, [...inWindow, later]);
+  assert.equal(fixed.unlinked.length, 0);
+  assert.equal(fixed.text, text);
+});

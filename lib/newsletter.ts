@@ -306,7 +306,11 @@ export async function generateNewsletter(
   // Enforce link integrity before the draft is stored: a minted slug here
   // would bypass the click-tracking rewrite (buildSlugToEventId only maps
   // known slugs) and ship as a permanent dead link in an immutable email.
-  const repair = repairEventLinks(body, events as unknown as LinkableEvent[]);
+  // Lookahead pick rows were in the prompt too, so their links must resolve.
+  const repair = repairEventLinks(body, [
+    ...(events as unknown as LinkableEvent[]),
+    ...lookaheadRows,
+  ]);
   logLinkRepairs("newsletter", repair);
   logMissingPicks("newsletter", missingPicks(repair.text, picks.inWindow));
   return repair.text;

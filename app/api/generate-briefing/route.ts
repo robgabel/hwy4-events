@@ -279,20 +279,20 @@ export async function GET(request: Request) {
       getEventsForBriefing(),
       getRecentBriefings(),
     ]);
-    // Rob's Picks under the homepage's own rule (issue #356). No lookahead: the
-    // daily is 60-100 words about today and tomorrow, and the weekend briefing
-    // and newsletter carry the mark-your-calendar line.
+    // Rob's Picks under the homepage's own rule (issue #356), narrowed to the
+    // days the daily actually leads with: today and tomorrow. Midweek is an
+    // optional P3 and next weekend is off-limits here, and a festival counts
+    // only when it opens today or tomorrow, not on every day of its run. No
+    // lookahead: the weekend briefing and newsletter carry that line.
     const todayIso = pacificToday().iso;
-    const { inWindow: picks } = selectBriefingPicks(
-      events as unknown as BriefingPickRow[],
-      {
-        todayIso,
-        nowMinutes: nowPacificMinutes(),
-        windowStart: todayIso,
-        windowEnd: addDaysIso(todayIso, 7),
-        guides: FESTIVAL_GUIDES,
-      }
-    );
+    const tomorrowIso = addDaysIso(todayIso, 1);
+    const picks = selectBriefingPicks(events as unknown as BriefingPickRow[], {
+      todayIso,
+      nowMinutes: nowPacificMinutes(),
+      windowStart: todayIso,
+      windowEnd: tomorrowIso,
+      guides: FESTIVAL_GUIDES,
+    }).inWindow.filter((p) => p.kind === "event" || p.startDate >= todayIso);
     const raw = await generateBriefing(events, recentBriefings, picks);
     // The model is handed exact URLs but sometimes reconstructs them from its
     // prose instead (the 2026-08-15 Kane Brown 404). Enforce deterministically:
@@ -300,21 +300,7 @@ export async function GET(request: Request) {
     const repair = repairEventLinks(raw, events as unknown as LinkableEvent[]);
     logLinkRepairs("daily-briefing", repair);
     const briefing = repair.text;
-    // Today's and tomorrow's picks must make the briefing; midweek ones are the
-    // model's call (P3 is optional). A festival counts on its opening day or
-    // the day before, not on every day of a two-week run.
-    const tomorrowIso = addDaysIso(todayIso, 1);
-    logMissingPicks(
-      "daily-briefing",
-      missingPicks(
-        briefing,
-        picks.filter(
-          (p) =>
-            p.startDate <= tomorrowIso &&
-            (p.kind === "event" || p.startDate >= todayIso)
-        )
-      )
-    );
+    logMissingPicks("daily-briefing", missingPicks(briefing, picks));
     await saveBriefing(briefing, events.length);
 
     // Invalidate the home page cache so the new briefing appears immediately

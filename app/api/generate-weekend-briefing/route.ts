@@ -344,7 +344,12 @@ export async function GET(request: Request) {
     );
     // Same deterministic link enforcement as the daily briefing: the model is
     // handed exact URLs but sometimes reconstructs them from its prose.
-    const repair = repairEventLinks(raw, events as unknown as LinkableEvent[]);
+    // The lookahead pick rows were in the prompt too, so a correctly copied
+    // mark-your-calendar link must resolve against them, not get unlinked.
+    const repair = repairEventLinks(raw, [
+      ...(events as unknown as LinkableEvent[]),
+      ...lookaheadRows,
+    ]);
     logLinkRepairs("weekend-briefing", repair);
     const briefing = repair.text;
     logMissingPicks("weekend-briefing", missingPicks(briefing, picks.inWindow));
