@@ -206,16 +206,21 @@ const PICK_LOOKAHEAD_MAX = 2;
 
 export async function generateNewsletter(
   events: Record<string, unknown>[],
-  recentBriefings: { briefing_date: string; text: string }[]
+  recentBriefings: { briefing_date: string; text: string }[],
+  /** When this issue will actually go out (YYYY-MM-DD). Defaults to the
+   *  coming Thursday; a regenerate passes its draft's target date. */
+  sendDate: string = nextThursdayISO()
 ): Promise<string> {
   const anthropic = new Anthropic();
 
   // Rob's Picks under the homepage's own rule (issue #356). The draft is
   // written Wednesday and sent Thursday (resumed Friday), so the pick window
   // starts on the send date: a Wednesday-evening pick would be over before the
-  // email lands. It ends where getUpcomingEvents' read ends.
+  // email lands. Never before today, so a draft regenerated after its Thursday
+  // (sent by the Friday resume) starts from now, not next week. It ends where
+  // getUpcomingEvents' read ends.
   const readStart = todayISO();
-  const windowStart = nextThursdayISO();
+  const windowStart = sendDate > readStart ? sendDate : readStart;
   const windowEnd = addDaysIso(readStart, NEWSLETTER_WINDOW_DAYS);
   const lookaheadRows = await getPickRowsBetween(
     getServiceClient(),
