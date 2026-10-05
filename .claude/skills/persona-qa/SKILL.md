@@ -7,7 +7,8 @@ description: >
   erode their trust; (2) run the fixed daily data sweep. Simple data errors are
   filed as qa_fix_event proposals into agent_actions (propose-first — Rob
   approves in /admin/actions). Structural problems needing a code push are
-  filed as ready-for-dev PRD tickets in hwy4_tasks (/admin/roadmap). Trigger:
+  filed as PRD-bodied GitHub issues labelled `proposed` + `qa` for Rob to
+  review and prioritize (GitHub Issues is the only backlog, #325). Trigger:
   "persona qa", "run today's QA", "/persona-qa", or the daily scheduled routine.
 ---
 
@@ -35,12 +36,14 @@ that promises something the detail page doesn't deliver, a filter that lies.
 3. Check what's already filed so you never duplicate:
    - `SELECT id, title, payload->>'event_id' AS event_id FROM agent_actions
       WHERE type='qa_fix_event' AND status IN ('proposed','approved');`
-   - `SELECT ref, title, status FROM hwy4_tasks
-      WHERE source='qa_agent' AND status NOT IN ('done','wont_do');`
+   - `gh issue list -R robgabel/hwy4-events --state open --label qa --limit 100 --json number,title,body`
+     (match on the `check_key:` line in each body, then on title/URL). Also
+     skim `gh issue list -R robgabel/hwy4-events --state open --search "<key phrase>"`
+     for the same problem filed by a human or another agent without the `qa` label.
 
 A "bug" that CLAUDE.md documents as intentional is a false positive. When
-unsure whether something is deliberate, file it as a **question ticket**
-(`hwy4_tasks`, `type='qa'`, `status='proposed'`, low priority) instead of a fix.
+unsure whether something is deliberate, file it as a **question issue**
+(§3B format, labels `proposed,qa,question`) instead of a fix.
 
 ## 1. Persona of the day
 
@@ -135,28 +138,50 @@ executor snapshots before writing, so every fix is revertible. Do NOT update
 2-week clean canary Rob flips the `agent_policy` row to auto-execute; the
 filing format stays identical.)
 
-### B. Structural problem → ready-for-dev PRD ticket in `hwy4_tasks`
+### B. Structural problem → GitHub issue for Rob to review and prioritize
 
 Wrong rendering of correct data, a missing capability, a systemic data-quality
 pattern (the same field wrong across many rows = the *scraper* is the bug), or
 anything needing a code push.
 
-```sql
-INSERT INTO hwy4_tasks (title, body, type, status, priority, source, ai_rationale)
-VALUES (
-  '<imperative title, e.g. "Range cards must require contiguous dates">',
-  '<PRD body — markdown, see template below>',
-  'qa',            -- or 'bug' for a clear defect
-  'ready',         -- Rob-approved default for persona-QA finds: straight to Ready for dev
-  'p2',            -- p1 if it actively misleads users today; p3 if cosmetic
-  'qa_agent',
-  jsonb_build_object('persona', '<name>', 'found_at', '<URL>', 'evidence', '<summary>')
-);
+GitHub Issues is the only backlog (#325, which retires the `hwy4_tasks` board).
+**Never write `hwy4_tasks`.** File with the `gh` CLI. It is authenticated as
+robgabel on this Mac. Write the body to a scratch file first so markdown and
+quotes survive:
+
+```bash
+gh issue create -R robgabel/hwy4-events \
+  --title "<imperative title, e.g. Range cards must require contiguous dates>" \
+  --body-file <scratch>/issue.md \
+  --label proposed --label qa --label lens:persona-qa \
+  --label bug \
+  --label size:M --label model:sonnet --label effort:medium
 ```
 
-PRD body template (keep it buildable by a cold-start Claude Code session):
+Labels, per the #325 convention:
+- **`proposed` + `qa` + `lens:persona-qa`** on every issue. `proposed` is the
+  human gate: Rob removes it when he accepts the issue and sets its priority. An
+  agent never removes it, and never sets a milestone, assignee or project.
+- **Type:** add `bug` for a clear defect. Add `question` for a
+  maybe-intentional finding (see §0). A plain QA find needs only `qa`.
+- **Build sizing:** one each of `size:XS|S|M|L|XL`, `model:opus|sonnet|haiku`
+  and `effort:low|medium|high|max`. This is your estimate of who should build it
+  and how hard it is. It is not a priority.
+- **No priority label.** Rob prioritizes. Put your suggestion in the body's
+  first line instead (see the template).
+- Use `program:freeze` only when the issue is a reader-misleading bug that
+  qualifies under the freeze rules in #326. Otherwise leave it off; Rob decides.
+
+Issue body template. Keep it buildable by a cold-start `/build-issue N`
+session. The header table matches every other issue in the repo:
 
 ```markdown
+| Size | Build with | Effort | Subagents |
+|---|---|---|---|
+| **M** | Sonnet 5 (`claude-sonnet-5`) | medium | <e.g. one independent QA subagent that re-runs the repro on the preview at 375×812> |
+
+**Suggested priority: p2.** <one line: p1 = actively misleads users today, p2 = erodes trust, p3 = cosmetic>. Filed by the daily persona-QA run, <YYYY-MM-DD>, persona <name>.
+
 ## Problem
 <persona> on <URL>: expected X, saw Y. Reproduction steps.
 
@@ -170,26 +195,32 @@ File/function if you traced it (read the repo code — you have it).
 Concrete. Include acceptance criteria and which scripts/test/* should lock it.
 
 ## Out of scope
+
+check_key: persona-qa/<stable-kebab-slug-of-the-problem>
 ```
 
-These land directly in the **Ready** column on /admin/roadmap (Rob's explicit
-choice for QA finds — they skip the `proposed` promote gate; everything else
-about the board flow, including `/build-ticket HWY-N`, is unchanged).
+The `check_key:` line is the dedupe key. Reuse the same slug when the same
+problem recurs. If an open issue already carries that key, do not file again.
+Add one comment with the new evidence (`gh issue comment N --body-file …`), and
+only if it adds something.
 
 ## 4. Close the loop
 
-1. Re-check your filings landed (`SELECT` them back).
+1. Re-check your filings landed (`SELECT` the proposals back;
+   `gh issue view N` for each issue).
 2. Post a short summary to Slack **#claude-updates**: persona of the day, what
-   was walked, N fixes proposed, N tickets filed (with HWY refs), anything
+   was walked, N fixes proposed, N issues filed (with `#N` links), anything
    clean ("Mia's journey clean, sweep found 2 stale rows").
 3. If the run found **nothing**, say so explicitly — a clean pass is signal.
 
 ## Guardrails
 
 - **Read-only on the site, propose-only on the DB.** Never UPDATE/DELETE
-  `hwy4_events` directly; never touch RLS; never merge or push code.
+  `hwy4_events` directly; never touch RLS; never merge or push code. Filing and
+  commenting on GitHub issues is the only GitHub write. Never close, relabel or
+  remove `proposed` from an issue.
 - One `qa_fix_event` per event row per run. Batch systemic patterns into ONE
-  structural ticket instead of 30 fix proposals.
-- Cap per run: ≤10 fix proposals, ≤3 tickets. Beyond that, file one roll-up
-  ticket — a flood means something upstream broke.
-- Respect the false-positive list in §0. When in doubt, question ticket.
+  structural issue instead of 30 fix proposals.
+- Cap per run: ≤10 fix proposals, ≤3 issues. Beyond that, file one roll-up
+  issue — a flood means something upstream broke.
+- Respect the false-positive list in §0. When in doubt, question issue.

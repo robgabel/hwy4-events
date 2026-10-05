@@ -20,12 +20,14 @@ per day, seven-day rotation, with an auto-triage split.
     `agent_policy` row to `auto_execute=true` and fixes apply themselves (still logged + revertible
     in `/admin/actions`; `canAutoExecute` still vetoes anything not low-blast/reversible/internal).
   - **Structural problem** (code renders correct data wrongly, missing capability, systemic scraper
-    bug) → a PRD-bodied ticket in `hwy4_tasks`, `type='qa'|'bug'`, `source='qa_agent'`,
-    **`status='ready'`** — straight to the Ready column on `/admin/roadmap`, skipping the
-    `proposed` promote gate (Rob's explicit choice for QA finds). Built via the existing
-    `/build-ticket HWY-N` loop.
-- **Admin visibility:** proposals surface in `/admin/actions` + the Inbox badge; tickets on the
-  roadmap board; each run posts a one-liner to Slack `#claude-updates`.
+    bug) → a PRD-bodied **GitHub issue** labelled `proposed` + `qa` + `lens:persona-qa`, plus
+    size/model/effort build labels. Rob reviews and prioritizes it: he removes `proposed` when he
+    accepts it. The agent suggests a priority in the body and sets no priority label. Dedupe uses a
+    `check_key:` line in the body. Built via `/build-issue N`. *(Changed 2026-10-04 per #325: it
+    used to be `hwy4_tasks` rows with `status='ready'` on `/admin/roadmap`, a board now being
+    retired.)*
+- **Admin visibility:** proposals surface in `/admin/actions` + the Inbox badge; issues in
+  `gh issue list --label proposed --label qa`; each run posts a one-liner to the daily digest.
 
 ## 2. New surface area (this PR)
 
