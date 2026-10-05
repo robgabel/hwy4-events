@@ -59,15 +59,21 @@ this; independence rests on the builder keeping to it.
      failed install stops the run before any lock runs, and the throwaway worktree is
      removed on every exit short of a SIGKILL (a killed run can leave `qa-pr-<n>-<pid>`
      in the scratchpad; delete it with `git worktree remove --force`);
-   - runs `npm test` (includes the voice-lint gate) and both typecheck roots, logs to the
-     scratchpad, and ends with one `RESULT` line naming the main commit (`base=`) and the
+   - runs `npm test` (includes the voice-lint gate) and both typecheck roots, logs to a
+     fresh per-run folder in the scratchpad (named in `RESULT` as `logs=`), and ends with one `RESULT` line naming the main commit (`base=`) and the
      PR head (`head=`) it checked. `checked=` is a throwaway local merge commit; the
      `base` + `head` pair is what identifies the review.
+
+   **A pass here is not a CI-equivalent pass.** CI uses the Node major in
+   `.github/workflows/test.yml` and runs package install scripts; the script uses this
+   machine's Node and skips them. `RESULT` records `node=`, with `(ci_uses_<n>)` appended
+   when the majors differ. When it is there, say so in the report, and treat any PR that
+   leans on a newer Node API or on an install script as unverified until CI runs.
 
    Exit codes: 0 pass, 1 a lock failed, 2 merge conflict, 3 fork refused, 4 setup error.
    1 and 2 are findings. On 3, report "fork PR: needs Rob's OK" and review by reading only.
    On 4, retry once; if it fails again, report the setup error and do not claim any lock
-   result. Read only the `RESULT` line and `grep` a log for the failing lines; never read a
+   result. Read only the `RESULT` line and `grep` a log in that run's `logs=` folder (never an older one) for the failing lines; never read a
    log whole. Copy the `RESULT` line into your report. **No `RESULT` line means the run
    failed, whatever the exit code**: report it as a setup error, never as a pass.
 
@@ -107,7 +113,7 @@ this; independence rests on the builder keeping to it.
   fetches the PR into the repo's shared git objects (moving `origin/main`), makes a
   throwaway merge commit there, updates `FETCH_HEAD` in your own checkout, registers and
   then removes its temporary worktree, and npm/npx write their cache and logs under
-  `~/.npm`. Nothing else.
+  `~/.npm`, and tsx keeps its transform cache under `$TMPDIR/tsx-<uid>/`. Nothing else.
 - Guess at Rob's intent. If the spec is ambiguous, that ambiguity is itself a finding.
 - Pad the report. Zero findings is a valid, welcome result. Say so in one line.
 

@@ -18,7 +18,10 @@ set -uo pipefail
 
 N="${1:-}"; SP="${2:-}"; QA=""; CHECKED="none"
 
-result() { echo "RESULT pr=${N:-?} checked=$CHECKED $*"; }
+result() {
+  local pr="$N"; [[ "$pr" =~ ^[0-9]+$ ]] || pr="invalid"
+  echo "RESULT pr=$pr checked=$CHECKED $*"
+}
 die() { echo "SETUP ERROR: $1" >&2; result "status=setup_error reason=\"$1\""; exit 4; }
 
 cleanup() {
@@ -30,8 +33,8 @@ cleanup() {
 trap cleanup EXIT
 
 [[ "$N" =~ ^[0-9]+$ && -n "$SP" ]] || die "usage: run-locks.sh <pr-number> <scratchpad-dir>"
-mkdir -p "$SP" || die "cannot create $SP"
-QA="$SP/qa-pr-$N-$$"
+QA="$SP/qa-pr-$N-$$"; LOG="$SP/logs-pr-$N-$$"   # per run, so a stale log is never read
+mkdir -p "$LOG" || die "cannot create $LOG"
 
 # Retry network calls: a dropped connection must never be read as a result.
 retry() {
@@ -76,12 +79,12 @@ elif [ "$STATE" = "OPEN" ]; then
   # Neutralize local git settings that could fail a clean merge (signing, hooks, ff-only).
   if ! git -C "$QA" -c user.name=pr-qa -c user.email=pr-qa@localhost \
        -c commit.gpgsign=false -c core.hooksPath=/dev/null -c merge.ff=true \
-       merge -q --no-edit "$PR" >"$SP/merge.log" 2>&1; then
+       merge -q --no-edit "$PR" >"$LOG/merge.log" 2>&1; then
     if [ -n "$(git -C "$QA" diff --name-only --diff-filter=U)" ]; then
-      echo "CONFLICT merging PR head $PR into origin/main $MAIN (see $SP/merge.log)" >&2
-      result "status=conflict base=$MAIN head=$PR"; exit 2
+      echo "CONFLICT merging PR head $PR into origin/main $MAIN (see $LOG/merge.log)" >&2
+      result "status=conflict base=$MAIN head=$PR logs=$LOG"; exit 2
     fi
-    die "merge failed without a conflict, see $SP/merge.log"
+    die "merge failed without a conflict, see $LOG/merge.log"
   fi
   CHECKED=$(git -C "$QA" rev-parse HEAD)
   git -C "$QA" merge-base --is-ancestor "$PR" HEAD || die "PR head not in the merged tree"
@@ -92,21 +95,30 @@ fi
 # --ignore-scripts: no package's install-time code runs (the locks don't need any, and
 # the supabase CLI's postinstall downloads a binary from GitHub that flakes).
 install() { (cd "$1" && npm install --ignore-scripts --no-audit --no-fund) >"$2" 2>&1; }
-retry install "$QA" "$SP/install-root.log" || die "npm install (root) failed, see $SP/install-root.log"
-retry install "$QA/scripts" "$SP/install-scripts.log" || die "npm install (scripts) failed, see $SP/install-scripts.log"
+retry install "$QA" "$LOG/install-root.log" || die "npm install (root) failed, see $LOG/install-root.log"
+retry install "$QA/scripts" "$LOG/install-scripts.log" || die "npm install (scripts) failed, see $LOG/install-scripts.log"
+
+# CI runs Node from .github/workflows/test.yml and runs install scripts; this run skips
+# them. Record the local Node and flag a major-version mismatch, so a pass is never
+# mistaken for a CI-equivalent pass.
+NODE_V=$(node --version 2>/dev/null || echo unknown)
+CI_NODE=$(grep -E 'node-version:' "$QA/.github/workflows/test.yml" 2>/dev/null | head -1 | grep -oE '[0-9]+' | head -1)
+NODE_MAJOR=${NODE_V#v}; NODE_MAJOR=${NODE_MAJOR%%.*}
+NODE_WARN=""
+[ -n "$CI_NODE" ] && [ "$NODE_MAJOR" = "$CI_NODE" ] || NODE_WARN="(ci_uses_${CI_NODE:-unknown})"
 
 FAIL=0
-(cd "$QA/scripts" && npm test) >"$SP/test.log" 2>&1; T=$?
-TP=$(grep -E '^ℹ pass' "$SP/test.log" | awk '{print $3}'); TF=$(grep -E '^ℹ fail' "$SP/test.log" | awk '{print $3}')
+(cd "$QA/scripts" && npm test) >"$LOG/test.log" 2>&1; T=$?
+TP=$(grep -E '^ℹ pass' "$LOG/test.log" | awk '{print $3}'); TF=$(grep -E '^ℹ fail' "$LOG/test.log" | awk '{print $3}')
 [ "$T" -eq 0 ] && TESTS="pass" || { TESTS="fail"; FAIL=1; }
 
-(cd "$QA" && npx tsc --noEmit) >"$SP/tsc-root.log" 2>&1; R=$?
-RE=$(grep -c 'error TS' "$SP/tsc-root.log")
+(cd "$QA" && npx tsc --noEmit) >"$LOG/tsc-root.log" 2>&1; R=$?
+RE=$(grep -c 'error TS' "$LOG/tsc-root.log")
 [ "$R" -eq 0 ] && TR="pass" || { TR="fail"; FAIL=1; }
 
-(cd "$QA/scripts" && npx tsc --noEmit) >"$SP/tsc-scripts.log" 2>&1; C=$?
-CE=$(grep -c 'error TS' "$SP/tsc-scripts.log")
+(cd "$QA/scripts" && npx tsc --noEmit) >"$LOG/tsc-scripts.log" 2>&1; C=$?
+CE=$(grep -c 'error TS' "$LOG/tsc-scripts.log")
 [ "$C" -eq 0 ] && TC="pass" || { TC="fail"; FAIL=1; }
 
-result "status=$([ $FAIL -eq 0 ] && echo pass || echo lock_failed) base=$MAIN head=$PR tests=$TESTS(${TP:-?}/${TF:-?}) tsc_root=$TR($RE) tsc_scripts=$TC($CE) logs=$SP"
+result "status=$([ $FAIL -eq 0 ] && echo pass || echo lock_failed) base=$MAIN head=$PR tests=$TESTS(${TP:-?}/${TF:-?}) tsc_root=$TR($RE) tsc_scripts=$TC($CE) node=$NODE_V$NODE_WARN logs=$LOG"
 exit $FAIL
