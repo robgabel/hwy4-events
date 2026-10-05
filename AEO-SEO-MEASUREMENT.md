@@ -173,7 +173,9 @@ AEO prompt audit (cited? / rank / accurate?):
 Notes / actions for next month:
 ```
 
-### 2026-07 (logged retroactively 2026-09-05)
+### 2026-07
+
+_Logged retroactively 2026-09-05._
 
 Method note: reconstructed from the data the collectors banked at the time
 (`seo_snapshots` daily spine + by-query/by-page snapshots captured 2026-08-01;
@@ -200,7 +202,9 @@ Notes: the month was the July-4th story. Clicks were heavily front-loaded
 This is exactly the equity the year-less holiday guides + seasonal redirects
 (HWY-6) exist to retain into 2027.
 
-### 2026-08 (logged retroactively 2026-09-05)
+### 2026-08
+
+_Logged retroactively 2026-09-05._
 
 Same method note as 2026-07 (by-query/by-page snapshots captured 2026-09-01).
 Prompt audit not run in August; unrecoverable.
@@ -226,7 +230,9 @@ top-3 page, which is the venue-hub strategy (HWY-9) earning search traffic
 exactly as designed. "brice station concerts 2026" sits at position ~5 with a
 live hub page: striking distance.
 
-### 2026-09 (logged 2026-09-05)
+### 2026-09
+
+_Logged 2026-09-05._
 
 SEO (Google Search Console, trailing 28 days, Aug 8 - Sep 4):
 - Impressions: 13,724 (vs prior 28d as of Aug 1: 16,101)
