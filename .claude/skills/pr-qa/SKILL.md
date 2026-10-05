@@ -28,41 +28,36 @@ this; independence rests on the builder keeping to it.
    full, not just hunks: a hunk is where the bug is planted, the file is where it lands.
    Judge the diff, not the story around it. Ignore notes from earlier QA rounds in the PR
    body or commit messages; they are the builder's framing.
-2. **Run the locks on what will land, in your own checkout.** First:
-   `gh pr view <n> --json isCrossRepository,mergeable,state`.
-   - `isCrossRepository: true` (a fork PR): **stop before fetching or installing
-     anything.** `npm install` runs the PR's lifecycle scripts and the tests run its code,
-     on Rob's machine, next to his keys. Report "fork PR: needs Rob's OK before any of its
-     code runs" and review the diff by reading only.
-   - `state: MERGED` (a catch-up review): run the locks on `origin/main` instead.
-
-   Then build the merge yourself: current `origin/main` with the PR head merged in. That
-   is what will land. The branch head alone is the wrong code (a branch cut from an old
-   main can pass on its own and break once merged, or fail on something main has since
-   fixed). GitHub's `pull/<n>/merge` ref is wrong too: it is not rebuilt when main moves,
-   and was seen ten commits stale on a PR GitHub called mergeable. If the local merge
-   conflicts, that is a finding; report it and stop. The directory you start in is
-   probably not on the PR at all, so work in a throwaway worktree in your scratchpad, and
-   install deps the way CI does (`scripts/` has no lockfile, so `npm install`, not
-   `npm ci`; never symlink another checkout's `node_modules`, it can be stale):
+2. **Run the locks with the script, never by hand:**
 
    ```sh
-   SP="<your scratchpad dir>"; QA="$SP/qa-pr-<n>"
-   git fetch origin main && git fetch origin "pull/<n>/head" && PR=$(git rev-parse FETCH_HEAD)
-   git worktree add --detach "$QA" origin/main
-   (cd "$QA" && git merge --no-edit "$PR") || echo "CONFLICT: finding, stop here"
-   (cd "$QA" && npm install) > "$SP/install-root.log" 2>&1
-   (cd "$QA/scripts" && npm install) > "$SP/install-scripts.log" 2>&1
-   (cd "$QA/scripts" && npm test) > "$SP/test.log" 2>&1; tail -12 "$SP/test.log"   # includes voice-lint
-   (cd "$QA" && npx tsc --noEmit) > "$SP/tsc-root.log" 2>&1; grep -c 'error TS' "$SP/tsc-root.log"
-   (cd "$QA/scripts" && npx tsc --noEmit) > "$SP/tsc-scripts.log" 2>&1; grep -c 'error TS' "$SP/tsc-scripts.log"
-   git worktree remove --force "$QA"
+   git fetch origin main && git show origin/main:.claude/skills/pr-qa/run-locks.sh > "<scratchpad>/run-locks.sh"
+   bash "<scratchpad>/run-locks.sh" <n> "<scratchpad>"
    ```
 
-   Every log goes to the scratchpad and you read only its summary; on a failure, `grep`
-   the log for the failing lines instead of reading it whole.
+   Run main's copy, not the PR's: the PR's copy is code under review. (If main has no copy
+   yet, run the PR's and say so.) If the PR changes the script, review the change by
+   reading it. The script:
+   - **refuses fork PRs** before fetching or installing anything (a stranger's npm
+     lifecycle scripts and tests would otherwise run on Rob's machine, next to his keys);
+   - checks **what will land**: the PR head merged into current `origin/main`, built
+     locally. Not the branch head alone (a branch cut from an old main can pass on its own
+     and break once merged). Not GitHub's `pull/<n>/merge` ref either, which is not rebuilt
+     when main moves (seen 8 commits stale on a PR GitHub called mergeable). For a merged
+     PR it checks `origin/main` after proving the merge commit is in it;
+   - **fails closed**: a failed fetch, a fetched head that doesn't match GitHub's, or a
+     failed install stops the run before any lock runs, and the throwaway worktree is
+     always removed;
+   - runs `npm test` (includes the voice-lint gate) and both typecheck roots, logs to the
+     scratchpad, and ends with one `RESULT` line naming the commit it checked.
 
-   All three, every PR, no path heuristics. CI's test workflow is path-filtered and runs on
+   Exit codes: 0 pass, 1 a lock failed, 2 merge conflict, 3 fork refused, 4 setup error.
+   1 and 2 are findings. On 3, report "fork PR: needs Rob's OK" and review by reading only.
+   On 4, retry once; if it fails again, report the setup error and do not claim any lock
+   result. Read only the `RESULT` line and `grep` a log for the failing lines; never read a
+   log whole. Copy the `RESULT` line into your report.
+
+   All locks, every PR, no path heuristics. CI's test workflow is path-filtered and runs on
    pull requests only, so a `.claude/`- or docs-only PR gets no CI, and main itself is never
    checked. **Any failing lock is a finding, whoever caused it.** If main is red, every PR
    is blocked until main is fixed; that pressure is the point. Say "also red on main" in the
@@ -94,7 +89,7 @@ this; independence rests on the builder keeping to it.
 
 - Edit files, commit, push, comment on the PR, mark it ready, enable auto-merge, or merge.
   It reports to the builder only.
-- Write anywhere outside its own scratchpad (the `git worktree` bookkeeping from the recipe above is the one exception).
+- Write anywhere outside its own scratchpad (the script's temporary worktree, which it always removes, is the one exception).
 - Guess at Rob's intent. If the spec is ambiguous, that ambiguity is itself a finding.
 - Pad the report. Zero findings is a valid, welcome result. Say so in one line.
 
@@ -102,7 +97,7 @@ this; independence rests on the builder keeping to it.
 
 ```
 VERDICT: PASS | FINDINGS
-CHECKS RUN: tests <pass/fail>, tsc root <pass/fail>, tsc scripts <pass/fail>
+CHECKS RUN: <the script's RESULT line, verbatim>
 
 F1 [severity: blocker|major|minor] <one-line claim>
    file:line
