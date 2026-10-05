@@ -5,6 +5,16 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-10-05 — Redesign retrospective: what a month of field data taught
+
+Rob asked how the Musk-lens redesign worked out, with radical candor. The scoreboard since the August ingest-quality program closed: 28 of 29 scrape runs green since Sep 6 (the one failure never recurred), `stale_scrapes` 138 → 18, the armed sweeps removed exactly 1 row in a month (a genuine Sequoia Woods retraction, zero false deletions), and the Oct 4 audit reads zero duplicates. The two claims the field falsified — the "~7.5h transit window" (measured median: 122h) and the audit reading 0 beside 5 live duplicate pairs — are already rules in the 2026-09-27 and 2026-08-19 entries. Three lessons were still unwritten:
+
+- **Fix the failure class, not the field.** `placeholderNameSteal` (2026-08-16) closed "a placeholder steals a specific stored value" for the TITLE and shipped without the venue sibling; the identical shape cost 5 red runs and daily hand-heals three weeks later (#275), and town needed a third pass (#278). When a guard lands on one column of a write payload, enumerate every sibling column the same writer stamps and either cover each or write down why it is exempt. The enumeration is the fix; the single-column patch is the symptom. (The August program's other misses rhyme: politeness added only after gocalaveras started 429ing us, claims written before measurement. Partial application, every time.)
+- **Content written for a machine checker must match the checker's actual rule — and an automated issue you believe is wrong is a sensor reading to verify, not noise.** The doc-freshness workflow matches `^### YYYY-MM$` exactly; the September AEO log entries carried `(logged 2026-09-05)` suffixes, so the catcher filed #293 and it sat open three weeks while everyone, me included, assumed the catcher was stale. It was right the whole time (fixed in #349). Read the checker's regex before writing the content it greps, and remember nothing auto-closes these issues: clearing the condition still needs the close.
+- **Automation that acts under guardrails earned its keep; automation that writes prose for a human mostly didn't.** The armed sweeps, write-path guards, and triage queue all paid rent. The daily chief-of-staff digest is slated for retirement with its deterministic nudges folded into the audit Slack line (#332), and the AEO ritual survived only by being delegated. Before building a new reasoner or memo surface, name the click it saves or the guarded action it takes; otherwise it is a dashboard (the rule is in the 2026-06-09 entry: a read-only memo that invents is a dashboard, not an agent; the 2026-07-05 entry traces the memory gap it exposed). The Oct 4 freeze program made this policy.
+
+---
+
 ## 2026-10-04: "I couldn't reach it" is not "it's gone"
 
 On 2026-09-28 visitmurphys.com timed out from the GitHub runner, and the nightly link checker nulled 139 `event_url`s in one run. It read a thrown fetch, and every status ≥ 400 except 401/403/429, as a dead link. The same rule nulled two more live links on 09-30 and 10-04.
