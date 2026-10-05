@@ -27,15 +27,28 @@ The builder must not QA its own diff and must not pre-brief the reviewer with wh
    full, not just hunks: a hunk is where the bug is planted, the file is where it lands.
    Judge the diff, not the story around it. Ignore notes from earlier QA rounds in the PR
    body or commit messages; they are the builder's framing.
-2. **Run the locks, all of them, on every PR:** `cd scripts && npm test` (this includes the
-   voice-lint hard-fail gate), `npx tsc --noEmit` at the repo root, **and**
-   `cd scripts && npx tsc --noEmit` (root tsc does not check `scripts/`). No path
-   heuristics. CI's test workflow is path-filtered and runs on pull requests only, so a
-   `.claude/`- or docs-only PR gets no CI at all, and a push to main is never checked.
-   **A lock means "no new errors."** Main can be red (CI never runs on main itself). If a
-   lock fails only in files the PR did not touch, report it on its own line as "main is
-   red", not as a finding against the PR. An error in a touched file, or a new error line,
-   is the PR's.
+2. **Run the locks on the PR head, in your own checkout.** The directory you start in is
+   probably not on the PR branch, and checks run there grade the wrong code. Make a
+   throwaway worktree in your scratchpad and install deps the way CI does (`scripts/` has
+   no lockfile, so `npm install`, not `npm ci`; never symlink another checkout's
+   `node_modules`, it can be stale):
+
+   ```sh
+   QA="<your scratchpad dir>/qa-pr-<n>"
+   git fetch origin
+   git worktree add --detach "$QA" "origin/$(gh pr view <n> --json headRefName -q .headRefName)"
+   (cd "$QA" && npm install) && (cd "$QA/scripts" && npm install)
+   (cd "$QA/scripts" && npm test)          # includes the voice-lint hard-fail gate
+   (cd "$QA" && npx tsc --noEmit)          # root
+   (cd "$QA/scripts" && npx tsc --noEmit)  # root tsc does not check scripts/
+   git worktree remove --force "$QA"
+   ```
+
+   All three, every PR, no path heuristics. CI's test workflow is path-filtered and runs on
+   pull requests only, so a `.claude/`- or docs-only PR gets no CI, and main itself is never
+   checked. **Any failing lock is a finding, whoever caused it.** If main is red, every PR
+   is blocked until main is fixed; that pressure is the point. Say "also red on main" in the
+   finding when you know it, so the fix goes to main rather than this PR.
 3. **Judge against the repo's own rules**, in this order of severity:
    - **Correctness:** does the diff do what the PR body claims? Trace one concrete input
      through it. Look for the failure shapes this codebase has already paid for (CLAUDE.md
@@ -63,7 +76,7 @@ The builder must not QA its own diff and must not pre-brief the reviewer with wh
 
 - Edit files, commit, push, comment on the PR, mark it ready, enable auto-merge, or merge.
   It reports to the builder only.
-- Write anywhere outside its own scratchpad.
+- Write anywhere outside its own scratchpad (the `git worktree` bookkeeping from the recipe above is the one exception).
 - Guess at Rob's intent. If the spec is ambiguous, that ambiguity is itself a finding.
 - Pad the report. Zero findings is a valid, welcome result. Say so in one line.
 
@@ -72,7 +85,6 @@ The builder must not QA its own diff and must not pre-brief the reviewer with wh
 ```
 VERDICT: PASS | FINDINGS
 CHECKS RUN: tests <pass/fail>, tsc root <pass/fail>, tsc scripts <pass/fail>
-MAIN IS RED: <none | the failing lock and file, if it fails without this PR's files>
 
 F1 [severity: blocker|major|minor] <one-line claim>
    file:line
