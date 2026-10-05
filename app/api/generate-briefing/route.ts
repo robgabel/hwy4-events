@@ -278,9 +278,9 @@ export async function GET(request: Request) {
       getEventsForBriefing(),
       getRecentBriefings(),
     ]);
-    // Rob's Picks for today and tomorrow, under the homepage's own rule (issue
-    // #356). Midweek is an optional P3 and next weekend belongs to the weekend
-    // briefing; the weekend briefing and newsletter carry the lookahead line.
+    // Rob's Picks for the daily's 7-day window, under the homepage's own rule
+    // (issue #356). No lookahead: the weekend briefing and newsletter carry the
+    // mark-your-calendar line.
     const { picks, mustLink } = dailyBriefingPicks(
       events as unknown as BriefingPickRow[],
       pacificToday().iso,

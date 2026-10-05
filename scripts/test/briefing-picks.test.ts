@@ -235,15 +235,20 @@ test("a lookahead pick's link survives repair when its row is in the repair set"
   assert.equal(fixed.text, text);
 });
 
-test("daily: today and tomorrow only, matching the homepage for those days", () => {
+test("daily: the homepage's 7-day set, but only today and tomorrow are required", () => {
+  // QA round 3 on #357: the daily must tag a midweek pick the homepage spotlights.
   const rows = [
     row({ name: "Today", date: TODAY, start_time: "18:00", end_time: "20:00" }),
     row({ name: "Tomorrow", date: "2026-10-06" }),
-    row({ name: "Midweek", date: "2026-10-08" }),
+    row({ name: "Midweek", date: "2026-10-08", pick_reason: "the one thing" }),
+    row({ name: "TooFar", date: "2026-10-13" }),
   ];
   const { picks, mustLink } = dailyBriefingPicks(rows, TODAY, MORNING, []);
-  assert.deepEqual(picks.map((p) => p.title), ["Today", "Tomorrow"]);
+  assert.deepEqual(picks.map((p) => p.title), ["Today", "Tomorrow", "Midweek"]);
   assert.deepEqual(mustLink.map((p) => p.title), ["Today", "Tomorrow"]);
+  assert.equal(pickTag(rows[2], picks), "[ROB'S PICK: the one thing]");
+  const home = selectPicks(rows, TODAY, MORNING, []);
+  assert.equal(home.spotlight?.kind === "event" && home.spotlight.event.name, "Today");
 });
 
 test("daily: a running festival stays a pick (its nights are absorbed) but is not required", () => {
@@ -276,4 +281,24 @@ test("a row passed twice (window + lookahead overlap) is one pick", () => {
   const r = row({ name: "Twice", date: "2026-10-15" });
   const { lookahead } = selectBriefingPicks([r, { ...r }], win({ lookaheadDays: 14 }));
   assert.deepEqual(lookahead.map((p) => p.title), ["Twice"]);
+});
+
+test("a festival opening after the window does not absorb an in-window pick at its venue", () => {
+  const g = guide({ startDate: "2026-10-20", hideAfter: "2026-10-25" });
+  const early = row({ name: "First Look", venue_key: "big-white-tent", date: "2026-10-10", pick_reason: "first look" });
+  const other = row({ name: "Other", date: "2026-10-15" });
+  const { inWindow, lookahead } = selectBriefingPicks(
+    [early, other],
+    win({ windowStart: "2026-10-09", windowEnd: "2026-10-11", guides: [g], lookaheadDays: 14, maxLookahead: 1 })
+  );
+  assert.deepEqual(inWindow.map((p) => p.title), ["First Look"]);
+  assert.equal(pickTag(early, inWindow), "[ROB'S PICK: first look]");
+  assert.deepEqual(lookahead.map((p) => p.title), ["Other"]);
+});
+
+test("a nightly pick inside the festival's run is still absorbed", () => {
+  const g = guide({ startDate: "2026-10-09", hideAfter: "2026-10-12" });
+  const night = row({ name: "Night", venue_key: "big-white-tent", date: "2026-10-10" });
+  const { inWindow } = selectBriefingPicks([night], win({ guides: [g] }));
+  assert.deepEqual(inWindow.map((p) => p.kind), ["guide"]);
 });

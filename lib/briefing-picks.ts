@@ -87,7 +87,27 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
     seen.add(k);
     return true;
   });
-  const entries = eligiblePickEntries(unique, w.todayIso, w.nowMinutes, guides);
+  // A guide absorbs only the picks dated inside its own run. Matching is by
+  // venue, so without this a festival opening after the window (or one that
+  // already ended) would swallow an unrelated pick at the same venue, and the
+  // lookahead cap could then drop the guide that was meant to represent it.
+  const outsideRun = (r: T) => {
+    const e = { venue_key: r.venue_key ?? null, name: r.name };
+    const matching = guides.filter((g) => g.matchEvent(e));
+    return (
+      matching.length > 0 &&
+      !matching.some((g) => r.date >= g.startDate && r.date <= g.hideAfter)
+    );
+  };
+  const entries = [
+    ...eligiblePickEntries(
+      unique.filter((r) => !outsideRun(r)),
+      w.todayIso,
+      w.nowMinutes,
+      guides
+    ),
+    ...eligiblePickEntries(unique.filter(outsideRun), w.todayIso, w.nowMinutes, []),
+  ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   const inWindow: BriefingPick[] = [];
   const lookahead: BriefingPick[] = [];
@@ -145,12 +165,16 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
 }
 
 /**
- * The daily briefing's picks: today's and tomorrow's, the same set the homepage
- * would show for those two days, including a festival that is running (its
- * nightly picks are absorbed into it, so dropping it would drop them too).
- * `mustLink` is what the backstop checks: a running festival is listed every
- * day but only required on its opening day or the day before.
+ * The daily briefing's picks: the same set the homepage would show for the
+ * daily's 7-day window, including a festival that is running (its nightly
+ * picks are absorbed into it, so dropping it would drop them too).
+ * `mustLink` is what the backstop checks: only today's and tomorrow's picks
+ * (midweek is an optional P3), and a festival only on its opening day or the
+ * day before, not on every day of its run.
  */
+/** Matches the daily route's own query (today through +7). */
+export const DAILY_WINDOW_DAYS = 7;
+
 export function dailyBriefingPicks<T extends BriefingPickRow>(
   rows: T[],
   todayIso: string,
@@ -161,12 +185,16 @@ export function dailyBriefingPicks<T extends BriefingPickRow>(
     todayIso,
     nowMinutes,
     windowStart: todayIso,
-    windowEnd: addDaysIso(todayIso, 1),
+    windowEnd: addDaysIso(todayIso, DAILY_WINDOW_DAYS),
     guides,
   });
+  const tomorrowIso = addDaysIso(todayIso, 1);
   return {
     picks: inWindow,
-    mustLink: inWindow.filter((p) => p.kind === "event" || p.startDate >= todayIso),
+    mustLink: inWindow.filter(
+      (p) =>
+        p.startDate <= tomorrowIso && (p.kind === "event" || p.startDate >= todayIso)
+    ),
   };
 }
 
