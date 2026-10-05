@@ -34,15 +34,19 @@ The builder must not QA its own diff and must not pre-brief the reviewer with wh
    `node_modules`, it can be stale):
 
    ```sh
-   QA="<your scratchpad dir>/qa-pr-<n>"
-   git fetch origin
-   git worktree add --detach "$QA" "origin/$(gh pr view <n> --json headRefName -q .headRefName)"
-   (cd "$QA" && npm install) && (cd "$QA/scripts" && npm install)
-   (cd "$QA/scripts" && npm test)          # includes the voice-lint hard-fail gate
-   (cd "$QA" && npx tsc --noEmit)          # root
-   (cd "$QA/scripts" && npx tsc --noEmit)  # root tsc does not check scripts/
+   SP="<your scratchpad dir>"; QA="$SP/qa-pr-<n>"
+   git fetch origin "pull/<n>/head"        # works for a branch PR and a fork PR alike
+   git worktree add --detach "$QA" FETCH_HEAD
+   (cd "$QA" && npm install) > "$SP/install-root.log" 2>&1
+   (cd "$QA/scripts" && npm install) > "$SP/install-scripts.log" 2>&1
+   (cd "$QA/scripts" && npm test) > "$SP/test.log" 2>&1; tail -12 "$SP/test.log"   # includes voice-lint
+   (cd "$QA" && npx tsc --noEmit) > "$SP/tsc-root.log" 2>&1; grep -c 'error TS' "$SP/tsc-root.log"
+   (cd "$QA/scripts" && npx tsc --noEmit) > "$SP/tsc-scripts.log" 2>&1; grep -c 'error TS' "$SP/tsc-scripts.log"
    git worktree remove --force "$QA"
    ```
+
+   Every log goes to the scratchpad and you read only its summary; on a failure, `grep`
+   the log for the failing lines instead of reading it whole.
 
    All three, every PR, no path heuristics. CI's test workflow is path-filtered and runs on
    pull requests only, so a `.claude/`- or docs-only PR gets no CI, and main itself is never
