@@ -19,7 +19,8 @@ picks → fix → fresh QA → Rob merges.
 The **builder** (whichever session opened the PR, branched from a fresh `origin/main`)
 spawns it with the Agent tool (`subagent_type: general-purpose`) once the draft PR exists.
 The builder must not QA its own diff and must not pre-brief the reviewer with what it
-"meant" to build. Hand it only the PR number and this file's path.
+"meant" to build. Hand it only the PR number and this file's path. Nothing enforces
+this; independence rests on the builder keeping to it.
 
 ## What the QA agent does (read-only)
 
@@ -27,16 +28,29 @@ The builder must not QA its own diff and must not pre-brief the reviewer with wh
    full, not just hunks: a hunk is where the bug is planted, the file is where it lands.
    Judge the diff, not the story around it. Ignore notes from earlier QA rounds in the PR
    body or commit messages; they are the builder's framing.
-2. **Run the locks on the PR head, in your own checkout.** The directory you start in is
-   probably not on the PR branch, and checks run there grade the wrong code. Make a
-   throwaway worktree in your scratchpad and install deps the way CI does (`scripts/` has
-   no lockfile, so `npm install`, not `npm ci`; never symlink another checkout's
-   `node_modules`, it can be stale):
+2. **Run the locks on what will land, in your own checkout.** First:
+   `gh pr view <n> --json isCrossRepository,mergeable,state`.
+   - `isCrossRepository: true` (a fork PR): **stop before fetching or installing
+     anything.** `npm install` runs the PR's lifecycle scripts and the tests run its code,
+     on Rob's machine, next to his keys. Report "fork PR: needs Rob's OK before any of its
+     code runs" and review the diff by reading only.
+   - `state: MERGED` (a catch-up review): run the locks on `origin/main` instead.
+
+   Then build the merge yourself: current `origin/main` with the PR head merged in. That
+   is what will land. The branch head alone is the wrong code (a branch cut from an old
+   main can pass on its own and break once merged, or fail on something main has since
+   fixed). GitHub's `pull/<n>/merge` ref is wrong too: it is not rebuilt when main moves,
+   and was seen ten commits stale on a PR GitHub called mergeable. If the local merge
+   conflicts, that is a finding; report it and stop. The directory you start in is
+   probably not on the PR at all, so work in a throwaway worktree in your scratchpad, and
+   install deps the way CI does (`scripts/` has no lockfile, so `npm install`, not
+   `npm ci`; never symlink another checkout's `node_modules`, it can be stale):
 
    ```sh
    SP="<your scratchpad dir>"; QA="$SP/qa-pr-<n>"
-   git fetch origin "pull/<n>/head"        # works for a branch PR and a fork PR alike
-   git worktree add --detach "$QA" FETCH_HEAD
+   git fetch origin main && git fetch origin "pull/<n>/head" && PR=$(git rev-parse FETCH_HEAD)
+   git worktree add --detach "$QA" origin/main
+   (cd "$QA" && git merge --no-edit "$PR") || echo "CONFLICT: finding, stop here"
    (cd "$QA" && npm install) > "$SP/install-root.log" 2>&1
    (cd "$QA/scripts" && npm install) > "$SP/install-scripts.log" 2>&1
    (cd "$QA/scripts" && npm test) > "$SP/test.log" 2>&1; tail -12 "$SP/test.log"   # includes voice-lint
