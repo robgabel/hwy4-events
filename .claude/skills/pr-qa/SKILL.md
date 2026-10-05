@@ -19,8 +19,10 @@ picks → fix → fresh QA → Rob merges.
 The **builder** (whichever session opened the PR, branched from a fresh `origin/main`)
 spawns it with the Agent tool (`subagent_type: general-purpose`) once the draft PR exists.
 The builder must not QA its own diff and must not pre-brief the reviewer with what it
-"meant" to build. Hand it only the PR number and this file's path. Nothing enforces
-this; independence rests on the builder keeping to it.
+"meant" to build. Hand it only the PR number, this file's path, and a fresh, empty
+scratchpad folder of its own. Never the builder's: notes, drafts and old logs left there
+brief the reviewer as surely as a prompt would. Nothing enforces this; independence rests
+on the builder keeping to it.
 
 ## What the QA agent does (read-only)
 
@@ -113,7 +115,8 @@ this; independence rests on the builder keeping to it.
   fetches the PR into the repo's shared git objects (moving `origin/main`), makes a
   throwaway merge commit there, updates `FETCH_HEAD` in your own checkout, registers and
   then removes its temporary worktree, and npm/npx write their cache and logs under
-  `~/.npm`, and tsx keeps its transform cache under `$TMPDIR/tsx-<uid>/`. Nothing else.
+  `~/.npm`, and tools keep caches under `$TMPDIR` (for example tsx's `tsx-<uid>/` and
+  Node's `node-compile-cache/`). Nothing else outside those.
 - Guess at Rob's intent. If the spec is ambiguous, that ambiguity is itself a finding.
 - Pad the report. Zero findings is a valid, welcome result. Say so in one line.
 
