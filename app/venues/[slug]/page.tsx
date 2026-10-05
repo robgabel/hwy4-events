@@ -14,6 +14,7 @@ import { getPublishedArtists } from "@/lib/artists-data";
 import { artistGenreMap } from "@/lib/artists";
 import { venueMetaTitle, venueMetaDescription, venueListSection } from "@/lib/venue-pages";
 import { personaHubForVenueKey } from "@/lib/persona-hubs";
+import { ironstoneConcoursVenueLink } from "@/lib/ironstone-concours-page";
 import {
   JsonLd,
   buildBreadcrumbs,
@@ -113,6 +114,7 @@ export default async function VenuePage({ params }: PageProps) {
 
   const year = Number(pacificToday().iso.slice(0, 4));
   const personaHub = personaHubForVenueKey(slug);
+  const concoursLink = ironstoneConcoursVenueLink(slug);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -204,6 +206,23 @@ export default async function VenuePage({ params }: PageProps) {
           </span>
           <span aria-hidden className="shrink-0 font-semibold text-pine">
             Guide &rarr;
+          </span>
+        </Link>
+      )}
+
+      {concoursLink && (
+        <Link
+          href={concoursLink.href}
+          className="mb-8 flex items-center justify-between gap-3 rounded-xl border border-earth/30 bg-warm-white px-5 py-4 transition-colors hover:border-pine/40"
+        >
+          <span>
+            <span className="font-display block font-bold text-forest">
+              {concoursLink.heading}
+            </span>
+            <span className="mt-0.5 block text-sm text-stone">{concoursLink.blurb}</span>
+          </span>
+          <span aria-hidden className="shrink-0 font-semibold text-pine">
+            Event &rarr;
           </span>
         </Link>
       )}

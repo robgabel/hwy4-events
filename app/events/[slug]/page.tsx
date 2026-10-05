@@ -9,7 +9,7 @@ import { weatherQualifier } from "@/lib/weather-conditions";
 import WeatherChip from "@/components/WeatherChip";
 import { resolveDisplayAddress, buildGeocodeQuery } from "@/lib/address";
 import { geocodeAddress } from "@/lib/geocode";
-import { buildEvent, JsonLd, type EventOrganizer } from "@/lib/schema";
+import { buildEvent, buildFaqPage, JsonLd, type EventOrganizer } from "@/lib/schema";
 import {
   artistChipLabel,
   artistGenreMap,
@@ -49,6 +49,7 @@ import { isParadeEvent, isFourthFeatureEvent, isTwoFiftyEvent, isAdoptAPetEvent,
 import { resolveEventLink, matchOrgForEvent, matchOrganizerForEvent, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
 import { nameWithArtists } from "@/lib/venue-pages";
 import { hermitFestPageSeo } from "@/lib/hermit-fest-page";
+import { ironstoneConcoursPage } from "@/lib/ironstone-concours-page";
 
 export const revalidate = 3600;
 
@@ -312,6 +313,8 @@ export default async function EventPage({ params }: PageProps) {
     geocodeQuery || `${event.venue_name}, ${event.town}, CA`
   )}`;
   const hermitSeo = hermitFestPageSeo(slug);
+  // HWY-58: year in the H1 plus a factual Q&A. Display only; the slug stays.
+  const concoursPage = ironstoneConcoursPage(slug);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
@@ -322,6 +325,16 @@ export default async function EventPage({ params }: PageProps) {
         organizer={organizer}
         artists={publishedArtists}
       />
+      {concoursPage && (
+        <JsonLd
+          data={buildFaqPage(
+            concoursPage.qa.map((item) => ({
+              question: item.question,
+              answer: item.answer,
+            })),
+          )}
+        />
+      )}
       <Suspense fallback={null}>
         <ShareTracker slug={slug} />
       </Suspense>
@@ -411,8 +424,28 @@ export default async function EventPage({ params }: PageProps) {
             </div>
 
             <h1 className="font-display text-3xl font-bold leading-tight text-forest sm:text-4xl">
-              {hermitSeo?.h1 ?? event.name}
+              {hermitSeo?.h1 ?? concoursPage?.h1 ?? event.name}
             </h1>
+            {concoursPage && (
+              <section className="speakable mt-4 space-y-4" aria-label="Good to know">
+                {concoursPage.qa.map((item) => (
+                  <div key={item.question}>
+                    <h2 className="text-base font-semibold text-forest">{item.question}</h2>
+                    <p className="mt-1 leading-relaxed text-stone">{item.answer}</p>
+                    {item.href && item.linkLabel && (
+                      <p className="mt-1">
+                        <Link
+                          href={item.href}
+                          className="font-medium text-pine underline underline-offset-2 hover:text-forest"
+                        >
+                          {item.linkLabel}
+                        </Link>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </section>
+            )}
             {hermitSeo && (
               <p className="mt-3 leading-relaxed text-stone">{hermitSeo.whenLine}</p>
             )}
