@@ -181,6 +181,9 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
   return { inWindow, lookahead: lookahead.slice(0, w.maxLookahead ?? 2) };
 }
 
+/** Matches the daily route's own query (today through +7). */
+export const DAILY_WINDOW_DAYS = 7;
+
 /**
  * The daily briefing's picks: the same set the homepage would show for the
  * daily's 7-day window, including a festival that is running (its nightly
@@ -189,9 +192,6 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
  * (midweek is an optional P3), and a festival only on its opening day or the
  * day before, not on every day of its run.
  */
-/** Matches the daily route's own query (today through +7). */
-export const DAILY_WINDOW_DAYS = 7;
-
 export function dailyBriefingPicks<T extends BriefingPickRow>(
   rows: T[],
   todayIso: string,
