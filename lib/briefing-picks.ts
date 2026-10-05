@@ -249,6 +249,11 @@ export function formatPicksSection(
 /** One rule, shared by all three system prompts. */
 export const ROB_PICKS_RULE = `- ROB'S PICKS: the ROB'S PICKS list is Rob's hand-picked highlights, and rows tagged [ROB'S PICK] in the day lists are the same picks. When a pick falls on a day you cover, mention it and lead that beat with it. A pick with a reason leads with that reason, in your own words. A pick with no reason gets a plain mention, no invented enthusiasm. A festival pick links to its festival page URL, never to one night. Never call anything else a Rob's Pick. UPCOMING ROB'S PICKS, when listed, are optional: at most one short mark-your-calendar line.`;
 
+/** The daily's addendum to ROB_PICKS_RULE. Its pick list spans the homepage's
+ *  7-day window, but the daily only leads today and tomorrow and must leave
+ *  next weekend to the weekend briefing, so it says which days it covers. */
+export const DAILY_PICKS_NOTE = `- ROB'S PICKS IN THE DAILY: the days you cover are today and tomorrow. Mention and lead with a pick on either day. A midweek pick may go in P3 if it fits. A pick on next weekend is not yours, leave it to the weekend briefing. A festival already underway (opened before today) gets at most a short nod, not the lead, so the daily doesn't open with it every day of its run; on its opening day or the day before, it leads.`;
+
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

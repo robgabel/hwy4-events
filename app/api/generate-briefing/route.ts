@@ -18,6 +18,7 @@ import {
   missingPicks,
   logMissingPicks,
   ROB_PICKS_RULE,
+  DAILY_PICKS_NOTE,
   type BriefingPick,
   type BriefingPickRow,
 } from "@/lib/briefing-picks";
@@ -54,7 +55,8 @@ Rules:
 - URLS ARE NOT YOURS TO WRITE: when you link an event, copy its "URL:" value from the event lists above character for character. Never construct, guess, or edit a URL, and never reuse a URL from RECENT BRIEFINGS — those may be stale.
 - Events marked [MEMBERS ONLY] are for private clubs (like Blue Lake Springs). Mention them naturally but note they're for members/guests. Example: "Over at Blue Lake Springs, members can catch..."
 - Do NOT link members-only events — they don't have public event pages.
-${ROB_PICKS_RULE}`;
+${ROB_PICKS_RULE}
+${DAILY_PICKS_NOTE}`;
 
 async function getEventsForBriefing() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

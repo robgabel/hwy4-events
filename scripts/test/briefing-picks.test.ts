@@ -13,6 +13,7 @@ import {
   formatPicksSection,
   missingPicks,
   ROB_PICKS_RULE,
+  DAILY_PICKS_NOTE,
   type BriefingPickRow,
 } from "../../lib/briefing-picks.js";
 import { selectPicks } from "../../lib/picks.js";
@@ -213,6 +214,7 @@ test("missingPicks finds unlinked picks, absolute or relative, with query string
 
 test("the shared prompt rule has no em dashes", () => {
   assert.ok(!ROB_PICKS_RULE.includes("\u2014"));
+  assert.ok(!DAILY_PICKS_NOTE.includes("\u2014"));
   assert.ok(!formatPicksSection(selectBriefingPicks([row()], win()).inWindow).includes("\u2014"));
 });
 
