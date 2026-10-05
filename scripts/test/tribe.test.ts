@@ -47,6 +47,18 @@ test("stripTitleDateSuffix removes an organizer's per-occurrence date suffix", (
   );
 });
 
+test("stripTitleDateSuffix decodes the HTML entities Tribe's REST API sends", () => {
+  // The live shape: arnoldrimtrail.org returns the dash as a numeric entity.
+  assert.equal(
+    stripTitleDateSuffix("Guided Sunset Hike to Cougar Rock &#8211; October 24, 2026"),
+    "Guided Sunset Hike to Cougar Rock"
+  );
+  assert.equal(stripTitleDateSuffix("Volunteer Trail Workday &ndash; Oct. 17, 2026"), "Volunteer Trail Workday");
+  assert.equal(stripTitleDateSuffix("Trail Workday &#x2014; October 17, 2026"), "Trail Workday");
+  // Decoding applies even when nothing is stripped.
+  assert.equal(stripTitleDateSuffix("Wine &amp; Trails"), "Wine & Trails");
+});
+
 test("stripTitleDateSuffix leaves a title that merely ends in a name alone", () => {
   // The guard that matters: only a *trailing full date* is a suffix. A title
   // ending in a place, an act, or a year alone must survive untouched.
