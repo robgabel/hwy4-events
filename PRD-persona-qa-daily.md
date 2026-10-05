@@ -27,7 +27,7 @@ per day, seven-day rotation, with an auto-triage split.
     used to be `hwy4_tasks` rows with `status='ready'` on `/admin/roadmap`, a board now being
     retired.)*
 - **Admin visibility:** proposals surface in `/admin/actions` + the Inbox badge; issues in
-  `gh issue list --label proposed --label qa`; each run posts a one-liner to the daily digest.
+  `gh issue list --label proposed --label qa`; each run emails Rob a short summary via `gws` (no Slack, no PAOS digest).
 
 ## 2. New surface area (this PR)
 

@@ -208,8 +208,12 @@ only if it adds something.
 
 1. Re-check your filings landed (`SELECT` the proposals back;
    `gh issue view N` for each issue).
-2. Post a short summary to Slack **#claude-updates**: persona of the day, what
-   was walked, N fixes proposed, N issues filed (with `#N` links), anything
+2. Email Rob a short summary (Slack and PAOS `notifications` are deprecated;
+   never post there): write it as HTML (`<p>` paragraphs, full issue URLs) and
+   send it with `~/rob-ai/scripts/send-summary-email.py --subject "hwy4 persona
+   QA (<Day>/<Persona>): <N> issues, <M> fixes" --html-file <file>`. Prefix the
+   subject `[action] ` when anything was filed. Cover persona of the day, what
+   was walked, N fixes proposed, N issues filed (with links), anything
    clean ("Mia's journey clean, sweep found 2 stale rows").
 3. If the run found **nothing**, say so explicitly — a clean pass is signal.
 
