@@ -83,15 +83,6 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
   const guides = w.guides.filter(
     (g) => g.startDate <= lookaheadEnd && g.hideAfter >= w.windowStart
   );
-  // Callers concatenate window rows with lookahead rows, and their reads can
-  // overlap by a day across the UTC/Pacific boundary. One row per pick.
-  const seen = new Set<string>();
-  const unique = rows.filter((r) => {
-    const k = pickKey(r);
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
   // A guide absorbs only the picks dated inside its own run. Matching is by
   // venue, so without this a festival opening after the window (or one that
   // already ended) would swallow an unrelated pick at the same venue, and the
@@ -104,15 +95,28 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
       !matching.some((g) => r.date >= g.startDate && r.date <= g.hideAfter)
     );
   };
+  // Callers concatenate window rows with lookahead rows, and their reads can
+  // overlap by a day across the UTC/Pacific boundary. Dedupe AFTER the shared
+  // rule, so a non-pick, members-only or sold-out twin that sorts first can
+  // never stand in for the real pick.
+  const seen = new Set<string>();
   const entries = [
     ...eligiblePickEntries(
-      unique.filter((r) => !outsideRun(r)),
+      rows.filter((r) => !outsideRun(r)),
       w.todayIso,
       w.nowMinutes,
       guides
     ),
-    ...eligiblePickEntries(unique.filter(outsideRun), w.todayIso, w.nowMinutes, []),
-  ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    ...eligiblePickEntries(rows.filter(outsideRun), w.todayIso, w.nowMinutes, []),
+  ]
+    .filter((entry) => {
+      if (entry.kind === "guide") return true;
+      const k = pickKey(entry.event);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   const inWindow: BriefingPick[] = [];
   const lookahead: BriefingPick[] = [];

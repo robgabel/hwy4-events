@@ -319,3 +319,20 @@ test("a matinee and an evening of one production are two picks; sold-out one dro
     assert.equal(pickTag(matinee, inWindow), "");
   }
 });
+
+test("a non-pick, members-only or sold-out twin sorting first never hides the pick", () => {
+  // QA round 6 on #357: deduping before the eligibility check let the first
+  // row win even when it was not the pick.
+  const pick = row({ name: "Harvest Hop", date: "2026-10-10" });
+  const twins = [
+    row({ name: "Harvest Hop", date: "2026-10-10", robs_pick: false }),
+    row({ name: "Harvest Hop", date: "2026-10-10", visibility: "private" }),
+    row({ name: "Harvest Hop", date: "2026-10-10", sold_out: true }),
+  ];
+  for (const twin of twins) {
+    for (const order of [[twin, pick], [pick, twin]]) {
+      const { inWindow } = selectBriefingPicks(order, win());
+      assert.deepEqual(inWindow.map((p) => p.title), ["Harvest Hop"]);
+    }
+  }
+});
