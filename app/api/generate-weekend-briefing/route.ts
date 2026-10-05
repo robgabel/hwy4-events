@@ -27,13 +27,14 @@ import { addDaysIso } from "@/lib/picks";
 import { pacificToday } from "@/lib/date-windows";
 import { nowPacificMinutes } from "@/lib/event-time";
 
-// How far past Sunday to look for a mark-your-calendar pick, and how many.
-const PICK_LOOKAHEAD_DAYS = 14;
-const PICK_LOOKAHEAD_MAX = 1;
 import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "@/lib/agent/models";
 import { messageText } from "@/lib/agent/message-text";
 
 export const maxDuration = 60;
+
+// How far past Sunday to look for a mark-your-calendar pick, and how many.
+const PICK_LOOKAHEAD_DAYS = 14;
+const PICK_LOOKAHEAD_MAX = 1;
 
 const WEEKEND_SYSTEM_PROMPT = `You write the weekend preview for Hwy4Events.com — a community events site for the Highway 4 corridor (Angels Camp to Bear Valley) in the California Sierra. Bylined "Millie" (a Sheepadoodle), but you write as a knowledgeable local, not a dog.
 

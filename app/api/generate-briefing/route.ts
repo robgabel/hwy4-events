@@ -12,7 +12,7 @@ import {
 } from "@/lib/briefing-links";
 import { withVoice } from "@/lib/voice";
 import {
-  selectBriefingPicks,
+  dailyBriefingPicks,
   pickTag,
   formatPicksSection,
   missingPicks,
@@ -22,7 +22,6 @@ import {
   type BriefingPickRow,
 } from "@/lib/briefing-picks";
 import { FESTIVAL_GUIDES } from "@/lib/event-guides";
-import { addDaysIso } from "@/lib/picks";
 import { pacificToday } from "@/lib/date-windows";
 import { nowPacificMinutes } from "@/lib/event-time";
 import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "@/lib/agent/models";
@@ -279,20 +278,15 @@ export async function GET(request: Request) {
       getEventsForBriefing(),
       getRecentBriefings(),
     ]);
-    // Rob's Picks under the homepage's own rule (issue #356), narrowed to the
-    // days the daily actually leads with: today and tomorrow. Midweek is an
-    // optional P3 and next weekend is off-limits here, and a festival counts
-    // only when it opens today or tomorrow, not on every day of its run. No
-    // lookahead: the weekend briefing and newsletter carry that line.
-    const todayIso = pacificToday().iso;
-    const tomorrowIso = addDaysIso(todayIso, 1);
-    const picks = selectBriefingPicks(events as unknown as BriefingPickRow[], {
-      todayIso,
-      nowMinutes: nowPacificMinutes(),
-      windowStart: todayIso,
-      windowEnd: tomorrowIso,
-      guides: FESTIVAL_GUIDES,
-    }).inWindow.filter((p) => p.kind === "event" || p.startDate >= todayIso);
+    // Rob's Picks for today and tomorrow, under the homepage's own rule (issue
+    // #356). Midweek is an optional P3 and next weekend belongs to the weekend
+    // briefing; the weekend briefing and newsletter carry the lookahead line.
+    const { picks, mustLink } = dailyBriefingPicks(
+      events as unknown as BriefingPickRow[],
+      pacificToday().iso,
+      nowPacificMinutes(),
+      FESTIVAL_GUIDES
+    );
     const raw = await generateBriefing(events, recentBriefings, picks);
     // The model is handed exact URLs but sometimes reconstructs them from its
     // prose instead (the 2026-08-15 Kane Brown 404). Enforce deterministically:
@@ -300,7 +294,7 @@ export async function GET(request: Request) {
     const repair = repairEventLinks(raw, events as unknown as LinkableEvent[]);
     logLinkRepairs("daily-briefing", repair);
     const briefing = repair.text;
-    logMissingPicks("daily-briefing", missingPicks(briefing, picks));
+    logMissingPicks("daily-briefing", missingPicks(briefing, mustLink));
     await saveBriefing(briefing, events.length);
 
     // Invalidate the home page cache so the new briefing appears immediately

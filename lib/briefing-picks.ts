@@ -70,9 +70,24 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
   rows: T[],
   w: BriefingPickWindow
 ): { inWindow: BriefingPick[]; lookahead: BriefingPick[] } {
-  const entries = eligiblePickEntries(rows, w.todayIso, w.nowMinutes, w.guides);
   const lookaheadDays = w.lookaheadDays ?? 0;
   const lookaheadEnd = addDaysIso(w.windowEnd, lookaheadDays);
+  // Only a guide this surface can show may absorb its nightly picks. A guide
+  // that is live today but ends before the window would otherwise swallow a
+  // later pick at the same venue with nothing left to represent it.
+  const guides = w.guides.filter(
+    (g) => g.startDate <= lookaheadEnd && g.hideAfter >= w.windowStart
+  );
+  // Callers concatenate window rows with lookahead rows, and their reads can
+  // overlap by a day across the UTC/Pacific boundary. One row per pick.
+  const seen = new Set<string>();
+  const unique = rows.filter((r) => {
+    const k = pickKey(r);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const entries = eligiblePickEntries(unique, w.todayIso, w.nowMinutes, guides);
 
   const inWindow: BriefingPick[] = [];
   const lookahead: BriefingPick[] = [];
@@ -127,6 +142,32 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
   }
 
   return { inWindow, lookahead: lookahead.slice(0, w.maxLookahead ?? 2) };
+}
+
+/**
+ * The daily briefing's picks: today's and tomorrow's, the same set the homepage
+ * would show for those two days, including a festival that is running (its
+ * nightly picks are absorbed into it, so dropping it would drop them too).
+ * `mustLink` is what the backstop checks: a running festival is listed every
+ * day but only required on its opening day or the day before.
+ */
+export function dailyBriefingPicks<T extends BriefingPickRow>(
+  rows: T[],
+  todayIso: string,
+  nowMinutes: number,
+  guides: FestivalGuide[]
+): { picks: BriefingPick[]; mustLink: BriefingPick[] } {
+  const { inWindow } = selectBriefingPicks(rows, {
+    todayIso,
+    nowMinutes,
+    windowStart: todayIso,
+    windowEnd: addDaysIso(todayIso, 1),
+    guides,
+  });
+  return {
+    picks: inWindow,
+    mustLink: inWindow.filter((p) => p.kind === "event" || p.startDate >= todayIso),
+  };
 }
 
 /** The tag a row in the day lists carries: only rows that are in-window picks

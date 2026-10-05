@@ -8,6 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   selectBriefingPicks,
+  dailyBriefingPicks,
   pickTag,
   formatPicksSection,
   missingPicks,
@@ -232,4 +233,47 @@ test("a lookahead pick's link survives repair when its row is in the repair set"
   const fixed = repairEventLinks(text, [...inWindow, later]);
   assert.equal(fixed.unlinked.length, 0);
   assert.equal(fixed.text, text);
+});
+
+test("daily: today and tomorrow only, matching the homepage for those days", () => {
+  const rows = [
+    row({ name: "Today", date: TODAY, start_time: "18:00", end_time: "20:00" }),
+    row({ name: "Tomorrow", date: "2026-10-06" }),
+    row({ name: "Midweek", date: "2026-10-08" }),
+  ];
+  const { picks, mustLink } = dailyBriefingPicks(rows, TODAY, MORNING, []);
+  assert.deepEqual(picks.map((p) => p.title), ["Today", "Tomorrow"]);
+  assert.deepEqual(mustLink.map((p) => p.title), ["Today", "Tomorrow"]);
+});
+
+test("daily: a running festival stays a pick (its nights are absorbed) but is not required", () => {
+  // QA round 2 on #357: filtering the running guide out dropped the absorbed
+  // nightly pick too, so the daily showed nothing while the homepage spotlit it.
+  const g = guide({ startDate: "2026-10-01", hideAfter: "2026-10-12" });
+  const night = row({ name: "Opera Night", venue_key: "big-white-tent", town: "Bear Valley", date: TODAY, start_time: "19:00", end_time: "22:00" });
+  const { picks, mustLink } = dailyBriefingPicks([night], TODAY, MORNING, [g]);
+  assert.deepEqual(picks.map((p) => p.kind), ["guide"]);
+  assert.deepEqual(mustLink, []);
+});
+
+test("daily: a festival opening tomorrow is required", () => {
+  const g = guide({ startDate: "2026-10-06", hideAfter: "2026-10-12" });
+  const { mustLink } = dailyBriefingPicks([], TODAY, MORNING, [g]);
+  assert.deepEqual(mustLink.map((p) => p.kind), ["guide"]);
+});
+
+test("a guide that ends before the window does not swallow a later pick at its venue", () => {
+  const g = guide({ startDate: "2026-10-01", hideAfter: "2026-10-08" });
+  const later = row({ name: "Fall Show", venue_key: "big-white-tent", date: "2026-10-10" });
+  const { inWindow } = selectBriefingPicks(
+    [later],
+    win({ windowStart: "2026-10-09", windowEnd: "2026-10-11", guides: [g] })
+  );
+  assert.deepEqual(inWindow.map((p) => p.title), ["Fall Show"]);
+});
+
+test("a row passed twice (window + lookahead overlap) is one pick", () => {
+  const r = row({ name: "Twice", date: "2026-10-15" });
+  const { lookahead } = selectBriefingPicks([r, { ...r }], win({ lookaheadDays: 14 }));
+  assert.deepEqual(lookahead.map((p) => p.title), ["Twice"]);
 });
