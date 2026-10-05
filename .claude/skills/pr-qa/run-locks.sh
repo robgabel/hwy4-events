@@ -14,25 +14,22 @@
 
 set -uo pipefail
 
-N="${1:-}"; SP="${2:-}"
-if [[ ! "$N" =~ ^[0-9]+$ || -z "$SP" ]]; then
-  echo "usage: run-locks.sh <pr-number> <scratchpad-dir>" >&2; exit 4
-fi
-mkdir -p "$SP" || exit 4
-QA="$SP/qa-pr-$N-$$"
-CHECKED="none"
+N="${1:-}"; SP="${2:-}"; QA=""; CHECKED="none"
 
-result() { echo "RESULT pr=$N checked=$CHECKED $*"; }
+result() { echo "RESULT pr=${N:-?} checked=$CHECKED $*"; }
 die() { echo "SETUP ERROR: $1" >&2; result "status=setup_error reason=\"$1\""; exit 4; }
 
 cleanup() {
-  if [ -d "$QA" ]; then
+  if [ -n "$QA" ] && [ -d "$QA" ]; then
     git -C "$QA" merge --abort >/dev/null 2>&1
     git worktree remove --force "$QA" >/dev/null 2>&1
   fi
-  git worktree prune >/dev/null 2>&1
 }
 trap cleanup EXIT
+
+[[ "$N" =~ ^[0-9]+$ && -n "$SP" ]] || die "usage: run-locks.sh <pr-number> <scratchpad-dir>"
+mkdir -p "$SP" || die "cannot create $SP"
+QA="$SP/qa-pr-$N-$$"
 
 # Retry network calls: a dropped connection must never be read as a result.
 retry() {
@@ -48,10 +45,14 @@ INFO=$(retry gh pr view "$N" --json isCrossRepository,state,headRefOid,mergeComm
   || die "gh pr view failed"
 read -r CROSS STATE HEAD_OID MERGE_OID <<<"$INFO"
 
-if [ "$CROSS" = "true" ]; then
-  echo "FORK PR: refusing to fetch, install or run any of its code. Needs Rob's OK." >&2
-  result "status=fork_refused"; exit 3
-fi
+# Fail closed: only an explicit "false" proceeds.
+case "$CROSS" in
+  false) ;;
+  true)
+    echo "FORK PR: refusing to fetch, install or run any of its code. Needs Rob's OK." >&2
+    result "status=fork_refused"; exit 3 ;;
+  *) die "cannot tell whether the PR is from a fork (isCrossRepository='$CROSS')" ;;
+esac
 
 retry git fetch -q origin main || die "fetch origin main failed"
 MAIN=$(git rev-parse origin/main) || die "no origin/main"
@@ -67,10 +68,15 @@ elif [ "$STATE" = "OPEN" ]; then
   PR=$(git rev-parse FETCH_HEAD) || die "no FETCH_HEAD"
   [ "$PR" = "$HEAD_OID" ] || die "fetched $PR but GitHub says the head is $HEAD_OID"
   git worktree add -q --detach "$QA" "$MAIN" || die "worktree add failed"
+  # Neutralize local git settings that could fail a clean merge (signing, hooks, ff-only).
   if ! git -C "$QA" -c user.name=pr-qa -c user.email=pr-qa@localhost \
+       -c commit.gpgsign=false -c core.hooksPath=/dev/null -c merge.ff=true \
        merge -q --no-edit "$PR" >"$SP/merge.log" 2>&1; then
-    echo "CONFLICT merging PR head $PR into origin/main $MAIN (see $SP/merge.log)" >&2
-    result "status=conflict base=$MAIN head=$PR"; exit 2
+    if [ -n "$(git -C "$QA" diff --name-only --diff-filter=U)" ]; then
+      echo "CONFLICT merging PR head $PR into origin/main $MAIN (see $SP/merge.log)" >&2
+      result "status=conflict base=$MAIN head=$PR"; exit 2
+    fi
+    die "merge failed without a conflict, see $SP/merge.log"
   fi
   CHECKED=$(git -C "$QA" rev-parse HEAD)
   git -C "$QA" merge-base --is-ancestor "$PR" HEAD || die "PR head not in the merged tree"

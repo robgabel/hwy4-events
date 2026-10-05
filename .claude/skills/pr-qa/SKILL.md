@@ -35,6 +35,10 @@ this; independence rests on the builder keeping to it.
    bash "<scratchpad>/run-locks.sh" <n> "<scratchpad>"
    ```
 
+   It takes several minutes (two installs, the test suite, two typechecks), longer than a
+   default 2-minute command timeout. Run it in the background, or with a timeout of 15
+   minutes or more; a run killed partway yields no `RESULT` and wastes the round.
+
    Run main's copy, not the PR's: the PR's copy is code under review. (If main has no copy
    yet, run the PR's and say so.) If the PR changes the script, review the change by
    reading it. The script:
@@ -89,7 +93,10 @@ this; independence rests on the builder keeping to it.
 
 - Edit files, commit, push, comment on the PR, mark it ready, enable auto-merge, or merge.
   It reports to the builder only.
-- Write anywhere outside its own scratchpad (the script's temporary worktree, which it always removes, is the one exception).
+- Write anywhere outside its own scratchpad, except what the script itself does: it
+  fetches the PR into the repo's shared git objects (moving `origin/main`), makes a
+  throwaway merge commit there, registers and then removes its temporary worktree, and
+  `npm install` fills the npm cache. Nothing else.
 - Guess at Rob's intent. If the spec is ambiguous, that ambiguity is itself a finding.
 - Pad the report. Zero findings is a valid, welcome result. Say so in one line.
 
