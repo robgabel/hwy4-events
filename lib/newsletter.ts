@@ -210,10 +210,13 @@ export async function generateNewsletter(
 ): Promise<string> {
   const anthropic = new Anthropic();
 
-  // Rob's Picks under the homepage's own rule (issue #356). Same date
-  // getUpcomingEvents windows on, so the pick window matches its rows.
-  const windowStart = todayISO();
-  const windowEnd = addDaysIso(windowStart, NEWSLETTER_WINDOW_DAYS);
+  // Rob's Picks under the homepage's own rule (issue #356). The draft is
+  // written Wednesday and sent Thursday (resumed Friday), so the pick window
+  // starts on the send date: a Wednesday-evening pick would be over before the
+  // email lands. It ends where getUpcomingEvents' read ends.
+  const readStart = todayISO();
+  const windowStart = nextThursdayISO();
+  const windowEnd = addDaysIso(readStart, NEWSLETTER_WINDOW_DAYS);
   const lookaheadRows = await getPickRowsBetween(
     getServiceClient(),
     addDaysIso(windowEnd, 1),
@@ -222,7 +225,7 @@ export async function generateNewsletter(
   const picks = selectBriefingPicks(
     [...(events as unknown as BriefingPickRow[]), ...lookaheadRows],
     {
-      todayIso: windowStart,
+      todayIso: readStart,
       nowMinutes: nowPacificMinutes(),
       windowStart,
       windowEnd,
@@ -253,7 +256,7 @@ export async function generateNewsletter(
       e.start_time ? `at ${e.start_time}` : "",
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
-      pickTag(e as { name: string; date: string; town: string; start_time?: string | null }, picks.inWindow),
+      pickTag(e as Parameters<typeof pickTag>[0], picks.inWindow),
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
       `URL: ${internalUrl}`,
     ].filter(Boolean);

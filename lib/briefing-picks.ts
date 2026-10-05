@@ -56,7 +56,15 @@ export type BriefingPickWindow = {
   maxLookahead?: number;
 };
 
-type KeyedRow = { name: string; date: string; town: string; start_time?: string | null };
+type KeyedRow = {
+  name: string;
+  date: string;
+  town: string;
+  start_time?: string | null;
+  robs_pick?: boolean | null;
+  visibility?: string | null;
+  sold_out?: boolean | null;
+};
 
 /** The identity a row is tagged and deduped by: name + date + town (what the
  *  slug uses) plus the start time, so a matinee and an evening performance of
@@ -116,7 +124,7 @@ export function selectBriefingPicks<T extends BriefingPickRow>(
       seen.add(k);
       return true;
     })
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    .sort(byPickOrder);
 
   const inWindow: BriefingPick[] = [];
   const lookahead: BriefingPick[] = [];
@@ -207,6 +215,25 @@ export function dailyBriefingPicks<T extends BriefingPickRow>(
   };
 }
 
+/** Date first; on a tie a festival, then a pick with a reason, then start time
+ *  and name, so which picks win a capped lookahead slot never depends on the
+ *  order the database returned the rows in. */
+function byPickOrder<T extends BriefingPickRow>(
+  a: ReturnType<typeof eligiblePickEntries<T>>[number],
+  b: ReturnType<typeof eligiblePickEntries<T>>[number]
+): number {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  if (a.kind !== b.kind) return a.kind === "guide" ? -1 : 1;
+  if (a.kind === "guide" || b.kind === "guide") return 0;
+  const ra = cleanReason(a.event.pick_reason) ? 0 : 1;
+  const rb = cleanReason(b.event.pick_reason) ? 0 : 1;
+  if (ra !== rb) return ra - rb;
+  const ta = a.event.start_time ?? "99:99";
+  const tb = b.event.start_time ?? "99:99";
+  if (ta !== tb) return ta < tb ? -1 : 1;
+  return a.event.name < b.event.name ? -1 : a.event.name > b.event.name ? 1 : 0;
+}
+
 /** The tag a row in the day lists carries: only rows that are in-window picks
  *  under the shared rule. A sold-out, ended, members-only or festival-absorbed
  *  robs_pick row gets no tag. */
@@ -214,6 +241,11 @@ export function pickTag(
   e: KeyedRow,
   inWindow: BriefingPick[]
 ): string {
+  // The row itself must be a pick too: a members-only, sold-out or non-pick
+  // twin sharing the key never borrows the real pick's tag.
+  if (e.robs_pick !== true || e.visibility !== "public" || e.sold_out === true) {
+    return "";
+  }
   const key = pickKey(e);
   const pick = inWindow.find((p) => p.key === key);
   if (!pick) return "";

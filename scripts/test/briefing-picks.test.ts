@@ -336,3 +336,27 @@ test("a non-pick, members-only or sold-out twin sorting first never hides the pi
     }
   }
 });
+
+test("a twin sharing the pick's key never borrows its tag", () => {
+  // QA round 8 on #357.
+  const pick = row({ name: "Trivia", date: "2026-10-10", start_time: "19:00" });
+  const { inWindow } = selectBriefingPicks([pick], win());
+  assert.equal(pickTag(pick, inWindow), "[ROB'S PICK]");
+  assert.equal(pickTag({ ...pick, visibility: "private" }, inWindow), "");
+  assert.equal(pickTag({ ...pick, robs_pick: false }, inWindow), "");
+  assert.equal(pickTag({ ...pick, sold_out: true }, inWindow), "");
+});
+
+test("same-day picks fill a capped lookahead deterministically, reasons first", () => {
+  const a = row({ name: "Firewise", date: "2026-10-17", start_time: "10:00" });
+  const b = row({ name: "Harvest Hop", date: "2026-10-17", start_time: "10:00", pick_reason: "wine crawl" });
+  const c = row({ name: "Gathering", date: "2026-10-17", start_time: "12:00" });
+  const w = win({ lookaheadDays: 14, maxLookahead: 2 });
+  const orders = [[a, b, c], [c, b, a], [b, c, a]];
+  for (const order of orders) {
+    assert.deepEqual(
+      selectBriefingPicks(order, w).lookahead.map((p) => p.title),
+      ["Harvest Hop", "Firewise"]
+    );
+  }
+});
