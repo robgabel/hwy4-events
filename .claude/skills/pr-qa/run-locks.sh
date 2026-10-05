@@ -2,7 +2,7 @@
 # Run the repo's locks (npm test + both typecheck roots) on exactly what a PR
 # will land: the PR head merged into current origin/main. Fails closed: any
 # setup step that goes wrong stops the run before a lock can grade the wrong
-# code, and the throwaway worktree is always removed.
+# code, and the throwaway worktree is removed on any exit short of SIGKILL.
 #
 # Usage: bash run-locks.sh <pr-number> <scratchpad-dir>
 # Run from inside a checkout of this repo. Logs go to <scratchpad-dir>.
@@ -40,10 +40,11 @@ retry() {
 
 git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git checkout"
 
-INFO=$(retry gh pr view "$N" --json isCrossRepository,state,headRefOid,mergeCommit \
-  -q '"\(.isCrossRepository) \(.state) \(.headRefOid) \(.mergeCommit.oid // "")"') \
+INFO=$(retry gh pr view "$N" --json isCrossRepository,state,headRefOid,mergeCommit,baseRefName \
+  -q '[.isCrossRepository, .state, .headRefOid, (.mergeCommit.oid // ""), .baseRefName] | map(tostring) | join("|")') \
   || die "gh pr view failed"
-read -r CROSS STATE HEAD_OID MERGE_OID <<<"$INFO"
+# "|"-separated so a blank field stays in its own slot instead of shifting the rest.
+IFS='|' read -r CROSS STATE HEAD_OID MERGE_OID BASE <<<"$INFO"
 
 # Fail closed: only an explicit "false" proceeds.
 case "$CROSS" in
@@ -62,8 +63,10 @@ if [ "$STATE" = "MERGED" ]; then
   [ -n "$MERGE_OID" ] || die "merged PR has no merge commit"
   git merge-base --is-ancestor "$MERGE_OID" "$MAIN" || die "merge commit $MERGE_OID not on origin/main"
   git worktree add -q --detach "$QA" "$MAIN" || die "worktree add failed"
-  CHECKED="$MAIN"
+  CHECKED="$MAIN"; PR="$HEAD_OID"
 elif [ "$STATE" = "OPEN" ]; then
+  # A stacked PR lands on another branch, not main; grading it against main is wrong.
+  [ "$BASE" = "main" ] || die "PR base is '$BASE', not main; stacked PRs are not supported"
   retry git fetch -q origin "pull/$N/head" || die "fetch pull/$N/head failed"
   PR=$(git rev-parse FETCH_HEAD) || die "no FETCH_HEAD"
   [ "$PR" = "$HEAD_OID" ] || die "fetched $PR but GitHub says the head is $HEAD_OID"
@@ -103,5 +106,5 @@ RE=$(grep -c 'error TS' "$SP/tsc-root.log")
 CE=$(grep -c 'error TS' "$SP/tsc-scripts.log")
 [ "$C" -eq 0 ] && TC="pass" || { TC="fail"; FAIL=1; }
 
-result "status=$([ $FAIL -eq 0 ] && echo pass || echo lock_failed) base=$MAIN tests=$TESTS(${TP:-?}/${TF:-?}) tsc_root=$TR($RE) tsc_scripts=$TC($CE) logs=$SP"
+result "status=$([ $FAIL -eq 0 ] && echo pass || echo lock_failed) base=$MAIN head=$PR tests=$TESTS(${TP:-?}/${TF:-?}) tsc_root=$TR($RE) tsc_scripts=$TC($CE) logs=$SP"
 exit $FAIL

@@ -48,12 +48,16 @@ this; independence rests on the builder keeping to it.
      locally. Not the branch head alone (a branch cut from an old main can pass on its own
      and break once merged). Not GitHub's `pull/<n>/merge` ref either, which is not rebuilt
      when main moves (seen 8 commits stale on a PR GitHub called mergeable). For a merged
-     PR it checks `origin/main` after proving the merge commit is in it;
+     PR it checks `origin/main` after proving the merge commit is in it. A PR whose base
+     is not `main` (stacked on another branch) is refused as a setup error;
    - **fails closed**: a failed fetch, a fetched head that doesn't match GitHub's, or a
      failed install stops the run before any lock runs, and the throwaway worktree is
-     always removed;
+     removed on every exit short of a SIGKILL (a killed run can leave `qa-pr-<n>-<pid>`
+     in the scratchpad; delete it with `git worktree remove --force`);
    - runs `npm test` (includes the voice-lint gate) and both typecheck roots, logs to the
-     scratchpad, and ends with one `RESULT` line naming the commit it checked.
+     scratchpad, and ends with one `RESULT` line naming the main commit (`base=`) and the
+     PR head (`head=`) it checked. `checked=` is a throwaway local merge commit; the
+     `base` + `head` pair is what identifies the review.
 
    Exit codes: 0 pass, 1 a lock failed, 2 merge conflict, 3 fork refused, 4 setup error.
    1 and 2 are findings. On 3, report "fork PR: needs Rob's OK" and review by reading only.
@@ -95,8 +99,9 @@ this; independence rests on the builder keeping to it.
   It reports to the builder only.
 - Write anywhere outside its own scratchpad, except what the script itself does: it
   fetches the PR into the repo's shared git objects (moving `origin/main`), makes a
-  throwaway merge commit there, registers and then removes its temporary worktree, and
-  `npm install` fills the npm cache. Nothing else.
+  throwaway merge commit there, updates `FETCH_HEAD` in your own checkout, registers and
+  then removes its temporary worktree, and npm/npx write their cache and logs under
+  `~/.npm`. Nothing else.
 - Guess at Rob's intent. If the spec is ambiguous, that ambiguity is itself a finding.
 - Pad the report. Zero findings is a valid, welcome result. Say so in one line.
 
