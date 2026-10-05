@@ -104,7 +104,7 @@ export async function GET(request: Request) {
       } else {
         // No draft yet — fall back to generating fresh content.
         const [recentBriefings] = await Promise.all([getRecentBriefings()]);
-        content = await generateNewsletter(events, recentBriefings);
+        content = await generateNewsletter(events, recentBriefings, todayISO());
         subject = buildSubject(todayISO());
         campaignId = "test";
       }

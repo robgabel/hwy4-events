@@ -11,10 +11,30 @@ import {
   type LinkableEvent,
 } from "@/lib/briefing-links";
 import { withVoice } from "@/lib/voice";
+import {
+  selectBriefingPicks,
+  pickTag,
+  formatPicksSection,
+  missingPicks,
+  logMissingPicks,
+  ROB_PICKS_RULE,
+  type BriefingPick,
+  type BriefingPickRow,
+} from "@/lib/briefing-picks";
+import { getPickRowsBetween } from "@/lib/briefing-picks-data";
+import { FESTIVAL_GUIDES } from "@/lib/event-guides";
+import { addDaysIso } from "@/lib/picks";
+import { pacificToday } from "@/lib/date-windows";
+import { nowPacificMinutes } from "@/lib/event-time";
+
 import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "@/lib/agent/models";
 import { messageText } from "@/lib/agent/message-text";
 
 export const maxDuration = 60;
+
+// How far past Sunday to look for a mark-your-calendar pick, and how many.
+const PICK_LOOKAHEAD_DAYS = 14;
+const PICK_LOOKAHEAD_MAX = 1;
 
 const WEEKEND_SYSTEM_PROMPT = `You write the weekend preview for Hwy4Events.com — a community events site for the Highway 4 corridor (Angels Camp to Bear Valley) in the California Sierra. Bylined "Millie" (a Sheepadoodle), but you write as a knowledgeable local, not a dog.
 
@@ -33,7 +53,8 @@ Rules:
 - LINKS: Link event mentions as [event text](url). Keep natural — don't link every event or venue names.
 - URLS ARE NOT YOURS TO WRITE: when you link an event, copy its "URL:" value from the event lists above character for character. Never construct, guess, or edit a URL, and never reuse a URL from RECENT BRIEFINGS — those may be stale.
 - Events marked [MEMBERS ONLY] are for private clubs (like Blue Lake Springs). Mention them naturally but note they're for members/guests. Example: "Over at Blue Lake Springs, members can catch..."
-- Do NOT link members-only events — they don't have public event pages.`;
+- Do NOT link members-only events — they don't have public event pages.
+${ROB_PICKS_RULE}`;
 
 function getUpcomingWeekend(): { friday: string; sunday: string; label: string } {
   const now = new Date();
@@ -72,7 +93,7 @@ async function getWeekendEvents() {
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
-      "name, date, start_time, venue_name, town, category, artists, price, robs_pick, status, description, event_url, visibility"
+      "name, date, start_time, end_time, venue_name, venue_key, town, category, artists, price, robs_pick, pick_reason, sold_out, status, description, event_url, visibility"
     )
     .gte("date", friday)
     .lte("date", sunday)
@@ -139,7 +160,11 @@ async function getRecentBriefings() {
 async function generateWeekendBriefing(
   events: Record<string, unknown>[],
   recentBriefings: { briefing_date: string; text: string }[],
-  cancelledEvents: { name: string; date: string; venue_name: string; town: string }[] = []
+  cancelledEvents: { name: string; date: string; venue_name: string; town: string }[] = [],
+  picks: { inWindow: BriefingPick[]; lookahead: BriefingPick[] } = {
+    inWindow: [],
+    lookahead: [],
+  }
 ) {
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
@@ -155,7 +180,7 @@ async function generateWeekendBriefing(
       e.start_time ? `at ${e.start_time}` : "",
       e.category ? `[${e.category}]` : "",
       e.price ? `${e.price}` : "",
-      e.robs_pick ? "[ROB'S PICK]" : "",
+      pickTag(e as Parameters<typeof pickTag>[0], picks.inWindow),
       e.visibility === "private" ? "[MEMBERS ONLY]" : "",
       e.artists ? `Artists: ${(e.artists as string[]).join(", ")}` : "",
       e.visibility !== "private" ? `URL: ${internalUrl}` : "",
@@ -217,7 +242,7 @@ async function generateWeekendBriefing(
     messages: [
       {
         role: "user",
-        content: `Write the weekend preview for Hwy4Events.com. This covers ${label}.\n\nFRIDAY EVENTS:\n${fridaySummary}\n\nSATURDAY EVENTS:\n${saturdaySummary}\n\nSUNDAY EVENTS:\n${sundaySummary}${cancelledSection}${historySection}`,
+        content: `Write the weekend preview for Hwy4Events.com. This covers ${label}.\n\nFRIDAY EVENTS:\n${fridaySummary}\n\nSATURDAY EVENTS:\n${saturdaySummary}\n\nSUNDAY EVENTS:\n${sundaySummary}${formatPicksSection(picks.inWindow, picks.lookahead)}${cancelledSection}${historySection}`,
       },
     ],
   });
@@ -289,12 +314,46 @@ export async function GET(request: Request) {
       getRecentBriefings(),
       getCancelledWeekendEvents(),
     ]);
-    const raw = await generateWeekendBriefing(events, recentBriefings, cancelledEvents);
+    // Rob's Picks under the homepage's own rule (issue #356), plus one
+    // mark-your-calendar pick from the two weeks after this weekend.
+    const { friday, sunday } = getUpcomingWeekend();
+    const lookaheadRows = await getPickRowsBetween(
+      createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      ),
+      addDaysIso(sunday, 1),
+      addDaysIso(sunday, PICK_LOOKAHEAD_DAYS)
+    );
+    const picks = selectBriefingPicks(
+      [...(events as unknown as BriefingPickRow[]), ...lookaheadRows],
+      {
+        todayIso: pacificToday().iso,
+        nowMinutes: nowPacificMinutes(),
+        windowStart: friday,
+        windowEnd: sunday,
+        guides: FESTIVAL_GUIDES,
+        lookaheadDays: PICK_LOOKAHEAD_DAYS,
+        maxLookahead: PICK_LOOKAHEAD_MAX,
+      }
+    );
+    const raw = await generateWeekendBriefing(
+      events,
+      recentBriefings,
+      cancelledEvents,
+      picks
+    );
     // Same deterministic link enforcement as the daily briefing: the model is
     // handed exact URLs but sometimes reconstructs them from its prose.
-    const repair = repairEventLinks(raw, events as unknown as LinkableEvent[]);
+    // The lookahead pick rows were in the prompt too, so a correctly copied
+    // mark-your-calendar link must resolve against them, not get unlinked.
+    const repair = repairEventLinks(raw, [
+      ...(events as unknown as LinkableEvent[]),
+      ...lookaheadRows,
+    ]);
     logLinkRepairs("weekend-briefing", repair);
     const briefing = repair.text;
+    logMissingPicks("weekend-briefing", missingPicks(briefing, picks.inWindow));
     await saveWeekendBriefing(briefing, events.length);
 
     revalidatePath("/");

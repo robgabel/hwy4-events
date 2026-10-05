@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       getRecentBriefings(),
     ]);
 
-    const content = await generateNewsletter(events, recentBriefings);
+    const content = await generateNewsletter(events, recentBriefings, targetSendDate);
     const subject = buildSubject(targetSendDate);
 
     const { error } = await supabase.from("newsletter_drafts").upsert(

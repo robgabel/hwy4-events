@@ -84,7 +84,7 @@ export async function regenerateDraft(formData: FormData) {
 
   const { data: draft, error: loadErr } = await supabase
     .from("newsletter_drafts")
-    .select("id, status")
+    .select("id, status, target_send_date")
     .eq("id", id)
     .maybeSingle();
   if (loadErr) failRedirect(ADMIN_PATH, loadErr.message);
@@ -96,7 +96,11 @@ export async function regenerateDraft(formData: FormData) {
       getUpcomingEvents(),
       getRecentBriefings(),
     ]);
-    const content = await generateNewsletter(events, recentBriefings);
+    const content = await generateNewsletter(
+      events,
+      recentBriefings,
+      draft.target_send_date ?? undefined
+    );
     const { error } = await supabase
       .from("newsletter_drafts")
       .update({
