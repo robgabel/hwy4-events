@@ -11,7 +11,7 @@ import type { RegionCore, TownInfo } from "../types";
 const CORRIDOR_TOWNS: TownInfo[] = [
   {
     name: "Copperopolis",
-    elevation: 850,
+    elevation: 997,
     tagline: "Copper country at the base",
     lat: 37.9810,
     lng: -120.6380,
@@ -32,7 +32,7 @@ const CORRIDOR_TOWNS: TownInfo[] = [
   },
   {
     name: "Avery",
-    elevation: 2800,
+    elevation: 3389,
     tagline: "Quiet stop on the way up",
     lat: 38.1860,
     lng: -120.3870,
@@ -40,7 +40,7 @@ const CORRIDOR_TOWNS: TownInfo[] = [
   },
   {
     name: "White Pines",
-    elevation: 3500,
+    elevation: 3907,
     tagline: "Just below Arnold",
     lat: 38.1970,
     lng: -120.3590,

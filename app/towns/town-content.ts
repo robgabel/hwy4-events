@@ -198,7 +198,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       },
       {
         "question": "How far is Angels Camp from Murphys?",
-        "answer": "About 10 to 12 minutes, 8.3 miles up Hwy 4. Angels Camp sits at 1,300 ft, Murphys at 2,400 ft. The two towns function as a pair: Angels Camp has the groceries, lumber, and medical care; Murphys has the tasting rooms and the walkable Main Street."
+        "answer": "About 10 to 12 minutes, 8.3 miles up Hwy 4. Angels Camp sits at 1,300 ft, Murphys at about 2,100 ft. The two towns function as a pair: Angels Camp has the groceries, lumber, and medical care; Murphys has the tasting rooms and the walkable Main Street."
       },
       {
         "question": "Is there a Tesla Supercharger in Angels Camp?",
@@ -264,7 +264,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       },
       {
         "question": "How far is Arnold from Murphys?",
-        "answer": "About 15 to 20 minutes on Highway 4. 12 miles. Murphys is wine country at 2,400 feet, Arnold is the mountain town at 4,000 feet. Different vibes, easy to do both in a weekend."
+        "answer": "About 15 to 20 minutes on Highway 4. 12 miles. Murphys is wine country at about 2,100 feet, Arnold is the mountain town at 4,000 feet. Different vibes, easy to do both in a weekend."
       },
       {
         "question": "Do I need snow chains to drive to Arnold?",
@@ -307,7 +307,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "If you live up the hill and you've never actually walked into the Avery Hotel, you're missing the oldest continuously operating hotel in the county. It's been there since 1853."
     ],
     "worthKnowing": [
-      "Avery's elevation is 3,389 feet, between Murphys (2,400 ft) and Arnold (3,999 ft). You're usually below the snow line but not always.",
+      "Avery's elevation is 3,389 feet, between Murphys (about 2,100 ft) and Arnold (3,999 ft). You're usually below the snow line but not always.",
       "The community is tiny: state stats show 45 employees across 13 businesses. Don't expect a downtown.",
       "The Historic Avery Hotel was built in 1851 and started operating as a hotel in 1853. It's the oldest continuously operating hotel in Calaveras County.",
       "Howard's Mystic Saloon is goth-mystic year-round, not a Halloween pop-up. Skull chandeliers, table shuffleboard, pool tables, a juke box, drinks only (no food). Curt and Tana Howard run it.",
@@ -355,7 +355,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     "h1": "Bear Valley events: skiing, the Music Festival, and a real summer calendar",
     "subhead": "The top of the 4. 6,600 to 8,500 feet, snow half the year, music and mountain events in the summer.",
     "disambiguation": BEAR_VALLEY_DISAMBIGUATION,
-    "introTeaser": "Bear Valley Mountain Resort sits at the summit of Hwy 4 with 1,680 skiable acres, 75 trails, 9 lifts, and a base elevation of 8,495 ft. Season runs late November through mid-April, the Bear Valley Music Festival anchors the summer (2026 dates: July 17 to August 2), and Bear Valley Adventure Company, the village outfitter at the Hwy 4 turnoff, fills the rest of the calendar with guided hikes, trail days, and boat and bike rentals.",
+    "introTeaser": "Bear Valley Mountain Resort sits at the summit of Hwy 4 with 1,680 skiable acres, 75 trails, 9 lifts, a base elevation of about 6,600 ft, and a summit around 8,500 ft. Season runs late November through mid-April, the Bear Valley Music Festival anchors the summer (2026 dates: July 17 to August 2), and Bear Valley Adventure Company, the village outfitter at the Hwy 4 turnoff, fills the rest of the calendar with guided hikes, trail days, and boat and bike rentals.",
     "intro": [
       "Bear Valley is the last stop on the 4 before the road closes for winter. About 30 minutes up from Arnold, a different climate, a different feel. Less Tahoe, more Sierra retro.",
       "Heads up for the 25/26 ski season: the resort consolidated most food and beverage to the Village Lodge. Sky High Pizza is open Thursday through Sunday evenings during the season, the General Store runs 9am to 5pm year-round, and Kofi Haus does mornings in winter. Monte Wolfe Saloon, Ebbetts Grill, and Basecamp Pizza are flagged for re-opening in the 26/27 season. Creekside Bistro was closed as of May 2026. Check bearvalley.com before you promise anyone a specific spot.",
@@ -371,7 +371,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
       "If you're a cross-country skier: Bear Valley Adventure Company runs the cross-country side, 3,000 acres of XC terrain with four trailside huts. Way quieter than the downhill resort, and the Meadow Café route is the easy intro."
     ],
     "worthKnowing": [
-      "Resort stats: 1,680 skiable acres, 75 trails, 9 lifts, 1,900 ft of vertical, base elevation 8,495 ft.",
+      "Resort stats: 1,680 skiable acres, 75 trails, 9 lifts, 1,900 ft of vertical, base about 6,600 ft, summit about 8,500 ft.",
       "Snowfall: resort claims 359 inches; long-term average per onthesnow.com is about 282 inches. Either way, real snow.",
       "Season runs late November through mid-April, weather dependent. Sky High Pizza closes for the season April 12, 2026.",
       "Ebbetts Pass (Hwy 4 east of the resort) closes roughly mid-November to late spring. 'The pass is open' is a real local milestone, not a slogan.",
@@ -633,7 +633,7 @@ export const TOWN_CONTENT: Record<string, TownContent> = {
     ],
     "worthKnowing": [
       "White Pines and Arnold share a ZIP code (95223) but they're different places. The hamlet sits off Blagen Road, named after Frank Blagen of the mill.",
-      "The lake is 26 acres, formed by a dam originally built in 1880 for the mill pond. Calaveras County Water District has owned it since 1977.",
+      "The lake is 26 acres, formed by White Pines Dam, an earthfill dam built in 1970. Calaveras County Water District has owned it since 1977.",
       "Fishing: rainbow trout (stocked) and bass. California fishing license required for ages 16+.",
       "Disc golf is free and uncrowded. The course runs through the park.",
       "Sierra Nevada Logging Museum is on-site at the park. It tells the Blagen Mill story, which is the reason this town exists at all.",
