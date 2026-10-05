@@ -588,6 +588,7 @@ The engine is region-parameterized so it can run as N deployments off one repo (
 
 ## Dev Workflow
 
+- **PR workflow (standing rule, 2026-09-24):** branch from a fresh `origin/main`, open a draft PR, then a separate subagent QAs it per [.claude/skills/pr-qa/SKILL.md](.claude/skills/pr-qa/SKILL.md). Any finding goes to Rob as three options plus one recommendation and the builder waits for his pick; fix, re-QA until PASS. Rob merges, never Claude, never auto-merge.
 - `npm run dev` for local development
 - Vercel auto-deploys from `main`
 - Migrations in `supabase/migrations/` — apply via Supabase dashboard or CLI
