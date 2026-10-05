@@ -77,14 +77,21 @@ const ENTITIES: Record<string, string> = {
   "&rdquo;": "”",
 };
 
-export function htmlToText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<[^>]+>/g, "")
+/** Decode numeric (`&#8211;`, `&#x2013;`) and the common named entities. */
+export function decodeEntities(text: string): string {
+  return text
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
     .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-    .replace(/&\w+;/g, (e) => ENTITIES[e.toLowerCase()] ?? e)
+    .replace(/&\w+;/g, (e) => ENTITIES[e.toLowerCase()] ?? e);
+}
+
+export function htmlToText(html: string): string {
+  return decodeEntities(
+    html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<[^>]+>/g, "")
+  )
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -132,9 +139,13 @@ const TITLE_DATE_SUFFIX =
   /\s*[–—-]\s*(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?\s*,?\s*\d{4}\s*$/i;
 
 export function stripTitleDateSuffix(title: string): string {
-  const stripped = title.replace(TITLE_DATE_SUFFIX, "").trim();
+  // Tribe's REST API returns titles HTML-encoded: ART's dash arrives as `&#8211;`,
+  // which the dash class below can't see. Decode first, or the suffix survives
+  // (it did, on every ART row, until 2026-10-05).
+  const decoded = decodeEntities(title);
+  const stripped = decoded.replace(TITLE_DATE_SUFFIX, "").trim();
   // Never strip a title down to nothing — if the whole name was a date, keep it.
-  return stripped.length > 0 ? stripped : title.trim();
+  return stripped.length > 0 ? stripped : decoded.trim();
 }
 
 /** Tribe's `cost` is free text ("15", "$15", "Free", ""). Normalize a bare
