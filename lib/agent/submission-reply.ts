@@ -19,7 +19,7 @@
 // cannot invent a fact or block the queue clear.
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { TriageAnalysis } from "@/lib/agent/submission-triage";
+import type { TriageAnalysis } from "./submission-triage";
 import { SITE_URL } from "../constants";
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";

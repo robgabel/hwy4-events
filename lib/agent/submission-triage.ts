@@ -23,9 +23,9 @@ import {
   generateDedupKey,
   normalizeTown,
   type EventIdentity,
-} from "@/lib/event-identity";
-import { matchVenueRow, type VenueRegistryRow } from "@/lib/venue-match";
-import type { EventCategory, EventCostTier } from "@/lib/types";
+} from "../event-identity";
+import { matchVenueRow, type VenueRegistryRow } from "../venue-match";
+import type { EventCategory, EventCostTier } from "../types";
 
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";
