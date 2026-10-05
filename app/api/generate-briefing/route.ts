@@ -23,7 +23,6 @@ import {
   type BriefingPickRow,
 } from "@/lib/briefing-picks";
 import { FESTIVAL_GUIDES } from "@/lib/event-guides";
-import { pacificToday } from "@/lib/date-windows";
 import { nowPacificMinutes } from "@/lib/event-time";
 import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "@/lib/agent/models";
 import { messageText } from "@/lib/agent/message-text";
@@ -283,9 +282,11 @@ export async function GET(request: Request) {
     // Rob's Picks for the daily's 7-day window, under the homepage's own rule
     // (issue #356). No lookahead: the weekend briefing and newsletter carry the
     // mark-your-calendar line.
+    // Same date the event query and the day buckets use, so the pick window
+    // can't drift a day from the rows it was handed.
     const { picks, mustLink } = dailyBriefingPicks(
       events as unknown as BriefingPickRow[],
-      pacificToday().iso,
+      new Date().toISOString().split("T")[0],
       nowPacificMinutes(),
       FESTIVAL_GUIDES
     );

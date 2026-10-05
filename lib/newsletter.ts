@@ -37,7 +37,6 @@ import {
 import { getPickRowsBetween } from "./briefing-picks-data";
 import { FESTIVAL_GUIDES } from "./event-guides";
 import { addDaysIso } from "./picks";
-import { pacificToday } from "./date-windows";
 import { nowPacificMinutes } from "./event-time";
 import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "./agent/models";
 import { messageText } from "./agent/message-text";
@@ -211,8 +210,9 @@ export async function generateNewsletter(
 ): Promise<string> {
   const anthropic = new Anthropic();
 
-  // Rob's Picks under the homepage's own rule (issue #356).
-  const windowStart = pacificToday().iso;
+  // Rob's Picks under the homepage's own rule (issue #356). Same date
+  // getUpcomingEvents windows on, so the pick window matches its rows.
+  const windowStart = todayISO();
   const windowEnd = addDaysIso(windowStart, NEWSLETTER_WINDOW_DAYS);
   const lookaheadRows = await getPickRowsBetween(
     getServiceClient(),
