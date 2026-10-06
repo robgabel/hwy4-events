@@ -8,6 +8,7 @@ import { scrapeVisitMurphys } from "./scrapers/visit-murphys.js";
 import { scrapeArnoldRimTrail } from "./scrapers/arnold-rim-trail.js";
 import { scrapeBriceStation } from "./scrapers/brice-station.js";
 import { scrapeMurphysIrishPub } from "./scrapers/murphys-irish-pub.js";
+import { scrapeProspect772 } from "./scrapers/prospect-772.js";
 import { scrapeRedCross } from "./scrapers/red-cross.js";
 import { scrapeSequoiaWoods } from "./scrapers/sequoia-woods.js";
 import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
@@ -43,6 +44,11 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  *   - murphys-irish-pub: the pub's own Wix site read via per-event pages
  *     (schema.org JSON-LD + dated occurrence slugs) after the generic LLM
  *     runner invented dates off the dateless homepage widget
+ *   - prospect-772: the winery's own Square Online calendar (featured event
+ *     products). GoCalaveras titles the same nights "Live Music @ Prospect 772"
+ *     with no band and no end time. Not blocklisted, so GoCalaveras still
+ *     covers a show the featured block has not picked up; this source writes
+ *     last (issue #359)
  *
  * Everything else goes through the config-driven generic Firecrawl runner.
  */
@@ -74,6 +80,11 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   // carries a generic series title, and last-writer-wins is the cheap way to
   // make sure the specific title is the one that lands.
   "hwy4-fb-pages": scrapeHwy4FbPages,
+  // prospect-772 is the winery's Square calendar. Same guard as Brice: not
+  // blocklisted (a show GoCalaveras lists before the featured block picks it
+  // up would otherwise vanish), registered last so the band, 9pm end, and
+  // ticket URL land on top of the generic GoCalaveras row.
+  "prospect-772": scrapeProspect772,
 };
 
 const SCRAPERS: Record<string, () => Promise<void>> = {

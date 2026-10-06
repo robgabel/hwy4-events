@@ -1,0 +1,71 @@
+{
+  "page": {
+    "id": "e6d03af0-b9ee-11f1-b818-99d64766b95d",
+    "properties": {
+      "name": "Events Calendar",
+      "route": "calendar",
+      "contentAreas": {
+        "main": {
+          "content": {
+            "properties": {
+              "featuredEventIds": [
+                "KYCQYYPGYOSINOW7PHDI46CJ",
+                "IEDPMOLSJEESMJZNUHDE2YIH"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "products": [
+    {
+      "id": "KYCQYYPGYOSINOW7PHDI46CJ",
+      "name": "October 10th - Breakaway - Prospect 772 Concert Series",
+      "visibility": "visible",
+      "product_type": "event",
+      "short_description": "<p>The Prospect 772 Concert Series is back! Join us on <strong><u>October 10th</u></strong> starting at <strong><u>5 PM</u></strong> for live music by <strong><u>Breakaway</u></strong>, food will be available for purchase, and a great evening of wine, music, and fun at Prospect 772 Winery.</p><p>Tickets: $12.77 online | $15 at the door</p>",
+      "absolute_site_link": "https://www.prospect772.com/product/october-10th-breakaway-prospect-772-concert-series/KYCQYYPGYOSINOW7PHDI46CJ",
+      "site_link": "product/october-10th-breakaway-prospect-772-concert-series/KYCQYYPGYOSINOW7PHDI46CJ",
+      "price": {
+        "low": 12.77,
+        "high": 12.77,
+        "low_formatted": "$12.77",
+        "high_formatted": "$12.77"
+      },
+      "thumbnail": {
+        "data": {
+          "absolute_url": "https://135798428.cdn6.editmysite.com/uploads/1/3/5/7/135798428/PL4OWC2PBCSZ5MZ4UVHOJV4L.png"
+        }
+      },
+      "product_type_details": {
+        "start_date": "2026-10-10",
+        "end_date": "2026-10-10",
+        "start_time": "5:00 PM",
+        "end_time": "9:00 PM",
+        "has_no_end_time": "0"
+      }
+    },
+    {
+      "id": "IEDPMOLSJEESMJZNUHDE2YIH",
+      "name": "October 24th - Boomer - Prospect 772 Concert Series",
+      "visibility": "visible",
+      "product_type": "event",
+      "short_description": "<p>The Prospect 772 Concert Series is back! Join us on <strong><u>October 24th</u></strong> starting at <strong><u>5 PM</u></strong> for live music by <strong><u>Boomer</u></strong>.</p><p>Tickets: $17.72 online | $20 at the door</p>",
+      "absolute_site_link": "https://www.prospect772.com/product/october-24th-boomer-prospect-772-concert-series/IEDPMOLSJEESMJZNUHDE2YIH",
+      "price": {
+        "low": 17.72,
+        "high": 17.72,
+        "low_formatted": "$17.72",
+        "high_formatted": "$17.72"
+      },
+      "product_type_details": {
+        "start_date": "2026-10-24",
+        "end_date": "2026-10-24",
+        "start_time": "5:00 PM",
+        "end_time": "9:00 PM",
+        "has_no_end_time": "0"
+      }
+    }
+  ]
+}
