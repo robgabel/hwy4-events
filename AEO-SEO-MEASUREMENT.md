@@ -279,6 +279,65 @@ Notes / actions for next month:
 - Candidate automation: the collector could pull GSC's Indexing coverage so
   "indexed pages" stops reading "not collected" in this log.
 
+### 2026-10
+
+_Logged 2026-10-06._
+
+SEO (Google Search Console, trailing 28 days, Sep 6 - Oct 3):
+- Impressions: 16,469 (vs prior 28d Aug 9 - Sep 5: 15,327)
+- Clicks: 792 (vs 646); CTR 4.8%
+- Avg position (impression-weighted): 6.7 (vs 8.4)
+- Indexed pages: not collected (collector improvement still a candidate)
+- Events rich result: not checked this pass
+- Top 3 queries (capture of Oct 6): "murphys grape stomp 2026" (20 clicks, pos 3.0); "brice station vineyards tasting room upcoming events" (14, pos 3.5); "hermitfest 2026" (12, pos 3.3)
+- Top 3 pages: Grape Stomp & Gold Rush Street Faire Oct 3 (87 clicks); 21st Arnold Classic Car Show (49); /venues/brice-station (47)
+
+AEO referrals (calendar September):
+- chatgpt: 11  |  perplexity: 0  |  gemini: 3  |  copilot: 0  |  bing: 0
+- (Oct 1-5 so far: 0 across all engines. September's ChatGPT count is nearly
+  4x August's 3; small numbers, but it is the first AEO needle that moved.)
+
+AEO prompt audit (engine: Claude with web search, run 2026-10-06; same
+one-engine-sample caveat as September. ChatGPT, Perplexity, and Google AI
+Overviews need a human at those UIs and were not run):
+- Q1 weekend Murphys: NOT in the top 8 sources this pass (Visit Murphys
+  FB/IG, Eventbrite, GoCalaveras, Bandsintown own them), a step back from
+  September's rank ~5 citation; one-sample noise is possible, worth watching
+  rather than reacting.
+- Q2 Arnold weekend: NOT cited, unchanged. The dated weekend H2 on
+  /towns/arnold (HWY-61) shipped Oct 4, two days before this pass; November
+  is the first fair read on it.
+- Q3 Bear Valley month: NOT cited, and the conflation hazard is confirmed
+  still live: 4 of the top 8 results are Big Bear Lake (SoCal), and the
+  correct-local results include a stale events page listing July. Our
+  disambiguation sentence (/towns/bear-valley + the BVMF and Hermitfest
+  Q&As) also shipped Oct 4; same November re-check.
+- Q6 live music Murphys: NOT cited. New noise source: the #1 result is a
+  Sonoma pub named Murphy's, a different wrong-place conflation than Q3's.
+  Visit Murphys' Facebook and the Irish Pub's own site carry accurate
+  lineups; meetmeinmurphys.com still ranks while the 2026 event is cancelled
+  (our /meet-me-in-murphys guide states the status; nothing to do but watch).
+- Q12 corridor calendar: CITED at rank 1, improved from September: the
+  homepage is the top result with our own briefing copy in the excerpt,
+  /this-weekend also places (#6), and the #2 result is the community's own
+  Facebook post recommending the calendar. Accurate throughout.
+
+Notes / actions for next month:
+- September's three actions all moved: the Bear Valley disambiguation and the
+  Arnold weekend answer shipped Oct 4 (HWY-61), llms.txt regenerated from the
+  core-page registry (HWY-63), and daily IndexNow pushes started (HWY-62).
+  All three are too fresh to score; the November audit is their first honest
+  read, so re-run Q1/Q2/Q3 with extra attention then.
+- "brice station concerts 2026" dropped out of the top-500 query capture
+  (concert season ended) while /venues/brice-station became a top-3 page on
+  other brice phrasings at pos ~3.5: the venue-hub strategy captured the
+  demand, and the striking-distance item is closed by season rather than by
+  rank.
+- The quoted-without-citation pattern (Q1/Q6) persists; backlink authority
+  remains the lever, per BUSINESS-PLAN.
+- Indexed-pages coverage in the collector remains the standing candidate
+  improvement.
+
 ---
 
 ## Part 5 — Automation (built)
