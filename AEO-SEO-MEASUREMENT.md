@@ -160,8 +160,9 @@ SEO (Google Search Console, trailing 28 days):
 - Top 3 queries:
 - Top 3 pages:
 
-AEO referrals (Cloudflare, trailing 28 days):
-- chatgpt:   |  perplexity:   |  gemini:   |  copilot:   |  bing:
+AEO referrals (Cloudflare, trailing 28 days; list only the engines the
+collector tracks — a zero must mean "measured zero", never "not collected"):
+- chatgpt:   |  perplexity:   |  gemini:   |  copilot:   |  claude:
 
 AEO prompt audit (cited? / rank / accurate?):
 - Q1 weekend Murphys:
@@ -292,8 +293,10 @@ SEO (Google Search Console, trailing 28 days, Sep 6 - Oct 3):
 - Top 3 queries (capture of Oct 6): "murphys grape stomp 2026" (20 clicks, pos 3.0); "brice station vineyards tasting room upcoming events" (14, pos 3.5); "hermitfest 2026" (12, pos 3.3)
 - Top 3 pages: Grape Stomp & Gold Rush Street Faire Oct 3 (87 clicks); 21st Arnold Classic Car Show (49); /venues/brice-station (47)
 
-AEO referrals (calendar September):
-- chatgpt: 11  |  perplexity: 0  |  gemini: 3  |  copilot: 0  |  bing: 0
+AEO referrals (calendar September; these five are the engines the collector
+tracks — bing is not collected, so earlier entries' "bing: 0" was a template
+artifact, not a measurement):
+- chatgpt: 11  |  perplexity: 0  |  gemini: 3  |  copilot: 0  |  claude: 0
 - (Oct 1-5 so far: 0 across all engines. September's ChatGPT count is nearly
   4x August's 3; small numbers, but it is the first AEO needle that moved.)
 
@@ -328,11 +331,13 @@ Notes / actions for next month:
   core-page registry (HWY-63), and daily IndexNow pushes started (HWY-62).
   All three are too fresh to score; the November audit is their first honest
   read, so re-run Q1/Q2/Q3 with extra attention then.
-- "brice station concerts 2026" dropped out of the top-500 query capture
-  (concert season ended) while /venues/brice-station became a top-3 page on
-  other brice phrasings at pos ~3.5: the venue-hub strategy captured the
-  demand, and the striking-distance item is closed by season rather than by
-  rank.
+- September's striking-distance item closed by RANK: "brice station concerts
+  2026" converted from pos ~4.6 to ~2.0 (7 clicks / 22 impressions in the
+  Oct 6 capture, present in every daily capture Sep 28 through Oct 6), the
+  first measured striking-distance win this log has recorded. Volume roughly
+  halved with the season's end (13 clicks in the Sep 5 log), and
+  /venues/brice-station also became a top-3 page on other brice phrasings at
+  pos ~3.5, so the demand is captured from both directions.
 - The quoted-without-citation pattern (Q1/Q6) persists; backlink authority
   remains the lever, per BUSINESS-PLAN.
 - Indexed-pages coverage in the collector remains the standing candidate
