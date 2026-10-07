@@ -91,7 +91,7 @@ referral. In Cloudflare Analytics (or GSC referrers), watch for these sources:
 - `perplexity.ai`
 - `gemini.google.com`
 - `copilot.microsoft.com`
-- `bing.com` (Copilot answers)
+- `claude.ai`
 
 Rising clicks from these = our content is being cited in AI answers. This is the single
 best free AEO signal and it requires zero ongoing effort once analytics is live. Log the
