@@ -18,6 +18,7 @@ scripts/package-lock.json
 
 # misc
 .DS_Store
+__pycache__/
 *.pem
 
 # debug
