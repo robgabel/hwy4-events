@@ -31,7 +31,11 @@ from paths import week_dir
 def fill_template(data):
     html = TEMPLATE.read_text()
     a, b = html.index("/*REEL_DATA*/"), html.index("/*END_REEL_DATA*/")
-    return html[:a] + "/*REEL_DATA*/" + json.dumps(data, ensure_ascii=False) + html[b:]
+    # The data lands inside a <script> tag. json.dumps leaves "<" alone, so listing text
+    # holding "</script>" would close the tag early; \u003c is the same character to JS
+    # (the rule lib/json-ld.ts serializeJsonLd applies to the site's JSON-LD).
+    payload = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+    return html[:a] + "/*REEL_DATA*/" + payload + html[b:]
 
 
 def main():

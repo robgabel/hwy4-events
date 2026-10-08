@@ -172,7 +172,7 @@ Migration `20260729_agent_runs_pm_review.sql` shipped with it and fixes **two la
 
 ## Weekend reel (a skill, not a cron)
 
-**[.claude/skills/hwy4-weekend-reel/SKILL.md](.claude/skills/hwy4-weekend-reel/SKILL.md)** makes the weekly "Millie's weekend picks" vertical video for the Hwy 4 Facebook groups: a 9:16 MP4 with an original score, thumbnails, and a paste-ready caption, built from the Friday-to-Sunday public listings. Trigger it with "make this weekend's reel". Renders go to `./out/weekend-YYYY-MM-DD/`, which is gitignored and never committed. When the session can't reach hwy4events.com (a cloud container's proxy blocks it), step 1 falls back to a Supabase query that uses the site's public filters. **This repo copy is the source of truth.** A claude.ai upload of the same skill drifts from it, so edit the copy here and re-package from it.
+**[.claude/skills/hwy4-weekend-reel/SKILL.md](.claude/skills/hwy4-weekend-reel/SKILL.md)** makes the weekly "Millie's weekend picks" vertical video for the Hwy 4 Facebook groups: a 9:16 MP4 with an original score, thumbnails, and a paste-ready caption, built from the Friday-to-Sunday public listings. Trigger it with "make this weekend's reel". Renders go to `out/weekend-YYYY-MM-DD/` at the repo root (from any working directory), which is gitignored and never committed. When the session can't reach hwy4events.com (a cloud container's proxy blocks it), step 1 falls back to a Supabase query that uses the site's public filters. **This repo copy is the source of truth.** A claude.ai upload of the same skill drifts from it, so edit the copy here and re-package from it.
 
 ## Newsletter email rendering ([lib/newsletter.ts](lib/newsletter.ts))
 

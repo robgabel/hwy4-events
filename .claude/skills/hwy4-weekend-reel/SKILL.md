@@ -12,7 +12,7 @@ Each week gets one folder, `weekend-YYYY-MM-DD/` (the Friday). It holds the inpu
 ## Where things live (works in claude.ai and Claude Code)
 
 - **`SKILL_DIR`** is the folder containing this file. In Claude Code, run scripts from the repo root as `python .claude/skills/hwy4-weekend-reel/scripts/...`; in claude.ai, use the skill's mounted path.
-- **Week folders** resolve automatically (`scripts/paths.py`): `/mnt/user-data/outputs/weekend-YYYY-MM-DD/` when that sandbox exists, otherwise `./out/weekend-YYYY-MM-DD/` from the current directory. Set `HWY4_REEL_OUT` to override. In the repo, `out/` must be in `.gitignore`; renders are never committed.
+- **Week folders** resolve automatically (`scripts/paths.py`): `/mnt/user-data/outputs/weekend-YYYY-MM-DD/` when that sandbox exists, otherwise `out/weekend-YYYY-MM-DD/` at the root of the git checkout (whatever directory the session is in; hwy4-events ignores the root `/out/`), or `./out/` outside a checkout. Set `HWY4_REEL_OUT` to override. Renders are never committed.
 - **First run on a new machine:** `python SKILL_DIR/scripts/check_env.py` lists anything missing (playwright + chromium, ffmpeg, numpy, scipy, pillow) with the install command for each.
 - **Claude Code cloud sessions:** Chromium is preinstalled, so don't run `playwright install`; `pip install` the playwright version that matches it (`playwright==1.56.0` matched `chromium-1194` on 2026-10-08) plus `scipy`. Set `HWY4_REEL_OUT` to the session's scratchpad so Rob can open the files, and send `reel.mp4` + `thumb_4x5.png` with the file-send tool. The container's proxy may block hwy4events.com, in which case `fetch_weekend.py` fails; use the Supabase fallback in step 1.
 - **Voice:** if the repo has `VOICE.md`, follow it for on-screen copy and the caption. It wins over the examples here.
@@ -21,7 +21,7 @@ Out of scope for now: per-town cuts (one reel for all groups). Rob may add them 
 
 ## Workflow
 
-1. **Pull the weekend.** `python SKILL_DIR/scripts/fetch_weekend.py` (add `--friday YYYY-MM-DD` to override; default is the next Friday after today). It writes `events.json` into the week folder and prints the listings. It reads the public site's schema.org Event data, which is what readers see after the site's quality filters, and adds each card's weather line. If it returns nothing, looks thin, or can't reach the site, query Supabase (project `uzediwokyshjbsymevtp`) with the site's own public filters:
+1. **Pull the weekend.** `python SKILL_DIR/scripts/fetch_weekend.py` (add `--friday YYYY-MM-DD` to override; default is the next Friday after today's Pacific date, so a UTC machine on Thursday evening still gets this weekend). It writes `events.json` into the week folder and prints the listings. It reads the schema.org Event data on `/this-weekend?from=<fri>&to=<sun>`, which is what readers see after the site's quality filters, and adds each card's weather line. That list is capped at 100 events; if a busy weekend overflows it, the script stops with an error instead of undercounting. If it returns nothing, looks thin, or can't reach the site, query Supabase (project `uzediwokyshjbsymevtp`) with the site's own public filters:
    ```sql
    select name, date, start_time, end_time, town, venue_name, category, robs_pick, artists, price, cost_tier, description
    from hwy4_events

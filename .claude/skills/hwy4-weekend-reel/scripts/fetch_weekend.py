@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 """Pull Friday-Sunday events from hwy4events.com's public listing.
 
-Reads the schema.org Event JSON-LD embedded in the homepage (the same data readers
-see, after the site's quality filters), plus the weather line shown on each card.
+Reads the schema.org Event JSON-LD on the date-scoped weekend page
+(/this-weekend?from=<fri>&to=<sun>, the same data readers see after the site's
+quality filters), plus the weather line shown on each card.
+
+That ItemList carries the full public count in numberOfItems but caps its event
+list (100 on that page; the homepage caps at 50 counted from today, which is why
+this no longer reads the homepage). If the list was cut short, the script stops
+with an error instead of writing an undercounted events.json.
 
 Usage:
   python fetch_weekend.py [--friday YYYY-MM-DD] [--out PATH]
 
-Default weekend = the next Friday strictly after today.
+Default weekend = the next Friday strictly after today's PACIFIC date. A UTC
+machine on a Thursday evening is already on Friday, and would otherwise pick next
+weekend.
 Default output = <week folder>/events.json (see paths.py).
 """
 import argparse, datetime as dt, html, json, re, sys, urllib.request
@@ -16,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import week_dir
 
 URL = "https://hwy4events.com"
+PACIFIC = "America/Los_Angeles"
 
 
 def fetch(url):
@@ -23,19 +32,50 @@ def fetch(url):
     return urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "replace")
 
 
+def pacific_now():
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.datetime.now(ZoneInfo(PACIFIC))
+    except Exception as e:  # no tz database on this machine
+        sys.exit(f"Can't read the Pacific date ({type(e).__name__}: {e}). Pass --friday YYYY-MM-DD.")
+
+
 def next_friday(today):
     return today + dt.timedelta(days=((4 - today.weekday()) % 7) or 7)
 
 
-def walk(o):
+def weekend_url(fri, sun):
+    return f"{URL}/this-weekend?from={fri.isoformat()}&to={sun.isoformat()}"
+
+
+def walk(o, kind="Event"):
     if isinstance(o, dict):
-        if o.get("@type") == "Event":
+        if o.get("@type") == kind:
             yield o
         for v in o.values():
-            yield from walk(v)
+            yield from walk(v, kind)
     elif isinstance(o, list):
         for v in o:
-            yield from walk(v)
+            yield from walk(v, kind)
+
+
+def json_ld_blocks(page):
+    for m in re.finditer(r'<script type="application/ld\+json">(.*?)</script>', page, re.S):
+        try:
+            yield json.loads(m.group(1))
+        except Exception:
+            continue
+
+
+def truncated_lists(page):
+    """(numberOfItems, items carried) for every ItemList whose event list was cut short."""
+    cut = []
+    for data in json_ld_blocks(page):
+        for il in walk(data, "ItemList"):
+            total, carried = il.get("numberOfItems"), len(il.get("itemListElement") or [])
+            if isinstance(total, int) and total > carried:
+                cut.append((total, carried))
+    return cut
 
 
 def time_label(iso):
@@ -76,18 +116,20 @@ def main():
     ap.add_argument("--friday", help="YYYY-MM-DD of the Friday to cover")
     ap.add_argument("--out", help="default: <week folder>/events.json")
     a = ap.parse_args()
-    fri = dt.date.fromisoformat(a.friday) if a.friday else next_friday(dt.date.today())
+    fri = dt.date.fromisoformat(a.friday) if a.friday else next_friday(pacific_now().date())
     days = [fri + dt.timedelta(days=k) for k in range(3)]
     a.out = a.out or str(week_dir(fri.isoformat()) / "events.json")
     want = {d.isoformat() for d in days}
 
-    page = fetch(URL)
+    source = weekend_url(days[0], days[-1])
+    page = fetch(source)
+    cut = truncated_lists(page)
+    if cut:
+        total, carried = cut[0]
+        sys.exit(f"The weekend page lists {total} events but its structured data carries only {carried}, "
+                 "so events.json would undercount. Use the Supabase fallback in SKILL.md step 1.")
     events, seen = [], set()
-    for m in re.finditer(r'<script type="application/ld\+json">(.*?)</script>', page, re.S):
-        try:
-            data = json.loads(m.group(1))
-        except Exception:
-            continue
+    for data in json_ld_blocks(page):
         for e in walk(data):
             sd = e.get("startDate", "")
             key = (e.get("name"), sd)
@@ -123,8 +165,8 @@ def main():
         "friday": fri.isoformat(),
         "dates": sorted(want),
         "count": len(events),
-        "source": URL,
-        "fetched_at": dt.datetime.now().isoformat(timespec="minutes"),
+        "source": source,
+        "fetched_at": pacific_now().isoformat(timespec="minutes"),
         "events": events,
     }
     with open(a.out, "w") as f:
@@ -133,7 +175,7 @@ def main():
     for e in events:
         print(f"  {e['day'][:3]} {e['time'] or 'all day':>8}  {e['name']}  ({e['venue']}, {e['town']})  {e['weather'] or ''} {e['weather_note'] or ''}")
     if not events:
-        sys.exit("No events found. The homepage JSON-LD may only cover the next ~week; try the Supabase connector.")
+        sys.exit("No events found on the weekend page; try the Supabase fallback in SKILL.md step 1.")
 
 
 if __name__ == "__main__":
