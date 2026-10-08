@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Millie's weekend picks | Hwy 4 Events</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --forest:#1b3a2d;--pine:#2d5a3d;--gold:#c4922a;--sunset:#d4855c;--cream:#fdf8f3;
+  --bark:#4a3728;--earth:#6b4226;--sage:#8b9e7e;--sage-l:#b5c4a8;--sky:#5a8fa8;--stone:#6e6153;--wine:#8b2e2e;
+  --page:#f5f0eb;--ink:#1b3a2d;--muted:#6e6153;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--page:#10231b;--ink:#f5f0eb;--muted:#b5c4a8}}
+:root[data-theme="dark"]{--page:#10231b;--ink:#f5f0eb;--muted:#b5c4a8}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--page);color:var(--ink);font-family:"DM Sans",ui-sans-serif,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:16px}
+.player{width:min(100%,440px,calc((100dvh - 110px) * .5625))}
+.frame{position:relative;width:100%;aspect-ratio:9/16;overflow:hidden;border-radius:12px;background:var(--forest)}
+#stage{position:absolute;left:0;top:0;width:1080px;height:1920px;transform-origin:0 0;overflow:hidden;background:var(--forest)}
+.controls{display:flex;align-items:center;gap:12px;margin-top:12px}
+.controls button{width:44px;height:44px;border-radius:50%;border:0;background:var(--gold);cursor:pointer;display:grid;place-items:center;flex:none}
+.controls button:focus-visible,.controls input:focus-visible{outline:3px solid var(--sky);outline-offset:3px}
+.controls input{flex:1;accent-color:var(--gold);height:28px;min-width:0}
+.time{font-variant-numeric:tabular-nums;color:var(--muted);font-size:15px;min-width:84px;text-align:right}
+.note{font-size:13px;color:var(--muted);margin-top:8px;text-align:center}
+body.export{padding:0;display:block;background:var(--forest)}
+body.export .player{width:1080px}
+body.export .frame{border-radius:0;width:1080px;height:1920px}
+body.export .controls,body.export .note{display:none}
+
+.layer{position:absolute;inset:0;display:none;overflow:hidden}
+.art{position:absolute;inset:0}
+.content{position:absolute;left:70px;top:490px;width:940px}
+.chip{display:inline-block;font-size:46px;font-weight:700;padding:12px 30px;border-radius:999px}
+.title{display:inline-block;font-family:"Bitter",Georgia,serif;font-weight:800;line-height:.96;letter-spacing:-.02em;margin-top:26px}
+.title .ln{display:block;white-space:nowrap;overflow:hidden;padding-bottom:.07em}
+.title .ln>span{display:inline-block}
+.support{font-family:"Bitter",Georgia,serif;font-weight:700;font-size:58px;margin-top:16px;line-height:1.1}
+.detail{font-size:52px;font-weight:500;margin-top:14px;line-height:1.2}
+.pillw{margin-top:24px}
+.pill{display:inline-block;font-size:42px;font-weight:700;padding:11px 26px;border-radius:999px}
+.picks{margin-top:56px;display:flex;flex-direction:column;gap:46px}
+.pick{border-left:10px solid var(--gold);padding-left:32px}
+.pick b{display:block;font-family:"Bitter",Georgia,serif;font-weight:700;font-size:70px;line-height:1.05}
+.pick span{display:block;font-size:48px;margin-top:10px}
+.dcontent{position:absolute;left:70px;top:660px;width:940px}
+.big{display:inline-block;font-family:"Bitter",Georgia,serif;font-weight:800;line-height:.92;letter-spacing:-.03em}
+.big .ln{display:block;white-space:nowrap}
+.dsub{font-size:64px;font-weight:500;margin-top:18px}
+
+.th-night{background:radial-gradient(ellipse at 50% 100%,#2a5540 0%,#1b3a2d 50%,#132a1f 100%);color:var(--cream)}
+.th-night .chip{background:var(--gold);color:var(--forest)}
+.th-night .support{color:var(--gold)}
+.th-night .detail,.th-night .dsub,.th-night .pick span{color:var(--sage-l)}
+.th-night .pill{background:var(--cream);color:var(--forest)}
+.th-sunrise{background:linear-gradient(170deg,#dc9a68 0%,#d4855c 50%,#c9774f 100%);color:var(--forest)}
+.th-sunrise .chip{background:var(--forest);color:var(--cream)}
+.th-sunrise .title,.th-sunrise .big{color:var(--cream)}
+.th-sunrise .pill{background:var(--cream);color:var(--forest)}
+.th-trees{background:var(--pine);color:var(--cream)}
+.th-trees .chip{background:var(--gold);color:var(--forest)}
+.th-trees .support{color:var(--gold)}
+.th-trees .detail,.th-trees .dsub,.th-trees .pick span{color:var(--sage-l)}
+.th-trees .pill{background:var(--cream);color:var(--forest)}
+
+#hdr{position:absolute;left:70px;top:300px;display:flex;align-items:center;gap:22px;padding:10px 36px 10px 10px;border-radius:999px;background:rgba(27,58,45,.9)}
+#hdr .av{width:116px;height:116px;border-radius:50%;background:var(--cream);overflow:hidden;display:flex;justify-content:center;flex:none}
+#hdr .av svg{width:98px;height:110px;margin-top:12px}
+#hdr span{font-size:50px;font-weight:700;color:var(--cream)}
+
+#end{background:var(--forest);color:var(--cream);text-align:center}
+#endIn{position:absolute;inset:0}
+#bigMillie{position:absolute;left:390px;top:380px;width:300px;height:338px;transform-origin:50% 100%}
+#bigMillie svg{width:100%;height:100%}
+#wordmark{position:absolute;left:0;right:0;top:770px;margin:0;font-family:"Bitter",Georgia,serif;font-weight:800;font-size:150px;line-height:1;letter-spacing:-.02em}
+#wordmark span{display:inline-block;white-space:pre}
+#endLine{position:absolute;left:0;right:0;top:1050px;font-size:52px;color:var(--sage-l)}
+#url{position:absolute;left:0;right:0;top:1125px;font-size:86px;font-weight:700;color:var(--gold)}
+#edge{position:absolute;left:0;right:0;height:22px;background:var(--gold);display:none}
+</style>
+</head>
+<body>
+<div class="player">
+  <div class="frame" id="frame">
+    <div id="stage" role="img" aria-label="">
+      <svg id="trunks" viewBox="0 0 1080 1920" width="1080" height="1920" style="position:absolute;inset:0;display:none;overflow:visible"></svg>
+      <div id="hdr"><div class="av"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180" fill="none">
+  <g stroke="#1B3A2D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 90 C35 85 30 75 32 65 C34 55 42 50 50 48 L110 48 C118 50 126 55 128 65 C130 75 125 85 120 90 L120 145 C120 152 115 155 108 155 L52 155 C45 155 40 152 40 145Z" fill="#1B3A2D"/>
+    <path d="M55 65 C55 58 62 52 80 52 C98 52 105 58 105 65 L105 155 L55 155Z" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <path d="M28 45 C28 20 48 2 80 2 C112 2 132 20 132 45 C132 70 112 82 80 82 C48 82 28 70 28 45Z" fill="white"/>
+    <path d="M95 15 C105 12 120 15 128 25 C132 32 130 42 125 48 C118 50 108 48 102 42 C96 36 94 25 95 15Z" fill="#1B3A2D"/>
+    <path d="M35 30 C28 25 20 30 18 40 C16 50 20 60 28 62 C34 58 38 50 38 42Z" fill="#1B3A2D"/>
+    <path d="M125 30 C132 25 140 30 142 40 C144 50 140 60 132 62 C126 58 122 50 122 42Z" fill="#1B3A2D"/>
+    <circle cx="62" cy="40" r="5" fill="#1B3A2D"/>
+    <circle cx="63" cy="39" r="1.5" fill="white"/>
+    <circle cx="98" cy="40" r="5" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <circle cx="98" cy="40" r="3" fill="#1B3A2D"/>
+    <circle cx="99" cy="39" r="1" fill="white"/>
+    <ellipse cx="80" cy="55" rx="7" ry="5" fill="#1B3A2D"/>
+    <path d="M68 62 C72 70 88 70 92 62" stroke="#1B3A2D" stroke-width="2" fill="none"/>
+    <path d="M70 62 C74 66 86 66 90 62 L90 64 C86 68 74 68 70 64Z" fill="#E8878C" stroke="none"/>
+    <path d="M76 66 C76 72 84 72 84 66" fill="#E8878C" stroke="#1B3A2D" stroke-width="1"/>
+    <path d="M52 145 L52 165 C52 170 58 172 62 170 L64 165 L64 145" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <path d="M96 145 L96 165 C96 170 102 172 106 170 L108 165 L108 145" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <circle cx="58" cy="166" r="4" fill="#1B3A2D"/>
+    <path d="M120 90 C130 82 138 75 140 65 C142 58 138 55 134 58 C130 62 132 70 128 78" stroke="#1B3A2D" stroke-width="5" fill="none"/>
+    <path d="M42 18 C44 14 48 15 46 19" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+    <path d="M70 5 C72 1 76 2 74 6" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+    <path d="M55 10 C57 6 61 7 59 11" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+  </g>
+</svg></div><span>Millie's weekend picks</span></div>
+      <div id="end" class="layer">
+        <div id="endIn">
+          <div id="bigMillie"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180" fill="none">
+  <g stroke="#1B3A2D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 90 C35 85 30 75 32 65 C34 55 42 50 50 48 L110 48 C118 50 126 55 128 65 C130 75 125 85 120 90 L120 145 C120 152 115 155 108 155 L52 155 C45 155 40 152 40 145Z" fill="#1B3A2D"/>
+    <path d="M55 65 C55 58 62 52 80 52 C98 52 105 58 105 65 L105 155 L55 155Z" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <path d="M28 45 C28 20 48 2 80 2 C112 2 132 20 132 45 C132 70 112 82 80 82 C48 82 28 70 28 45Z" fill="white"/>
+    <path d="M95 15 C105 12 120 15 128 25 C132 32 130 42 125 48 C118 50 108 48 102 42 C96 36 94 25 95 15Z" fill="#1B3A2D"/>
+    <path d="M35 30 C28 25 20 30 18 40 C16 50 20 60 28 62 C34 58 38 50 38 42Z" fill="#1B3A2D"/>
+    <path d="M125 30 C132 25 140 30 142 40 C144 50 140 60 132 62 C126 58 122 50 122 42Z" fill="#1B3A2D"/>
+    <circle cx="62" cy="40" r="5" fill="#1B3A2D"/>
+    <circle cx="63" cy="39" r="1.5" fill="white"/>
+    <circle cx="98" cy="40" r="5" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <circle cx="98" cy="40" r="3" fill="#1B3A2D"/>
+    <circle cx="99" cy="39" r="1" fill="white"/>
+    <ellipse cx="80" cy="55" rx="7" ry="5" fill="#1B3A2D"/>
+    <path d="M68 62 C72 70 88 70 92 62" stroke="#1B3A2D" stroke-width="2" fill="none"/>
+    <path d="M70 62 C74 66 86 66 90 62 L90 64 C86 68 74 68 70 64Z" fill="#E8878C" stroke="none"/>
+    <path d="M76 66 C76 72 84 72 84 66" fill="#E8878C" stroke="#1B3A2D" stroke-width="1"/>
+    <path d="M52 145 L52 165 C52 170 58 172 62 170 L64 165 L64 145" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <path d="M96 145 L96 165 C96 170 102 172 106 170 L108 165 L108 145" fill="white" stroke="#1B3A2D" stroke-width="1.5"/>
+    <circle cx="58" cy="166" r="4" fill="#1B3A2D"/>
+    <path d="M120 90 C130 82 138 75 140 65 C142 58 138 55 134 58 C130 62 132 70 128 78" stroke="#1B3A2D" stroke-width="5" fill="none"/>
+    <path d="M42 18 C44 14 48 15 46 19" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+    <path d="M70 5 C72 1 76 2 74 6" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+    <path d="M55 10 C57 6 61 7 59 11" stroke="#1B3A2D" stroke-width="1" fill="none"/>
+  </g>
+</svg></div>
+          <h2 id="wordmark"></h2>
+          <svg id="endArt" viewBox="0 0 1080 1920" width="1080" height="1920" style="position:absolute;inset:0;overflow:visible">
+            <path id="sq" transform="translate(140 930)" d="M20 34 C 120 6, 180 58, 280 32 S 440 8, 520 30 S 700 54, 780 22" fill="none" stroke="#c4922a" stroke-width="12" stroke-linecap="round"/>
+            <g id="frog"><g id="frogInner" transform="scale(1.7)">
+              <ellipse cx="-20" cy="-6" rx="12" ry="7" fill="#8b9e7e" stroke="#fdf8f3" stroke-width="2"/>
+              <ellipse cx="0" cy="-16" rx="25" ry="16" fill="#b5c4a8" stroke="#fdf8f3" stroke-width="2.5"/>
+              <circle cx="-4" cy="-32" r="7.5" fill="#b5c4a8" stroke="#fdf8f3" stroke-width="2.5"/><circle cx="12" cy="-31" r="8" fill="#b5c4a8" stroke="#fdf8f3" stroke-width="2.5"/>
+              <circle cx="-3" cy="-32" r="3" fill="#1b3a2d"/><circle cx="13.5" cy="-31" r="3.2" fill="#1b3a2d"/>
+              <path d="M8 -13 q9 5 16 -3" stroke="#1b3a2d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            </g></g>
+          </svg>
+          <div id="endLine"></div>
+          <div id="url"></div>
+        </div>
+      </div>
+      <div id="edge"></div>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="pp" aria-label="Pause"><svg id="ppi" width="18" height="18" viewBox="0 0 18 18" fill="#fff"></svg></button>
+    <input id="scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Seek">
+    <span class="time" id="time"></span>
+  </div>
+  <div class="note">Preview is silent. The MP4 has the soundtrack.</div>
+</div>
+<script>
+const REEL=/*REEL_DATA*/{}/*END_REEL_DATA*/;
+(function(){
+const $=id=>document.getElementById(id);
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,a,b)=>clamp((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const ei=x=>x*x*x;
+const eb=x=>{const c1=1.9,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)};
+const lerp=(a,b,x)=>a+(b-a)*x;
+const NS="http://www.w3.org/2000/svg";
+const mk=(tag,attrs,parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent&&parent.appendChild(e);return e};
+const div=(cls,txt,parent)=>{const e=document.createElement('div');if(cls)e.className=cls;if(txt!=null)e.textContent=txt;parent&&parent.appendChild(e);return e};
+let seed=11; const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const show=(el,on)=>{el.style.display=on?'block':'none'};
+const fade=(el,p,dy=24)=>{if(!el)return; el.style.opacity=p; el.style.transform=`translateY(${(1-p)*dy}px)`};
+const pop=(g,x,y,p,extra='')=>g.setAttribute('transform',`translate(${x} ${y}) scale(${Math.max(0,p)}) ${extra}`);
+const C={forest:'#1b3a2d',pine:'#2d5a3d',gold:'#c4922a',sunset:'#d4855c',cream:'#fdf8f3',bark:'#4a3728',earth:'#6b4226',sage:'#8b9e7e',sageL:'#b5c4a8',sky:'#5a8fa8',wine:'#8b2e2e',lamp:'#f0c27a'};
+
+/* ================= art library =================
+   Each module: build(svg, s) draws into the scene's SVG; render(tau, s, t) animates it.
+   tau = seconds since the scene started. Event art lives in the zone y 1200 to 1490.
+   Theme backdrops (stars, sequoias) are added automatically by theme. */
+const noteGlyph=(g,fill,beam)=>{
+  mk('ellipse',{cx:0,cy:0,rx:17,ry:12,transform:'rotate(-22)',fill},g); mk('rect',{x:12,y:-74,width:6,height:74,fill},g);
+  if(beam){mk('ellipse',{cx:44,cy:-8,rx:17,ry:12,transform:'rotate(-22 44 -8)',fill},g); mk('rect',{x:56,y:-82,width:6,height:74,fill},g); mk('rect',{x:12,y:-84,width:50,height:12,fill},g)}
+  else mk('path',{d:'M18 -74 q24 10 18 38 q-4 -18 -18 -22 z',fill},g);
+};
+const ART={
+  starsBg:{
+    build(svg,s){s.stars=[...Array(80)].map(()=>({c:mk('circle',{cx:rnd()*1080,cy:rnd()*1900,r:1.2+rnd()*2.8,fill:C.cream},svg),ph:rnd()*6.28,sp:1.5+rnd()*3}))},
+    render(tau,s,t){s.stars.forEach(st=>st.c.setAttribute('opacity',.2+.7*Math.abs(Math.sin(t*st.sp+st.ph))))}
+  },
+  sequoiasBg:{
+    build(svg){[[-70,125,C.bark,1],[1000,170,C.earth,1],[40,40,C.earth,.5]].forEach(([x,w,c,o])=>{
+      mk('rect',{x,y:-20,width:w,height:1980,fill:c,opacity:o},svg);
+      for(let k=0;k<3;k++) mk('rect',{x:x+w*(.18+k*.28),y:-20,width:6,height:1980,fill:C.cream,opacity:.07*o},svg)})},
+    render(){}
+  },
+  beams:{
+    build(svg,s){const defs=mk('defs',{},svg), g=mk('linearGradient',{id:'beam'+s.i,x1:0,y1:1,x2:0,y2:0},defs);
+      mk('stop',{offset:0,'stop-color':C.gold,'stop-opacity':.42},g); mk('stop',{offset:1,'stop-color':C.gold,'stop-opacity':0},g);
+      s.beams=[250,540,830].map((x,k)=>({g:mk('polygon',{points:`${x},2150 ${x-240},-100 ${x+240},-100`,fill:`url(#beam${s.i})`},svg),x,k}))},
+    render(tau,s,t){s.beams.forEach(b=>{b.g.setAttribute('transform',`rotate(${(b.k-1)*12+Math.sin(t*1.4+b.k*2)*12} ${b.x} 2150)`); b.g.setAttribute('opacity',s.first?1:eo(P(tau,.1,.7)))})}
+  },
+  sun:{
+    build(svg,s){s.sunG=mk('g',{},svg); mk('circle',{r:420,fill:'#f3c98d',opacity:.35},s.sunG); mk('circle',{r:170,fill:C.lamp},s.sunG)},
+    render(tau,s){s.sunG.setAttribute('transform',`translate(820 ${lerp(1950,1420,eo(P(tau,0,1.4)))})`)}
+  },
+  stomp:{ // grapes pop in, a boot stomps them (lands ~2.0s, on the beat), splash
+    build(svg,s){
+      const cx=540, top=1215, cols=[C.wine,'#7a2626','#9c3a3a'];
+      s.puddle=mk('ellipse',{cx,cy:1482,rx:0,ry:0,fill:C.wine},svg);
+      s.cluster=mk('g',{},svg);
+      mk('path',{d:`M${cx} ${top-46} Q${cx+2} ${top-78} ${cx+18} ${top-98}`,stroke:C.bark,'stroke-width':12,fill:'none','stroke-linecap':'round'},s.cluster);
+      s.leaf=mk('path',{d:`M${cx+12} ${top-74} Q${cx+66} ${top-130} ${cx+146} ${top-98} Q${cx+100} ${top-40} ${cx+12} ${top-74} Z`,fill:C.pine},s.cluster);
+      s.grapes=[];
+      [5,4,3,2,1].forEach((n,row)=>{for(let k=0;k<n;k++){const g=mk('g',{},s.cluster);
+        mk('circle',{cx:0,cy:0,r:34,fill:cols[(row+k)%3]},g); mk('circle',{cx:-11,cy:-12,r:8,fill:C.cream,opacity:.35},g);
+        s.grapes.push({g,x:cx+(k-(n-1)/2)*68,y:top+row*58,i:s.grapes.length})}});
+      s.splats=[...Array(18)].map(()=>{const a=(-170+rnd()*160)*Math.PI/180,v=560+rnd()*560;return {c:mk('circle',{r:8+rnd()*13,fill:C.wine},svg),vx:Math.cos(a)*v,vy:Math.sin(a)*v}});
+      s.boot=mk('g',{},svg);
+      mk('path',{d:'M-56 -370 L56 -370 L56 -78 L134 -62 Q170 -52 170 -18 L170 0 L-68 0 Q-70 -50 -56 -80 Z',fill:C.bark},s.boot);
+      mk('rect',{x:-70,y:-16,width:242,height:16,rx:4,fill:'#2e2219'},s.boot);
+    },
+    render(tau,s){
+      s.grapes.forEach(g=>pop(g.g,g.x,g.y,s.first?1:eb(P(tau,.45+g.i*.04,.8+g.i*.04))));
+      s.leaf.setAttribute('opacity',s.first?1:P(tau,.4,.6));
+      let by; if(tau<1.7) by=-900; else if(tau<1.93) by=lerp(-500,1180,ei(P(tau,1.7,1.93))); else if(tau<2.07) by=lerp(1180,1470,P(tau,1.93,2.07)); else if(tau<2.2) by=1470; else by=lerp(1470,-700,ei(P(tau,2.2,2.6)));
+      s.boot.setAttribute('transform',`translate(480 ${by})`);
+      const q=P(tau,1.93,2.07);
+      s.cluster.setAttribute('transform',`translate(540 1490) scale(${1+q*.35} ${1-q*.85}) translate(-540 -1490)`);
+      s.cluster.setAttribute('opacity',1-P(tau,2.05,2.15));
+      const pd=eo(P(tau,2.0,2.25)); s.puddle.setAttribute('rx',pd*230); s.puddle.setAttribute('ry',pd*40);
+      const st=tau-2.0; s.splats.forEach(sp=>{if(st<0){sp.c.setAttribute('opacity',0);return}
+        sp.c.setAttribute('cx',540+sp.vx*st); sp.c.setAttribute('cy',1480+sp.vy*st+950*st*st); sp.c.setAttribute('opacity',1-P(st,0,.9))});
+    }
+  },
+  blend:{ // three wines drip into one glass
+    build(svg,s){
+      const defs=mk('defs',{},svg), cp=mk('clipPath',{id:'bowl'+s.i},defs);
+      const bowl='M430 1250 L650 1250 Q656 1405 540 1410 Q424 1405 430 1250 Z';
+      mk('path',{d:bowl},cp);
+      s.fill=mk('rect',{x:420,y:1410,width:240,height:0,fill:'#9a3b3a','clip-path':`url(#bowl${s.i})`},svg);
+      mk('path',{d:bowl,fill:'rgba(253,248,243,.06)',stroke:C.cream,'stroke-width':6},svg);
+      mk('line',{x1:540,y1:1410,x2:540,y2:1468,stroke:C.cream,'stroke-width':7},svg);
+      mk('ellipse',{cx:540,cy:1472,rx:64,ry:11,fill:'none',stroke:C.cream,'stroke-width':6},svg);
+      s.drops=[[360,C.wine],[540,C.sunset],[720,C.gold]].map(([x,c])=>({x,c:mk('circle',{r:17,fill:c,opacity:0},svg)}));
+      s.glass=svg;
+    },
+    render(tau,s){
+      s.drops.forEach((d,k)=>{const a=.5+k*.35, p=P(tau,a,a+.38); d.c.setAttribute('cx',lerp(d.x,540,p)); d.c.setAttribute('cy',lerp(1200,1330,ei(p))); d.c.setAttribute('opacity',p>0&&p<1?1:0)});
+      const lv=(eo(P(tau,.88,1.05))+eo(P(tau,1.23,1.4))+eo(P(tau,1.58,1.75)))/3, h=lv*120+Math.sin(tau*7)*3*lv;
+      s.fill.setAttribute('y',1410-h); s.fill.setAttribute('height',h);
+    }
+  },
+  slab:{ // roll a clay slab, press in a leaf and pine needles, wrap it into a mug
+    build(svg,s){
+      mk('rect',{x:260,y:1470,width:560,height:16,rx:4,fill:C.bark},svg);
+      s.slabG=mk('g',{},svg);
+      s.slab=mk('rect',{x:350,y:1230,width:380,height:0,rx:12,fill:C.sunset},s.slabG);
+      s.tex=mk('g',{opacity:0,stroke:'#a55a36','stroke-width':4,fill:'none','stroke-linecap':'round'},s.slabG);
+      mk('path',{d:'M430 1380 Q470 1300 540 1290 Q520 1360 430 1380 Z M440 1372 L528 1298'},s.tex);
+      [[600,1270,660,1330],[615,1262,690,1300],[590,1300,640,1380],[630,1340,700,1370]].forEach(([a,b,c,d])=>mk('line',{x1:a,y1:b,x2:c,y2:d},s.tex));
+      s.rim=mk('ellipse',{cx:540,cy:1230,rx:0,ry:18,fill:'#b8653f'},svg);
+      s.handle=mk('path',{d:'M645 1275 Q735 1285 725 1350 Q715 1410 645 1405',stroke:C.sunset,'stroke-width':24,fill:'none','stroke-linecap':'round',opacity:0},svg);
+      s.pin=mk('g',{},svg);
+      mk('rect',{x:310,y:-22,width:460,height:44,rx:22,fill:'#e8d3b0'},s.pin);
+      mk('rect',{x:250,y:-10,width:64,height:20,rx:10,fill:C.bark},s.pin); mk('rect',{x:766,y:-10,width:64,height:20,rx:10,fill:C.bark},s.pin);
+    },
+    render(tau,s){
+      const py=lerp(1200,1470,eio(P(tau,.4,1.15)));
+      s.pin.setAttribute('transform',`translate(0 ${py})`); s.pin.setAttribute('opacity',1-P(tau,1.2,1.35));
+      s.slab.setAttribute('height',Math.max(0,Math.min(240,py-1230)));
+      s.tex.setAttribute('opacity',P(tau,1.3,1.6));
+      const w=eio(P(tau,2.0,2.5));
+      s.slabG.setAttribute('transform',`translate(540 0) scale(${1-w*.45} 1) translate(-540 0)`);
+      s.rim.setAttribute('rx',w*105); s.handle.setAttribute('opacity',P(tau,2.35,2.55));
+    }
+  },
+  lights:{ // rooftop string lights switch on bulb by bulb
+    build(svg,s){
+      s.bulbs=[];
+      [['M-20 1215 Q540 1420 1100 1215',0],['M-20 1330 Q540 1510 1100 1330',1]].forEach(([d,row])=>{
+        const p=mk('path',{d,fill:'none',stroke:'#2e2219','stroke-width':4},svg), L=p.getTotalLength();
+        for(let k=0;k<11;k++){const pt=p.getPointAtLength((k+.5)/11*L), g=mk('g',{},svg);
+          mk('line',{x1:0,y1:0,x2:0,y2:16,stroke:'#2e2219','stroke-width':3},g);
+          const glow=mk('circle',{cx:0,cy:30,r:30,fill:C.lamp,opacity:0},g), b=mk('circle',{cx:0,cy:30,r:13,fill:'#6e6153'},g);
+          g.setAttribute('transform',`translate(${pt.x} ${pt.y})`); s.bulbs.push({glow,b,k:k+row*11,ph:rnd()*6})}});
+      mk('rect',{x:0,y:1478,width:1080,height:60,fill:'#142a20'},svg);
+    },
+    render(tau,s,t){s.bulbs.forEach(u=>{const on=P(tau,.4+u.k*.035,.5+u.k*.035), tw=.85+.15*Math.sin(t*5+u.ph);
+      u.b.setAttribute('fill',on>.5?C.lamp:'#6e6153'); u.glow.setAttribute('opacity',on*.3*tw)})}
+  },
+  lighthouse:{ // a lit lighthouse sweeps its beam through drifting mist
+    build(svg,s){
+      const defs=mk('defs',{},svg), g=mk('linearGradient',{id:'lh'+s.i,x1:1,y1:0,x2:0,y2:0},defs);
+      mk('stop',{offset:0,'stop-color':C.lamp,'stop-opacity':.55},g); mk('stop',{offset:1,'stop-color':C.lamp,'stop-opacity':0},g);
+      s.beam=mk('polygon',{points:'820,1192 820,1212 -300,1150 -300,1330',fill:`url(#lh${s.i})`},svg);
+      mk('path',{d:'M640 1500 Q700 1455 780 1462 L880 1462 Q960 1452 1010 1500 Z',fill:'#142a20'},svg);
+      mk('polygon',{points:'765,1465 875,1465 858,1232 782,1232',fill:C.cream},svg);
+      [[1290,1320],[1380,1410]].forEach(([a,b])=>{const w=y=>lerp(38,55,(y-1232)/233); mk('polygon',{points:`${820-w(a)},${a} ${820+w(a)},${a} ${820+w(b)},${b} ${820-w(b)},${b}`,fill:C.wine},svg)});
+      mk('rect',{x:770,y:1222,width:100,height:12,fill:'#2e2219'},svg);
+      s.lamp=mk('rect',{x:788,y:1180,width:64,height:42,fill:C.lamp},svg);
+      mk('polygon',{points:'776,1182 864,1182 820,1142',fill:C.wine},svg);
+      s.mist=[0,1,2].map(k=>mk('ellipse',{cx:0,cy:1440+k*22,rx:260,ry:26,fill:C.sageL,opacity:.1},svg));
+    },
+    render(tau,s,t){
+      s.beam.setAttribute('transform',`rotate(${Math.sin(t*1.3)*5+2} 820 1202)`); s.beam.setAttribute('opacity',P(tau,.3,.7));
+      s.lamp.setAttribute('opacity',.75+.25*Math.sin(t*6));
+      s.mist.forEach((m,k)=>m.setAttribute('cx',((t*(40+k*25)+k*400)%1600)-260));
+    }
+  },
+  map:{ // paper map: dotted route draws itself, pins drop at each studio
+    build(svg,s){
+      s.g=mk('g',{},svg);
+      mk('rect',{x:190,y:1215,width:700,height:270,rx:12,fill:C.cream,stroke:'#e3d8ca','stroke-width':4},s.g);
+      ['M200 1300 Q360 1260 520 1320 T880 1290','M200 1420 Q380 1380 560 1440 T880 1410'].forEach(d=>mk('path',{d,fill:'none',stroke:C.sageL,'stroke-width':4},s.g));
+      const route='M250 1450 C 360 1270, 450 1460, 560 1330 S 760 1250, 840 1275';
+      const defs=mk('defs',{},svg), m=mk('mask',{id:'rt'+s.i,maskUnits:'userSpaceOnUse',x:0,y:0,width:1080,height:1920},defs);
+      s.rm=mk('path',{d:route,fill:'none',stroke:'#fff','stroke-width':30},m); s.rL=s.rm.getTotalLength(); s.rm.setAttribute('stroke-dasharray',s.rL+' '+s.rL);
+      mk('path',{d:route,fill:'none',stroke:C.forest,'stroke-width':7,'stroke-dasharray':'14 12',mask:`url(#rt${s.i})`},s.g);
+      s.pins=[0,.36,.68,1].map(f=>{const pt=s.rm.getPointAtLength(f*s.rL), g=mk('g',{},s.g);
+        mk('path',{d:'M0 0 C -22 -30 -26 -44 -26 -56 A26 26 0 1 1 26 -56 C 26 -44 22 -30 0 0 Z',fill:C.wine},g); mk('circle',{cx:0,cy:-56,r:10,fill:C.cream},g);
+        return {g,x:pt.x,y:pt.y,f}});
+    },
+    render(tau,s){
+      const m=eo(P(tau,.25,.6)); s.g.setAttribute('transform',`translate(0 ${(1-m)*120}) rotate(${-3*m} 540 1350)`); s.g.setAttribute('opacity',m);
+      const r=eio(P(tau,.55,1.9)); s.rm.setAttribute('stroke-dashoffset',s.rL*(1-r));
+      s.pins.forEach(p=>{const a=.55+p.f*1.35; pop(p.g,p.x,p.y,eb(P(tau,a,a+.3)))});
+    }
+  },
+  hat:{ // cowboy hat drops in with sparkles (rodeo events)
+    build(svg,s){
+      s.hat=mk('g',{},svg);
+      mk('path',{d:'M-190 20 Q0 90 190 20 Q170 70 0 80 Q-170 70 -190 20 Z',fill:C.bark},s.hat);
+      mk('path',{d:'M-110 30 Q-125 -95 -55 -110 Q0 -85 55 -110 Q125 -95 110 30 Z',fill:C.earth},s.hat);
+      mk('path',{d:'M-112 8 Q0 26 112 8 L110 30 Q0 46 -110 30 Z',fill:C.gold},s.hat);
+      s.sp=[[-250,-60],[230,-90],[-170,-170],[190,-10],[0,-190],[-260,60]].map(([x,y],k)=>{const g=mk('g',{},svg);
+        mk('path',{d:'M0 -26 L7 -7 L26 0 L7 7 L0 26 L-7 7 L-26 0 L-7 -7 Z',fill:k%2?C.cream:C.lamp},g); return {g,x:540+x,y:1380+y,k}});
+    },
+    render(tau,s,t){
+      const d=eb(P(tau,.35,.85)); s.hat.setAttribute('transform',`translate(540 ${lerp(900,1400,Math.min(1,d))+(d>1?(d-1)*-60:0)}) rotate(${Math.sin(t*2)*3})`);
+      s.hat.setAttribute('opacity',P(tau,.35,.45));
+      s.sp.forEach(p=>{const on=P(tau,.9+p.k*.1,1.1+p.k*.1); pop(p.g,p.x,p.y,on*(.7+.35*Math.sin(t*4+p.k)))});
+    }
+  },
+  pumpkins:{ // pumpkins pop onto a crate by the creek
+    build(svg,s){
+      s.creek=[0,1].map(k=>mk('path',{d:'M-40 0 Q60 -14 160 0 T360 0 T560 0 T760 0 T960 0 T1160 0',fill:'none',stroke:C.sky,'stroke-width':6,'stroke-linecap':'round',opacity:.8-k*.3},svg));
+      mk('rect',{x:170,y:1440,width:740,height:24,rx:6,fill:C.bark},svg);
+      s.pk=[[260,62,C.sunset],[400,50,C.gold],[545,78,C.sunset],[695,56,'#e0a15a'],[830,64,C.gold]].map(([x,r,c],k)=>{const g=mk('g',{},svg);
+        mk('ellipse',{cx:0,cy:-r*.72,rx:r,ry:r*.72,fill:c},g); mk('ellipse',{cx:0,cy:-r*.72,rx:r*.5,ry:r*.72,fill:'none',stroke:'#a55a36','stroke-width':4,opacity:.55},g);
+        mk('ellipse',{cx:0,cy:-r*.72,rx:r*.16,ry:r*.72,fill:'none',stroke:'#a55a36','stroke-width':3,opacity:.45},g);
+        mk('rect',{x:-6,y:-r*1.44-18,width:12,height:24,rx:4,fill:C.pine},g); return {g,x,k}});
+    },
+    render(tau,s,t){
+      s.pk.forEach(p=>pop(p.g,p.x,1440,eb(P(tau,.4+p.k*.12,.75+p.k*.12))));
+      s.creek.forEach((c,k)=>c.setAttribute('transform',`translate(${-((t*90+k*70)%200)} ${1488+k*18})`));
+    }
+  },
+  trail:{ // a dotted trail climbs through the grove, hiker dot leading
+    build(svg,s){
+      const d='M330 1495 C 470 1450, 300 1380, 460 1340 S 720 1290, 640 1235 S 730 1195, 800 1205';
+      [[330,95],[520,70],[760,110]].forEach(([x,w])=>mk('rect',{x:x-w/2,y:1120,width:w,height:380,fill:C.earth,opacity:.35},svg));
+      const defs=mk('defs',{},svg), m=mk('mask',{id:'tr'+s.i,maskUnits:'userSpaceOnUse',x:0,y:0,width:1080,height:1920},defs);
+      s.tm=mk('path',{d,fill:'none',stroke:'#fff','stroke-width':30},m); s.L=s.tm.getTotalLength(); s.tm.setAttribute('stroke-dasharray',s.L+' '+s.L);
+      mk('path',{d,fill:'none',stroke:C.cream,'stroke-width':9,'stroke-linecap':'round','stroke-dasharray':'1 20',mask:`url(#tr${s.i})`},svg);
+      s.hiker=mk('circle',{r:16,fill:C.gold,stroke:C.forest,'stroke-width':4},svg);
+    },
+    render(tau,s){const r=eio(P(tau,.35,2.2)); s.tm.setAttribute('stroke-dashoffset',s.L*(1-r)); const pt=s.tm.getPointAtLength(r*s.L);
+      s.hiker.setAttribute('cx',pt.x); s.hiker.setAttribute('cy',pt.y); s.hiker.setAttribute('opacity',P(tau,.35,.5))}
+  },
+  notes:{ // music notes float up and sway
+    build(svg,s,xs){s.notes=(xs||[200,330,470,610,750,880,540]).map((x,k)=>{const g=mk('g',{},svg); noteGlyph(g,k%2?C.cream:C.gold,k%3===1); return {g,x,k,ph:rnd()*6}})},
+    render(tau,s,t){s.notes.forEach(n=>{const cyc=((tau-.3-n.k*.22)%1.8+1.8)%1.8, on=tau>.3+n.k*.22;
+      const y=lerp(1490,1180,cyc/1.8), o=on?Math.sin(Math.PI*cyc/1.8):0;
+      n.g.setAttribute('transform',`translate(${n.x+Math.sin(t*2+n.ph)*22} ${y}) scale(${1+n.k%3*.15})`); n.g.setAttribute('opacity',o)})}
+  },
+  slushie:{ // wine slushie fills up, straw pops in, notes around it
+    build(svg,s){
+      ART.notes.build(svg,s,[180,300,800,910]);
+      const defs=mk('defs',{},svg), cp=mk('clipPath',{id:'cup'+s.i},defs), cup='M445 1260 L635 1260 L605 1485 L475 1485 Z';
+      mk('path',{d:cup},cp);
+      s.f1=mk('rect',{x:430,y:1485,width:220,height:0,fill:C.wine,'clip-path':`url(#cup${s.i})`},svg);
+      s.f2=mk('rect',{x:430,y:1485,width:220,height:0,fill:C.sunset,'clip-path':`url(#cup${s.i})`},svg);
+      mk('path',{d:cup,fill:'none',stroke:C.cream,'stroke-width':6,'stroke-linejoin':'round'},svg);
+      s.dome=mk('path',{d:'M438 1262 Q540 1150 642 1262',fill:'rgba(253,248,243,.12)',stroke:C.cream,'stroke-width':5,opacity:0},svg);
+      s.straw=mk('g',{opacity:0},svg); mk('rect',{x:560,y:1110,width:18,height:190,rx:6,fill:C.cream,transform:'rotate(14 569 1300)'},s.straw);
+      [0,1,2,3].forEach(k=>mk('rect',{x:560,y:1125+k*42,width:18,height:14,fill:C.sage,transform:'rotate(14 569 1300)'},s.straw));
+    },
+    render(tau,s,t){
+      ART.notes.render(tau,s,t);
+      const a=eo(P(tau,.35,.9)), b=eo(P(tau,.8,1.3));
+      s.f1.setAttribute('y',1485-a*120); s.f1.setAttribute('height',a*120);
+      s.f2.setAttribute('y',1485-120-b*105); s.f2.setAttribute('height',b*105);
+      s.dome.setAttribute('opacity',P(tau,1.3,1.45)); const sp=eb(P(tau,1.45,1.8));
+      s.straw.setAttribute('opacity',P(tau,1.45,1.55)); s.straw.setAttribute('transform',`translate(0 ${(1-sp)*80})`);
+    }
+  }
+  ,carshow:{ // classic car: idles from frame 0 as the hook (or rolls in elsewhere), hops on the 2.0s beat, chrome sparkles
+    build(svg,s){
+      mk('rect',{x:0,y:1474,width:1080,height:12,rx:6,fill:C.bark,opacity:.6},svg);
+      s.puffs=[0,1,2,3].map(k=>({c:mk('circle',{r:12,fill:C.cream,opacity:0},svg),k}));
+      s.shadow=mk('ellipse',{cx:0,cy:1478,rx:230,ry:12,fill:'#2e2219',opacity:.35},svg);
+      s.car=mk('g',{},svg);
+      const body=mk('g',{transform:'translate(0 40)'},s.car);
+      mk('path',{d:'M-236 -44 Q-238 -98 -184 -108 L-112 -116 Q-74 -180 -4 -184 L58 -184 Q118 -180 146 -116 L204 -108 Q244 -100 242 -54 L242 -44 Q242 -34 230 -34 L-226 -34 Q-236 -34 -236 -44 Z',fill:C.wine},body);
+      mk('path',{d:'M-92 -120 Q-62 -168 -12 -170 L-12 -120 Z',fill:C.sky},body);
+      mk('path',{d:'M4 -120 L4 -170 L54 -170 Q102 -166 124 -120 Z',fill:C.sky},body);
+      mk('rect',{x:-226,y:-76,width:458,height:8,rx:4,fill:C.cream,opacity:.85},body);
+      mk('rect',{x:204,y:-54,width:46,height:16,rx:6,fill:C.cream},body);
+      mk('rect',{x:-252,y:-54,width:42,height:16,rx:6,fill:C.cream},body);
+      s.glow=mk('circle',{cx:226,cy:-90,r:46,fill:C.lamp,opacity:.25},body);
+      mk('circle',{cx:226,cy:-90,r:13,fill:C.lamp},body);
+      s.wheels=[-138,136].map(x=>{const g=mk('g',{},s.car); mk('circle',{cx:0,cy:0,r:44,fill:'#2e2219'},g); mk('circle',{cx:0,cy:0,r:22,fill:C.cream},g);
+        for(let k=0;k<3;k++) mk('rect',{x:-3,y:-20,width:6,height:40,fill:'#8a7b66',transform:`rotate(${k*60})`},g); return {g,x}});
+      s.sp=[[-170,-230],[40,-280],[250,-200],[-270,-140],[160,-300]].map(([x,y],k)=>{const g=mk('g',{},svg);
+        mk('path',{d:'M0 -24 L6 -6 L24 0 L6 6 L0 24 L-6 6 L-24 0 L-6 -6 Z',fill:k%2?C.cream:C.lamp},g); return {g,x:540+x,y:1430+y,k}});
+    },
+    render(tau,s,t){
+      const x=s.first?540:lerp(-320,540,eo(P(tau,.3,2.0)));
+      const hop=tau>=2.0&&tau<2.45?Math.sin(Math.PI*P(tau,2.0,2.45))*70:0;
+      const idle=tau<2.0?Math.sin(t*40)*2:0;
+      const settle=tau>=2.45?Math.sin((tau-2.45)*20)*7*Math.exp(-(tau-2.45)*6):0;
+      const tilt=hop?-4*Math.sin(Math.PI*P(tau,2.0,2.45)):0;
+      s.car.setAttribute('transform',`translate(${x} ${1430-hop+idle+settle}) rotate(${tilt})`);
+      s.shadow.setAttribute('cx',x); s.shadow.setAttribute('rx',230-hop*.8); s.shadow.setAttribute('opacity',.35-hop*.002);
+      const spin=s.first?0:(x+320)/44*57.3;
+      s.wheels.forEach(w=>w.g.setAttribute('transform',`translate(${w.x} 0) rotate(${spin})`));
+      s.glow.setAttribute('opacity',.22+.12*Math.sin(t*7));
+      s.puffs.forEach(p=>{const life=((tau+p.k*.3)%1.2)/1.2, on=tau<2.0;
+        p.c.setAttribute('cx',x-262-life*90); p.c.setAttribute('cy',1438-life*40); p.c.setAttribute('r',8+life*22);
+        p.c.setAttribute('opacity',on?.45*(1-life):0)});
+      s.sp.forEach(p=>{const on=P(tau,2.2+p.k*.08,2.4+p.k*.08); pop(p.g,p.x,p.y,on*(.75+.3*Math.sin(t*5+p.k)))});
+    }
+  },
+  gift:{ // a gift box drops in, the lid pops on the 1.5s beat, confetti and three balloons
+    build(svg,s){
+      s.balloons=[[420,C.gold,1300],[540,C.sky,1265],[660,C.sage,1300]].map(([x,c,y],k)=>{const g=mk('g',{},svg);
+        mk('path',{d:'M0 0 Q-10 50 6 100 Q-6 140 4 170',stroke:C.cream,'stroke-width':3,fill:'none',opacity:.7},g);
+        mk('ellipse',{cx:0,cy:-52,rx:44,ry:54,fill:c},g); mk('ellipse',{cx:-14,cy:-72,rx:9,ry:14,fill:C.cream,opacity:.35},g);
+        mk('path',{d:'M-9 3 L9 3 L0 -7 Z',fill:c},g); return {g,x,y,k}});
+      s.box=mk('g',{},svg);
+      mk('rect',{x:-120,y:-170,width:240,height:170,rx:8,fill:C.wine},s.box);
+      mk('rect',{x:-18,y:-170,width:36,height:170,fill:C.gold},s.box);
+      s.lid=mk('g',{},svg);
+      mk('rect',{x:-135,y:-48,width:270,height:48,rx:8,fill:'#9c3a3a'},s.lid);
+      mk('rect',{x:-18,y:-48,width:36,height:48,fill:C.gold},s.lid);
+      mk('path',{d:'M0 -48 Q-70 -120 -84 -72 Q-72 -40 0 -48 Z M0 -48 Q70 -120 84 -72 Q72 -40 0 -48 Z',fill:C.gold},s.lid);
+      const cols=[C.gold,C.cream,C.sunset,C.sageL,C.lamp];
+      s.conf=[...Array(26)].map((_,k)=>{const a=(-165+rnd()*150)*Math.PI/180, v=480+rnd()*520;
+        return {r:mk('rect',{x:-8,y:-5,width:16,height:10,fill:cols[k%5]},svg),vx:Math.cos(a)*v,vy:Math.sin(a)*v,sp:rnd()*900-450}});
+    },
+    render(tau,s,t){
+      const d=s.first?1:eb(P(tau,.25,.75)), by=lerp(1000,1484,d);
+      s.box.setAttribute('transform',`translate(540 ${by})`); s.box.setAttribute('opacity',s.first?1:P(tau,.25,.32));
+      const lp=P(tau,1.5,2.3);
+      s.lid.setAttribute('transform',`translate(${540-380*lp} ${by-170-340*lp+520*lp*lp}) rotate(${-70*lp})`);
+      s.lid.setAttribute('opacity',(s.first?1:P(tau,.25,.32))*(1-P(tau,2.15,2.3)));
+      const st=tau-1.5; s.conf.forEach(c=>{if(st<0){c.r.setAttribute('opacity',0);return}
+        c.r.setAttribute('transform',`translate(${540+c.vx*st*.8} ${1320+c.vy*st+900*st*st}) rotate(${c.sp*st})`); c.r.setAttribute('opacity',1-P(st,.7,1.5))});
+      s.balloons.forEach(b=>{const p=eo(P(tau,1.6+b.k*.12,2.5+b.k*.12));
+        b.g.setAttribute('transform',`translate(${b.x+Math.sin(t*1.6+b.k*2)*10} ${lerp(1430,b.y,p)}) scale(${p})`); b.g.setAttribute('opacity',p>0?1:0)});
+    }
+  }
+};
+const THEME_BG={night:'starsBg',trees:'sequoiasBg'};
+const DEF_DUR={event:4,divider:2,list:6};
+const DEF_TITLE={event:160,list:150};
+
+/* ================= scenes ================= */
+const stage=$('stage'), trunksSvg=$('trunks');
+stage.setAttribute('aria-label',REEL.aria||"Millie's weekend picks on Hwy 4");
+let acc=0;
+const scenes=REEL.scenes.map((d,i)=>{const layout=d.layout||'event'; const s={d,i,layout,theme:d.theme||'night',start:acc,dur:d.dur||DEF_DUR[layout]||4,first:i===0}; acc+=s.dur; return s});
+scenes.forEach((s,i)=>{ if(i===0){s.enter='none';return} const p=scenes[i-1]; s.enter=(s.layout!=='event'||s.theme!==p.theme)?'theme':'slide' });
+const END0=acc, ENDD=(REEL.end&&REEL.end.dur)||4, T=END0+ENDD;
+
+scenes.forEach(s=>{
+  const d=s.d, el=div('layer th-'+s.theme); stage.insertBefore(el,trunksSvg); s.el=el;
+  const svg=mk('svg',{class:'art',viewBox:'0 0 1080 1920',width:1080,height:1920},el);
+  s.bg=ART[THEME_BG[s.theme]]; if(s.bg) s.bg.build(svg,s);
+  s.art=d.art?ART[d.art]:null; if(s.art) s.art.build(svg,s);
+  if(s.layout==='divider'){
+    const c=div('dcontent',null,el); s.big=div('big',null,c); s.fitEl=s.big;
+    s.lines=[d.big||d.day].map(tx=>{const ln=div('ln',null,s.big); const sp=document.createElement('span'); sp.textContent=tx; ln.appendChild(sp); return sp});
+    if(d.sub) s.sub=div('dsub',d.sub,c);
+    return;
+  }
+  const c=div('content',null,el);
+  if(d.chip) s.chip=div('chip',d.chip,div('',null,c));
+  s.title=div('title',null,c); s.fitEl=s.title;
+  s.lines=(d.title||[]).map(tx=>{const ln=div('ln',null,s.title); const sp=document.createElement('span'); sp.textContent=tx; ln.appendChild(sp); return sp});
+  if(d.support) s.support=div('support',d.support,c);
+  if(d.detail) s.detail=div('detail',d.detail,c);
+  if(d.pill){ const w=div('pillw',null,c); s.pill=div('pill',d.pill,w) }
+  if(d.items){ const pk=div('picks',null,c); s.items=d.items.map(p=>{const e=div('pick',null,pk); const b=document.createElement('b'); b.textContent=p.what; e.appendChild(b); const sp=document.createElement('span'); sp.textContent=p.where; e.appendChild(sp); return e}) }
+});
+function fitTitles(){ // shrink each title until its widest line fits the text column
+  scenes.forEach(s=>{const prev=s.el.style.display; s.el.style.display='block';
+    let size=s.d.title_size||(s.layout==='divider'?330:DEF_TITLE[s.layout]||160); s.fitEl.style.fontSize=size+'px';
+    const w=()=>Math.max(0,...s.lines.map(sp=>sp.offsetWidth));
+    while(w()>930&&size>70){size-=4; s.fitEl.style.fontSize=size+'px'}
+    s.el.style.display=prev});
+}
+
+/* trunk sweep used when entering a 'trees' themed scene from another theme */
+const TRUNKS=[]; {let x=-20,i=0; const cols=[C.earth,C.bark,'#7a4b2c','#5a3b27'];
+  while(x<1100){const w=150+rnd()*80, g=mk('g',{},trunksSvg); mk('rect',{x,y:0,width:w+20,height:2300,fill:cols[i%4]},g);
+    for(let k=0;k<3;k++) mk('rect',{x:x+w*(.2+k*.27),y:0,width:7,height:2300,fill:C.cream,opacity:.07},g);
+    TRUNKS.push({g,i}); x+=w; i++}}
+
+/* end card */
+const END=REEL.end||{};
+const wSpans=[...(END.wordmark||'Hwy 4 Events')].map(ch=>{const s=document.createElement('span');s.textContent=ch;$('wordmark').appendChild(s);return s});
+$('endLine').textContent=END.line||'Everything this weekend at'; $('url').textContent=END.url||'hwy4events.com';
+const sq=$('sq'), sqL=sq.getTotalLength(); sq.setAttribute('stroke-dasharray',sqL+' '+sqL);
+const hops=[[-80,960]].concat([0,.2,.4,.6,.8,1].map(f=>{const p=sq.getPointAtLength(f*sqL);return [p.x+140,p.y+930]})).concat([[1180,950]]);
+const FROG0=1.9, HOP=.2;
+
+/* ================= render(t) ================= */
+function renderScene(s,t){
+  const tau=t-s.start, next=scenes[s.i+1];
+  const vFrom=s.first?-1:s.start-(s.enter==='theme'&&s.theme==='trees'?.1:.3);
+  const vTo=s.start+s.dur+(next&&next.theme==='trees'&&next.enter==='theme'?.05:.35);
+  const vis=t>=vFrom&&t<vTo; show(s.el,vis); if(!vis) return;
+  let tx=0; s.el.style.clipPath='none';
+  if(s.enter==='theme'&&s.theme!=='trees'){const r=lerp(0,2400,eio(P(tau,-.3,.2))); const cy=s.theme==='night'?-200:2150;
+    if(r<2390) s.el.style.clipPath=`circle(${r}px at 540px ${cy}px)`}
+  if(s.enter==='slide') tx=(1-eio(P(tau,-.3,.15)))*1080;
+  if(next&&next.enter==='slide') tx-=eio(P(t,next.start-.3,next.start+.15))*360;
+  s.el.style.transform=tx?`translateX(${tx}px)`:'';
+  if(s.bg) s.bg.render(tau,s,t);
+  if(s.art) s.art.render(tau,s,t);
+  const E=(a,dur=.45)=>s.first?1:eo(P(tau,a,a+dur));
+  if(s.layout==='divider'){
+    const h=eo(P(tau,0,.3)); s.big.style.opacity=P(tau,0,.08); s.big.style.transformOrigin='0 60%'; s.big.style.transform=`scale(${lerp(1.35,1,h)})`;
+    fade(s.sub,E(.25),20); return;
+  }
+  fade(s.chip,E(.12),20);
+  s.lines.forEach((ln,k)=>{const p=s.first?1:eo(P(tau,.22+k*.1,.72+k*.1)); ln.style.transform=`translateY(${(1-p)*105}%)`});
+  fade(s.support,E(.5),20); fade(s.detail,E(.65),20);
+  if(s.pill){const p=s.first?1:eb(P(tau,.85,1.15)); s.pill.style.transform=`scale(${Math.max(0,p)})`; s.pill.style.opacity=s.first?1:P(tau,.85,.95)}
+  if(s.items) s.items.forEach((e,k)=>{const p=eo(P(tau,.8+k*.55,1.3+k*.55)); e.style.opacity=p; e.style.transform=`translateX(${(1-p)*-60}px)`});
+}
+function render(t){
+  scenes.forEach(s=>renderScene(s,t));
+  const ts=scenes.find(s=>s.theme==='trees'&&s.enter==='theme'&&t>=s.start-.65&&t<s.start+.7);
+  show(trunksSvg,!!ts);
+  if(ts) TRUNKS.forEach(k=>{const d=(k.i%5)*.035+(k.i%2)*.02; let y;
+    if(t<ts.start-.02) y=lerp(1960,-160,eo(P(t,ts.start-.6+d,ts.start-.2+d))); else y=lerp(-160,-2400,ei(P(t,ts.start+.02+d,ts.start+.5+d)));
+    k.g.setAttribute('transform',`translate(0 ${y})`)});
+  $('hdr').style.display=t<END0+.5?'flex':'none';
+  const end=$('end'), edge=$('edge'), te=t-END0;
+  const w=eio(P(te,-.2,.3)), Y=lerp(1920,0,w);
+  show(end,te>=-.2); edge.style.display=te>=-.2&&w<1?'block':'none'; edge.style.top=(Y-22)+'px';
+  if(te>=-.2){
+    end.style.clipPath=`inset(${Y}px 0 0 0)`;
+    const m=eb(P(te,.15,.6)); $('bigMillie').style.transform=`scale(${Math.max(0,m)}) rotate(${Math.sin(te*6)*2*P(te,.6,1)}deg)`;
+    wSpans.forEach((s,i)=>{const p=eo(P(te,.35+i*.035,.8+i*.035)); s.style.opacity=p; s.style.transform=`translateY(${(1-p)*70}px)`});
+    sq.setAttribute('stroke-dashoffset',sqL*(1-eio(P(te,.75,1.3))));
+    fade($('endLine'),eo(P(te,.95,1.4)),20); fade($('url'),eo(P(te,1.1,1.55)),20);
+    let fx=-200,fy=960,air=0;
+    if(te>=FROG0){const k=Math.min(hops.length-2,Math.floor((te-FROG0)/HOP)); const p=eio(P(te,FROG0+k*HOP,FROG0+(k+1)*HOP));
+      const a=hops[k],b=hops[k+1]; fx=lerp(a[0],b[0],p); fy=lerp(a[1],b[1],p)-Math.sin(Math.PI*p)*90; air=Math.sin(Math.PI*p)}
+    $('frog').setAttribute('transform',`translate(${fx} ${fy})`);
+    $('frogInner').setAttribute('transform',`scale(${1.7*(1-air*.12)} ${1.7*(1+air*.18)})`);
+    $('endIn').style.opacity=1-P(te,ENDD-.3,ENDD);
+  }
+}
+
+/* ================= playback / export hooks ================= */
+const frame=$('frame'), isExport=/export/.test(location.search);
+let playing=!matchMedia('(prefers-reduced-motion: reduce)').matches, t0=performance.now(), cur=playing?0:(REEL.thumb_time||3);
+const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+$('scrub').max=Math.round(T*1000);
+function setT(t){cur=t; render(t); $('scrub').value=Math.round(t*1000); $('time').textContent=fmt(t)+' / '+fmt(T)}
+function icon(){$('ppi').innerHTML=playing?'<rect x="3" y="2" width="4" height="14" rx="1"/><rect x="11" y="2" width="4" height="14" rx="1"/>':'<path d="M4 2 L16 9 L4 16 Z"/>'; $('pp').setAttribute('aria-label',playing?'Pause':'Play')}
+function loop(now){ if(playing) setT(((now-t0)/1000)%T); requestAnimationFrame(loop) }
+function fit(){ stage.style.transform=`scale(${frame.clientWidth/1080})` }
+window.__duration=T;
+window.__scenes=scenes.map(s=>({start:s.start,dur:s.dur,theme:s.theme,layout:s.layout,art:s.d.art||null,enter:s.enter}));
+window.__end={start:END0,dur:ENDD,frog_start:FROG0,hop:HOP,hops:hops.length-1};
+window.__qaTimes=[0].concat(scenes.map(s=>s.start+Math.min(2.6,s.dur-.3))).concat([END0+1.8]);
+const fontsIn=Promise.all(['800 100px Bitter','700 100px Bitter','500 50px "DM Sans"','700 50px "DM Sans"'].map(f=>document.fonts.load(f).catch(()=>{}))).then(()=>document.fonts.ready);
+if(isExport){
+  document.body.classList.add('export');
+  window.__seek=t=>render(t);
+  fontsIn.then(()=>{fitTitles(); render(0); window.__ready=true});
+}else{
+  new ResizeObserver(fit).observe(frame); fit(); icon();
+  $('pp').onclick=()=>{playing=!playing; if(playing) t0=performance.now()-cur*1000; icon()};
+  $('scrub').oninput=e=>{playing=false; icon(); setT(e.target.value/1000)};
+  fontsIn.then(()=>{fitTitles(); t0=performance.now()-cur*1000; setT(cur); requestAnimationFrame(loop)});
+}
+})();
+</script>
+</body>
+</html>
