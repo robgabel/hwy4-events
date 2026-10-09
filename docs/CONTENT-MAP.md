@@ -54,7 +54,7 @@ touching any content surface.
 - **Storage:** `site_config` keys `weekly_briefing` / `weekend_briefing` (+ `_date`,
   weekend `_label`); archived to `briefing_history` (used for an anti-repetition lookback
   already passed into the prompt).
-- **Cron:** `vercel.json` — daily `0 14 * * *`, weekend `0 14 * * 5`.
+- **Cron:** `vercel.json` — daily `0 8 * * *`, weekend `0 14 * * 4,5` (Thursday refresh of the coming weekend, Friday preview of the next). The weekend tab's "Updated" line is that briefing's own timestamp.
 - **Rendered by** `components/WeeklyBriefing.tsx` (also builds an `Article` JSON-LD with a
   naive `briefing.slice(0, 280)` — see §6).
 - **Voice today:** signed "— Millie 🐾", warm/dry, one dog reference max. This is the

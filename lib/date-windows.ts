@@ -96,6 +96,83 @@ export function thisWeekendRange(today = pacificToday()): DateWindow {
   return { start: fri, end: addDays(fri, 2) };
 }
 
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const MONTH_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+/** "Fri, Oct 9". Noon UTC so the civil date's weekday does not depend on server TZ. */
+function shortCivilDate(iso: string): string {
+  const month = Number(iso.slice(5, 7));
+  const day = Number(iso.slice(8, 10));
+  const dow = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  return `${WEEKDAY_SHORT[dow]}, ${MONTH_SHORT[month - 1]} ${day}`;
+}
+
+export interface WeekendPreview {
+  /** Friday of the previewed weekend, YYYY-MM-DD. */
+  friday: string;
+  /** Sunday of that weekend, YYYY-MM-DD. */
+  sunday: string;
+  /** "Fri, Oct 9 – Sun, Oct 11". The site_config label the refresh compares. */
+  label: string;
+}
+
+/**
+ * The weekend the homepage preview is written for. Distinct from
+ * `thisWeekendRange`, which on Fri–Sun returns the weekend already underway.
+ *
+ * Mon–Thu: the coming Fri–Sun (the tab reads "This Weekend"). A midweek run
+ * rewrites that same window.
+ * Fri–Sun: the following Fri–Sun (the tab reads "Next Weekend"). The Friday
+ * cron builds that preview; Sat/Sun stay on it so a manual re-run does not
+ * jump back to the weekend in progress.
+ *
+ * Pacific civil date. The old route helper used the server clock, so a
+ * Thursday evening (already Friday in UTC) previewed the week after.
+ */
+export function upcomingWeekendPreview(today = pacificToday()): WeekendPreview {
+  const { iso, dow } = today;
+  const daysToFriday =
+    dow === 5 ? 7 : dow === 6 ? 6 : dow === 0 ? 5 : 5 - dow;
+  const friday = addDays(iso, daysToFriday);
+  const sunday = addDays(friday, 2);
+  return {
+    friday,
+    sunday,
+    label: `${shortCivilDate(friday)} \u2013 ${shortCivilDate(sunday)}`,
+  };
+}
+
+/**
+ * The Friday run is the one `briefing_history` row for a weekend. A later run
+ * with the same label is a refresh of that Fri–Sun: rewrite the live text,
+ * do not insert a second history row. Two rows for one weekend make the
+ * anti-repetition lookback argue with the draft it is replacing, and a
+ * Thursday insert would also overwrite that day's daily briefing.
+ */
+export function shouldArchiveWeekendBriefing(
+  previousLabel: string | null | undefined,
+  nextLabel: string
+): boolean {
+  return (previousLabel ?? "") !== nextLabel;
+}
+
+/**
+ * Pacific civil date of a stored briefing timestamp, for the "Updated …" line.
+ * The homepage renders on UTC; formatting without a zone would label a late
+ * Pacific evening as the next day, and the stamp would not match the text.
+ */
+export function formatBriefingUpdated(generatedAt: string, timeZone = TZ): string {
+  return new Date(generatedAt).toLocaleDateString("en-US", {
+    timeZone,
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 /** This week = today through the next 6 days (rolling 7-day window). */
 export function thisWeekRange(): DateWindow {
   const { iso } = pacificToday();
