@@ -22,9 +22,11 @@ import { PERSONA_HUBS } from "../../lib/persona-hubs.js";
 
 const WEEKEND = { start: "2026-10-09", end: "2026-10-11" }; // Fri-Sun
 // Thursday Oct 8 2026, noon Pacific, in the absolute-minutes scale
-// nowPacificMinutes uses (year*525960 + (month-1)*43830 + day*1440 + h*60 + m).
-const minutes = (y: number, mo: number, d: number, h: number, mi = 0) =>
-  y * 525960 + (mo - 1) * 43830 + d * 1440 + h * 60 + mi;
+// nowPacificMinutes uses a UTC day ordinal * 1440 + h*60 + m.
+const minutes = (y: number, mo: number, d: number, h: number, mi = 0) => {
+  const dayOrdinal = Math.floor(Date.UTC(y, mo - 1, d) / 86400000);
+  return dayOrdinal * 1440 + h * 60 + mi;
+};
 const THU_NOON = minutes(2026, 10, 8, 12);
 
 let n = 0;

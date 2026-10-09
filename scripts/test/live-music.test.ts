@@ -30,7 +30,8 @@ const WEEKEND = { start: "2026-09-11", end: "2026-09-13" }; // Fri–Sun
 function at(dateStr: string, time24: string): number {
   const [h, m] = time24.split(":").map(Number);
   const [y, mo, d] = dateStr.split("-").map(Number);
-  return y * 525960 + (mo - 1) * 43830 + d * 1440 + h * 60 + m;
+  const dayOrdinal = Math.floor(Date.UTC(y, mo - 1, d) / 86400000);
+  return dayOrdinal * 1440 + h * 60 + m;
 }
 
 function ev(over: {

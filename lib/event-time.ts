@@ -6,6 +6,24 @@ export type LiveStatus =
   | null;
 
 /**
+ * Civil date + clock as absolute minutes. Day ordinal is
+ * `Date.UTC(year, month-1, day) / 86400000`, times 1440, plus the minutes.
+ * That is monotonic across month ends and year ends. A fixed 43830 minutes
+ * per month (~30.44 days) is not: on the evening of a 31st it sorts the next
+ * morning earlier, so a Nov 1 9am show reads as already over at Oct 31 9pm.
+ */
+export function absoluteCivilMinutes(
+  year: number,
+  month: number,
+  day: number,
+  hours: number,
+  minutes: number
+): number {
+  const dayOrdinal = Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+  return dayOrdinal * 1440 + hours * 60 + minutes;
+}
+
+/**
  * Current Pacific wall-clock time as absolute minutes, in the same scheme as
  * `toAbsoluteMinutes`. Exported so list views can find the next event that
  * hasn't ended yet (the "Up Next" highlight) without re-deriving timezone math.
@@ -26,11 +44,11 @@ export function nowPacificMinutes(): number {
   const get = (type: string) =>
     parseInt(pacificParts.find((p) => p.type === type)?.value || "0", 10);
 
-  return (
-    get("year") * 525960 +
-    (get("month") - 1) * 43830 +
-    get("day") * 1440 +
-    get("hour") * 60 +
+  return absoluteCivilMinutes(
+    get("year"),
+    get("month"),
+    get("day"),
+    get("hour"),
     get("minute")
   );
 }
@@ -169,8 +187,7 @@ export function getEventLiveStatus(
 
 /**
  * Convert a date + time string into absolute minutes for comparison.
- * Uses the same year*525960 + month*43830 + day*1440 scheme — not
- * astronomically precise, but consistent for same-day comparisons.
+ * Same ordinal as `nowPacificMinutes` (`absoluteCivilMinutes`).
  */
 function toAbsoluteMinutes(dateStr: string, timeStr: string): number | null {
   const time24 = to24Hour(timeStr.trim());
@@ -179,7 +196,7 @@ function toAbsoluteMinutes(dateStr: string, timeStr: string): number | null {
   const [hours, minutes] = time24.split(":").map(Number);
   const [year, month, day] = dateStr.split("-").map(Number);
 
-  return year * 525960 + (month - 1) * 43830 + day * 1440 + hours * 60 + minutes;
+  return absoluteCivilMinutes(year, month, day, hours, minutes);
 }
 
 function to24Hour(time: string): string | null {

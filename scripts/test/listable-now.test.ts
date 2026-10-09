@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { isListableNow } from "../../lib/event-time.js";
+import { absoluteCivilMinutes, isListableNow } from "../../lib/event-time.js";
 import {
   NEXT_WEEKEND_FROM_MINUTE,
   nextWeekendHandoffLead,
@@ -23,10 +23,12 @@ import {
 const SUNDAY = "2026-10-04";
 const WEEKEND = { start: "2026-10-02", end: SUNDAY }; // Fri–Sun of the repro
 
+/** Independent of event-time.ts: real UTC day ordinal, not a fixed month length. */
 function at(dateStr: string, time24: string): number {
   const [h, m] = time24.split(":").map(Number);
   const [y, mo, d] = dateStr.split("-").map(Number);
-  return y * 525960 + (mo - 1) * 43830 + d * 1440 + h * 60 + m;
+  const dayOrdinal = Math.floor(Date.UTC(y, mo - 1, d) / 86400000);
+  return dayOrdinal * 1440 + h * 60 + m;
 }
 
 function readRepo(rel: string): string {
@@ -77,6 +79,75 @@ test("multi-day range card stays until the last day's slot ends", () => {
   assert.equal(
     isListableNow({ ...run, isCollapsed: false }, at("2026-10-03", "18:00")),
     false
+  );
+});
+
+test("month-end and year-end: the next morning is still upcoming", () => {
+  // The old (month-1)*43830 scheme sorts Oct 31 9pm AFTER Nov 1 9am.
+  const sundayMorning = { date: "2026-11-01", start_time: "09:00", end_time: "10:00" };
+  const oct31 = at("2026-10-31", "21:00");
+  assert.ok(oct31 < at("2026-11-01", "09:00"));
+  assert.equal(isListableNow(sundayMorning, oct31), true);
+  // Saturday of Halloween weekend (Fri Oct 30–Sun Nov 1). Sunday morning
+  // still on, so the page must not offer next weekend yet.
+  assert.equal(
+    shouldOfferNextWeekend({
+      pageRange: { start: "2026-10-30", end: "2026-11-01" },
+      today: { iso: "2026-10-31", dow: 6 },
+      minutesOfDay: 21 * 60,
+      stillOnCount: 1,
+    }),
+    false
+  );
+
+  // A 30-day month.
+  assert.ok(at("2026-04-30", "21:00") < at("2026-05-01", "09:00"));
+  assert.equal(
+    isListableNow(
+      { date: "2026-05-01", start_time: "09:00", end_time: "10:00" },
+      at("2026-04-30", "21:00")
+    ),
+    true
+  );
+
+  // February, non-leap and leap.
+  assert.ok(at("2026-02-28", "21:00") < at("2026-03-01", "09:00"));
+  assert.equal(
+    isListableNow(
+      { date: "2026-03-01", start_time: "09:00", end_time: "10:00" },
+      at("2026-02-28", "21:00")
+    ),
+    true
+  );
+  assert.ok(at("2024-02-29", "21:00") < at("2024-03-01", "09:00"));
+  assert.equal(
+    isListableNow(
+      { date: "2024-03-01", start_time: "09:00", end_time: "10:00" },
+      at("2024-02-29", "21:00")
+    ),
+    true
+  );
+
+  // Year end.
+  assert.ok(at("2026-12-31", "21:00") < at("2027-01-01", "09:00"));
+  assert.equal(
+    isListableNow(
+      { date: "2027-01-01", start_time: "09:00", end_time: "10:00" },
+      at("2026-12-31", "21:00")
+    ),
+    true
+  );
+});
+
+test("nowPacificMinutes and toAbsoluteMinutes share the day ordinal", () => {
+  const src = readRepo("../../lib/event-time.ts");
+  const calls = src.split("absoluteCivilMinutes(").length - 1;
+  assert.ok(calls >= 3, "definition plus nowPacificMinutes and toAbsoluteMinutes");
+  // The oracle and the export agree, including across a month end.
+  assert.equal(absoluteCivilMinutes(2026, 10, 31, 21, 0), at("2026-10-31", "21:00"));
+  assert.equal(absoluteCivilMinutes(2026, 11, 1, 9, 0), at("2026-11-01", "09:00"));
+  assert.ok(
+    absoluteCivilMinutes(2026, 10, 31, 21, 0) < absoluteCivilMinutes(2026, 11, 1, 9, 0)
   );
 });
 
