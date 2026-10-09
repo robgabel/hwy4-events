@@ -3,6 +3,10 @@ import type { AgentActionRow } from "@/lib/agent/policy";
 import {
   lockColumnsFor,
   lockedViolations,
+  qaFixBeforeSnapshot,
+  qaFixRevertPayload,
+  qaFixSnapshotRestores,
+  qaFixWritePayload,
   validateQaFixPayload,
   type QaFixEventPayload,
 } from "@/lib/agent/qa-fix-event";
@@ -89,15 +93,16 @@ export async function revertAction(
       return error ? { ok: false, error: error.message } : { ok: true };
     }
     case "qa_fix_event": {
-      // before_snapshot holds exactly the columns the fix touched — writing it
-      // back restores the pre-fix values without disturbing anything else.
+      // before_snapshot holds the columns the fix touched, plus __locks_set
+      // naming the lock flags this approval turned on. Revert restores those
+      // columns and clears only those locks. A lock set earlier stays set.
       const snap = action.before_snapshot ?? null;
-      if (!snap || Object.keys(snap).length === 0) {
+      if (!snap || !qaFixSnapshotRestores(snap)) {
         return { ok: false, error: "No before_snapshot recorded — cannot revert." };
       }
       const { error } = await supabase
         .from("hwy4_events")
-        .update(snap)
+        .update(qaFixRevertPayload(snap))
         .eq("id", action.target_id);
       return error ? { ok: false, error: error.message } : { ok: true };
     }
@@ -133,15 +138,21 @@ async function execQaFixEvent(
     };
   }
 
-  const { error } = await supabase.from("hwy4_events").update(v.updates).eq("id", v.eventId);
+  // Same UPDATE as the field write. Guarded columns (LOCK_GUARDS) get their
+  // *_locked flag set so the next scrape leaves the correction in place.
+  // Unguarded columns have no lock to set; see qaFixWritePayload.
+  const { error } = await supabase
+    .from("hwy4_events")
+    .update(qaFixWritePayload(v.updates))
+    .eq("id", v.eventId);
   if (error) return { ok: false, error: error.message };
 
-  // Snapshot only the touched columns (not the lock flags — revert must not
-  // write them back).
-  const beforeSnapshot: Record<string, unknown> = {};
-  for (const c of v.columns) beforeSnapshot[c] = row[c] ?? null;
-
-  return { ok: true, targetTable: "hwy4_events", targetId: v.eventId, beforeSnapshot };
+  return {
+    ok: true,
+    targetTable: "hwy4_events",
+    targetId: v.eventId,
+    beforeSnapshot: qaFixBeforeSnapshot(row, v.columns),
+  };
 }
 
 async function execCreateOrgRow(

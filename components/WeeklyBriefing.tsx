@@ -1,6 +1,7 @@
 import React from "react";
 import Image from "next/image";
 import { SITE_URL } from "@/lib/constants";
+import { formatBriefingUpdated, pacificToday } from "@/lib/date-windows";
 import { REGION } from "@/lib/region";
 import { REGION_OPS } from "@/lib/region-ops";
 import { JsonLd, buildArticle } from "@/lib/schema";
@@ -68,6 +69,12 @@ function BriefingContent({
           {nodes}
         </p>
       ))}
+      {generatedAt && (
+        <p className="mt-4 border-t border-stone-light/20 pt-3 text-xs text-stone-light">
+          Updated{" "}
+          <time dateTime={generatedAt}>{formatBriefingUpdated(generatedAt)}</time>
+        </p>
+      )}
     </>
   );
 }
@@ -82,9 +89,11 @@ export default function WeeklyBriefing({
   const hasWeekend = !!weekendBriefing;
 
   // Fri/Sat/Sun: "Next Weekend" (just generated, covers next week)
-  // Mon-Thu: "This Weekend" (that next weekend is now this weekend)
-  const todayDay = new Date().getDay();
-  const isCurrentlyWeekend = todayDay === 0 || todayDay === 5 || todayDay === 6;
+  // Mon-Thu: "This Weekend" (that next weekend is now this weekend).
+  // Pacific, same anchor as upcomingWeekendPreview, so a Thursday evening
+  // (Friday in UTC) does not flip the tab a day early.
+  const { dow } = pacificToday();
+  const isCurrentlyWeekend = dow === 0 || dow === 5 || dow === 6;
   const weekendTabLabel = isCurrentlyWeekend ? "Next Weekend" : "This Weekend";
 
   const todayDateLabel = generatedAt
@@ -155,19 +164,6 @@ export default function WeeklyBriefing({
         />
       ) : (
         <BriefingContent text={briefing} generatedAt={generatedAt} />
-      )}
-
-      {generatedAt && (
-        <p className="mt-4 border-t border-stone-light/20 pt-3 text-xs text-stone-light">
-          Updated{" "}
-          <time dateTime={generatedAt}>
-            {new Date(generatedAt).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </time>
-        </p>
       )}
     </div>
   );

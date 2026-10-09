@@ -4,7 +4,8 @@
 // the agent_policy row can graduate it to auto-run after a clean canary).
 //
 // Pure module — no Supabase client — so scripts/test/qa-fix-event.test.ts can
-// lock the whitelist and the lock-respect rules without a network.
+// lock the whitelist, the lock-respect rules, and the approve-sets-the-lock
+// payload (#366) without a network.
 
 // Columns the QA agent may propose changing. Deliberately excludes identity /
 // provenance columns (id, dedup_key, source_*, org_slug, venue_key, created_at,
@@ -193,4 +194,75 @@ export function lockedViolations(
     const guard = LOCK_GUARDS[c as QaFixableColumn];
     return guard ? row[guard] === true : false;
   });
+}
+
+// Snapshot key on agent_actions.before_snapshot. It is not a hwy4_events
+// column. Revert reads it to clear only the locks this approval turned on,
+// then strips it before the UPDATE.
+export const QA_FIX_LOCKS_SET_KEY = "__locks_set";
+
+const KNOWN_LOCKS = new Set(
+  Object.values(LOCK_GUARDS).filter((lock): lock is string => typeof lock === "string")
+);
+
+/**
+ * Columns with no LOCK_GUARDS entry (name, date, venue_name, town, address,
+ * category, cost_tier, event_url, artists, status, and the rest of
+ * QA_FIXABLE_COLUMNS) have no *_locked column. An approved fix writes them,
+ * and a later scrape can still overwrite them. cost_tier is covered only when
+ * price is locked too: /api/extract-prices skips price_locked rows, and the
+ * scrapers do not write cost_tier.
+ */
+export function qaFixWritePayload(updates: Record<string, unknown>): Record<string, unknown> {
+  const payload: Record<string, unknown> = { ...updates };
+  for (const lock of lockColumnsFor(Object.keys(updates))) {
+    payload[lock] = true;
+  }
+  return payload;
+}
+
+/** Locks this approval will flip from unset to set. A flag already true was
+ *  set by a person (or an earlier approval) and must not be listed, or revert
+ *  would clear it. */
+export function locksTurnedOn(
+  row: Record<string, unknown>,
+  columns: readonly string[]
+): string[] {
+  return lockColumnsFor(columns)
+    .filter((lock) => row[lock] !== true)
+    .sort();
+}
+
+export function qaFixBeforeSnapshot(
+  row: Record<string, unknown>,
+  columns: readonly string[]
+): Record<string, unknown> {
+  const beforeSnapshot: Record<string, unknown> = {};
+  for (const c of columns) beforeSnapshot[c] = row[c] ?? null;
+  const locks = locksTurnedOn(row, columns);
+  if (locks.length > 0) beforeSnapshot[QA_FIX_LOCKS_SET_KEY] = locks;
+  return beforeSnapshot;
+}
+
+/** True when the snapshot holds at least one restored column. A snapshot that
+ *  is only `__locks_set` has nothing to put back. */
+export function qaFixSnapshotRestores(snap: Record<string, unknown>): boolean {
+  return Object.keys(snap).some((key) => key !== QA_FIX_LOCKS_SET_KEY);
+}
+
+/** Field values from the snapshot, plus `false` on each lock this approval
+ *  turned on. `__locks_set` itself is never sent to hwy4_events. */
+export function qaFixRevertPayload(snap: Record<string, unknown>): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(snap)) {
+    if (key === QA_FIX_LOCKS_SET_KEY) continue;
+    payload[key] = value;
+  }
+  const locks = snap[QA_FIX_LOCKS_SET_KEY];
+  if (Array.isArray(locks)) {
+    for (const lock of locks) {
+      if (typeof lock === "string" && KNOWN_LOCKS.has(lock)) payload[lock] = false;
+    }
+  }
+  return payload;
 }

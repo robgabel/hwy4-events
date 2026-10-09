@@ -24,7 +24,13 @@ import {
 import { getPickRowsBetween } from "@/lib/briefing-picks-data";
 import { FESTIVAL_GUIDES } from "@/lib/event-guides";
 import { addDaysIso } from "@/lib/picks";
-import { pacificToday } from "@/lib/date-windows";
+import {
+  addDays,
+  pacificToday,
+  shouldArchiveWeekendBriefing,
+  upcomingWeekendPreview,
+  type WeekendPreview,
+} from "@/lib/date-windows";
 import { nowPacificMinutes } from "@/lib/event-time";
 
 import { MEDIUM_EFFORT, PREMIUM_COPY_MODEL } from "@/lib/agent/models";
@@ -56,31 +62,7 @@ Rules:
 - Do NOT link members-only events — they don't have public event pages.
 ${ROB_PICKS_RULE}`;
 
-function getUpcomingWeekend(): { friday: string; sunday: string; label: string } {
-  const now = new Date();
-  const day = now.getDay(); // 0=Sun, 5=Fri, 6=Sat
-
-  // Always target NEXT Friday (7 days out), not this Friday.
-  // The cron runs on Fridays and generates a preview for the following weekend.
-  const daysUntilNextFriday = ((5 - day + 7) % 7) || 7; // 0 becomes 7 (next week)
-
-  const friday = new Date(now);
-  friday.setDate(now.getDate() + daysUntilNextFriday);
-  const sunday = new Date(friday);
-  sunday.setDate(friday.getDate() + 2);
-
-  const fmt = (d: Date) => d.toISOString().split("T")[0];
-  const labelFmt = (d: Date) =>
-    d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-
-  return {
-    friday: fmt(friday),
-    sunday: fmt(sunday),
-    label: `${labelFmt(friday)} – ${labelFmt(sunday)}`,
-  };
-}
-
-async function getWeekendEvents() {
+async function getWeekendEvents(weekend: WeekendPreview) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -88,15 +70,14 @@ async function getWeekendEvents() {
   }
 
   const supabase = createClient(supabaseUrl, serviceKey);
-  const { friday, sunday } = getUpcomingWeekend();
 
   const { data, error } = await supabase
     .from("hwy4_events")
     .select(
       "name, date, start_time, end_time, venue_name, venue_key, town, category, artists, price, robs_pick, pick_reason, sold_out, status, description, event_url, visibility"
     )
-    .gte("date", friday)
-    .lte("date", sunday)
+    .gte("date", weekend.friday)
+    .lte("date", weekend.sunday)
     .neq("status", "cancelled")
     .neq("is_routine", true)
     .order("date", { ascending: true })
@@ -110,19 +91,18 @@ async function getWeekendEvents() {
   return data || [];
 }
 
-async function getCancelledWeekendEvents() {
+async function getCancelledWeekendEvents(weekend: WeekendPreview) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) return [];
 
   const supabase = createClient(supabaseUrl, serviceKey);
-  const { friday, sunday } = getUpcomingWeekend();
 
   const { data } = await supabase
     .from("hwy4_events")
     .select("name, date, venue_name, town")
-    .gte("date", friday)
-    .lte("date", sunday)
+    .gte("date", weekend.friday)
+    .lte("date", weekend.sunday)
     .eq("status", "cancelled")
     .order("date", { ascending: true });
 
@@ -158,6 +138,7 @@ async function getRecentBriefings() {
 }
 
 async function generateWeekendBriefing(
+  weekend: WeekendPreview,
   events: Record<string, unknown>[],
   recentBriefings: { briefing_date: string; text: string }[],
   cancelledEvents: { name: string; date: string; venue_name: string; town: string }[] = [],
@@ -169,7 +150,7 @@ async function generateWeekendBriefing(
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
-  const { friday, sunday, label } = getUpcomingWeekend();
+  const { friday, sunday, label } = weekend;
 
   const formatEvent = (e: Record<string, unknown>) => {
     const slug = generateEventSlug(e.name as string, e.date as string, e.town as string);
@@ -190,9 +171,7 @@ async function generateWeekendBriefing(
 
   // Group by day
   const fridayEvents = events.filter((e) => e.date === friday);
-  const saturdayDate = new Date(friday);
-  saturdayDate.setDate(saturdayDate.getDate() + 1);
-  const saturdayStr = saturdayDate.toISOString().split("T")[0];
+  const saturdayStr = addDays(friday, 1);
   const saturdayEvents = events.filter((e) => e.date === saturdayStr);
   const sundayEvents = events.filter((e) => e.date === sunday);
 
@@ -258,7 +237,11 @@ async function generateWeekendBriefing(
   return text;
 }
 
-async function saveWeekendBriefing(text: string, eventCount: number) {
+async function saveWeekendBriefing(
+  weekend: WeekendPreview,
+  text: string,
+  eventCount: number
+) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -266,7 +249,17 @@ async function saveWeekendBriefing(text: string, eventCount: number) {
   }
 
   const supabase = createClient(supabaseUrl, serviceKey);
-  const { label } = getUpcomingWeekend();
+
+  // Read the label first. History is written before the label changes, so a
+  // failed archive leaves the old label in place and a retry still archives.
+  // A refresh (same label) never reaches that insert.
+  const { data: existingLabel, error: labelReadError } = await supabase
+    .from("site_config")
+    .select("value")
+    .eq("key", "weekend_briefing_label")
+    .maybeSingle();
+  if (labelReadError) throw labelReadError;
+  const archive = shouldArchiveWeekendBriefing(existingLabel?.value, weekend.label);
 
   // Save the briefing text
   const { error: textError } = await supabase.from("site_config").upsert(
@@ -275,32 +268,36 @@ async function saveWeekendBriefing(text: string, eventCount: number) {
   );
   if (textError) throw textError;
 
-  // Save the generation timestamp
+  // Save the generation timestamp. A refresh updates this, so the weekend
+  // tab's "Updated" line matches the text just written.
   const { error: dateError } = await supabase.from("site_config").upsert(
     { key: "weekend_briefing_date", value: new Date().toISOString() },
     { onConflict: "key" }
   );
   if (dateError) throw dateError;
 
-  // Save the weekend date range label
+  if (archive) {
+    // One history row per weekend (the Friday preview). Keyed by generation
+    // date, same as before, so the daily lookback's shape is unchanged.
+    const { error: historyError } = await supabase
+      .from("briefing_history")
+      .upsert(
+        {
+          briefing_date: new Date().toISOString().split("T")[0],
+          text: text,
+          event_count: eventCount,
+        },
+        { onConflict: "briefing_date" }
+      );
+    if (historyError) throw historyError;
+  }
+
+  // Label last: once it matches, a retry will not insert a second history row.
   const { error: labelError } = await supabase.from("site_config").upsert(
-    { key: "weekend_briefing_label", value: label },
+    { key: "weekend_briefing_label", value: weekend.label },
     { onConflict: "key" }
   );
   if (labelError) throw labelError;
-
-  // Archive to briefing_history
-  const { error: historyError } = await supabase
-    .from("briefing_history")
-    .upsert(
-      {
-        briefing_date: new Date().toISOString().split("T")[0],
-        text: text,
-        event_count: eventCount,
-      },
-      { onConflict: "briefing_date" }
-    );
-  if (historyError) throw historyError;
 }
 
 export async function GET(request: Request) {
@@ -309,14 +306,17 @@ export async function GET(request: Request) {
   if (cronDenied) return cronDenied;
 
   try {
+    // One window for the whole request. Friday cron: the following Fri–Sun.
+    // Thursday cron: that same weekend, now one day out, reread from the DB.
+    const weekend = upcomingWeekendPreview();
     const [events, recentBriefings, cancelledEvents] = await Promise.all([
-      getWeekendEvents(),
+      getWeekendEvents(weekend),
       getRecentBriefings(),
-      getCancelledWeekendEvents(),
+      getCancelledWeekendEvents(weekend),
     ]);
     // Rob's Picks under the homepage's own rule (issue #356), plus one
     // mark-your-calendar pick from the two weeks after this weekend.
-    const { friday, sunday } = getUpcomingWeekend();
+    const { friday, sunday } = weekend;
     const lookaheadRows = await getPickRowsBetween(
       createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -338,6 +338,7 @@ export async function GET(request: Request) {
       }
     );
     const raw = await generateWeekendBriefing(
+      weekend,
       events,
       recentBriefings,
       cancelledEvents,
@@ -354,7 +355,7 @@ export async function GET(request: Request) {
     logLinkRepairs("weekend-briefing", repair);
     const briefing = repair.text;
     logMissingPicks("weekend-briefing", missingPicks(briefing, picks.inWindow));
-    await saveWeekendBriefing(briefing, events.length);
+    await saveWeekendBriefing(weekend, briefing, events.length);
 
     revalidatePath("/");
 

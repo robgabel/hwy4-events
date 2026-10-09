@@ -133,7 +133,12 @@ VALUES (
 ```
 
 Rob approves in **/admin/actions** (they also surface in the Inbox badge); the
-executor snapshots before writing, so every fix is revertible. Do NOT update
+executor snapshots before writing, so every fix is revertible. On a guarded
+column the same update sets the existing lock (`times_locked`, `price_locked`,
+`description_locked`, `poster_locked`, `visibility_locked`,
+`family_friendly_locked`), so the next scrape leaves the correction in place.
+Revert clears only the locks that approval turned on. Columns with no lock
+flag stay writable by the scrapers. Do NOT update
 `hwy4_events` directly — the proposal queue IS the approval gate. (After a
 2-week clean canary Rob flips the `agent_policy` row to auto-execute; the
 filing format stays identical.)
