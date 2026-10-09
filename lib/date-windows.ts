@@ -96,6 +96,103 @@ export function thisWeekendRange(today = pacificToday()): DateWindow {
   return { start: fri, end: addDays(fri, 2) };
 }
 
+/** Sunday 6:00 PM Pacific. From here, /this-weekend points at the next weekend
+ *  even if a late show is still on. */
+export const NEXT_WEEKEND_FROM_MINUTE = 18 * 60;
+
+export type PacificNow = {
+  iso: string;
+  dow: number;
+  /** Minutes since Pacific midnight, 0–1439. */
+  minutesOfDay: number;
+};
+
+/** Pacific civil date, weekday, and minutes since midnight for one instant. */
+export function pacificNow(instant: Date = new Date()): PacificNow {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  let hour = parseInt(get("hour"), 10);
+  const minute = parseInt(get("minute"), 10);
+  // A few engines report midnight as 24:00.
+  if (hour === 24) hour = 0;
+  return {
+    iso: `${get("year")}-${get("month")}-${get("day")}`,
+    dow: DOW[get("weekday")],
+    minutesOfDay: hour * 60 + minute,
+  };
+}
+
+/**
+ * The Friday–Sunday after `weekend`. `weekend.end` is that weekend's Sunday;
+ * the next Friday is five days later. Does not change what "this weekend"
+ * means. The canonical /this-weekend page keeps `thisWeekendRange`.
+ */
+export function nextWeekendRange(weekend: DateWindow): DateWindow {
+  const start = addDays(weekend.end, 5);
+  return { start, end: addDays(start, 2) };
+}
+
+/** Stay-overlay URL for the weekend after `weekend`. Same shape as HWY-40. */
+export function nextWeekendPath(weekend: DateWindow): string {
+  const next = nextWeekendRange(weekend);
+  return `/this-weekend?from=${next.start}&to=${next.end}`;
+}
+
+/**
+ * Show the next-weekend link on the canonical weekend page.
+ *
+ * True when nothing in the window is still on, or on that window's Sunday
+ * from 6:00 PM Pacific even if a late show remains. Mon–Thu already list the
+ * upcoming weekend, so the link stays off, unless this render is a cached
+ * page still showing the weekend that just ended.
+ */
+export function shouldOfferNextWeekend(args: {
+  pageRange: DateWindow;
+  today: { iso: string; dow: number };
+  minutesOfDay: number;
+  stillOnCount: number;
+}): boolean {
+  const { pageRange, today, minutesOfDay, stillOnCount } = args;
+  const weekendDay = today.dow === 5 || today.dow === 6 || today.dow === 0;
+  const pageIsThisWeekend =
+    today.iso >= pageRange.start && today.iso <= pageRange.end;
+  const pageWeekendHasPassed = today.iso > pageRange.end;
+
+  if (!weekendDay && !pageWeekendHasPassed) return false;
+  if (weekendDay && !pageIsThisWeekend && !pageWeekendHasPassed) return false;
+
+  if (stillOnCount === 0) return true;
+  return (
+    today.dow === 0 &&
+    today.iso === pageRange.end &&
+    minutesOfDay >= NEXT_WEEKEND_FROM_MINUTE
+  );
+}
+
+/** One sentence above the next-weekend link. No em dashes. */
+export function nextWeekendHandoffLead(args: {
+  stillOnCount: number;
+  listedCount: number;
+  todayIso: string;
+  pageRange: DateWindow;
+}): string {
+  if (args.stillOnCount > 0) return "A few things are still on tonight.";
+  if (args.listedCount > 0) return "This weekend's events have wrapped up.";
+  if (args.todayIso >= args.pageRange.start) {
+    return "Nothing else is listed for the rest of this weekend.";
+  }
+  return "Nothing is listed this weekend yet.";
+}
+
 /** This week = today through the next 6 days (rolling 7-day window). */
 export function thisWeekRange(): DateWindow {
   const { iso } = pacificToday();

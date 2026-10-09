@@ -67,6 +67,40 @@ export function hasEventEnded(
 }
 
 /**
+ * A row a list can still show. Same clock as `hasEventEnded`.
+ *
+ * A collapsed multi-day card (`isCollapsed` + `endDate`) stays up until the
+ * LAST day's slot ends, matching the homepage: the card's date is day one,
+ * and checking that morning's start against a later afternoon would hide a
+ * festival that still has tomorrow. An ordinary row is judged on its own date.
+ * A null end runs four hours from the start; a timeless row runs through
+ * 23:59. An unparseable start stays visible.
+ */
+export type ListableNowEvent = {
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  endDate?: string | null;
+  isCollapsed?: boolean | null;
+};
+
+export function isListableNow(
+  event: ListableNowEvent,
+  nowMinutes: number
+): boolean {
+  const lastDay =
+    event.isCollapsed && event.endDate ? event.endDate : event.date;
+  return !hasEventEnded(lastDay, event.start_time, event.end_time, nowMinutes);
+}
+
+export function filterListableNow<T extends ListableNowEvent>(
+  events: readonly T[],
+  nowMinutes: number
+): T[] {
+  return events.filter((event) => isListableNow(event, nowMinutes));
+}
+
+/**
  * Has an event already begun, relative to `nowMinutes` (Pacific, from
  * `nowPacificMinutes`)? Mirrors the live-badge's notion of "started": only an
  * event with a parseable clock start can be "started" — a timeless/all-day event

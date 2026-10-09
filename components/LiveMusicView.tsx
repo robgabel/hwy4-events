@@ -3,7 +3,6 @@ import Image from "next/image";
 import { format, parseISO } from "date-fns";
 
 import { SITE_URL } from "@/lib/constants";
-import { Hwy4Event } from "@/lib/types";
 import { getEventsInRange } from "@/lib/events-data";
 import { getPublishedArtists } from "@/lib/artists-data";
 import { artistGenreMap } from "@/lib/artists";
@@ -16,7 +15,7 @@ import {
   buildWebPage,
 } from "@/lib/schema";
 import { pageDateModified } from "@/lib/date-modified";
-import SimpleEventList from "@/components/SimpleEventList";
+import LiveEventDays from "@/components/LiveEventDays";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecastsByTown } from "@/lib/weather";
 import { getPublishedTownSlugs } from "@/app/towns/town-content";
@@ -37,16 +36,6 @@ import {
 
 // IntentPageView sibling for /live-music: same cached feed + SimpleEventList
 // + JSON-LD spine, plus Tonight / This weekend / Upcoming lenses.
-
-function groupByDate(events: Hwy4Event[]): [string, Hwy4Event[]][] {
-  const map = new Map<string, Hwy4Event[]>();
-  for (const e of events) {
-    const arr = map.get(e.date) ?? [];
-    arr.push(e);
-    map.set(e.date, arr);
-  }
-  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-}
 
 function publishedTownLinks() {
   const published = new Set(getPublishedTownSlugs());
@@ -74,13 +63,15 @@ export default async function LiveMusicView({
     getPublishedArtists(),
   ]);
   const artistGenres = artistGenreMap(artists);
+  // selectLiveMusic drops ended shows, including Friday once it is over, so
+  // JSON-LD matches this render. LiveEventDays re-checks during the 30-minute
+  // cache so a show that ends after generation leaves the list.
   const events = selectLiveMusic(inRange, lens, {
     todayIso: today.iso,
     nowMinutes: nowPacificMinutes(),
     weekend,
     horizonEnd: fetchEnd,
   });
-  const grouped = groupByDate(events);
   const townLinks = publishedTownLinks();
 
   const rangeLabel =
@@ -211,66 +202,44 @@ export default async function LiveMusicView({
         </Link>
       </nav>
 
-      {grouped.length > 0 ? (
-        <div className="mb-10 space-y-8">
-          {(() => {
-            let priorCount = 0;
-            return grouped.map(([date, dayEvents]) => {
-              const localIdx = 4 - priorCount;
-              priorCount += dayEvents.length;
-              const newsletterAfterIndex =
-                localIdx >= 0 && localIdx < dayEvents.length
-                  ? localIdx
-                  : undefined;
-              return (
-                <section key={date}>
-                  <h2 className="font-display mb-3 border-b border-stone-light/30 pb-1 text-lg font-semibold text-forest">
-                    {format(parseISO(date), "EEEE, MMMM d")}
-                  </h2>
-                  <SimpleEventList
-                    events={dayEvents}
-                    newsletterAfterIndex={newsletterAfterIndex}
-                    newsletterSource={`live_music_${lens}`}
-                    forecastsByTown={forecastsByTown}
-                    artistGenres={artistGenres}
-                  />
-                </section>
-              );
-            });
-          })()}
-        </div>
-      ) : (
-        <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">
-          {cfg.empty}{" "}
-          {lens === "tonight" ? (
-            <>
-              Check{" "}
-              <Link
-                href={liveMusicHref("weekend")}
-                className="font-medium text-pine hover:underline"
-              >
-                this weekend
-              </Link>
-              {" or "}
-              <Link
-                href={liveMusicHref("upcoming")}
-                className="font-medium text-pine hover:underline"
-              >
-                upcoming shows
-              </Link>
-              .
-            </>
-          ) : (
-            <>
-              Check the{" "}
-              <Link href="/" className="font-medium text-pine hover:underline">
-                full corridor list
-              </Link>
-              , or check back. New events get added daily.
-            </>
-          )}
-        </p>
-      )}
+      <LiveEventDays
+        events={events}
+        newsletterSource={`live_music_${lens}`}
+        forecastsByTown={forecastsByTown}
+        artistGenres={artistGenres}
+        empty={
+          <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">
+            {cfg.empty}{" "}
+            {lens === "tonight" ? (
+              <>
+                Check{" "}
+                <Link
+                  href={liveMusicHref("weekend")}
+                  className="font-medium text-pine hover:underline"
+                >
+                  this weekend
+                </Link>
+                {" or "}
+                <Link
+                  href={liveMusicHref("upcoming")}
+                  className="font-medium text-pine hover:underline"
+                >
+                  upcoming shows
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                Check the{" "}
+                <Link href="/" className="font-medium text-pine hover:underline">
+                  full corridor list
+                </Link>
+                , or check back. New events get added daily.
+              </>
+            )}
+          </p>
+        }
+      />
 
       <section className="mb-10">
         <h2 className="font-display mb-3 text-lg font-semibold text-forest">

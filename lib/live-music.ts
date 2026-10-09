@@ -10,7 +10,7 @@
 // Relative (not "@/") imports so the scripts/ test runner can import this.
 
 import type { Hwy4Event } from "./types";
-import { hasEventEnded } from "./event-time";
+import { isListableNow } from "./event-time";
 import {
   addDays,
   pacificToday,
@@ -61,11 +61,11 @@ export type LiveMusicSelectOpts = {
 
 /**
  * Lens filter over a feed already bounded by getUpcomingEvents.
- * Tonight: same Pacific calendar day, not yet ended (hasEventEnded).
- * Weekend: Friday–Sunday window (thisWeekendRange), including already-played
- *   nights — matches /this-weekend, which is a weekend lineup, not a clock.
- * Upcoming: today through the horizon; today's ended shows drop so the list
- *   starts with something still useful.
+ * Tonight: same Pacific calendar day, not yet ended (isListableNow).
+ * Weekend: Friday–Sunday window (thisWeekendRange). Shows that have already
+ *   ended drop, same as /this-weekend, so a Friday night is gone on Saturday.
+ * Upcoming: today through the horizon; ended shows drop so the list starts
+ *   with something still useful.
  */
 export function selectLiveMusic<
   T extends Pick<
@@ -76,25 +76,20 @@ export function selectLiveMusic<
   const music = events.filter(isLiveMusicEvent);
   if (lens === "tonight") {
     return music.filter(
-      (e) =>
-        e.date === opts.todayIso &&
-        !hasEventEnded(e.date, e.start_time, e.end_time, opts.nowMinutes)
+      (e) => e.date === opts.todayIso && isListableNow(e, opts.nowMinutes)
     );
   }
   if (lens === "weekend") {
     return music.filter(
-      (e) => e.date >= opts.weekend.start && e.date <= opts.weekend.end
+      (e) =>
+        e.date >= opts.weekend.start &&
+        e.date <= opts.weekend.end &&
+        isListableNow(e, opts.nowMinutes)
     );
   }
   return music.filter((e) => {
     if (e.date < opts.todayIso || e.date > opts.horizonEnd) return false;
-    if (
-      e.date === opts.todayIso &&
-      hasEventEnded(e.date, e.start_time, e.end_time, opts.nowMinutes)
-    ) {
-      return false;
-    }
-    return true;
+    return isListableNow(e, opts.nowMinutes);
   });
 }
 

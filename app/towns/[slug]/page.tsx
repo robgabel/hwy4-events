@@ -34,21 +34,11 @@ import { marketGuideForTown } from "@/lib/market-pages";
 import { meetMeGuideForTown } from "@/lib/meet-me-pages";
 import { personaHubsForTown } from "@/lib/persona-hubs";
 import { pacificToday, thisWeekendRange } from "@/lib/date-windows";
-import { nowPacificMinutes } from "@/lib/event-time";
-import { generateEventSlug } from "@/lib/slugs";
-import {
-  buildWeekendAnswer,
-  nearestTownWithEvents,
-  selectWeekendEvents,
-  weekdayName,
-  weekendEmptyLine,
-  weekendHeading,
-} from "@/lib/town-weekend";
+import { filterListableNow, nowPacificMinutes } from "@/lib/event-time";
+import { weekendHeading, type WeekendEvent } from "@/lib/town-weekend";
+import TownWeekendLive from "@/components/TownWeekendLive";
 
 export const revalidate = 3600;
-
-// Weekend-block list length before it hands off to /this-weekend.
-const WEEKEND_LIST_CAP = 8;
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -131,27 +121,44 @@ export default async function TownPage({ params }: PageProps) {
   // Public feed. Town pages have no Clubs toggle, so members-only rows stay
   // hidden. getEventsInTown already applies this gate before its cap; calling
   // it here keeps the view on the same predicate if that cap changes.
-  const events = filterListableEvents(townEvents);
+  // Drop events that have already ended so the ItemList and the "Coming up"
+  // cards agree at render. SimpleEventList re-checks after hydration because
+  // this page is cached for an hour.
+  const serverNowMinutes = nowPacificMinutes();
+  const serverTodayIso = pacificToday().iso;
+  const events = filterListableNow(
+    filterListableEvents(townEvents),
+    serverNowMinutes
+  );
   const artistGenres = artistGenreMap(artists);
   // Every event on this page is in one town, so a one-entry map is all the
   // cards need (and keeps the client payload to a single town's forecast).
   const forecastsByTown: TownForecasts = { [town.name]: townForecast };
 
-  // HWY-61: the dated "this weekend" answer, shaped like the question people
-  // actually ask an engine. Live rows only; ISR (revalidate above) keeps it
-  // current, and already-finished events drop so Sunday doesn't list Friday.
-  const nowMinutes = nowPacificMinutes();
-  const weekendListable = filterListableEvents(weekendRows);
-  const weekendEvents = selectWeekendEvents(weekendListable, town.name, weekend, nowMinutes);
-  const weekendAnswer = buildWeekendAnswer(town.name, weekendEvents);
-  const weekendFallback = weekendAnswer
-    ? null
-    : nearestTownWithEvents(
-        townsByDistance(town).map((t) => t.name),
-        weekendListable,
-        weekend,
-        nowMinutes
-      );
+  // HWY-61: the dated "this weekend" answer. TownWeekendLive filters with
+  // this clock on the first paint, then re-reads it after hydration so a
+  // show that ends during the hourly cache leaves the sentence.
+  const weekendRowsLive: WeekendEvent[] = filterListableEvents(weekendRows).map(
+    (e) => ({
+      id: e.id,
+      name: e.name,
+      date: e.date,
+      start_time: e.start_time,
+      end_time: e.end_time,
+      venue_name: e.venue_name,
+      town: e.town,
+      visibility: e.visibility,
+      robs_pick: e.robs_pick,
+    })
+  );
+  const nearestTowns = townsByDistance(town).map((t) => t.name);
+  const townHrefs: Record<string, string> = {};
+  for (const name of nearestTowns) {
+    const slugForTown = townSlug(name);
+    townHrefs[name] = getTownContent(slugForTown)
+      ? `/towns/${slugForTown}`
+      : `/?town=${encodeURIComponent(name)}`;
+  }
 
   const nearby = pickNearbyTowns(town, 3);
   // Guide callouts this town hosts: seasonal festival guide(s) (hideAfter-gated,
@@ -171,7 +178,7 @@ export default async function TownPage({ params }: PageProps) {
   // query targets (Arnold car show, Hermitfest, Brice concerts).
   const personaHubs = personaHubsForTown(slug);
   const guides: { path: string; heading: string; blurb: string }[] = [
-    ...festivalGuidesForTown(slug, pacificToday().iso),
+    ...festivalGuidesForTown(slug, serverTodayIso),
     ...(holidayGuide ? [holidayGuide] : []),
     ...(marketGuide ? [marketGuide] : []),
     ...(meetMeGuide ? [meetMeGuide] : []),
@@ -274,60 +281,15 @@ export default async function TownPage({ params }: PageProps) {
         <h2 className="font-display mb-2 text-xl font-semibold text-forest">
           {weekendHeading(town.name, weekend)}
         </h2>
-        {weekendAnswer ? (
-          <>
-            <p className="speakable leading-relaxed text-stone">{weekendAnswer}</p>
-            {/* Every weekend event, so "Plus N more" is never a promise the
-             * page can't keep (the upcoming list below starts from today and
-             * fills with weekday rows first). */}
-            <ul className="mt-3 space-y-1 text-sm">
-              {weekendEvents.slice(0, WEEKEND_LIST_CAP).map((e) => (
-                <li key={e.id} className="text-stone">
-                  <span className="text-stone-light">{weekdayName(e.date)}: </span>
-                  <Link
-                    href={`/events/${generateEventSlug(e.name, e.date, e.town)}`}
-                    className="font-medium text-pine hover:underline"
-                  >
-                    {e.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            {weekendEvents.length > WEEKEND_LIST_CAP && (
-              <p className="mt-2 text-sm">
-                <Link href="/this-weekend" className="font-medium text-pine hover:underline">
-                  See all {weekendEvents.length} on the weekend page &rarr;
-                </Link>
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="speakable leading-relaxed text-stone">
-            {weekendEmptyLine(town.name, weekend, pacificToday().iso)}{" "}
-            {weekendFallback ? (
-              <>
-                The nearest town with something on is{" "}
-                <Link
-                  href={
-                    getTownContent(townSlug(weekendFallback.town))
-                      ? `/towns/${townSlug(weekendFallback.town)}`
-                      : `/?town=${encodeURIComponent(weekendFallback.town)}`
-                  }
-                  className="font-medium text-pine hover:underline"
-                >
-                  {weekendFallback.town}
-                </Link>
-                , or see{" "}
-              </>
-            ) : (
-              <>See </>
-            )}
-            <Link href="/this-weekend" className="font-medium text-pine hover:underline">
-              everything on the corridor this weekend
-            </Link>
-            .
-          </p>
-        )}
+        <TownWeekendLive
+          town={town.name}
+          range={weekend}
+          rows={weekendRowsLive}
+          nearestTowns={nearestTowns}
+          townHrefs={townHrefs}
+          serverNowMinutes={serverNowMinutes}
+          serverTodayIso={serverTodayIso}
+        />
       </section>
 
       {/* Lead: always-visible teaser + collapsed full intro behind a Read
@@ -381,27 +343,31 @@ export default async function TownPage({ params }: PageProps) {
         <h2 className="font-display mb-4 text-xl font-semibold text-forest">
           Coming up in {town.name}
         </h2>
-        {events.length > 0 ? (
-          <>
-            <SimpleEventList events={events.slice(0, 10)} newsletterAfterIndex={4} newsletterSource={`town_${slug}`} forecastsByTown={forecastsByTown} artistGenres={artistGenres} />
-            {events.length > 10 && (
-              <p className="mt-4 text-sm text-stone">
-                <Link
-                  href={`/?town=${encodeURIComponent(town.name)}`}
-                  className="font-medium text-pine hover:underline"
-                >
-                  See all {events.length} upcoming events in {town.name} &rarr;
-                </Link>
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-sm text-stone">
-            Nothing on the calendar in {town.name} right now. Check the{" "}
-            <Link href="/" className="font-medium text-pine hover:underline">
-              full corridor list
+        <SimpleEventList
+          dropEnded
+          events={events.slice(0, 10)}
+          newsletterAfterIndex={4}
+          newsletterSource={`town_${slug}`}
+          forecastsByTown={forecastsByTown}
+          artistGenres={artistGenres}
+          empty={
+            <p className="rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-sm text-stone">
+              Nothing on the calendar in {town.name} right now. Check the{" "}
+              <Link href="/" className="font-medium text-pine hover:underline">
+                full corridor list
+              </Link>
+              . There&apos;s usually something nearby.
+            </p>
+          }
+        />
+        {events.length > 10 && (
+          <p className="mt-4 text-sm text-stone">
+            <Link
+              href={`/?town=${encodeURIComponent(town.name)}`}
+              className="font-medium text-pine hover:underline"
+            >
+              See all {events.length} upcoming events in {town.name} &rarr;
             </Link>
-            . There&apos;s usually something nearby.
           </p>
         )}
       </section>
