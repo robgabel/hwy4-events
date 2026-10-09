@@ -9,6 +9,7 @@ import { scrapeArnoldRimTrail } from "./scrapers/arnold-rim-trail.js";
 import { scrapeBriceStation } from "./scrapers/brice-station.js";
 import { scrapeMurphysIrishPub } from "./scrapers/murphys-irish-pub.js";
 import { scrapeProspect772 } from "./scrapers/prospect-772.js";
+import { scrapeStevenot } from "./scrapers/stevenot.js";
 import { scrapeRedCross } from "./scrapers/red-cross.js";
 import { scrapeSequoiaWoods } from "./scrapers/sequoia-woods.js";
 import { scrapeFirecrawlSource } from "./scrapers/firecrawl-generic.js";
@@ -48,7 +49,13 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  *     products). GoCalaveras titles the same nights "Live Music @ Prospect 772"
  *     with no band and no end time. Not blocklisted, so GoCalaveras still
  *     covers a show the featured block has not picked up; this source writes
- *     last (issue #359)
+ *     after GoCalaveras (issue #359)
+ *   - stevenot: the winery's own Tribe calendar. GoCalaveras had the only copy
+ *     and it named the wrong Sunday act, the wrong Halloween clock, and missed
+ *     the later Sundays. Owner-blocklisted (pattern "stevenot", owner
+ *     "stevenot") so GoCalaveras skips the venue and cannot revert a
+ *     correction on the next exact-match. Corrections keep the stored title
+ *     when that title's URL must stay (issue #373)
  *
  * Everything else goes through the config-driven generic Firecrawl runner.
  */
@@ -82,9 +89,15 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   "hwy4-fb-pages": scrapeHwy4FbPages,
   // prospect-772 is the winery's Square calendar. Same guard as Brice: not
   // blocklisted (a show GoCalaveras lists before the featured block picks it
-  // up would otherwise vanish), registered last so the band, 9pm end, and
-  // ticket URL land on top of the generic GoCalaveras row.
+  // up would otherwise vanish), so the band, 9pm end, and ticket URL land on
+  // top of the generic GoCalaveras row.
   "prospect-772": scrapeProspect772,
+  // stevenot is the winery's Tribe calendar, and that feed is the whole
+  // calendar. Owner-blocklisted, so GoCalaveras never writes these rows (the
+  // EventON id left on a correction would otherwise exact-match and restore
+  // Perarez / the 7pm Halloween clock). The pairing in scripts/lib/stevenot.ts
+  // updates an existing row instead of inserting a second one.
+  "stevenot": scrapeStevenot,
 };
 
 const SCRAPERS: Record<string, () => Promise<void>> = {

@@ -402,7 +402,7 @@ test("Boomer's hand-retitled slug 301s to the spaced title", () => {
   assert.equal(pickFallbackEvent([boomer], stale), boomer);
 });
 
-test("Prospect 772 is not blocklisted, and the scraper is the last writer", () => {
+test("Prospect 772 is not blocklisted, and it writes after GoCalaveras", () => {
   const row = {
     name: "Breakaway Live Music @ Prospect 772",
     venue_name: "Prospect 772 Winery",
@@ -413,7 +413,7 @@ test("Prospect 772 is not blocklisted, and the scraper is the last writer", () =
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../scrape.ts"), "utf8");
   const block = src.slice(src.indexOf("const SPECIAL_SCRAPERS"), src.indexOf("const SCRAPERS"));
   const keys = [...block.matchAll(/"([^"]+)":/g)].map((m) => m[1]);
-  assert.equal(keys.at(-1), "prospect-772");
-  assert.equal(keys.at(-2), "hwy4-fb-pages");
+  assert.equal(keys.at(-1), "stevenot");
+  assert.equal(keys.at(-2), "prospect-772");
   assert.ok(keys.indexOf("gocalaveras") < keys.indexOf("prospect-772"));
 });

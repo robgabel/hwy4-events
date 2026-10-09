@@ -95,6 +95,17 @@ const MANUAL_VENUE_PATTERNS: readonly ManualPattern[] = [
   { pattern: "cougar rock", owner: "arnold-rim-trail" },
   { pattern: "volunteer trail workday", owner: "arnold-rim-trail" },
   { pattern: "art trailhead", owner: "arnold-rim-trail" },
+  // Stevenot Winery's own Tribe calendar is the full schedule
+  // (scripts/scrapers/stevenot.ts, issue #373). GoCalaveras's copy names the
+  // wrong Sunday act and the wrong Halloween clock. A correction that leaves
+  // GoCalaveras's EventON id on the row is exact-matched the next morning, and
+  // resolveWrittenName only protects a stored name from a placeholder title, so
+  // "Perarez Live Music @ Stevenot Winery" and the 7pm party clock write back.
+  // The pattern matches the venue ("Stevenot Winery") and any title that names
+  // it. `owner` lets the Stevenot scraper through; every aggregator is blocked.
+  // Unlike Prospect 772, this feed is the whole calendar, so skipping
+  // GoCalaveras here does not drop a show the organizer has not published.
+  { pattern: "stevenot", owner: "stevenot" },
 ];
 
 export interface MatchableEvent {
