@@ -1,9 +1,10 @@
 // Regression lock for the live-music hub (lib/live-music.ts, HWY-37).
 //
 // Load-bearing: the three lenses (tonight is Pacific-day + not-ended;
-// weekend is the shared Friday–Sunday window; upcoming drops today's ended
-// shows), public live_music only, and the fixed copy's voice rules (no em
-// dashes; every Q&A answer resolves in its first sentence).
+// weekend is the shared Friday–Sunday window and drops shows that have
+// already ended; upcoming drops ended shows), public live_music only, and
+// the fixed copy's voice rules (no em dashes; every Q&A answer resolves in
+// its first sentence).
 //
 // Run: `cd scripts && npm test`
 
@@ -29,7 +30,8 @@ const WEEKEND = { start: "2026-09-11", end: "2026-09-13" }; // Fri–Sun
 function at(dateStr: string, time24: string): number {
   const [h, m] = time24.split(":").map(Number);
   const [y, mo, d] = dateStr.split("-").map(Number);
-  return y * 525960 + (mo - 1) * 43830 + d * 1440 + h * 60 + m;
+  const dayOrdinal = Math.floor(Date.UTC(y, mo - 1, d) / 86400000);
+  return dayOrdinal * 1440 + h * 60 + m;
 }
 
 function ev(over: {
@@ -108,17 +110,23 @@ test("tonight lens: timeless row stays until end of the Pacific day", () => {
   assert.equal(select([allDay], "tonight", at(TODAY, "23:59")).length, 0);
 });
 
-test("weekend lens: Friday–Sunday inclusive, including already-played nights", () => {
+test("weekend lens: Friday–Sunday, dropping shows that have already ended", () => {
   const fri = ev({ date: "2026-09-11", start_time: "19:00", end_time: "22:00" });
-  const sat = ev({ date: TODAY });
+  const satEarly = ev({ date: TODAY, start_time: "12:00", end_time: "14:00" });
+  const sat = ev({ date: TODAY, start_time: "19:00", end_time: "22:00" });
   const sun = ev({ date: "2026-09-13" });
   const mon = ev({ date: "2026-09-14" });
   const thu = ev({ date: "2026-09-10" });
-  // Saturday 6pm: Friday's show has ended. Weekend still lists it.
-  const out = select([fri, sat, sun, mon, thu], "weekend", at(TODAY, "18:00"));
+  // Saturday 6pm: Friday night and Saturday afternoon are over. Tonight and
+  // Sunday stay. Monday and Thursday are outside the window.
+  const out = select(
+    [fri, satEarly, sat, sun, mon, thu],
+    "weekend",
+    at(TODAY, "18:00")
+  );
   assert.deepEqual(
-    out.map((e) => e.date),
-    ["2026-09-11", TODAY, "2026-09-13"]
+    out.map((e) => e.date + (e.start_time ?? "")),
+    [TODAY + "19:00", "2026-09-13" + "19:00"]
   );
 });
 

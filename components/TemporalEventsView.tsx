@@ -3,7 +3,6 @@ import Image from "next/image";
 import { format, parseISO } from "date-fns";
 
 import { SITE_URL } from "@/lib/constants";
-import { Hwy4Event } from "@/lib/types";
 import { getEventsInRange } from "@/lib/events-data";
 import { getPublishedArtists } from "@/lib/artists-data";
 import { artistGenreMap } from "@/lib/artists";
@@ -16,27 +15,32 @@ import {
   buildWebPage,
 } from "@/lib/schema";
 import { pageDateModified } from "@/lib/date-modified";
-import SimpleEventList from "@/components/SimpleEventList";
+import LiveEventDays from "@/components/LiveEventDays";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecastsByTown } from "@/lib/weather";
 import { getPublishedTownSlugs, getTownContent } from "@/app/towns/town-content";
-import { TEMPORAL_CONFIG, type WindowKey } from "@/lib/date-windows";
+import {
+  TEMPORAL_CONFIG,
+  nextWeekendPath,
+  nextWeekendRange,
+  pacificNow,
+  type WindowKey,
+} from "@/lib/date-windows";
 import { stayHref, type StayRange } from "@/lib/stay-range";
 import CopyPageLink from "@/components/CopyPageLink";
 import { filterListableEvents } from "@/lib/list-visibility";
+import { filterListableNow, nowPacificMinutes } from "@/lib/event-time";
 
 // Event fetching moved to lib/events-data.ts (getEventsInRange) — an in-memory
 // filter over the site-wide cached upcoming-events set, so this view adds no
 // database scan of its own.
 
-function groupByDate(events: Hwy4Event[]): [string, Hwy4Event[]][] {
-  const map = new Map<string, Hwy4Event[]>();
-  for (const e of events) {
-    const arr = map.get(e.date) ?? [];
-    arr.push(e);
-    map.set(e.date, arr);
-  }
-  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+function spanLabel(range: { start: string; end: string }): string {
+  if (range.start === range.end) return format(parseISO(range.start), "EEEE, MMMM d");
+  return `${format(parseISO(range.start), "EEEE, MMMM d")} through ${format(
+    parseISO(range.end),
+    "EEEE, MMMM d"
+  )}`;
 }
 
 /** Published town pages, ordered west-to-east by elevation, for cross-links. */
@@ -84,18 +88,26 @@ export default async function TemporalEventsView({
   ]);
   // Public feed. No Clubs toggle on temporal or stay-range pages, so
   // members-only rows stay out (same gate as the homepage with nothing checked).
-  const events = filterListableEvents(inRange);
+  // Ended rows drop here so JSON-LD matches the HTML generated this hour.
+  // LiveEventDays re-checks the clock after hydration, because this page is
+  // cached for an hour and a Sunday visitor should not see a finished show.
+  const listed = filterListableEvents(inRange);
+  const serverNow = pacificNow();
+  const events = filterListableNow(listed, nowPacificMinutes());
   const artistGenres = artistGenreMap(artists);
-  const grouped = groupByDate(events);
   const townLinks = publishedTownLinks();
+  const handoff =
+    windowKey === "weekend" && !isStay
+      ? {
+          href: nextWeekendPath(range),
+          dateLabel: spanLabel(nextWeekendRange(range)),
+          pageRange: range,
+          serverNow,
+          listedCount: listed.length,
+        }
+      : null;
 
-  const rangeLabel =
-    range.start === range.end
-      ? format(parseISO(range.start), "EEEE, MMMM d")
-      : `${format(parseISO(range.start), "EEEE, MMMM d")} through ${format(
-          parseISO(range.end),
-          "EEEE, MMMM d"
-        )}`;
+  const rangeLabel = spanLabel(range);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -172,51 +184,27 @@ export default async function TemporalEventsView({
         </div>
       </div>
 
-      {/* Events grouped by day */}
-      {grouped.length > 0 ? (
-        <div className="mb-10 space-y-8">
-          {(() => {
-            // Drop the inline newsletter after the 5th event overall (index 4),
-            // matching the homepage/SEO pages. Events are split across day
-            // groups, so track a running offset and hand the local index to
-            // whichever day group the 5th event lands in.
-            let priorCount = 0;
-            return grouped.map(([date, dayEvents]) => {
-              const localIdx = 4 - priorCount;
-              priorCount += dayEvents.length;
-              const newsletterAfterIndex =
-                localIdx >= 0 && localIdx < dayEvents.length
-                  ? localIdx
-                  : undefined;
-              return (
-                <section key={date}>
-                  <h2 className="font-display mb-3 border-b border-stone-light/30 pb-1 text-lg font-semibold text-forest">
-                    {format(parseISO(date), "EEEE, MMMM d")}
-                  </h2>
-                  <SimpleEventList
-                    events={dayEvents}
-                    newsletterAfterIndex={newsletterAfterIndex}
-                    newsletterSource={`temporal_${windowKey}`}
-                    forecastsByTown={forecastsByTown}
-                    artistGenres={artistGenres}
-                  />
-                </section>
-              );
-            });
-          })()}
-        </div>
-      ) : (
-        <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">
-          {isStay
-            ? "Nothing on the calendar for these dates yet. The list only shows events already listed, so a quiet stretch is honest."
-            : "Nothing on the calendar for this window yet."}{" "}
-          Check the{" "}
-          <Link href="/" className="font-medium text-pine hover:underline">
-            full corridor list
-          </Link>
-          , or check back. New events get added daily.
-        </p>
-      )}
+      {/* Events grouped by day. Ended rows drop again on the client so the
+          hourly cache cannot keep a finished show in front of a visitor. */}
+      <LiveEventDays
+        events={events}
+        newsletterSource={`temporal_${windowKey}`}
+        forecastsByTown={forecastsByTown}
+        artistGenres={artistGenres}
+        handoff={handoff}
+        empty={
+          <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">
+            {isStay
+              ? "Nothing on the calendar for these dates yet. The list only shows events already listed, so a quiet stretch is honest."
+              : "Nothing on the calendar for this window yet."}{" "}
+            Check the{" "}
+            <Link href="/" className="font-medium text-pine hover:underline">
+              full corridor list
+            </Link>
+            , or check back. New events get added daily.
+          </p>
+        }
+      />
 
       {/* Newsletter */}
       <section className="mb-10">

@@ -1,11 +1,12 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import type { Hwy4Event, CollapsedEvent } from "@/lib/types";
 import EventCard from "./EventCard";
 import NewsletterSignup from "./NewsletterSignup";
 import type { TownForecasts } from "@/lib/weather";
 import { filterListableEvents } from "@/lib/list-visibility";
+import { filterListableNow, nowPacificMinutes } from "@/lib/event-time";
 
 /**
  * Minimal client-rendered list of EventCards, used by server pages (town,
@@ -26,6 +27,8 @@ export default function SimpleEventList({
   forecastsByTown = null,
   artistGenres = {},
   enabledOrgs,
+  dropEnded = false,
+  empty = null,
 }: {
   events: Hwy4Event[];
   newsletterAfterIndex?: number;
@@ -39,9 +42,29 @@ export default function SimpleEventList({
    * Clubs toggle holds if a page grows that control.
    */
   enabledOrgs?: ReadonlySet<string>;
+  /**
+   * Hide rows whose slot has already ended. The clock is read after mount so
+   * a cached server render does not hydrate against a newer minute. Pass
+   * `empty` for the state where every row drops.
+   */
+  dropEnded?: boolean;
+  empty?: ReactNode;
 }) {
-  const visible = filterListableEvents(events, enabledOrgs);
-  if (visible.length === 0) return null;
+  const [nowMinutes, setNowMinutes] = useState<number | null>(null);
+  useEffect(() => {
+    if (!dropEnded) return;
+    const tick = () => setNowMinutes(nowPacificMinutes());
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [dropEnded]);
+
+  const listable = filterListableEvents(events, enabledOrgs);
+  const visible =
+    dropEnded && nowMinutes !== null
+      ? filterListableNow(listable, nowMinutes)
+      : listable;
+  if (visible.length === 0) return <>{empty}</>;
   return (
     <div className="space-y-3">
       {visible.map((e, i) => (

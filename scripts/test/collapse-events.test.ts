@@ -52,11 +52,12 @@ const ev = (
 });
 
 // Pacific wall-clock minutes in the same scheme as lib/event-time.ts
-// (year*525960 + (month-1)*43830 + day*1440 + hour*60 + minute).
+// (UTC day ordinal * 1440 + hour*60 + minute).
 const clock = (dateIso: string, hhmm: string): number => {
   const [y, m, d] = dateIso.split("-").map(Number);
   const [h, min] = hhmm.split(":").map(Number);
-  return y * 525960 + (m - 1) * 43830 + d * 1440 + h * 60 + min;
+  const dayOrdinal = Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+  return dayOrdinal * 1440 + h * 60 + min;
 };
 
 const sortByDate = (events: EventListItem[]) =>

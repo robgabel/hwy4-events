@@ -28,7 +28,8 @@ const TODAY = "2026-10-05";
 function at(time24: string, dateStr = TODAY): number {
   const [h, m] = time24.split(":").map(Number);
   const [y, mo, d] = dateStr.split("-").map(Number);
-  return y * 525960 + (mo - 1) * 43830 + d * 1440 + h * 60 + m;
+  const dayOrdinal = Math.floor(Date.UTC(y, mo - 1, d) / 86400000);
+  return dayOrdinal * 1440 + h * 60 + m;
 }
 const MORNING = at("08:00");
 

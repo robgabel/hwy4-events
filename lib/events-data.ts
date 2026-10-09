@@ -20,6 +20,7 @@ import { Hwy4Event, EventListItem } from "@/lib/types";
 import { gateEventDescription } from "@/lib/description-quality";
 import { pacificToday, addDays } from "@/lib/date-windows";
 import { filterListableEvents } from "@/lib/list-visibility";
+import { filterListableNow, nowPacificMinutes } from "@/lib/event-time";
 import type { SitemapEventRow } from "@/lib/sitemap";
 
 export const EVENTS_CACHE_TAG = "events";
@@ -179,9 +180,10 @@ export async function getEventsInRange(
 
 /**
  * Upcoming events in a single town, capped (already deduped upstream).
- * The cap counts rows a card may show: routine rows and members-only rows
- * with no club opted in are dropped first, so they cannot crowd out public
- * events. Pass `enabledOrgs` only when a Clubs toggle is on the page.
+ * The cap counts rows a card may show: routine rows, members-only rows
+ * with no club opted in, and events that have already ended are dropped
+ * first, so they cannot crowd out something still on. Pass `enabledOrgs`
+ * only when a Clubs toggle is on the page.
  */
 export async function getEventsInTown(
   townName: string,
@@ -189,9 +191,12 @@ export async function getEventsInTown(
   enabledOrgs?: ReadonlySet<string>
 ): Promise<Hwy4Event[]> {
   const all = await getUpcomingEvents();
-  return filterListableEvents(
-    all.filter((e) => e.town === townName),
-    enabledOrgs
+  return filterListableNow(
+    filterListableEvents(
+      all.filter((e) => e.town === townName),
+      enabledOrgs
+    ),
+    nowPacificMinutes()
   ).slice(0, limit);
 }
 

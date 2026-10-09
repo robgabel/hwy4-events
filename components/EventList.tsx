@@ -24,7 +24,7 @@ import {
 } from "@/lib/date-utils";
 import { collapseEventList, isHighlightEvent } from "@/lib/collapse-events";
 import { pacificToday, pacificDateGroupKind } from "@/lib/date-windows";
-import { nowPacificMinutes, hasEventEnded, hasEventStarted } from "@/lib/event-time";
+import { nowPacificMinutes, hasEventEnded, hasEventStarted, isListableNow } from "@/lib/event-time";
 import { matchesKidsFilter } from "@/lib/family-friendly";
 import { isListableEvent } from "@/lib/list-visibility";
 
@@ -51,13 +51,9 @@ const ALL_CATEGORIES: EventCategory[] = [
 const NEWSLETTER_AFTER_EVENT_INDEX = 4;
 
 // A multi-day collapsed event is represented by its FIRST day, but it's only
-// "over" once the final day's slot has passed — so check ended against endDate.
-// (hasEventEnded folds the date into its comparison, so a future endDate is
-// never treated as ended even if the morning start_time has gone by today.)
+// "over" once the final day's slot has passed. isListableNow checks endDate.
 function eventHasEnded(event: CollapsedEvent, nowMinutes: number): boolean {
-  const lastDay =
-    event.isCollapsed && event.endDate ? event.endDate : event.date;
-  return hasEventEnded(lastDay, event.start_time, event.end_time, nowMinutes);
+  return !isListableNow(event, nowMinutes);
 }
 
 function groupEventsByDate(events: CollapsedEvent[]) {

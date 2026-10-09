@@ -1,9 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
-import { format, parseISO } from "date-fns";
 
 import { SITE_URL } from "@/lib/constants";
-import { Hwy4Event } from "@/lib/types";
 import { getEventsInRange } from "@/lib/events-data";
 import { getPublishedArtists } from "@/lib/artists-data";
 import { artistGenreMap } from "@/lib/artists";
@@ -16,29 +14,20 @@ import {
   buildWebPage,
 } from "@/lib/schema";
 import { pageDateModified } from "@/lib/date-modified";
-import SimpleEventList from "@/components/SimpleEventList";
+import LiveEventDays from "@/components/LiveEventDays";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import { getForecastsByTown } from "@/lib/weather";
 import { getPublishedTownSlugs } from "@/app/towns/town-content";
 import { pacificToday } from "@/lib/date-windows";
 import { addDaysIso } from "@/lib/picks";
 import { INTENT_CONFIG, type IntentKey } from "@/lib/intent-pages";
+import { filterListableNow, nowPacificMinutes } from "@/lib/event-time";
 
 // The intent-page sibling of TemporalEventsView: same live-calendar spine
 // (shared cached fetch, SimpleEventList, JSON-LD, town cross-links), but the
 // window is intent-shaped (a filter over the corridor set) and the page opens
 // with fixed editorial copy + a short Q&A written for the queries visitors
 // actually type (BUSINESS-PLAN §8: editorial over programmatic).
-
-function groupByDate(events: Hwy4Event[]): [string, Hwy4Event[]][] {
-  const map = new Map<string, Hwy4Event[]>();
-  for (const e of events) {
-    const arr = map.get(e.date) ?? [];
-    arr.push(e);
-    map.set(e.date, arr);
-  }
-  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-}
 
 function publishedTownLinks() {
   const published = new Set(getPublishedTownSlugs());
@@ -61,8 +50,10 @@ export default async function IntentPageView({
     getPublishedArtists(),
   ]);
   const artistGenres = artistGenreMap(artists);
-  const events = inRange.filter(cfg.filter);
-  const grouped = groupByDate(events);
+  // Same ended-event rule as the homepage. JSON-LD uses this generation-time
+  // set; LiveEventDays drops anything that ends during the hourly cache.
+  const listed = inRange.filter(cfg.filter);
+  const events = filterListableNow(listed, nowPacificMinutes());
   const townLinks = publishedTownLinks();
 
   const siblings = Object.values(INTENT_CONFIG).filter(
@@ -169,44 +160,21 @@ export default async function IntentPageView({
         </Link>
       </nav>
 
-      {/* Events grouped by day */}
-      {grouped.length > 0 ? (
-        <div className="mb-10 space-y-8">
-          {(() => {
-            let priorCount = 0;
-            return grouped.map(([date, dayEvents]) => {
-              const localIdx = 4 - priorCount;
-              priorCount += dayEvents.length;
-              const newsletterAfterIndex =
-                localIdx >= 0 && localIdx < dayEvents.length
-                  ? localIdx
-                  : undefined;
-              return (
-                <section key={date}>
-                  <h2 className="font-display mb-3 border-b border-stone-light/30 pb-1 text-lg font-semibold text-forest">
-                    {format(parseISO(date), "EEEE, MMMM d")}
-                  </h2>
-                  <SimpleEventList
-                    events={dayEvents}
-                    newsletterAfterIndex={newsletterAfterIndex}
-                    newsletterSource={`intent_${cfg.key}`}
-                    forecastsByTown={forecastsByTown}
-                    artistGenres={artistGenres}
-                  />
-                </section>
-              );
-            });
-          })()}
-        </div>
-      ) : (
-        <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">
-          Nothing in this lane on the calendar right now. Check the{" "}
-          <Link href="/" className="font-medium text-pine hover:underline">
-            full corridor list
-          </Link>
-          , or check back. New events get added daily.
-        </p>
-      )}
+      <LiveEventDays
+        events={events}
+        newsletterSource={`intent_${cfg.key}`}
+        forecastsByTown={forecastsByTown}
+        artistGenres={artistGenres}
+        empty={
+          <p className="mb-10 rounded-lg border border-stone-light/30 bg-white px-4 py-3 text-stone">
+            Nothing in this lane on the calendar right now. Check the{" "}
+            <Link href="/" className="font-medium text-pine hover:underline">
+              full corridor list
+            </Link>
+            , or check back. New events get added daily.
+          </p>
+        }
+      />
 
       {/* Q&A — written to resolve the searches that land here */}
       <section className="mb-10">
