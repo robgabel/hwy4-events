@@ -22,10 +22,14 @@
  *     day). A second Stevenot row the same day would make that 301 ambiguous,
  *     which is why the correction updates in place instead of inserting.
  *
- * The scraper omits `source_event_id` on a correction so GoCalaveras's EventON
- * id stays the exact-match key, and it clears `artists` in memory before
+ * The scraper omits `source_event_id` on a correction so the Tribe id does not
+ * replace GoCalaveras's EventON id, and it clears `artists` in memory before
  * `buildExactMatchUpdate` when the act is wrong. That fill replaces the list.
- * The stock union would keep Perarez beside Skull Country.
+ * The stock union would keep Perarez beside Skull Country. The EventON id is
+ * also why GoCalaveras is blocklisted from this venue (manual-sources.ts,
+ * owner "stevenot"): the next aggregator pass exact-matches that id and would
+ * write the Perarez name and the 7pm Halloween clock back. `resolveWrittenName`
+ * only keeps a stored name when the incoming title is a placeholder.
  *
  * Town is Murphys. The feed's city is Vallecito, the winery's postal city, and
  * every stored row is already Murphys. Writing Vallecito would move the slug
@@ -37,7 +41,9 @@
 
 import { artistIdentityKey } from "../../lib/artist-identity.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
+import { SITE_URL } from "../../lib/constants.js";
 import { normalizeName } from "../../lib/event-identity.js";
+import { REGION } from "../../lib/region.js";
 import { parseStatedTime } from "../../lib/verify-times.js";
 import { decodeEntities, htmlToText, normalizeCost, splitDateTime } from "./tribe.js";
 
@@ -49,12 +55,20 @@ export const STEVENOT_ORG_SLUG = "stevenot";
 export const STEVENOT_SOURCE_NAME = "Stevenot Winery";
 
 /**
- * Identifying UA. Probed 2026-10-09: this string gets HTTP 200 JSON from the
- * Tribe endpoint. The shared Tribe client's Mozilla UA, and a Chrome UA, get
- * a SiteGround 403 page (no captcha challenge). The scraper uses this UA and
- * throws on anything that is not JSON. It does not call Firecrawl.
+ * Identifying UA, same shape as WEATHER_USER_AGENT in lib/constants.ts.
+ * Probed 2026-10-09: an identifying bot UA gets HTTP 200 JSON. The shared
+ * Tribe client's Mozilla UA can get a SiteGround 403 page (no captcha). The
+ * scraper uses this UA and throws on anything that is not JSON. It does not
+ * call Firecrawl.
  */
-export const STEVENOT_UA = "Hwy4EventsBot/1.0 (+https://hwy4events.com)";
+export const STEVENOT_UA = `${REGION.botName}/1.0 (${SITE_URL})`;
+
+/** True when the feed returned events and every one failed to parse. That is
+ *  a format change. A quiet calendar (nothing returned, or everything parsed
+ *  and already past) is not this. */
+export function unparsedStevenotFeed(rawCount: number, mappedCount: number): boolean {
+  return rawCount > 0 && mappedCount === 0;
+}
 
 const CLICK_HERE_TAIL = /\s*[–—-]\s*click here\s*$/i;
 const SUNDAY_TITLE = /^(.+?)\s*[–—-]\s*free live music\s*$/i;

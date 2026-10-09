@@ -52,9 +52,10 @@ import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape
  *     after GoCalaveras (issue #359)
  *   - stevenot: the winery's own Tribe calendar. GoCalaveras had the only copy
  *     and it named the wrong Sunday act, the wrong Halloween clock, and missed
- *     the later Sundays. Not blocklisted. Registered last so the venue's row
- *     wins, and corrections keep the stored title when that title's URL must
- *     stay (issue #373)
+ *     the later Sundays. Owner-blocklisted (pattern "stevenot", owner
+ *     "stevenot") so GoCalaveras skips the venue and cannot revert a
+ *     correction on the next exact-match. Corrections keep the stored title
+ *     when that title's URL must stay (issue #373)
  *
  * Everything else goes through the config-driven generic Firecrawl runner.
  */
@@ -91,11 +92,11 @@ const SPECIAL_SCRAPERS: Record<string, () => Promise<void>> = {
   // up would otherwise vanish), so the band, 9pm end, and ticket URL land on
   // top of the generic GoCalaveras row.
   "prospect-772": scrapeProspect772,
-  // stevenot is the winery's Tribe calendar. Not blocklisted: GoCalaveras
-  // still lists these nights, and dropping them would lose a show this feed
-  // has not published yet. Last, so a correction lands after GoCalaveras on
-  // the same run. The pairing in scripts/lib/stevenot.ts updates the existing
-  // row instead of inserting a second one.
+  // stevenot is the winery's Tribe calendar, and that feed is the whole
+  // calendar. Owner-blocklisted, so GoCalaveras never writes these rows (the
+  // EventON id left on a correction would otherwise exact-match and restore
+  // Perarez / the 7pm Halloween clock). The pairing in scripts/lib/stevenot.ts
+  // updates an existing row instead of inserting a second one.
   "stevenot": scrapeStevenot,
 };
 

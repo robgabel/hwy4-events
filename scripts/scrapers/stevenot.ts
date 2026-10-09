@@ -20,6 +20,7 @@ import {
   categoryForStevenot,
   correctionSnapshot,
   mapStevenotEvent,
+  unparsedStevenotFeed,
   type StevenotResident,
   type StevenotShow,
 } from "../lib/stevenot.js";
@@ -50,10 +51,13 @@ type StevenotRow = StevenotResident & {
 /**
  * Stevenot Winery — the organizer's own Tribe calendar.
  *
- * Registered LAST in SPECIAL_SCRAPERS and deliberately not blocklisted.
- * GoCalaveras still lists the Sundays; this run writes after it and puts the
- * venue's act, clock, and price on the row GoCalaveras already inserted.
- * Parsing and the slug-preserving pairing live in scripts/lib/stevenot.ts.
+ * Owner-blocklisted in manual-sources.ts (`stevenot` / owner `stevenot`), the
+ * Arnold Rim Trail pattern. GoCalaveras stays on for every other venue and
+ * skips this one, so the next EventON exact-match cannot write Perarez or the
+ * 7pm Halloween clock back. This file does not filter with
+ * isManuallyManagedEvent: the guard keeps aggregators off these rows, and
+ * this scraper is the owner. Parsing and the slug-preserving pairing live in
+ * scripts/lib/stevenot.ts.
  *
  * Fetch is this file. The shared Tribe transport uses a Mozilla UA that this
  * host answers with HTTP 403, then retries through a hosted render. A 403 or
@@ -166,11 +170,17 @@ export async function scrapeStevenot(): Promise<void> {
 
   const raw = await fetchStevenotEvents(run.today);
   const shows: StevenotShow[] = [];
+  let mapped = 0;
   for (const ev of raw) {
     const show = mapStevenotEvent(ev);
-    if (show && show.date >= run.today) shows.push(show);
+    if (!show) continue;
+    mapped++;
+    if (show.date >= run.today) shows.push(show);
   }
-  console.log(`Mapped ${shows.length} future show(s) from ${raw.length} Tribe event(s)`);
+  console.log(`Mapped ${mapped} show(s) from ${raw.length} Tribe event(s); ${shows.length} still ahead`);
+  if (unparsedStevenotFeed(raw.length, mapped)) {
+    throw new Error(`Stevenot feed returned ${raw.length} events and none parsed`);
+  }
   if (shows.length === 0) {
     console.log("No future Stevenot shows to write.");
     return;

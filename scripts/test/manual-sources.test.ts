@@ -163,6 +163,28 @@ test("owning one pattern does not unlock somebody else's curated rows", () => {
   );
 });
 
+// --- Stevenot: owner-aware blocking (2026-10-09, #373) --------------------
+//
+// The Tribe feed is the winery's whole calendar. GoCalaveras exact-matches the
+// EventON id a correction leaves behind and writes the wrong act and the wrong
+// Halloween clock back. The pattern blocks every aggregator; the Stevenot
+// scraper is the owner.
+
+test("aggregators are blocked from Stevenot, and the Stevenot scraper is not", () => {
+  const rows = [
+    { name: "Perarez Live Music @ Stevenot Winery", venue_name: "Stevenot Winery" },
+    { name: "Skull Country Live Music @ Stevenot Winery", venue_name: "Stevenot Winery" },
+    { name: "Stevenot Winery Halloween Party", venue_name: "Stevenot Winery" },
+    { name: "SOLD OUT! Wine Club Release Party", venue_name: "Stevenot Winery" },
+    { name: "Live Music", venue_name: "Stevenot Winery" },
+  ];
+  for (const row of rows) {
+    assert.equal(isManuallyManagedEvent(row), true, `unblocked: ${row.name}`);
+    assert.equal(isManuallyManagedEvent(row, "gocalaveras"), true, `unblocked: ${row.name}`);
+    assert.equal(isManuallyManagedEvent(row, "stevenot"), false, `owner blocked: ${row.name}`);
+  }
+});
+
 test("unrelated Arnold events are untouched by the ART patterns", () => {
   // The patterns are ART-specific on purpose — a bare "arnold" or "trail" would
   // sweep up half the corridor (cf. the deliberate "lake alpine lodge" narrowing).

@@ -19,17 +19,21 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isSameEvent } from "../../lib/event-identity.js";
-import { generateEventSlug } from "../../lib/slugs.js";
-import { pickFallbackEvent } from "../../lib/events.js";
 import { classifyEventCategory } from "../../lib/categorize.js";
+import { SITE_URL, WEATHER_USER_AGENT } from "../../lib/constants.js";
+import { isSameEvent } from "../../lib/event-identity.js";
+import { pickFallbackEvent } from "../../lib/events.js";
+import { REGION } from "../../lib/region.js";
+import { generateEventSlug } from "../../lib/slugs.js";
 import { isManuallyManagedEvent } from "../lib/manual-sources.js";
 import {
+  STEVENOT_UA,
   actsCompatible,
   assignStevenotShows,
   categoryForStevenot,
   correctionSnapshot,
   mapStevenotEvent,
+  unparsedStevenotFeed,
   type StevenotResident,
   type StevenotShow,
 } from "../lib/stevenot.js";
@@ -449,8 +453,9 @@ test("a shared Sunday blurb fuzzy-matches, and that path would keep both acts", 
   };
   // The menu blurb is shared, so the matcher says these are one show. The
   // fuzzy write unions both acts. The correction therefore updates by id with
-  // the list cleared, and it leaves GoCalaveras's source_event_id in place so
-  // the next aggregator pass exact-matches (and does not union).
+  // the list cleared. It does not write the Tribe id over the EventON id.
+  // GoCalaveras is blocklisted from the venue so that id is never exact-matched
+  // again; if it were, the payload would restore the Perarez name.
   assert.equal(isSameEvent(gocal, feed), true);
   const merged = buildStrongMatchUpdate(
     {
@@ -478,13 +483,25 @@ test("a shared Sunday blurb fuzzy-matches, and that path would keep both acts", 
   assert.ok(merged.artists?.includes("Skull Country"));
 });
 
-test("Stevenot is not blocklisted, and the scraper is the last writer", () => {
+test("aggregators are blocked from Stevenot; the organizer scraper is not", () => {
   const row = {
     name: "Skull Country Live Music @ Stevenot Winery",
     venue_name: "Stevenot Winery",
   };
-  assert.equal(isManuallyManagedEvent(row), false);
-  assert.equal(isManuallyManagedEvent(row, "gocalaveras"), false);
+  // GoCalaveras, Visit Murphys, and the Facebook scrapers call with no slug.
+  assert.equal(isManuallyManagedEvent(row), true);
+  assert.equal(isManuallyManagedEvent(row, "gocalaveras"), true);
+  assert.equal(isManuallyManagedEvent(row, "stevenot"), false);
+  // Venue alone covers a title that never says the winery (the wine club).
+  assert.equal(
+    isManuallyManagedEvent({ name: "SOLD OUT! Wine Club Release Party", venue_name: "Stevenot Winery" }),
+    true
+  );
+  // A different venue stays on GoCalaveras.
+  assert.equal(
+    isManuallyManagedEvent({ name: "Live Music @ Murphys Irish Pub", venue_name: "Murphys Irish Pub" }),
+    false
+  );
 
   const src = readFileSync(join(here, "../scrape.ts"), "utf8");
   const block = src.slice(src.indexOf("const SPECIAL_SCRAPERS"), src.indexOf("const SCRAPERS"));
@@ -500,4 +517,164 @@ test("Stevenot is not blocklisted, and the scraper is the last writer", () => {
   assert.match(scraper, /STEVENOT_UA/);
   assert.match(scraper, /ignoreDuplicates: true/);
   assert.match(scraper, /toExtracted\(assignment\.show, assignment\.nameToWrite, false\)/);
+  assert.match(scraper, /unparsedStevenotFeed/);
+  assert.equal(STEVENOT_UA, `${REGION.botName}/1.0 (${SITE_URL})`);
+  assert.equal(STEVENOT_UA, WEATHER_USER_AGENT);
+});
+
+test("a feed that returns events and parses none is a failure; a past-only feed is quiet", () => {
+  assert.equal(unparsedStevenotFeed(15, 0), true);
+  assert.equal(unparsedStevenotFeed(0, 0), false);
+  assert.equal(unparsedStevenotFeed(15, 15), false);
+  assert.equal(unparsedStevenotFeed(3, 3), false);
+});
+
+test("day 2: GoCalaveras then Stevenot changes neither corrected row", async () => {
+  const { buildExactMatchUpdate, generateDedupKey, rowChanged } = await loadDedup();
+  const now = "2026-10-10T15:00:00.000Z";
+  const skullShow = skull();
+  const party = halloween();
+
+  // Day 1 already happened: Stevenot corrected the GoCalaveras rows in place
+  // and left the EventON ids where they were.
+  const skullRow = {
+    id: "oct-25",
+    name: "Skull Country Live Music @ Stevenot Winery",
+    date: "2026-10-25",
+    town: "Murphys",
+    venue_name: "Stevenot Winery",
+    venue_key: "stevenot",
+    description: skullShow.description,
+    start_time: "13:00",
+    end_time: "16:00",
+    price: "Free",
+    event_url: skullShow.eventUrl,
+    address: "2849 Batten Rd, Vallecito, CA 95251",
+    image_url: null,
+    category: "live_music",
+    artists: ["Skull Country"],
+    source_event_id: "192971",
+    family_friendly: false,
+  };
+  const partyRow = {
+    id: "oct-30",
+    name: "Stevenot Winery Halloween Party",
+    date: "2026-10-30",
+    town: "Murphys",
+    venue_name: "Stevenot Winery",
+    venue_key: "stevenot",
+    description: party.description,
+    start_time: "16:00",
+    end_time: "20:00",
+    price: "$25.00",
+    event_url: party.eventUrl,
+    address: "2849 Batten Rd, Vallecito, CA 95251",
+    image_url: null,
+    category: "wine",
+    artists: null,
+    source_event_id: "193044",
+    family_friendly: false,
+  };
+  const gocalSkull = {
+    name: "Perarez Live Music @ Stevenot Winery",
+    description:
+      "Sunday Live Music Presents: Perarez FREE Live Music Sunday, October 25th 1:00-4:00pm wine by the glass",
+    date: "2026-10-25",
+    start_time: "13:00",
+    end_time: "16:00",
+    venue_name: "Stevenot Winery",
+    town: "Murphys",
+    address: skullRow.address,
+    category: "live_music" as const,
+    price: null,
+    artists: ["Perarez"],
+    event_url: "https://www.gocalaveras.com/events/live-music-stevenot-winery-10/",
+    image_url: null,
+    source_event_id: "192971",
+  };
+  const gocalParty = {
+    name: "Stevenot Winery Halloween Party",
+    description: "Join us for a Halloween Party at Stevenot Winery! 7–10 PM | $25",
+    date: "2026-10-30",
+    start_time: "19:00",
+    end_time: "22:00",
+    venue_name: "Stevenot Winery",
+    town: "Murphys",
+    address: partyRow.address,
+    category: "wine" as const,
+    price: null,
+    artists: null,
+    event_url: "https://www.gocalaveras.com/events/stevenot-winery-halloween-party/",
+    image_url: null,
+    source_event_id: "193044",
+  };
+  const stevenotSkull = {
+    name: skullShow.name,
+    description: skullShow.description,
+    date: skullShow.date,
+    start_time: skullShow.startTime,
+    end_time: skullShow.endTime,
+    venue_name: "Stevenot Winery",
+    town: "Murphys",
+    address: null,
+    category: "live_music" as const,
+    price: skullShow.price,
+    artists: [skullShow.act!],
+    event_url: skullShow.eventUrl,
+    image_url: null,
+  };
+  const stevenotParty = {
+    name: "Stevenot Winery Halloween Party",
+    description: party.description,
+    date: party.date,
+    start_time: party.startTime,
+    end_time: party.endTime,
+    venue_name: "Stevenot Winery",
+    town: "Murphys",
+    address: null,
+    category: categoryForStevenot(party),
+    price: party.price,
+    artists: null,
+    event_url: party.eventUrl,
+    image_url: null,
+  };
+
+  // The exact-match path would revert both rows. resolveWrittenName does not
+  // keep Skull Country against the specific Perarez title, and the Halloween
+  // clock is not a placeholder.
+  assert.equal(rowChanged(skullRow as never, gocalSkull as never), true);
+  const reverted = buildExactMatchUpdate(
+    skullRow as never,
+    gocalSkull as never,
+    generateDedupKey(gocalSkull.name, gocalSkull.date, gocalSkull.town),
+    now
+  ) as Record<string, unknown>;
+  assert.equal(reverted.name, "Perarez Live Music @ Stevenot Winery");
+  assert.equal(reverted.event_url, gocalSkull.event_url);
+  assert.equal(rowChanged(partyRow as never, gocalParty as never), true);
+  const retimed = buildExactMatchUpdate(
+    partyRow as never,
+    gocalParty as never,
+    generateDedupKey(gocalParty.name, gocalParty.date, gocalParty.town),
+    now
+  ) as Record<string, unknown>;
+  assert.equal(retimed.start_time, "19:00");
+  assert.equal(retimed.end_time, "22:00");
+
+  // Day 2, GoCalaveras first. The scraper drops a blocklisted event before
+  // upsert, so rowChanged is never asked and the corrected row stays.
+  function day2Changed(
+    existing: object,
+    event: { name: string; venue_name: string },
+    askingOrg?: string
+  ): boolean {
+    if (isManuallyManagedEvent(event, askingOrg)) return false;
+    return rowChanged(existing as never, event as never);
+  }
+  assert.equal(day2Changed(skullRow, gocalSkull), false);
+  assert.equal(day2Changed(partyRow, gocalParty), false);
+
+  // Stevenot second. Same fields it wrote yesterday.
+  assert.equal(day2Changed(skullRow, stevenotSkull, "stevenot"), false);
+  assert.equal(day2Changed(partyRow, stevenotParty, "stevenot"), false);
 });
