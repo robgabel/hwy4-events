@@ -5,6 +5,15 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-10-12 — A watcher that hashes the intro is not watching the schedule
+
+The Big Trees cron fingerprinted from "all programs are free" to the first "Related Pages". That window is the intro. Over the summer the park changed South Grove to Saturdays and Sundays through September and dropped the October Sundays, then took the program list off the page when the grove closed for burns. The hash did not move. The alert went to Slack, which Rob does not read, and a visitor showed up for a hike that was not happening (#382).
+
+- **Fingerprint the thing you claim to watch.** A page that still has its intro and has no program list is a missing schedule, not a new baseline. Store that as its own sentinel so the next quiet week does not file again, and do not replace the baseline when the fetch itself is unreadable.
+- **An alert nobody reads is not an alert.** This watcher writes a `proposed` `agent_actions` row (`schedule_watch_alert`) because that queue is already reviewed. A Slack-only ping is not a sensor for a schedule a person has to fix.
+
+---
+
 ## 2026-10-05 — Redesign retrospective: what a month of field data taught
 
 Rob asked how the Musk-lens redesign worked out, with radical candor. The scoreboard since the August ingest-quality program closed: 28 of 29 scrape runs green since Sep 6 (the one failure never recurred), `stale_scrapes` 138 → 18, the armed sweeps removed exactly 1 row in a month (a genuine Sequoia Woods retraction, zero false deletions), and the Oct 4 audit reads zero duplicates. The two claims the field falsified — the "~7.5h transit window" (measured median: 122h) and the audit reading 0 beside 5 live duplicate pairs — are already rules in the 2026-09-27 and 2026-08-19 entries. Three lessons were still unwritten:

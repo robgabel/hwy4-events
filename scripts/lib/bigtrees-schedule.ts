@@ -11,19 +11,24 @@
  * which the scrapers can't parse. So we transcribe the rules here and expand them
  * to dated rows with the tested expander in lib/recurrence.ts.
  *
- * This module is PURE (imports only ./recurrence + the ExtractedEvent type), so a
- * creds-free emitter can import it to compute rows. The runnable seed
+ * This module is PURE (recurrence, the ExtractedEvent type, and generateDedupKey),
+ * so a creds-free emitter can import it to compute rows. The runnable seed
  * (scripts/seed-bigtrees-programs-2026.ts) and the live loader both build from
  * buildOccurrences(), so they can't diverge.
  *
  * The venue is blocklisted from the auto-scrapers in lib/manual-sources.ts, and a
- * weekly watcher (/api/check-bigtrees-schedule) pings Slack when the source page
- * changes so we re-transcribe and re-run. To change the schedule, edit the
- * PROGRAMS below and re-run the seed; nothing else writes these rows.
+ * weekly watcher (/api/check-bigtrees-schedule) files a proposed agent_actions
+ * row when the program list changes or disappears so we re-transcribe and re-run.
+ * To change the schedule, edit the PROGRAMS below and re-run the seed; nothing
+ * else writes these rows. omitCancelledOccurrences drops any date already
+ * cancelled, so a re-seed cannot republish one.
  *
  * Modeling notes / judgment calls (the page is prose, sometimes vague):
- *  - South Grove: page says "Fri/Sat/Sun late May through early September, Sundays
- *    also in October." Read as Fri/Sat/Sun May 23 - Sep 7, plus Sundays in Oct.
+ *  - South Grove, late-summer page: "Saturdays and Sundays through September,"
+ *    with a note that a prescribed burn could start Sept 30. October Sundays
+ *    are not listed. Read as Sat/Sun from the Memorial Day weekend (May 23)
+ *    through September 30. The spring page's Fridays and October Sundays are
+ *    not part of this schedule.
  *  - Introduction to North Grove: "Sundays starting June 14" with no end; ended at
  *    the Aug 16 close of the daily-program season.
  *  - Laugh then Learn campfire: "topics and time vary," so start_time is null and
@@ -35,6 +40,7 @@
  *    them cost_tier 'free' and price-locked so extraction can't relabel them.
  */
 
+import { generateDedupKey } from "../../lib/event-identity.js";
 import type { ExtractedEvent } from "./extract.js";
 import {
   expandWeekly,
@@ -106,6 +112,20 @@ function occ(base: ProgramBase, date: string, startOverride?: string | null): Se
 /** A recurring program: one ProgramBase expanded across a precomputed date list. */
 function recurring(base: ProgramBase, dates: readonly string[]): SeededEvent[] {
   return dates.map((d) => occ(base, d));
+}
+
+/**
+ * Drop occurrences whose dedup_key is already cancelled. upsertEvents writes
+ * status only on INSERT, but a cancelled row the key lookup misses would be
+ * inserted again as confirmed. The seed passes the cancelled keys it loaded
+ * and never hands those dates to the writer.
+ */
+export function omitCancelledOccurrences<T extends { name: string; date: string; town: string }>(
+  events: readonly T[],
+  cancelledDedupKeys: ReadonlySet<string>
+): T[] {
+  if (cancelledDedupKeys.size === 0) return [...events];
+  return events.filter((e) => !cancelledDedupKeys.has(generateDedupKey(e.name, e.date, e.town)));
 }
 
 /** A program given as explicit (date, start_time) pairs, e.g. astronomy nights. */
@@ -196,10 +216,9 @@ export function buildOccurrences(): SeededEvent[] {
         description:
           "A moderate five-mile hike to the park's larger, quieter grove of giant sequoias. Bring water and a snack or lunch; there is no food or water at the trailhead. Meet at the South Grove trailhead parking lot. Free with the $10/vehicle park entrance.",
       },
-      mergeDates(
-        expandWeekly([FRI, SAT, SUN], "2026-05-23", "2026-09-07"),
-        expandWeekly([SUN], "2026-10-01", "2026-10-31")
-      )
+      // Late-summer page: Saturdays and Sundays through September. No Fridays,
+      // and no October Sundays (the grove closed Oct 1 for prescribed burns).
+      expandWeekly([SAT, SUN], "2026-05-23", "2026-09-30")
     )
   );
 
