@@ -8,10 +8,13 @@
 // scripts/lib/manual-sources.ts ("big trees state park" / "calaveras big trees"),
 // so the auto-scrapers (GoCalaveras et al.) skip it and can't overwrite these
 // rows with their wrong date ranges. A weekly watcher (/api/check-bigtrees-schedule)
-// pings Slack when the source page changes so we re-transcribe and re-run.
+// files a proposed agent_actions row when the program list changes or disappears
+// so we re-transcribe and re-run.
 //
 // To change the schedule: edit PROGRAMS in lib/bigtrees-schedule.ts and re-run.
-// Re-runnable: upsertEvents dedups by hash(name|date|town). After upserting, this
+// Re-runnable: upsertEvents dedups by hash(name|date|town). Dates already
+// cancelled are omitted before the upsert, so a re-seed cannot insert them
+// again as confirmed. After upserting, this
 // finalizes the venue's rows that upsertEvents doesn't manage:
 //   - cost_tier 'free' + price_locked: every program is free with park entrance,
 //     so price extraction must never relabel them.
@@ -29,13 +32,41 @@ import { upsertEvents, type UpsertResult } from "./lib/dedup.js";
 import type { ExtractedEvent } from "./lib/extract.js";
 import {
   buildOccurrences,
+  omitCancelledOccurrences,
   SOURCE_NAME,
   ORG_SLUG,
   SOURCE_URL,
 } from "./lib/bigtrees-schedule.js";
 
+/** Cancelled keys for this source. Paged: one unpaged select stops at 1000. */
+async function loadCancelledDedupKeys(): Promise<Set<string>> {
+  const keys = new Set<string>();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("hwy4_events")
+      .select("dedup_key")
+      .eq("source_name", SOURCE_NAME)
+      .eq("status", "cancelled")
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`cancelled-row lookup failed: ${error.message}`);
+    const rows = (data ?? []) as { dedup_key: string | null }[];
+    for (const row of rows) {
+      if (row.dedup_key) keys.add(row.dedup_key);
+    }
+    if (rows.length < pageSize) break;
+  }
+  return keys;
+}
+
 async function main(): Promise<void> {
-  const seeded = buildOccurrences();
+  const cancelledKeys = await loadCancelledDedupKeys();
+  const occurrences = buildOccurrences();
+  const seeded = omitCancelledOccurrences(occurrences, cancelledKeys);
+  const skipped = occurrences.length - seeded.length;
+  if (skipped > 0) {
+    console.log(`Skipping ${skipped} occurrence(s) already cancelled. A re-seed will not republish them.`);
+  }
   // Drop the is_weekly hint — upsertEvents takes plain ExtractedEvents; we apply
   // is_weekly in the finalize step below.
   const events: ExtractedEvent[] = seeded.map(({ is_weekly: _is_weekly, ...e }) => e);
