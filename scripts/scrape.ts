@@ -17,6 +17,13 @@ import { FIRECRAWL_SOURCES } from "./scrapers/firecrawl-sources.js";
 import { validateEventUrls } from "./lib/validate-urls.js";
 import { runHealthCheck } from "./lib/health.js";
 import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape-run-log.js";
+import { supabaseAdmin } from "./lib/supabase-admin.js";
+import {
+  buildScrapeRunAlert,
+  fileScrapeAlert,
+  scrapeRunUrlFromEnv,
+  type ScrapeAlertClient,
+} from "../lib/scrape-alerts.js";
 
 /**
  * Sources whose scraping shape is unique enough to keep their own file:
@@ -153,17 +160,40 @@ async function main() {
   // visibility (see scripts/lib/scrape-run-log.ts).
   await finishScrapeRun(sources);
 
-  // Validate all event URLs after scraping
+  // Validate all event URLs after scraping. A null, a spared host, or a throw
+  // belongs on the same end-of-run notice as a source that threw. The process
+  // still exits 0: the GitHub alert job only runs when this job is not success,
+  // and a thrown source must not file a second row.
   const skipValidation = args.includes("--skip-url-check");
+  let nulled = 0;
+  let sparedHosts: string[] = [];
+  let validationError: string | null = null;
   if (!skipValidation) {
     try {
-      await validateEventUrls();
+      const urls = await validateEventUrls();
+      nulled = urls.nulled;
+      sparedHosts = urls.sparedHosts;
     } catch (err) {
       console.error("URL validation failed:", err);
+      validationError = err instanceof Error ? err.message : String(err);
     }
   }
 
-  // Post-scrape health report
+  const alert = buildScrapeRunAlert({
+    sourceErrors: [...sourceErrors.entries()].map(([source, message]) => ({ source, message })),
+    nulled,
+    sparedHosts,
+    validationError,
+    runUrl: scrapeRunUrlFromEnv(process.env),
+  });
+  if (alert) {
+    const filed = await fileScrapeAlert(supabaseAdmin as unknown as ScrapeAlertClient, alert);
+    const detail = filed.status === "error" ? `: ${filed.message}` : "";
+    console.log(`SCRAPE_ALERT ${filed.status}${detail} ${alert.title}`);
+  }
+
+  // Post-scrape health report. A throw here stays a log line: the health table
+  // is advisory, and failing the job would also file a job-level alert.
   const skipHealth = args.includes("--skip-health");
   if (!skipHealth) {
     try {

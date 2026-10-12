@@ -10,7 +10,14 @@ import {
   findTimelessNearDupes,
   findSuspectTicketLinks,
   findVenueSlotCollisions,
+  scrapeRunAgeMs,
+  scrapeRunIsOverdue,
 } from "@/lib/audit-checks";
+import {
+  buildMissedRunAlert,
+  fileScrapeAlert,
+  type ScrapeAlertClient,
+} from "@/lib/scrape-alerts";
 
 export const maxDuration = 60;
 
@@ -26,11 +33,13 @@ export const maxDuration = 60;
  *
  * Posts a summary to SLACK_WEBHOOK_URL if set; always returns JSON.
  * Runs daily via vercel.json cron — keep this READ-ONLY against event data
- * (no hwy4_events mutations). The one write is a monitoring artifact: the
- * compact summary is upserted to site_config (AUDIT_SIGNAL_KEY) so the
- * chief-of-staff digest an hour later can see what this audit saw — without
- * it the digest headlined "all quiet" while this route posted a backlog to
- * the same Slack channel (2026-07-10).
+ * (no hwy4_events mutations). Two monitoring writes: the compact summary is
+ * upserted to site_config (AUDIT_SIGNAL_KEY) so the chief-of-staff digest an
+ * hour later can see what this audit saw (without it the digest headlined
+ * "all quiet" while this route posted a backlog to the same Slack channel,
+ * 2026-07-10), and a proposed agent_actions row when the daily scrape has not
+ * recorded a start in 30 hours (issue #345). A failed scrape_runs read files
+ * nothing.
  */
 
 const VALID_CATEGORIES = [
@@ -363,6 +372,33 @@ export async function GET(request: Request) {
   }
   const analyticsStale = analyticsStaleReason !== null;
 
+  // A schedule that never fires writes no scrape_runs row and no workflow log.
+  // The audit is the only place that can see that. A failed read is not
+  // "never ran": leave the flag off so a blip does not file an alert.
+  let scrapeStartedAt: string | null = null;
+  let scrapeReadOk = false;
+  try {
+    const { data: scrapeRows, error: scrapeErr } = await supabase
+      .from("scrape_runs")
+      .select("started_at")
+      .order("started_at", { ascending: false })
+      .limit(1);
+    if (scrapeErr) {
+      console.error("[check-events] scrape_runs query failed:", scrapeErr.message);
+    } else {
+      scrapeReadOk = true;
+      const started = scrapeRows?.[0]?.started_at;
+      scrapeStartedAt = typeof started === "string" ? started : null;
+    }
+  } catch (err) {
+    console.error("[check-events] scrape_runs query failed:", err);
+  }
+  const nowMs = Date.now();
+  const scrapeOverdue = scrapeReadOk && scrapeRunIsOverdue(scrapeStartedAt, nowMs);
+  const scrapeAgeMs = scrapeReadOk ? scrapeRunAgeMs(scrapeStartedAt, nowMs) : null;
+  const scrapeAgeHours =
+    scrapeAgeMs == null || scrapeAgeMs < 0 ? null : Math.floor(scrapeAgeMs / 3_600_000);
+
   const summary = {
     audited_at: new Date().toISOString(),
     total_future_events: rows.length,
@@ -375,6 +411,12 @@ export async function GET(request: Request) {
       latest_pageviews: analyticsLatest?.pageviews ?? null,
       stale: analyticsStale,
       stale_reason: analyticsStaleReason,
+    },
+    scrape_run: {
+      read_ok: scrapeReadOk,
+      started_at: scrapeStartedAt,
+      age_hours: scrapeAgeHours,
+      overdue: scrapeOverdue,
     },
     issues: {
       duplicates: duplicates.length,
@@ -408,6 +450,9 @@ export async function GET(request: Request) {
       actionable_link_gaps: actionableLinkGaps.length,
       analytics_stale: analyticsStale,
       analytics_stale_reason: analyticsStaleReason,
+      scrape_run_overdue: scrapeOverdue,
+      scrape_run_started_at: scrapeStartedAt,
+      scrape_run_age_hours: scrapeAgeHours,
       samples: {
         unresolved_venue: unresolvedVenue
           .slice(0, 3)
@@ -451,6 +496,19 @@ export async function GET(request: Request) {
     if (stashErr) console.error("[check-events] audit-signal stash failed:", stashErr.message);
   } catch (err) {
     console.error("[check-events] audit-signal stash failed:", err);
+  }
+
+  if (scrapeReadOk && scrapeOverdue) {
+    try {
+      const missed = buildMissedRunAlert({ startedAt: scrapeStartedAt, nowMs });
+      if (missed) {
+        const filed = await fileScrapeAlert(supabase as unknown as ScrapeAlertClient, missed);
+        const detail = filed.status === "error" ? `: ${filed.message}` : "";
+        console.log(`[check-events] SCRAPE_ALERT ${filed.status}${detail} ${missed.title}`);
+      }
+    } catch (err) {
+      console.error("[check-events] scrape alert failed:", err);
+    }
   }
 
   // Post to Slack if there are issues, a high-frequency link gap to nudge, or the

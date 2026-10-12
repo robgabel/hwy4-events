@@ -179,3 +179,70 @@ test("ensureAuditItems is a no-op without a signal", () => {
   assert.equal(digest.fyi.length, 0);
   assert.equal(digest.watching.length, 0);
 });
+
+test("a summary with no scrape_run_overdue parses as not overdue", () => {
+  const signal = parseAuditSignal(rawSummary(), NOW) as AuditSignal;
+  assert.equal(signal.scrape_run_overdue, false);
+  assert.equal(signal.scrape_run_started_at, null);
+  assert.equal(signal.scrape_run_age_hours, null);
+});
+
+test("a scrape that has not run outranks a stale analytics snapshot", () => {
+  const signal = parseAuditSignal(
+    rawSummary({
+      scrape_run_overdue: true,
+      scrape_run_started_at: "2026-10-02T08:00:00Z",
+      scrape_run_age_hours: 34,
+      analytics_stale: true,
+      analytics_stale_reason: "latest snapshot is 2026-07-07 (3 days behind)",
+    }),
+    NOW
+  ) as AuditSignal;
+  const alarm = auditAlarmItem(signal);
+  assert.ok(alarm);
+  assert.equal(alarm.title, "Daily scrape has not run");
+  assert.match(alarm.detail, /34 hours/);
+});
+
+test("a stale audit still outranks a missed scrape", () => {
+  const signal = parseAuditSignal(
+    rawSummary({
+      audited_at: "2026-07-07T18:00:00Z",
+      scrape_run_overdue: true,
+      analytics_stale: true,
+    }),
+    NOW
+  ) as AuditSignal;
+  const alarm = auditAlarmItem(signal);
+  assert.ok(alarm);
+  assert.match(alarm.title, /audit has stopped running/);
+});
+
+test("ensureAuditItems does not duplicate a mention that the scrape has not run", () => {
+  const digest = emptyDigest("Quiet day.");
+  digest.needs_you.push({
+    title: "Daily scrape has not run",
+    detail: "The newest start is too old.",
+  });
+  const signal = parseAuditSignal(
+    rawSummary({ scrape_run_overdue: true, scrape_run_age_hours: 34 }),
+    NOW
+  ) as AuditSignal;
+  ensureAuditItems(digest, signal);
+  assert.equal(digest.needs_you.length, 1);
+});
+
+test("ensureAuditItems still adds a missed scrape when the digest only mentions the audit", () => {
+  const digest = emptyDigest("Yesterday's audit found 2 stale scrape(s).");
+  digest.watching.push({
+    title: "Data-quality backlog",
+    detail: "2 stale scrapes from the audit.",
+  });
+  const signal = parseAuditSignal(
+    rawSummary({ issues: {}, samples: {}, scrape_run_overdue: true }),
+    NOW
+  ) as AuditSignal;
+  ensureAuditItems(digest, signal);
+  assert.equal(digest.needs_you.length, 1);
+  assert.equal(digest.needs_you[0].title, "Daily scrape has not run");
+});

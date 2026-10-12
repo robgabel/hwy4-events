@@ -38,6 +38,13 @@ export type AuditSignal = {
   actionable_link_gaps: number;
   analytics_stale: boolean;
   analytics_stale_reason: string | null;
+  /**
+   * True when the newest scrape_runs start is missing or older than 30 hours.
+   * Absent on summaries written before that check: treated as not overdue.
+   */
+  scrape_run_overdue: boolean;
+  scrape_run_started_at: string | null;
+  scrape_run_age_hours: number | null;
   /** A few concrete examples per class so the digest can name names. */
   samples: Record<string, string[]>;
 };
@@ -96,6 +103,13 @@ export function parseAuditSignal(raw: string | null | undefined, nowMs: number):
     analytics_stale: o.analytics_stale === true,
     analytics_stale_reason:
       typeof o.analytics_stale_reason === "string" ? o.analytics_stale_reason : null,
+    scrape_run_overdue: o.scrape_run_overdue === true,
+    scrape_run_started_at:
+      typeof o.scrape_run_started_at === "string" ? o.scrape_run_started_at : null,
+    scrape_run_age_hours:
+      o.scrape_run_age_hours == null || !Number.isFinite(Number(o.scrape_run_age_hours))
+        ? null
+        : Number(o.scrape_run_age_hours),
     samples,
   };
 }
@@ -156,6 +170,17 @@ export function auditAlarmItem(signal: AuditSignal): DigestItem | null {
       why: "The audit is the watchdog for every scraper write path. A dead watchdog fails silent.",
     };
   }
+  if (signal.scrape_run_overdue) {
+    const started = signal.scrape_run_started_at;
+    const age = signal.scrape_run_age_hours;
+    return {
+      title: "Daily scrape has not run",
+      detail: started
+        ? `The newest scrape_runs start is ${started} (${age ?? "unknown"} hours before the audit). A start older than 30 hours means a day was skipped or the job never started.`
+        : "scrape_runs has never recorded a start. The daily scrape has not recorded a run.",
+      why: "A run that never starts writes nothing, so the workflow cannot report it. The audit is the backstop.",
+    };
+  }
   if (signal.analytics_stale) {
     return {
       title: "Analytics snapshot is stale",
@@ -181,7 +206,15 @@ export function ensureAuditItems(digest: Digest, signal: AuditSignal | null): vo
     allBuckets.some((bucket) => bucket.some((i) => re.test(`${i.title} ${i.detail}`)));
 
   const alarm = auditAlarmItem(signal);
-  if (alarm && !mentioned(/analytics|audit/i)) digest.needs_you.push(alarm);
+  if (alarm) {
+    // A scrape alarm is not covered by a digest that merely says "audit" or
+    // "stale scrape(s)". Those words belong to the other alarms and the backlog.
+    const covered =
+      alarm.title === "Daily scrape has not run"
+        ? mentioned(/has not run|never recorded a start/i)
+        : mentioned(/analytics|audit/i);
+    if (!covered) digest.needs_you.push(alarm);
+  }
 
   const backlog = auditBacklogItem(signal);
   if (backlog && !mentioned(/backlog|data.quality|unresolved|audit/i)) {

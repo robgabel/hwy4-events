@@ -341,6 +341,7 @@ test("validateEventUrls: a host 404ing most of its links is spared in the real w
   assert.equal(updates.length, 0);
   assert.equal(result.broken, 3);
   assert.equal(result.nulled, 0);
+  assert.deepEqual(result.sparedHosts, ["walled.example"]);
 });
 
 test("validateEventUrls: a link rewritten during the check is left alone and not counted", async () => {

@@ -12,6 +12,8 @@ import {
   findTimelessNearDupes,
   findSuspectTicketLinks,
   findVenueSlotCollisions,
+  scrapeRunIsOverdue,
+  SCRAPE_RUN_MAX_AGE_MS,
   type AuditRow,
 } from "../../lib/audit-checks.js";
 
@@ -287,4 +289,37 @@ test("venue slot collisions: outdoor bases legitimately overlap and stay quiet",
     row({ name: "Bear Valley Triathlon", venue_name: "Bear Valley Adventure Company", start_time: "10:00" }),
   ];
   assert.deepEqual(findVenueSlotCollisions(rows), []);
+});
+
+// Audit at 18:00 UTC on 2026-10-04. The scrape is scheduled for 08:00 and has
+// been observed starting as late as 16:20. Exactly 30 hours is not overdue.
+const AUDIT_AT = Date.parse("2026-10-04T18:00:00Z");
+
+test("scrape run overdue: same-day late start is quiet", () => {
+  assert.equal(SCRAPE_RUN_MAX_AGE_MS, 30 * 60 * 60 * 1000);
+  assert.equal(scrapeRunIsOverdue("2026-10-04T16:20:00Z", AUDIT_AT), false);
+});
+
+test("scrape run overdue: a skipped day after an on-time start is overdue", () => {
+  // 08:00 yesterday to 18:00 today is 34 hours.
+  assert.equal(scrapeRunIsOverdue("2026-10-03T08:00:00Z", AUDIT_AT), true);
+});
+
+test("scrape run overdue: a skipped day after the latest observed start is not yet overdue", () => {
+  // 16:20 yesterday to 18:00 today is 25h40m, under 30h. It fires once the gap passes 30h.
+  assert.equal(scrapeRunIsOverdue("2026-10-03T16:20:00Z", AUDIT_AT), false);
+});
+
+test("scrape run overdue: exactly 30 hours is quiet, one millisecond over is not", () => {
+  assert.equal(scrapeRunIsOverdue("2026-10-03T12:00:00Z", AUDIT_AT), false);
+  assert.equal(scrapeRunIsOverdue(new Date(AUDIT_AT - SCRAPE_RUN_MAX_AGE_MS).toISOString(), AUDIT_AT), false);
+  assert.equal(scrapeRunIsOverdue(new Date(AUDIT_AT - SCRAPE_RUN_MAX_AGE_MS - 1).toISOString(), AUDIT_AT), true);
+});
+
+test("scrape run overdue: missing or unreadable start is overdue, a future start is not", () => {
+  assert.equal(scrapeRunIsOverdue(null, AUDIT_AT), true);
+  assert.equal(scrapeRunIsOverdue(undefined, AUDIT_AT), true);
+  assert.equal(scrapeRunIsOverdue("", AUDIT_AT), true);
+  assert.equal(scrapeRunIsOverdue("not-a-date", AUDIT_AT), true);
+  assert.equal(scrapeRunIsOverdue("2026-10-04T18:00:01Z", AUDIT_AT), false);
 });

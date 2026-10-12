@@ -5,19 +5,18 @@ on:
     - cron: '0 8 * * *' # 8 AM UTC (midnight PST)
   workflow_dispatch: # Manual trigger
 
-# The failure path files a GitHub issue via actions/github-script; the default
-# GITHUB_TOKEN is read-only, so without an explicit grant that step 403s
-# ("Resource not accessible by integration") and the failure alert never lands —
-# which is how two red sanity-check runs (2026-08-17/18) went unannounced. A
-# sensor that can fail silently is not a sensor (HWY-18).
+# Checkout only. Failure notices are agent_actions rows written with the
+# service-role key (issue #345), not GitHub issues, so this token stays read-only.
 permissions:
   contents: read
-  issues: write
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      scrape_outcome: ${{ steps.scrape.outcome }}
+      sanity_outcome: ${{ steps.sanity.outcome }}
 
     steps:
       - uses: actions/checkout@v4
@@ -62,20 +61,31 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      - name: Create failure issue
-        if: failure()
-        uses: actions/github-script@v7
+  # A thrown source stays inside scrape.ts (exit 0) and files its own row.
+  # This job is the path that still runs when the scrape job is failure or
+  # cancelled: if: failure() never runs for a timeout-minutes kill.
+  alert:
+    needs: scrape
+    if: "${{ always() && needs.scrape.result != 'success' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          script: |
-            const today = new Date().toISOString().split('T')[0];
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const failedStep = '${{ steps.sanity.outcome }}' === 'failure'
-              ? 'Location sanity check'
-              : 'Scrape';
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `${failedStep} failed: ${today}`,
-              body: `The daily ${failedStep.toLowerCase()} step failed on ${today}.\n\n[View run logs](${runUrl})`,
-              labels: ['bug', 'automated']
-            });
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: scripts
+
+      - name: File scrape job alert
+        run: npx tsx file-scrape-job-alert.ts
+        working-directory: scripts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SCRAPE_JOB_RESULT: ${{ needs.scrape.result }}
+          SCRAPE_STEP_OUTCOME: ${{ needs.scrape.outputs.scrape_outcome }}
+          SANITY_STEP_OUTCOME: ${{ needs.scrape.outputs.sanity_outcome }}
