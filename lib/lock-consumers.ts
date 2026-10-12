@@ -1,8 +1,9 @@
 // Registry of hwy4_events `*_locked` consumers (HWY-50).
 //
-// Seven lock columns are checked by five writers, and the subsets differ for
+// Seven lock columns are checked by six writers, and the subsets differ for
 // real reasons: the sweep deletes rows, the dedup path updates fields, the
-// moose PDF route writes its own UPDATE, and Blue Lake Springs only inserts.
+// moose PDF route writes its own UPDATE, Blue Lake Springs only inserts, and
+// cancel_event writes status only.
 // One shared lock list would force a consumer to check a lock it cannot
 // violate. The defect was the opposite — only qa-fix-event noticed when the
 // set of locks grew (visibility_locked landed in LOCK_GUARDS the same day
@@ -96,6 +97,19 @@ export const MOOSE_LODGE_LOCK_ACKS = {
 const BLS_INSERT_ONLY =
   "Insert-only: an existing dedup_key is skipped, so /api/scrape-bls never updates a row and cannot overwrite a locked field.";
 
+const CANCEL_EVENT_STATUS_ONLY =
+  "cancel_event sets status to cancelled and does not write this column. The lock stays as it was.";
+
+export const CANCEL_EVENT_LOCK_ACKS = {
+  description_locked: CANCEL_EVENT_STATUS_ONLY,
+  price_locked: CANCEL_EVENT_STATUS_ONLY,
+  poster_locked: CANCEL_EVENT_STATUS_ONLY,
+  times_locked: CANCEL_EVENT_STATUS_ONLY,
+  notability_locked: CANCEL_EVENT_STATUS_ONLY,
+  visibility_locked: CANCEL_EVENT_STATUS_ONLY,
+  family_friendly_locked: CANCEL_EVENT_STATUS_ONLY,
+} as const satisfies LockAcknowledgements;
+
 export const BLS_LOCK_ACKS = {
   description_locked: BLS_INSERT_ONLY,
   price_locked: BLS_INSERT_ONLY,
@@ -136,6 +150,12 @@ export const LOCK_CONSUMERS: readonly LockConsumer[] = [
     sourceFile: "app/api/scrape-bls/route.ts",
     guards: {},
     acknowledged: BLS_LOCK_ACKS,
+  },
+  {
+    id: "cancel-event",
+    sourceFile: "lib/agent/actions-executor.ts",
+    guards: {},
+    acknowledged: CANCEL_EVENT_LOCK_ACKS,
   },
 ];
 

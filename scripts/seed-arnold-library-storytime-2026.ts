@@ -8,8 +8,9 @@
 // or duplicate them.
 //
 // The schedule is a recurrence *rule* (every Wednesday, 10:30 AM); the dated
-// rows are pure arithmetic via the tested scripts/lib/recurrence.ts. Edit the
-// rule (DAY / TIME) or extend the horizon (END) and re-run to change it.
+// rows are pure arithmetic via expandWeeklyThrough. END is the season end:
+// a re-run does not emit a Wednesday after it. Dates already cancelled are
+// dropped before insert (scripts/lib/series-bounds.ts), same as Big Trees.
 //
 // Idempotent: keyed on the same dedup_key the app computes (name|date|town), so
 // re-running only inserts dates that aren't already present.
@@ -18,13 +19,15 @@
 //
 // Caveats (inferred from the submission, not a published calendar):
 //  - Day-of-week (Wednesday) is taken from the submitted date (2026-06-03).
-//  - Holiday/closure weeks are NOT pruned — sanity-check around Thanksgiving and
-//    the winter holidays, and delete any week the library is closed.
-//  - Re-seed (bump END) to extend past 2026-12-30.
+//  - Holiday weeks are not pruned here. A date that is already cancelled is
+//    skipped, so deleting a closure week by setting status = 'cancelled' sticks
+//    across a re-seed.
+//  - Re-seed (bump END) to extend past 2026-12-30. END is required.
 
 import { supabaseAdmin } from "./lib/supabase-admin.js";
 import { generateDedupKey } from "./lib/dedup.js";
-import { expandWeekly, WED } from "./lib/recurrence.js";
+import { WED } from "./lib/recurrence.js";
+import { boundWeeklySeries, expandWeeklyThrough } from "./lib/series-bounds.js";
 
 const NAME = "Storytime with Miss Debbie";
 const TOWN = "Arnold";
@@ -43,26 +46,39 @@ const END = "2026-12-30"; // bump + re-run to extend
 const TIME = "10:30:00";
 
 async function main(): Promise<void> {
-  const dates = expandWeekly([WED], START, END);
+  const dates = expandWeeklyThrough([WED], START, END);
+  const occurrences = dates.map((date) => ({ name: NAME, date, town: TOWN }));
 
-  // Skip dates already present (idempotent on the app's dedup_key).
-  const keyed = dates.map((date) => ({
-    date,
-    dedupKey: generateDedupKey(NAME, date, TOWN),
-  }));
-
-  const { data: existing } = await supabaseAdmin
+  const { data: existing, error: existingErr } = await supabaseAdmin
     .from("hwy4_events")
-    .select("dedup_key")
+    .select("dedup_key, status")
     .in(
       "dedup_key",
-      keyed.map((k) => k.dedupKey)
+      occurrences.map((o) => generateDedupKey(o.name, o.date, o.town))
     );
-  const have = new Set((existing ?? []).map((r) => r.dedup_key as string));
+  if (existingErr) throw new Error(`existing-row lookup failed: ${existingErr.message}`);
+  const existingRows = (existing ?? []) as { dedup_key: string | null; status: string | null }[];
+  const cancelled = new Set(
+    existingRows.filter((r) => r.status === "cancelled" && r.dedup_key).map((r) => r.dedup_key as string)
+  );
+  const bounded = boundWeeklySeries(occurrences, { seasonEnd: END, cancelledDedupKeys: cancelled });
+  const skipped = occurrences.length - bounded.length;
+  if (skipped > 0) {
+    console.log(
+      `Skipping ${skipped} Storytime date(s) past ${END} or already cancelled. A re-seed will not republish them.`
+    );
+  }
+
+  // Skip dates already present (idempotent on the app's dedup_key).
+  const keyed = bounded.map((o) => ({
+    date: o.date,
+    dedupKey: generateDedupKey(o.name, o.date, o.town),
+  }));
+  const have = new Set(existingRows.map((r) => r.dedup_key as string));
   const toInsert = keyed.filter((k) => !have.has(k.dedupKey));
 
   if (toInsert.length === 0) {
-    console.log(`All ${dates.length} Storytime dates already present. Nothing to do.`);
+    console.log(`All ${bounded.length} in-season Storytime dates already present. Nothing to do.`);
     return;
   }
 

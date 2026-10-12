@@ -1,4 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  cancelEventWritePayload,
+  cancelRevertPayload,
+  type CancelEventPayload,
+} from "@/lib/feedback-cancel";
 import type { AgentActionRow } from "@/lib/agent/policy";
 import {
   lockColumnsFor,
@@ -54,6 +59,8 @@ export async function executeAction(
       return execFlagSpam(supabase, action.payload as { submission_id?: string });
     case "qa_fix_event":
       return execQaFixEvent(supabase, action.payload as QaFixEventPayload);
+    case "cancel_event":
+      return execCancelEvent(supabase, action.payload as CancelEventPayload);
     default:
       return { ok: false, error: `Unknown action type: ${action.type}` };
   }
@@ -106,6 +113,14 @@ export async function revertAction(
         .eq("id", action.target_id);
       return error ? { ok: false, error: error.message } : { ok: true };
     }
+    case "cancel_event": {
+      // Restore status only. Lock flags and identity columns stay as they are,
+      // so a revert cannot clear a human lock or move the URL.
+      const payload = cancelRevertPayload(action.before_snapshot);
+      if (!payload) return { ok: false, error: "No status in before_snapshot — cannot revert." };
+      const { error } = await supabase.from("hwy4_events").update(payload).eq("id", action.target_id);
+      return error ? { ok: false, error: error.message } : { ok: true };
+    }
     default:
       return { ok: false, error: `Cannot revert unknown type: ${action.type}` };
   }
@@ -152,6 +167,49 @@ async function execQaFixEvent(
     targetTable: "hwy4_events",
     targetId: v.eventId,
     beforeSnapshot: qaFixBeforeSnapshot(row, v.columns),
+  };
+}
+
+// Set status to cancelled and nothing else. Reads the lock columns so this
+// writer has a stance on them (lib/lock-consumers.ts) and then does not write
+// them. A missing event id fails closed: the slug is not used to guess a row.
+async function execCancelEvent(
+  supabase: SupabaseClient,
+  p: CancelEventPayload
+): Promise<ExecuteResult> {
+  const eventId = (p.event_id ?? "").trim();
+  if (!eventId) {
+    return { ok: false, error: "No event id on this report. Resolve the listing by hand." };
+  }
+
+  const { data: before, error: readError } = await supabase
+    .from("hwy4_events")
+    .select(
+      "id, status, description_locked, price_locked, poster_locked, times_locked, notability_locked, visibility_locked, family_friendly_locked"
+    )
+    .eq("id", eventId)
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!before) return { ok: false, error: `Event ${eventId} not found.` };
+
+  const row = before as unknown as { status?: string | null };
+  const previous = row.status ?? null;
+  if (previous !== "confirmed" && previous !== "tentative" && previous !== "cancelled") {
+    return { ok: false, error: `Event ${eventId} has no status to cancel.` };
+  }
+  if (previous !== "cancelled") {
+    const { error } = await supabase
+      .from("hwy4_events")
+      .update(cancelEventWritePayload())
+      .eq("id", eventId);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  return {
+    ok: true,
+    targetTable: "hwy4_events",
+    targetId: eventId,
+    beforeSnapshot: { status: previous },
   };
 }
 

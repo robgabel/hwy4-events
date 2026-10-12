@@ -15,12 +15,16 @@ export type ActionStatus =
   | "failed";
 
 // The action types the executor knows how to run (Stage 1). Add a type here and
-// give it a handler in actions-executor.ts + a row in agent_policy.
+// give it a handler in actions-executor.ts. Types that may auto-run also need
+// an agent_policy row. cancel_event deliberately has none.
 export type ActionType =
   | "create_org_row"
   | "flag_spam_submission"
   | "create_venue_row"
-  | "qa_fix_event";
+  | "qa_fix_event"
+  // Proposed from visitor feedback. No agent_policy row: approval is the only
+  // path, and canAutoExecute cannot pass (med blast, outward-facing).
+  | "cancel_event";
 
 export type AgentActionRow = {
   id: string;
