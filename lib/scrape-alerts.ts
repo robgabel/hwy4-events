@@ -63,11 +63,10 @@ export function errorSnippet(message: string): string {
     : text.slice(0, SCRAPE_ERROR_SNIPPET_CHARS);
 }
 
-export function scrapeRunUrlFromEnv(env: {
-  GITHUB_SERVER_URL?: string;
-  GITHUB_REPOSITORY?: string;
-  GITHUB_RUN_ID?: string;
-}): string | null {
+/** `process.env`, or a test double. Index signature so a partial env still typechecks. */
+export type ScrapeAlertEnv = { [key: string]: string | undefined };
+
+export function scrapeRunUrlFromEnv(env: ScrapeAlertEnv): string | null {
   const server = env.GITHUB_SERVER_URL?.replace(/\/$/, "") ?? "";
   const repo = env.GITHUB_REPOSITORY ?? "";
   const id = env.GITHUB_RUN_ID ?? "";
@@ -331,14 +330,7 @@ export async function fileScrapeAlert(
  * failed, so the alert job itself goes red.
  */
 export async function fileJobAlertFromEnv(
-  env: {
-    SCRAPE_JOB_RESULT?: string;
-    SCRAPE_STEP_OUTCOME?: string;
-    SANITY_STEP_OUTCOME?: string;
-    GITHUB_SERVER_URL?: string;
-    GITHUB_REPOSITORY?: string;
-    GITHUB_RUN_ID?: string;
-  },
+  env: ScrapeAlertEnv,
   supabase: ScrapeAlertClient
 ): Promise<{ code: number; status: string; detail: string }> {
   const alert = buildJobFailureAlert({
