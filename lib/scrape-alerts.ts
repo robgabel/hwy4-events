@@ -18,7 +18,13 @@ import { SCHEDULE_WATCH_ACTION_TYPE } from "./bigtrees-watch";
 export const SCRAPE_ALERT_TYPE = SCHEDULE_WATCH_ACTION_TYPE;
 export const SCRAPE_ERROR_SNIPPET_CHARS = 200;
 
-export type ScrapeAlertKind = "source_errors" | "job_failed" | "missed_run";
+export type ScrapeAlertKind =
+  | "source_errors"
+  | "nulled_links"
+  | "spared_hosts"
+  | "validation"
+  | "job_failed"
+  | "missed_run";
 
 export type ScrapeSourceError = { source: string; message: string };
 
@@ -97,61 +103,195 @@ function sortedSources(errors: readonly ScrapeSourceError[]): ScrapeSourceError[
 }
 
 /**
- * One notice for a scrape process that exited on its own. Null when every
- * source returned and the link check neither nulled a link, spared a host,
- * nor threw. A thrown source does not fail the GitHub job (the other sources
- * still run); this row is the alert.
+ * Stable class for a thrown error. The fingerprint uses this, not the message,
+ * so a request id, a URL, or a count does not file a new inbox row.
  */
-export function buildScrapeRunAlert(args: {
+export function scrapeErrorKind(message: string): string {
+  const flat = message.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!flat) return "unknown";
+  if (/non-json|invalid json|did not return valid json|unexpected token/.test(flat)) return "invalid-json";
+  if (/missing\b.*\b(?:api_key|environment variable)|api key is unset|environment variable/.test(flat)) {
+    return "missing-env";
+  }
+  if (/\bnonce\b|shortcode|page config/.test(flat)) return "page-config";
+  const http = httpKind(flat);
+  if (http) return http;
+  if (/timeout|timed out|econnreset|enotfound|eai_again|fetch failed|network|socket hang up|aborted/.test(flat)) {
+    return "network";
+  }
+  const stem = flat
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\b(?:req|request|trace)[_ :=-]*[a-z0-9-]{6,}\b/g, " ")
+    .replace(/\b[0-9a-f]{8,}\b/g, " ")
+    .replace(/\b\d+\b/g, " ")
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 6)
+    .join("-");
+  return stem || "unknown";
+}
+
+function httpKind(flat: string): string | null {
+  if (/rate.?limit/.test(flat)) return "http-429";
+  const match = /\b(?:http|status)\s*(\d{3})\b|\bfailed:?\s*(\d{3})\b/.exec(flat);
+  const code = match?.[1] ?? match?.[2];
+  if (!code) return null;
+  if (code === "429") return "http-429";
+  if (code === "401" || code === "403") return `http-${code}`;
+  if (code === "404" || code === "410") return "http-404";
+  if (code.startsWith("5")) return "http-5xx";
+  return `http-${code}`;
+}
+
+/** A quiet link check nulls a dead page or two. 139 in one day is an outage. */
+export const NULLED_LINK_ALERT_MIN = 10;
+/**
+ * Also alert when today's count clears the recent median by this many, even
+ * under the absolute minimum. A 1-link wobble does not.
+ */
+export const NULLED_LINK_JUMP = 8;
+/** site_config key. scrape_runs is already written before the link check. */
+export const NULLED_LINK_HISTORY_KEY = "scrape_nulled_link_counts";
+export const NULLED_LINK_HISTORY_KEEP = 14;
+
+export function parseNulledLinkHistory(raw: string | null | undefined): number[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const counts: number[] = [];
+  for (const value of parsed) {
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    counts.push(Math.max(0, Math.floor(value)));
+  }
+  return counts.slice(-NULLED_LINK_HISTORY_KEEP);
+}
+
+export function nextNulledLinkHistory(recent: readonly number[], nulled: number): number[] {
+  const n = Math.max(0, Math.floor(nulled) || 0);
+  return [...recent, n].slice(-NULLED_LINK_HISTORY_KEEP);
+}
+
+function median(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** True when a nulled-link count is worth an inbox row. */
+export function nulledLinkAlertWarranted(nulled: number, recent: readonly number[]): boolean {
+  const n = Math.max(0, Math.floor(nulled) || 0);
+  if (n <= 0) return false;
+  if (n >= NULLED_LINK_ALERT_MIN) return true;
+  const prior = recent.filter((value) => Number.isFinite(value)).map((value) => Math.max(0, Math.floor(value)));
+  if (prior.length === 0) return false;
+  return n >= median(prior) + NULLED_LINK_JUMP;
+}
+
+function withRun(lines: string[], runUrl: string | null): string {
+  if (runUrl) lines.push(`Run: ${runUrl}`);
+  lines.push(DISMISS);
+  return lines.join("\n");
+}
+
+/**
+ * Notices for a scrape process that exited on its own. Empty when every
+ * source returned, the link check was quiet, and no host was spared.
+ * Each notice has its own fingerprint, so a new source, a new error kind,
+ * or a spared host does not refile the others. A thrown source does not
+ * fail the GitHub job; these rows are the alert.
+ */
+export function buildScrapeRunAlerts(args: {
   sourceErrors: readonly ScrapeSourceError[];
   nulled: number;
+  /** Nulled counts from earlier runs, oldest first. Empty means no baseline. */
+  recentNulled?: readonly number[];
   sparedHosts: readonly string[];
   validationError: string | null;
   runUrl: string | null;
-}): ScrapeAlertRow | null {
+}): ScrapeAlertRow[] {
   const sources = sortedSources(args.sourceErrors);
   const spared = [...new Set(args.sparedHosts.map((h) => h.trim()).filter(Boolean))].sort();
   const nulled = Math.max(0, Math.floor(args.nulled) || 0);
+  const recent = args.recentNulled ?? [];
   const validation = args.validationError ? errorSnippet(args.validationError) : null;
-  if (sources.length === 0 && nulled === 0 && spared.length === 0 && !validation) return null;
+  const rows: ScrapeAlertRow[] = [];
 
-  const fingerprint = [
-    "run",
-    sources.map((s) => `${s.source}=${s.message}`).join("\n"),
-    `nulled=${nulled}`,
-    `spared=${spared.join(",")}`,
-    `validation=${validation ?? ""}`,
-  ].join("\n");
-
-  const lines: string[] = [];
-  for (const s of sources) lines.push(`${s.source} threw: ${s.message}`);
-  if (nulled > 0) {
-    lines.push(`The link check nulled ${nulled} link${nulled === 1 ? "" : "s"}.`);
+  for (const source of sources) {
+    const kind = scrapeErrorKind(source.message);
+    rows.push(
+      notice(`Scrape source failed: ${source.source}`, withRun([`${source.source} threw: ${source.message}`], args.runUrl), {
+        alert: "scrape",
+        kind: "source_errors",
+        fingerprint: `source:${source.source}:${kind}`,
+        run_url: args.runUrl,
+        sources: [source],
+      })
+    );
   }
+
+  if (nulledLinkAlertWarranted(nulled, recent)) {
+    const prior = recent.filter((value) => Number.isFinite(value));
+    const why =
+      nulled >= NULLED_LINK_ALERT_MIN
+        ? `That is at least ${NULLED_LINK_ALERT_MIN} links, above a quiet link check.`
+        : `That jumps past recent runs (${prior.join(", ")}).`;
+    rows.push(
+      notice(
+        `Scrape link check nulled ${nulled} link${nulled === 1 ? "" : "s"}`,
+        withRun([`The link check nulled ${nulled} link${nulled === 1 ? "" : "s"}.`, why], args.runUrl),
+        {
+          alert: "scrape",
+          kind: "nulled_links",
+          fingerprint: "nulled",
+          run_url: args.runUrl,
+          nulled,
+        }
+      )
+    );
+  }
+
   if (spared.length > 0) {
-    lines.push(`The link check spared ${spared.join(", ")} (treated as a host problem, not dead pages).`);
+    rows.push(
+      notice(
+        `Scrape link check spared ${spared.length} host${spared.length === 1 ? "" : "s"}`,
+        withRun(
+          [`The link check spared ${spared.join(", ")} (treated as a host problem, not dead pages).`],
+          args.runUrl
+        ),
+        {
+          alert: "scrape",
+          kind: "spared_hosts",
+          fingerprint: `spared:${spared.join(",")}`,
+          run_url: args.runUrl,
+          spared_hosts: spared,
+        }
+      )
+    );
   }
-  if (validation) lines.push(`URL validation threw: ${validation}`);
-  if (args.runUrl) lines.push(`Run: ${args.runUrl}`);
-  lines.push(DISMISS);
 
-  let title: string;
-  if (sources.length === 1) title = `Scrape source failed: ${sources[0].source}`;
-  else if (sources.length > 1) title = `Scrape sources failed: ${sources.map((s) => s.source).join(", ")}`;
-  else if (validation && nulled === 0 && spared.length === 0) title = "Scrape URL validation failed";
-  else if (nulled > 0) title = `Scrape link check nulled ${nulled} link${nulled === 1 ? "" : "s"}`;
-  else title = `Scrape link check spared ${spared.length} host${spared.length === 1 ? "" : "s"}`;
+  if (validation) {
+    const kind = scrapeErrorKind(validation);
+    rows.push(
+      notice("Scrape URL validation failed", withRun([`URL validation threw: ${validation}`], args.runUrl), {
+        alert: "scrape",
+        kind: "validation",
+        fingerprint: `validation:${kind}`,
+        run_url: args.runUrl,
+        validation_error: validation,
+      })
+    );
+  }
 
-  return notice(title, lines.join("\n"), {
-    alert: "scrape",
-    kind: "source_errors",
-    fingerprint,
-    run_url: args.runUrl,
-    sources,
-    nulled,
-    spared_hosts: spared,
-    validation_error: validation,
-  });
+  return rows;
 }
 
 export function describeScrapeJobFailure(args: {

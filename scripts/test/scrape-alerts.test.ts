@@ -1,6 +1,8 @@
 // Locks lib/scrape-alerts.ts (issue #345). A thrown source, a failed or
-// cancelled scrape job, and a scrape that never started each become one
-// proposed agent_actions row. No Slack, no new action type.
+// cancelled scrape job, and a scrape that never started each become a
+// proposed agent_actions row. A source fingerprint is the name plus the
+// error kind. Nulled links file only above a threshold or a jump, and
+// spared hosts are their own row. No Slack, no new action type.
 //
 // Run: `cd scripts && npm test`
 
@@ -11,14 +13,19 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SCHEDULE_WATCH_ACTION_TYPE } from "../../lib/bigtrees-watch.js";
 import {
+  NULLED_LINK_HISTORY_KEEP,
   SCRAPE_ALERT_TYPE,
   SCRAPE_ERROR_SNIPPET_CHARS,
   buildJobFailureAlert,
   buildMissedRunAlert,
-  buildScrapeRunAlert,
+  buildScrapeRunAlerts,
   fileJobAlertFromEnv,
   fileScrapeAlert,
+  nextNulledLinkHistory,
+  nulledLinkAlertWarranted,
+  parseNulledLinkHistory,
   scrapeAlertCanAutoExecute,
+  scrapeErrorKind,
   scrapeRunUrlFromEnv,
   type ScrapeAlertClient,
   type ScrapeAlertRow,
@@ -67,14 +74,29 @@ function assertNoEmDash(text: string) {
   assert.equal(text.includes("\u2014"), false, text);
 }
 
+function runAlerts(partial: {
+  sourceErrors?: { source: string; message: string }[];
+  nulled?: number;
+  recentNulled?: number[];
+  sparedHosts?: string[];
+  validationError?: string | null;
+  runUrl?: string | null;
+}) {
+  return buildScrapeRunAlerts({
+    sourceErrors: partial.sourceErrors ?? [],
+    nulled: partial.nulled ?? 0,
+    recentNulled: partial.recentNulled,
+    sparedHosts: partial.sparedHosts ?? [],
+    validationError: partial.validationError ?? null,
+    runUrl: partial.runUrl ?? null,
+  });
+}
+
 test("one thrown source is one notice naming that source", () => {
-  const alert = buildScrapeRunAlert({
+  const [alert] = runAlerts({
     sourceErrors: [
       { source: "visit-murphys", message: "Firecrawl fallback did not return valid JSON" },
     ],
-    nulled: 0,
-    sparedHosts: [],
-    validationError: null,
     runUrl: "https://github.com/robgabel/hwy4-events/actions/runs/9",
   });
   assert.ok(alert);
@@ -86,89 +108,197 @@ test("one thrown source is one notice naming that source", () => {
   assert.equal(alert.reversible, false);
   assert.equal(alert.payload.alert, "scrape");
   assert.equal(alert.payload.kind, "source_errors");
+  assert.equal(alert.payload.fingerprint, "source:visit-murphys:invalid-json");
   assert.equal(scrapeAlertCanAutoExecute(alert), false);
   assertNoEmDash(alert.title);
   assertNoEmDash(alert.rationale);
 });
 
-test("two thrown sources share one notice, names sorted, snippets capped", () => {
-  const alert = buildScrapeRunAlert({
+test("two thrown sources are two notices, snippets capped", () => {
+  const alerts = runAlerts({
     sourceErrors: [
       { source: "stevenot", message: "y".repeat(400) },
       { source: "brice-station", message: "calendar empty" },
     ],
-    nulled: 0,
-    sparedHosts: [],
-    validationError: null,
-    runUrl: null,
   });
-  assert.ok(alert);
-  assert.equal(alert.title, "Scrape sources failed: brice-station, stevenot");
-  assert.equal(alert.payload.sources?.length, 2);
-  assert.equal(
-    alert.payload.sources?.find((s) => s.source === "stevenot")?.message.length,
-    SCRAPE_ERROR_SNIPPET_CHARS
+  assert.deepEqual(
+    alerts.map((a) => a.title),
+    ["Scrape source failed: brice-station", "Scrape source failed: stevenot"]
   );
+  assert.equal(alerts[1].payload.sources?.[0].message.length, SCRAPE_ERROR_SNIPPET_CHARS);
   assert.equal(SCRAPE_ERROR_SNIPPET_CHARS, 200);
 });
 
-test("a clean run files nothing", () => {
+test("a source fingerprint is the name and the error kind", () => {
+  const usual = "Firecrawl fallback did not return valid JSON (request abcdef1234567890)";
+  const reworded =
+    "Tribe API request failed on page 3 (direct: HTTP 500 https://visitmurphys.com/x): Firecrawl fallback did not return valid JSON trace-deadbeefcafe";
+  assert.equal(scrapeErrorKind(usual), "invalid-json");
+  assert.equal(scrapeErrorKind(reworded), "invalid-json");
+  assert.equal(scrapeErrorKind("AJAX request RATE-LIMITED (429) for October req-abc123def"), "http-429");
+  assert.equal(scrapeErrorKind("AJAX request failed: 429 https://gocalaveras.com/x"), "http-429");
+  assert.equal(scrapeErrorKind("returned 500 events"), "returned-events");
+  assert.equal(scrapeErrorKind("returned 12 events"), "returned-events");
+  assert.equal(scrapeErrorKind("GoCalaveras events page gave no nonce (HTTP 200, the page loaded)"), "page-config");
+
+  const alone = runAlerts({ sourceErrors: [{ source: "visit-murphys", message: usual }] });
+  const beside = runAlerts({
+    sourceErrors: [
+      { source: "visit-murphys", message: reworded },
+      { source: "stevenot", message: "Stevenot fetch failed HTTP 503 https://www.stevenotwinery.com/x" },
+    ],
+  });
+  assert.equal(alone[0].payload.fingerprint, "source:visit-murphys:invalid-json");
   assert.equal(
-    buildScrapeRunAlert({
-      sourceErrors: [],
-      nulled: 0,
-      sparedHosts: [],
-      validationError: null,
-      runUrl: "https://github.com/robgabel/hwy4-events/actions/runs/1",
-    }),
-    null
+    beside.find((row) => row.payload.sources?.[0].source === "visit-murphys")?.payload.fingerprint,
+    alone[0].payload.fingerprint
   );
+  assert.equal(
+    beside.find((row) => row.payload.sources?.[0].source === "stevenot")?.payload.fingerprint,
+    "source:stevenot:http-5xx"
+  );
+  const rateLimited = runAlerts({
+    sourceErrors: [{ source: "gocalaveras", message: "AJAX request failed: 429" }],
+  });
+  const nonce = runAlerts({
+    sourceErrors: [
+      { source: "gocalaveras", message: "GoCalaveras events page gave no nonce (HTTP 200)" },
+    ],
+  });
+  assert.equal(rateLimited[0].payload.fingerprint, "source:gocalaveras:http-429");
+  assert.equal(nonce[0].payload.fingerprint, "source:gocalaveras:page-config");
+  assert.notEqual(rateLimited[0].payload.fingerprint, nonce[0].payload.fingerprint);
 });
 
-test("nulled links and a spared host share the run notice", () => {
-  const alert = buildScrapeRunAlert({
-    sourceErrors: [],
+test("the same source kind stays one open row when the message or a second source changes", async () => {
+  const usual = runAlerts({
+    sourceErrors: [
+      {
+        source: "visit-murphys",
+        message: "Firecrawl fallback did not return valid JSON request abcdef123456",
+      },
+    ],
+  })[0];
+  const next = runAlerts({
+    sourceErrors: [
+      {
+        source: "visit-murphys",
+        message: "Firecrawl fallback did not return valid JSON trace-deadbeefcafe",
+      },
+      { source: "stevenot", message: "Stevenot fetch failed HTTP 503" },
+    ],
+  });
+  const db = memory();
+  assert.equal((await fileScrapeAlert(db.client, usual)).status, "inserted");
+  assert.equal((await fileScrapeAlert(db.client, usual)).status, "duplicate");
+  for (const row of next) {
+    const filed = await fileScrapeAlert(db.client, row);
+    const source = row.payload.sources?.[0].source;
+    assert.equal(filed.status, source === "visit-murphys" ? "duplicate" : "inserted");
+  }
+  assert.equal(db.inserts.length, 2);
+});
+
+test("a clean run files nothing", () => {
+  assert.deepEqual(runAlerts({ runUrl: "https://github.com/robgabel/hwy4-events/actions/runs/1" }), []);
+});
+
+test("a quiet nulled count files nothing; a 139-link day and a later 150 share one fingerprint", () => {
+  assert.equal(nulledLinkAlertWarranted(2, [0, 1, 1]), false);
+  assert.equal(nulledLinkAlertWarranted(3, [0, 1, 0, 1]), false);
+  assert.equal(nulledLinkAlertWarranted(9, []), false);
+  assert.equal(nulledLinkAlertWarranted(4, [139]), false);
+  assert.deepEqual(runAlerts({ nulled: 2, recentNulled: [0, 1, 1] }), []);
+  assert.deepEqual(runAlerts({ nulled: 9 }), []);
+
+  const outage = runAlerts({ nulled: 139, recentNulled: [0, 1, 1] });
+  const still = runAlerts({ nulled: 150, recentNulled: [0, 1, 139] });
+  assert.equal(outage.length, 1);
+  assert.equal(outage[0].title, "Scrape link check nulled 139 links");
+  assert.equal(outage[0].payload.kind, "nulled_links");
+  assert.equal(outage[0].payload.fingerprint, "nulled");
+  assert.equal(outage[0].payload.nulled, 139);
+  assert.equal(still[0].payload.fingerprint, "nulled");
+  assert.match(outage[0].rationale, /at least 10 links/);
+  assertNoEmDash(outage[0].rationale);
+});
+
+test("a jump under the minimum files, and the fingerprint stays nulled", () => {
+  assert.equal(nulledLinkAlertWarranted(9, [0, 1, 0, 1]), true);
+  const rows = runAlerts({ nulled: 9, recentNulled: [0, 1, 0, 1] });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].payload.fingerprint, "nulled");
+  assert.match(rows[0].rationale, /jumps past recent runs \(0, 1, 0, 1\)/);
+  assertNoEmDash(rows[0].rationale);
+});
+
+test("139 then 150 nulled links do not insert a second row", async () => {
+  const day1 = runAlerts({ nulled: 139 })[0];
+  const day2 = runAlerts({ nulled: 150, recentNulled: [139] })[0];
+  const db = memory();
+  assert.equal((await fileScrapeAlert(db.client, day1)).status, "inserted");
+  assert.equal((await fileScrapeAlert(db.client, day2)).status, "duplicate");
+  assert.equal(db.inserts.length, 1);
+});
+
+test("spared hosts are a separate notice, and host order does not change the fingerprint", () => {
+  const quiet = runAlerts({
+    nulled: 2,
+    recentNulled: [0, 1],
+    sparedHosts: ["visitmurphys.com", "example.com", "visitmurphys.com"],
+  });
+  assert.equal(quiet.length, 1);
+  assert.equal(quiet[0].payload.kind, "spared_hosts");
+  assert.equal(quiet[0].payload.fingerprint, "spared:example.com,visitmurphys.com");
+  assert.equal(quiet[0].title, "Scrape link check spared 2 hosts");
+  assert.match(quiet[0].rationale, /spared example.com, visitmurphys.com/);
+  assertNoEmDash(quiet[0].rationale);
+
+  const loud = runAlerts({
     nulled: 139,
-    sparedHosts: ["visitmurphys.com"],
-    validationError: null,
-    runUrl: null,
+    sparedHosts: ["example.com", "visitmurphys.com"],
   });
-  assert.ok(alert);
-  assert.equal(alert.title, "Scrape link check nulled 139 links");
-  assert.match(alert.rationale, /nulled 139 links/);
-  assert.match(alert.rationale, /spared visitmurphys.com/);
-  assertNoEmDash(alert.rationale);
+  const spared = loud.find((row) => row.payload.kind === "spared_hosts");
+  const nulled = loud.find((row) => row.payload.kind === "nulled_links");
+  assert.equal(spared?.payload.fingerprint, quiet[0].payload.fingerprint);
+  assert.equal(nulled?.payload.fingerprint, "nulled");
+  assert.equal(runAlerts({ sparedHosts: ["other.example"] })[0].payload.fingerprint, "spared:other.example");
 });
 
-test("a URL validation throw is its own notice when nothing else failed", () => {
-  const alert = buildScrapeRunAlert({
-    sourceErrors: [],
-    nulled: 0,
-    sparedHosts: [],
-    validationError: "socket hang up",
-    runUrl: null,
-  });
-  assert.ok(alert);
-  assert.equal(alert.title, "Scrape URL validation failed");
-  assert.match(alert.rationale, /URL validation threw: socket hang up/);
+test("a URL validation throw keeps its kind when the request id changes", () => {
+  const first = runAlerts({ validationError: "socket hang up request abcdef123456" })[0];
+  const second = runAlerts({
+    validationError: "socket hang up trace-deadbeefcafe https://visitmurphys.com/x",
+  })[0];
+  assert.equal(first.title, "Scrape URL validation failed");
+  assert.match(first.rationale, /URL validation threw: socket hang up/);
+  assert.equal(first.payload.kind, "validation");
+  assert.equal(first.payload.fingerprint, "validation:network");
+  assert.equal(second.payload.fingerprint, first.payload.fingerprint);
 });
 
-test("an open row with the same fingerprint is not inserted again; a new error is", async () => {
-  const first = buildScrapeRunAlert({
-    sourceErrors: [{ source: "gocalaveras", message: "429" }],
-    nulled: 0,
-    sparedHosts: [],
-    validationError: null,
-    runUrl: null,
-  });
-  const changed = buildScrapeRunAlert({
-    sourceErrors: [{ source: "gocalaveras", message: "nonce missing" }],
-    nulled: 0,
-    sparedHosts: [],
-    validationError: null,
-    runUrl: null,
-  });
-  assert.ok(first && changed);
+test("nulled-link history keeps the last 14 finite counts", () => {
+  assert.deepEqual(parseNulledLinkHistory(null), []);
+  assert.deepEqual(parseNulledLinkHistory("nope"), []);
+  assert.deepEqual(parseNulledLinkHistory(JSON.stringify({ nulled: 4 })), []);
+  assert.deepEqual(parseNulledLinkHistory(JSON.stringify([1, "x", 2.9, -3])), [1, 2, 0]);
+  const long = Array.from({ length: 20 }, (_, i) => i);
+  assert.equal(NULLED_LINK_HISTORY_KEEP, 14);
+  assert.deepEqual(parseNulledLinkHistory(JSON.stringify(long)), long.slice(-14));
+  assert.deepEqual(nextNulledLinkHistory([0, 1], 2), [0, 1, 2]);
+  assert.deepEqual(nextNulledLinkHistory(long, 3).length, 14);
+  assert.equal(nextNulledLinkHistory(long, 3).at(-1), 3);
+});
+
+test("a different error kind is inserted again", async () => {
+  const first = runAlerts({
+    sourceErrors: [{ source: "gocalaveras", message: "AJAX request failed: 429" }],
+  })[0];
+  const changed = runAlerts({
+    sourceErrors: [
+      { source: "gocalaveras", message: "GoCalaveras events page gave no nonce (HTTP 200)" },
+    ],
+  })[0];
   const db = memory();
   assert.equal((await fileScrapeAlert(db.client, first)).status, "inserted");
   assert.equal((await fileScrapeAlert(db.client, first)).status, "duplicate");
@@ -177,13 +307,9 @@ test("an open row with the same fingerprint is not inserted again; a new error i
 });
 
 test("a select failure does not insert", async () => {
-  const alert = buildScrapeRunAlert({
-    sourceErrors: [{ source: "gocalaveras", message: "429" }],
-    nulled: 0,
-    sparedHosts: [],
-    validationError: null,
-    runUrl: null,
-  });
+  const alert = runAlerts({
+    sourceErrors: [{ source: "gocalaveras", message: "AJAX request failed: 429" }],
+  })[0];
   assert.ok(alert);
   let inserted = false;
   const client: ScrapeAlertClient = {
@@ -322,10 +448,14 @@ test("run urls are only built from an https host, an owner/repo, and a numeric i
   );
 });
 
-test("scrape.ts files the run notice and does not grow a new Slack post", () => {
+test("scrape.ts files each run notice and does not grow a new Slack post", () => {
   const src = readFileSync(join(root, "scripts/scrape.ts"), "utf8");
-  assert.match(src, /buildScrapeRunAlert/);
+  assert.match(src, /buildScrapeRunAlerts/);
+  assert.doesNotMatch(src, /buildScrapeRunAlert[^s]/);
   assert.match(src, /fileScrapeAlert/);
+  assert.match(src, /nextNulledLinkHistory/);
+  assert.match(src, /NULLED_LINK_HISTORY_KEY/);
+  assert.match(src, /recordNulled && recentNulled/);
   assert.doesNotMatch(src, /postSlack/);
   assert.doesNotMatch(src, /SLACK_WEBHOOK/);
 });
