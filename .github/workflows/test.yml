@@ -17,6 +17,8 @@ on:
       - 'lib/**'
       - 'scripts/**'
       - 'supabase/**'
+      - 'CLAUDE.md'
+      - 'docs/subsystems/**'
       - '.github/workflows/test.yml'
   workflow_dispatch: # Manual trigger
 
