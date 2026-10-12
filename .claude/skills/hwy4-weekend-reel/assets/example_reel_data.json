@@ -1,0 +1,31 @@
+{
+  "friday": "2026-10-02",
+  "weekend": "Oct 2 to 4",
+  "format": "long",
+  "thumb_time": 2.9,
+  "aria": "Millie's weekend picks on Hwy 4, Oct 2 to 4: ten lesser-known events plus the big ones. hwy4events.com",
+  "scenes": [
+    {"theme": "sunrise", "art": "stomp", "chip": "Oct 2 to 4 on Hwy 4", "title": ["Beyond the", "Grape Stomp"], "support": "10 more weekend picks", "dur": 4},
+
+    {"layout": "divider", "theme": "night", "art": "beams", "big": "Friday", "sub": "Oct 2"},
+    {"theme": "night", "art": "blend", "chip": "Friday, 5 PM", "title": ["Blend your", "own wine"], "support": "Wine Blending Night", "detail": "Murphys Wine & Beer Garden", "pill": "Ticketed"},
+    {"theme": "night", "art": "slab", "chip": "Friday, 5:30 PM", "title": ["Make your", "own mug"], "support": "Press in pine needles", "detail": "Lackler Ceramics, Arnold", "pill": "From $65"},
+    {"theme": "night", "art": "lights", "chip": "Friday, 6 PM", "title": ["Rooftop", "music"], "support": "Live Music Upstairs", "detail": "Boyle MacDonald Wines, Murphys"},
+    {"theme": "night", "art": "lighthouse", "chip": "Friday, 7:30 PM", "title": ["A ghost", "story opens"], "support": "SPIRIT/SONG, opening night", "detail": "Murphys Creek Theatre", "pill": "Runs to Oct 25"},
+
+    {"layout": "divider", "theme": "sunrise", "art": "sun", "big": "Saturday", "sub": "Oct 3"},
+    {"theme": "sunrise", "art": "map", "chip": "Saturday, 10 AM", "title": ["Art studio", "treasure hunt"], "support": "Calaveras Creative Crawl", "detail": "Show at Native Sons Hall, Murphys", "pill": "Free, Sat & Sun"},
+    {"theme": "sunrise", "art": "hat", "chip": "Saturday evening", "title": ["Live Like", "Lilly"], "support": "Dinner & dance for rodeo queen scholarships", "detail": "Calaveras County Fairgrounds"},
+
+    {"layout": "divider", "theme": "trees", "big": "Sunday", "sub": "Oct 4"},
+    {"theme": "trees", "art": "pumpkins", "chip": "Sunday, 9 AM", "title": ["Market by", "the creek"], "support": "Murphys Park Farmers Market", "detail": "Live music until 1 PM"},
+    {"theme": "trees", "art": "trail", "chip": "Sunday, 10 AM", "title": ["The quiet", "sequoia grove"], "support": "South Grove guided hike", "detail": "Big Trees State Park, 5 miles", "pill": "$10/car park entry"},
+    {"theme": "trees", "art": "notes", "chip": "Sunday, 11:30 AM", "title": ["Vineyard", "music fest"], "support": "Arnold Angels Music Festival", "detail": "Brice Station Vineyards", "pill": "Tickets online"},
+    {"theme": "trees", "art": "slushie", "chip": "Sunday, 1 PM", "title": ["Free music +", "wine slushies"], "support": "Ron Bruder at Stevenot", "detail": "Stevenot Winery, Murphys"},
+
+    {"layout": "list", "theme": "night", "art": "beams", "chip": "Also this weekend", "title": ["And yes,", "the big ones"],
+     "items": [{"what": "Lynyrd Skynyrd, Fri 7 PM", "where": "Ironstone Vineyards, with Foghat & Molly Hatchet"},
+               {"what": "Grape Stomp, Sat 9:30 AM", "where": "Murphys Community Park"}]}
+  ],
+  "end": {"wordmark": "Hwy 4 Events", "line": "All 17 weekend events at", "url": "hwy4events.com", "dur": 4}
+}
