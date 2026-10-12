@@ -5,6 +5,22 @@ scoped so a future session (or person) skips the re-derivation. Newest first.
 
 ---
 
+## 2026-10-12 — Identity and link rules that lived only in the CLAUDE.md narrative
+
+#329 moved the long CLAUDE.md sections into `docs/subsystems/` without rewriting them. The rules below were in that narrative and were not already a lesson here. The full writeup stays in the linked file. Stories already logged in this file (the 7.5h transit window, pub phantoms, `scrape_runs`, URL nulling, series-start drift, the RUM cap, weather tags) were not copied again.
+
+- **Town is a label, not an identity key.** A submitter's town and the venue's town can disagree (Doc Nancy: Camp Connell vs Arnold) and still be one event when the venues agree. The town veto fires only when the venues do not. [docs/subsystems/dedup.md](docs/subsystems/dedup.md).
+- **Same start is not enough to merge.** The Rotary shrimp feed matched because the venue, the start, and the end all agreed. A NULL end never matches: Calaveras Big Trees runs different programs at the same start. Naming different acts disqualifies the window. [docs/subsystems/dedup.md](docs/subsystems/dedup.md).
+- **A copied description is the signal when nobody can name the venue.** The wine-trail pair shared a press release and disagreed on the door. That path applies only when the venues do not agree, so a matinee and an evening that share one synopsis stay split. [docs/subsystems/dedup.md](docs/subsystems/dedup.md).
+- **A conflicting end is noise when the venue is the same.** Coffee & Cars had three extracted ends for one start. [docs/subsystems/dedup.md](docs/subsystems/dedup.md).
+- **`series_umbrella` is the festival separator.** A timeless row without the flag merges on the venue. Two same-day festival cards are intentional. [docs/subsystems/dedup.md](docs/subsystems/dedup.md).
+- **Do not retune `generateDedupKey`.** Match-time normalization stays out of the hash so stored keys do not orphan. [docs/subsystems/dedup.md](docs/subsystems/dedup.md).
+- **Cancel the duplicate; do not delete it.** A deleted aggregator row comes back on the next scrape. `status='cancelled'` is the tombstone the exact-key path updates. [docs/subsystems/dedup.md](docs/subsystems/dedup.md).
+- **Repair event links in generated copy.** The model reconstructs slugs. `repairEventLinks` is the guarantee; the prompt only makes it rarer. [docs/subsystems/newsletter.md](docs/subsystems/newsletter.md).
+- **A keyless CARTO tile is HTTP 200 with a watermark.** A missing `NEXT_PUBLIC_CARTO_API_KEY` has to log `CARTO_BASEMAP_KEY_MISSING`. The env list in CLAUDE.md.
+
+---
+
 ## 2026-10-12 — A watcher that hashes the intro is not watching the schedule
 
 The Big Trees cron fingerprinted from "all programs are free" to the first "Related Pages". That window is the intro. Over the summer the park changed South Grove to Saturdays and Sundays through September and dropped the October Sundays, then took the program list off the page when the grove closed for burns. The hash did not move. The alert went to Slack, which Rob does not read, and a visitor showed up for a hike that was not happening (#382).
