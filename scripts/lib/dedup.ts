@@ -408,7 +408,7 @@ function dropOutOfCorridor(
 ): ExtractedEvent[] {
   const kept: ExtractedEvent[] = [];
   for (const e of events) {
-    if (isOutOfCorridor(e.address, e.venue_name, e.description)) {
+    if (isOutOfCorridor(e.address, e.venue_name, e.description, e.town)) {
       console.warn(
         `  OUT_OF_CORRIDOR source=${orgSlug} venue="${e.venue_name}" ` +
         `date=${e.date} town="${e.town}" name="${e.name}" addr="${e.address ?? ""}"`
