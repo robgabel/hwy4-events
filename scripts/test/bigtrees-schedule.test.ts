@@ -13,7 +13,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateDedupKey } from "../../lib/event-identity.js";
 import { SAT, SUN, expandWeekly } from "../lib/recurrence.js";
-import { buildOccurrences, omitCancelledOccurrences } from "../lib/bigtrees-schedule.js";
+import { boundWeeklySeries } from "../lib/series-bounds.js";
+import {
+  BIGTREES_2026_SEASON_END,
+  buildOccurrences,
+  omitCancelledOccurrences,
+} from "../lib/bigtrees-schedule.js";
 
 /** Daily / most-nights — stay collapsed. */
 const WEEKLY = [
@@ -126,10 +131,52 @@ test("a cancelled South Grove date is left out of a re-seed, including October",
   assert.equal(omitCancelledOccurrences(rows, new Set()).length, rows.length);
 });
 
+test("nothing after 2026-10-25 is generated, and a cancelled dedup_key stays skipped", () => {
+  assert.equal(BIGTREES_2026_SEASON_END, "2026-10-25");
+  const schedule = readFileSync(new URL("../lib/bigtrees-schedule.ts", import.meta.url), "utf8");
+  assert.match(
+    schedule,
+    /return boundWeeklySeries\(out, \{ seasonEnd: BIGTREES_2026_SEASON_END \}\)/
+  );
+
+  const rows = buildOccurrences();
+  assert.ok(rows.length > 0);
+  const late = rows.filter((e) => e.date > "2026-10-25");
+  assert.deepEqual(
+    late.map((e) => `${e.date} ${e.name}`),
+    []
+  );
+
+  const sample = rows.find((e) => e.name === SOUTH_GROVE && e.date === "2026-09-27");
+  assert.ok(sample);
+  const key = generateDedupKey(sample.name, sample.date, sample.town);
+  const kept = omitCancelledOccurrences(rows, new Set([key]));
+  assert.equal(kept.length, rows.length - 1);
+  assert.equal(
+    kept.some((e) => e.name === sample.name && e.date === sample.date),
+    false
+  );
+
+  // Oct 25 is the last day the bound keeps. The next day is past the season,
+  // and a cancelled in-season key is still left out.
+  const onEnd = { ...sample, date: "2026-10-25" };
+  const past = { ...sample, date: "2026-10-26" };
+  const bounded = boundWeeklySeries([past, onEnd, sample], {
+    seasonEnd: BIGTREES_2026_SEASON_END,
+    cancelledDedupKeys: new Set([key]),
+  });
+  assert.deepEqual(
+    bounded.map((e) => e.date),
+    ["2026-10-25"]
+  );
+});
+
 test("the seed omits cancelled dates before it upserts", () => {
   const seed = readFileSync(new URL("../seed-bigtrees-programs-2026.ts", import.meta.url), "utf8");
-  const omitAt = seed.indexOf("omitCancelledOccurrences(");
+  const boundAt = seed.indexOf("boundWeeklySeries(");
   const upsertAt = seed.indexOf("upsertEvents(");
-  assert.ok(omitAt > 0, "seed must call omitCancelledOccurrences");
-  assert.ok(upsertAt > omitAt, "cancelled dates must be dropped before upsertEvents");
+  assert.ok(boundAt > 0, "seed must call boundWeeklySeries");
+  assert.ok(upsertAt > boundAt, "season end and cancelled dates must be applied before upsertEvents");
+  assert.match(seed, /seasonEnd:\s*BIGTREES_2026_SEASON_END/);
+  assert.match(seed, /cancelledDedupKeys:\s*cancelledKeys/);
 });
