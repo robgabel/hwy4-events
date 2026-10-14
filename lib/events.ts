@@ -8,9 +8,10 @@ const UUID_RE =
 
 // Shared by the event detail page and the generated-poster route so the slug →
 // event resolution can't drift. `image_url` is included because the poster
-// branching (supplied vs generated) keys off it.
+// branching (supplied vs generated) keys off it. `series_umbrella` is included
+// because the poster TIME line says "See dates" for an umbrella (#355).
 export const EVENT_COLUMNS =
-  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, last_scraped_at, visibility, org_slug, robs_pick, sold_out, community_sourced, venue_key, image_url, created_at, verification_status, verification_reason, verification_checked_at, family_friendly";
+  "id, name, description, date, start_time, end_time, venue_name, town, address, category, artists, status, price, cost_tier, event_url, source_url, source_name, last_scraped_at, visibility, org_slug, robs_pick, sold_out, community_sourced, venue_key, image_url, created_at, verification_status, verification_reason, verification_checked_at, family_friendly, series_umbrella";
 
 const PAGE_SIZE = 60;
 

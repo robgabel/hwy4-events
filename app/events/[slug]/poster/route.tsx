@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { format, parseISO } from "date-fns";
 import { findEventBySlug } from "@/lib/events";
 import { REGION } from "@/lib/region";
-import { posterKind, humanizeHost } from "@/lib/poster";
+import { posterKind, humanizeHost, posterTimeLabel } from "@/lib/poster";
 import { resolveDisplayAddress } from "@/lib/address";
 import type { EventCategory, Hwy4Event } from "@/lib/types";
 import QRCode from "qrcode";
@@ -166,15 +166,6 @@ function qrSvg(url: string): Promise<string> {
   });
 }
 
-function formatTime(t: string | null): string | null {
-  if (!t) return null;
-  const [h, m] = t.split(":");
-  const hour = parseInt(h, 10);
-  const ampm = hour >= 12 ? "pm" : "am";
-  const display = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-  return `${display}${m && m !== "00" ? ":" + m : ""}${ampm}`;
-}
-
 // Brand fonts are served from /public/fonts and fetched over HTTP from the
 // request's own origin — the portable next/og pattern (file-URL fetch isn't
 // supported in the Node runtime). Memoized per process after the first load.
@@ -225,9 +216,11 @@ export async function GET(
   const dow = format(dateObj, "EEE");
   const md = format(dateObj, "MMM d");
   const year = format(dateObj, "yyyy");
-  const start = formatTime(event.start_time);
-  const end = formatTime(event.end_time);
-  const timeStr = start ? (end ? `${start}–${end}` : start) : "All day";
+  const timeStr = posterTimeLabel(
+    event.start_time,
+    event.end_time,
+    event.series_umbrella
+  );
   const addr = resolveDisplayAddress(event.address, event.town);
   const host = humanizeHost(event.source_name, event.name);
   const free = event.cost_tier === "free";

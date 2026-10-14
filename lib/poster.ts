@@ -64,3 +64,34 @@ export function humanizeHost(
   if (norm(cleaned) === norm(title)) return null; // just repeats the title
   return cleaned.replace(/\b([a-z])/g, (_m, c: string) => c.toUpperCase());
 }
+
+/**
+ * TIME line on the generated poster, which is also the event page's og:image.
+ *
+ * A stated clock stays as it was: "7pm", or "7pm–10pm" when an end is stored.
+ * A missing start is "Time TBA". `hwy4_events` has no all-day column (source
+ * `all_day` flags are stored as null times), so a blank start is unknown, not
+ * "All day" (#355). A `series_umbrella` row stands for a run of dated shows,
+ * so the column says "See dates" instead of one door time.
+ */
+export function posterTimeLabel(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  umbrella?: boolean | null
+): string {
+  if (umbrella) return "See dates";
+  const startLabel = formatPosterClock(start);
+  if (!startLabel) return "Time TBA";
+  const endLabel = formatPosterClock(end);
+  return endLabel ? `${startLabel}–${endLabel}` : startLabel;
+}
+
+/** 24h "HH:MM[:SS]" → the poster clock ("7pm", "7:30pm"). Null when absent. */
+function formatPosterClock(t: string | null | undefined): string | null {
+  if (!t) return null;
+  const [h, m] = t.split(":");
+  const hour = parseInt(h, 10);
+  const ampm = hour >= 12 ? "pm" : "am";
+  const display = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+  return `${display}${m && m !== "00" ? ":" + m : ""}${ampm}`;
+}
