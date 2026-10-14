@@ -17,6 +17,16 @@ import { FIRECRAWL_SOURCES } from "./scrapers/firecrawl-sources.js";
 import { validateEventUrls } from "./lib/validate-urls.js";
 import { runHealthCheck } from "./lib/health.js";
 import { beginScrapeRun, recordSourceError, finishScrapeRun } from "./lib/scrape-run-log.js";
+import { supabaseAdmin } from "./lib/supabase-admin.js";
+import {
+  NULLED_LINK_HISTORY_KEY,
+  buildScrapeRunAlerts,
+  fileScrapeAlert,
+  nextNulledLinkHistory,
+  parseNulledLinkHistory,
+  scrapeRunUrlFromEnv,
+  type ScrapeAlertClient,
+} from "../lib/scrape-alerts.js";
 
 /**
  * Sources whose scraping shape is unique enough to keep their own file:
@@ -107,6 +117,45 @@ const SCRAPERS: Record<string, () => Promise<void>> = {
   ),
 };
 
+/**
+ * Recent nulled-link counts, oldest first. Null when the read failed, so the
+ * caller does not replace a real baseline with today's count alone.
+ */
+async function loadNulledLinkHistory(): Promise<number[] | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("site_config")
+      .select("value")
+      .eq("key", NULLED_LINK_HISTORY_KEY)
+      .maybeSingle();
+    if (error) {
+      console.error(`Nulled-link history read failed: ${error.message}`);
+      return null;
+    }
+    return parseNulledLinkHistory(data?.value ?? null);
+  } catch (err) {
+    console.error("Nulled-link history read failed:", err);
+    return null;
+  }
+}
+
+/** Best-effort. A write failure must not fail the scrape job. */
+async function saveNulledLinkHistory(counts: number[]): Promise<void> {
+  try {
+    const { error } = await supabaseAdmin.from("site_config").upsert(
+      {
+        key: NULLED_LINK_HISTORY_KEY,
+        value: JSON.stringify(counts),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" }
+    );
+    if (error) console.error(`Nulled-link history write failed: ${error.message}`);
+  } catch (err) {
+    console.error("Nulled-link history write failed:", err);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const sourceFlag = args.indexOf("--source");
@@ -153,17 +202,50 @@ async function main() {
   // visibility (see scripts/lib/scrape-run-log.ts).
   await finishScrapeRun(sources);
 
-  // Validate all event URLs after scraping
+  // Validate all event URLs after scraping. A thrown source, a loud link
+  // check, and a spared host each file their own notice. The process still
+  // exits 0: the GitHub alert job only runs when this job is not success,
+  // and a thrown source must not file a second row from that job.
   const skipValidation = args.includes("--skip-url-check");
+  let nulled = 0;
+  let sparedHosts: string[] = [];
+  let validationError: string | null = null;
+  let recentNulled: number[] | null = null;
+  // Only a finished link check updates the baseline. A skip, a throw, or a
+  // failed history read must not record 0 (or today alone) over a real baseline.
+  let recordNulled = false;
   if (!skipValidation) {
     try {
-      await validateEventUrls();
+      const urls = await validateEventUrls();
+      nulled = urls.nulled;
+      sparedHosts = urls.sparedHosts;
+      recordNulled = true;
+      recentNulled = await loadNulledLinkHistory();
     } catch (err) {
       console.error("URL validation failed:", err);
+      validationError = err instanceof Error ? err.message : String(err);
     }
   }
 
-  // Post-scrape health report
+  const alerts = buildScrapeRunAlerts({
+    sourceErrors: [...sourceErrors.entries()].map(([source, message]) => ({ source, message })),
+    nulled,
+    recentNulled: recentNulled ?? [],
+    sparedHosts,
+    validationError,
+    runUrl: scrapeRunUrlFromEnv(process.env),
+  });
+  for (const alert of alerts) {
+    const filed = await fileScrapeAlert(supabaseAdmin as unknown as ScrapeAlertClient, alert);
+    const detail = filed.status === "error" ? `: ${filed.message}` : "";
+    console.log(`SCRAPE_ALERT ${filed.status}${detail} ${alert.title}`);
+  }
+  if (recordNulled && recentNulled !== null) {
+    await saveNulledLinkHistory(nextNulledLinkHistory(recentNulled, nulled));
+  }
+
+  // Post-scrape health report. A throw here stays a log line: the health table
+  // is advisory, and failing the job would also file a job-level alert.
   const skipHealth = args.includes("--skip-health");
   if (!skipHealth) {
     try {

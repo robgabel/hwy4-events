@@ -396,3 +396,46 @@ export function findVenueSlotCollisions(rows: AuditRow[]): VenueSlotCollision[] 
   }
   return out;
 }
+
+/**
+ * How long the newest `scrape_runs.started_at` may be before the daily audit
+ * says the scrape did not run.
+ *
+ * The Action is scheduled for 08:00 UTC and has been observed starting as late
+ * as 16:20 UTC. The audit runs at 18:00 UTC, after that window, so a run that
+ * is merely late has already started by the time this is checked (16:20 to
+ * 18:00 is about 1h40m). "Older than 30 hours" therefore does not fire on a
+ * late same-day start. A skipped day whose previous start was on time (08:00
+ * yesterday, audit 18:00 today = 34h) does fire. A skipped day whose previous
+ * start was the latest observed delay (16:20 yesterday = 25h40m) stays under
+ * 30h at the next audit and fires once the gap passes 30h. Exactly 30h is not
+ * older, so it stays quiet.
+ */
+export const SCRAPE_RUN_MAX_AGE_MS = 30 * 60 * 60 * 1000;
+
+/** Milliseconds since `startedAt`, or null when there is no parseable start. */
+export function scrapeRunAgeMs(
+  startedAt: string | null | undefined,
+  nowMs: number
+): number | null {
+  if (startedAt == null || startedAt.trim() === "") return null;
+  const t = Date.parse(startedAt);
+  if (Number.isNaN(t)) return null;
+  return nowMs - t;
+}
+
+/**
+ * True when the scrape has not recorded a start, or the newest start is older
+ * than 30 hours. A clock-skewed future timestamp is not overdue. An unreadable
+ * timestamp is treated as "never ran": a row we cannot age is not evidence
+ * the job started.
+ */
+export function scrapeRunIsOverdue(
+  startedAt: string | null | undefined,
+  nowMs: number
+): boolean {
+  const age = scrapeRunAgeMs(startedAt, nowMs);
+  if (age === null) return true;
+  if (age < 0) return false;
+  return age > SCRAPE_RUN_MAX_AGE_MS;
+}

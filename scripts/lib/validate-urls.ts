@@ -67,6 +67,8 @@ export async function validateEventUrls(): Promise<{
   broken: number;
   nulled: number;
   unconfirmed: number;
+  /** Hosts the anomaly guard refused to null, so a bad day is visible. */
+  sparedHosts: string[];
 }> {
   console.log("\n=== URL Validation ===");
 
@@ -80,12 +82,12 @@ export async function validateEventUrls(): Promise<{
 
   if (error) {
     console.error("Failed to fetch events for URL validation:", error.message);
-    return { checked: 0, broken: 0, nulled: 0, unconfirmed: 0 };
+    return { checked: 0, broken: 0, nulled: 0, unconfirmed: 0, sparedHosts: [] };
   }
 
   if (!events || events.length === 0) {
     console.log("No upcoming events with URLs to validate");
-    return { checked: 0, broken: 0, nulled: 0, unconfirmed: 0 };
+    return { checked: 0, broken: 0, nulled: 0, unconfirmed: 0, sparedHosts: [] };
   }
 
   // Skip hosts we can't server-validate and don't render anyway (bot-walled
@@ -170,5 +172,6 @@ export async function validateEventUrls(): Promise<{
     broken: dead.length,
     nulled,
     unconfirmed: unconfirmed.length,
+    sparedHosts: plan.sparedHosts.map((h) => h.host),
   };
 }

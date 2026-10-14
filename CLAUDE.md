@@ -68,7 +68,7 @@ Schedule only. The full purpose of each row, including the flags and the failure
 | `/api/reconcile-dupes` | Daily 3:30pm UTC | Merge duplicates when `RECONCILE_EXECUTE=true`. |
 | `/api/indexnow` | Daily 4pm UTC | Push event URLs created in the last ~24h. |
 | `/api/snapshot-analytics` | Daily 9am UTC | Cloudflare RUM snapshot. The spike guard nulls a bad day's totals. |
-| `/api/check-events` | Daily 6pm UTC | Data-quality audit. Stashes `latest_audit_summary`. |
+| `/api/check-events` | Daily 6pm UTC | Data-quality audit. Stashes `latest_audit_summary`. Files a missed-scrape row when the newest run is older than 30 hours. |
 | `/api/aeo-audit-reminder` | 1st of the month, 16:00 UTC | Slack reminder for the manual AEO ritual. |
 | `/api/sync-venue-facts` | Mon 12pm UTC | Weekly Google Places refresh. |
 | `/api/sync-venue-facts?only=new` | Daily 11:30am UTC | Places onboarding for venues never synced. |
