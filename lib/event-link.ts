@@ -11,11 +11,16 @@
 //
 // resolveEventLink answers destination from event *identity*, in priority order:
 //   1. organizer canonical  (hwy4_orgs.canonical_url, matched by slug or pattern)
-//   2. venue canonical      (registry URL, caller-supplied)
-//   3. stable-source link   (event_url from a durable host, e.g. visitmurphys.com)
-//   4. aggregator fallback  (event_url from GoCalaveras — non-durable source link;
+//   2. same-host event page (event_url on the venue's site, deeper than /)
+//   3. venue canonical      (registry URL, caller-supplied)
+//   4. stable-source link   (event_url from a durable host, e.g. visitmurphys.com)
+//   5. aggregator fallback  (event_url from GoCalaveras — non-durable source link;
 //                            excluded for community submissions)
-//   5. none                 (community / no source — our own page is the destination)
+//   6. none                 (community / no source — our own page is the destination)
+//
+// The Source receipt (lib/source-receipt.ts) is a different question: where we
+// found the listing. It always links event_url, even when this resolver sends
+// the Visit button to a venue homepage.
 //
 // Primary source always wins: a GoCalaveras event that also matches an organizer
 // or venue keeps linking to that organizer/venue, NOT to GoCalaveras.
@@ -131,8 +136,8 @@ const SOCIAL_HOSTS: ReadonlySet<string> = new Set([
  *  always refused to promote a Facebook page to a durable CTA, and it would be
  *  incoherent for the same host to become a high-contrast "Visit Event Page"
  *  button and a schema.org offer.url purely because the link arrived in a
- *  different column. It renders as the quieter "Listed on facebook.com" line
- *  instead, which is what an aggregator-grade link is for. */
+ *  different column. The Source receipt still links it. It does not become
+ *  the Visit button or a schema.org offer.url. */
 export function isUnstableHost(url: string): boolean {
   const h = hostOf(url);
   if (!h) return true; // unparseable → don't trust it
@@ -140,11 +145,9 @@ export function isUnstableHost(url: string): boolean {
   return UNSTABLE_SOURCE_HOSTS.has(h) || UNSTABLE_SOURCE_HOSTS.has(`www.${h}`);
 }
 
-/** Friendly provenance label for a non-durable aggregator source link — the
- *  "via GoCalaveras" on a card and "Listed on GoCalaveras" on the detail page.
- *  Only aggregator hosts reach this path today; falls back to the bare host so a
- *  future aggregator still reads sensibly. Shared so the card + detail page can't
- *  drift. */
+/** Friendly provenance label for a source host. The Source receipt uses it
+ *  ("GoCalaveras", "Visit Murphys", "Facebook"). Falls back to the bare host
+ *  so an unlabeled site still reads sensibly. */
 export function aggregatorHostLabel(href: string): string {
   const h = hostOf(href);
   if (!h) return "the source";
@@ -250,6 +253,27 @@ export function matchOrganizerForEvent<O extends LinkOrg>(
 }
 
 /**
+ * True when `eventUrl` is a page on the same site as the venue homepage and
+ * the path is deeper than `/` (#362). A homepage, including one with a query
+ * or hash, is not deeper. Aggregator and social hosts are never promoted:
+ * those stay the non-durable fallback, and the Source receipt is what shows
+ * them when a venue website wins the Visit button.
+ */
+export function isDeeperSameHostPage(eventUrl: string, venueUrl: string): boolean {
+  if (!isHttpUrl(eventUrl) || !isHttpUrl(venueUrl)) return false;
+  if (isUnstableHost(eventUrl)) return false;
+  const eventHost = hostOf(eventUrl);
+  const venueHost = hostOf(venueUrl);
+  if (!eventHost || eventHost !== venueHost) return false;
+  try {
+    const path = new URL(eventUrl).pathname.replace(/\/+$/, "");
+    return path.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The destination resolver. Pure: callers supply the matched org and any venue
  * URL. Use resolveEventLinkFromOrgs when you have the full org registry.
  */
@@ -274,7 +298,23 @@ export function resolveEventLink(
     };
   }
 
-  // 2. Venue canonical.
+  // 2. Same-host event or ticket page. Beats the venue homepage so a reader
+  //    lands on the show, not a site with no events (#362). Off-site and
+  //    aggregator event_urls do not take this branch.
+  if (
+    opts?.venueUrl &&
+    ev.event_url &&
+    isDeeperSameHostPage(ev.event_url, opts.venueUrl)
+  ) {
+    return {
+      href: ev.event_url,
+      label: `Visit ${opts.venueName?.trim() || ev.venue_name}`,
+      kind: "source",
+      durable: true,
+    };
+  }
+
+  // 3. Venue canonical.
   if (opts?.venueUrl) {
     return {
       href: opts.venueUrl,
@@ -284,7 +324,7 @@ export function resolveEventLink(
     };
   }
 
-  // 3. Scraped per-event link — from a host we trust to be durable. Gate on
+  // 4. Scraped per-event link — from a host we trust to be durable. Gate on
   //    isHttpUrl first: a scraped `event_url` is attacker-adjacent (it comes
   //    from an aggregator's external-link field), so a javascript:/data: value
   //    must be treated as absent, never rendered as an href.
@@ -301,7 +341,7 @@ export function resolveEventLink(
     }
   }
 
-  // 4. No durable destination — the internal event page is the destination.
+  // 5. No durable destination — the internal event page is the destination.
   return NONE;
 }
 

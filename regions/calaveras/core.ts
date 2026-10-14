@@ -131,7 +131,11 @@ export const CALAVERAS_CORE: RegionCore = {
     "visitmurphys.com",
   ],
   unstableSourceHosts: ["gocalaveras.com"],
-  sourceHostLabels: { "gocalaveras.com": "GoCalaveras", "facebook.com": "Facebook" },
+  sourceHostLabels: {
+    "gocalaveras.com": "GoCalaveras",
+    "facebook.com": "Facebook",
+    "visitmurphys.com": "Visit Murphys",
+  },
   sourceSlugLabels: {
     "moose-lodge": "Moose Lodge",
     "sequoia-woods": "Sequoia Woods",

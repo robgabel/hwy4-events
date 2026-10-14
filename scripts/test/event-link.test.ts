@@ -177,7 +177,7 @@ test("facebook event links render, but as a NON-durable source", () => {
   // facebook.com into schema.org offer.url as a matter of course. The site's
   // whole AEO/SEO thesis is to BE the canonical answer for these events, so
   // handing structured-data offers to a login-walled silo works against it.
-  // The link still renders — as the quieter "Listed on Facebook" line.
+  // The link still renders, as the Source line, and stays out of the Visit button.
   const r = resolveEventLink(ev({ name: "Show", event_url: "https://www.facebook.com/events/123" }));
   assert.equal(r.kind, "source");
   assert.equal(r.durable, false);
@@ -416,6 +416,82 @@ test("resolveEventLink: the live Copperopolis Town Square shape stays non-durabl
   assert.equal(r.href, "https://www.facebook.com/events/1801994517316530/");
   assert.equal(r.kind, "source");
   // durable:false keeps it out of JSON-LD offer.url and out of the outline
-  // "Visit …" button; it renders as "Listed on Facebook" instead.
+  // "Visit …" button. The Source receipt still links the post.
   assert.equal(r.durable, false);
+});
+
+// ── Same-host event page beats the venue homepage (#362) ──────────────────
+// Prospect 772 stores a Square product permalink. The Visit button used to
+// open prospect772.com, which does not list the show.
+
+const PROSPECT_HOME = "http://www.prospect772.com/";
+const PROSPECT_TICKET =
+  "https://www.prospect772.com/product/october-24th-boomer-prospect-772-concert-series/IEDPMOLSJEESMJZNUHDE2YIH";
+
+test("same-host deep link wins over the venue homepage", () => {
+  const r = resolveEventLink(
+    ev({
+      name: "Boomer Live Music @ Prospect 772",
+      venue_name: "Prospect 772 Winery",
+      org_slug: "gocalaveras",
+      event_url: PROSPECT_TICKET,
+    }),
+    { venueUrl: PROSPECT_HOME, venueName: "Prospect 772 Winery" }
+  );
+  assert.equal(r.kind, "source");
+  assert.equal(r.durable, true);
+  assert.equal(r.href, PROSPECT_TICKET);
+  assert.equal(r.label, "Visit Prospect 772 Winery");
+});
+
+test("a homepage event_url does not replace the venue homepage", () => {
+  const r = resolveEventLink(
+    ev({
+      name: "Show",
+      venue_name: "Prospect 772 Winery",
+      event_url: "https://www.prospect772.com/?utm_source=google",
+    }),
+    { venueUrl: PROSPECT_HOME, venueName: "Prospect 772 Winery" }
+  );
+  assert.equal(r.kind, "venue");
+  assert.equal(r.href, PROSPECT_HOME);
+});
+
+test("an aggregator event_url still loses to the venue website", () => {
+  const listing =
+    "https://www.gocalaveras.com/events/thursday-summer-concert-series-the-watering-hole-23/";
+  const r = resolveEventLink(
+    ev({
+      name: "Thursday Summer Concert Series @ The Watering Hole",
+      venue_name: "The Watering Hole",
+      org_slug: "gocalaveras",
+      event_url: listing,
+    }),
+    { venueUrl: "https://murphyswateringhole.com/", venueName: "The Watering Hole" }
+  );
+  assert.equal(r.kind, "venue");
+  assert.equal(r.href, "https://murphyswateringhole.com/");
+  assert.notEqual(r.href, listing);
+});
+
+test("organizer canonical still beats a same-host ticket page", () => {
+  const r = resolveEventLink(
+    ev({
+      name: "Boomer Live Music @ Prospect 772",
+      venue_name: "Prospect 772 Winery",
+      event_url: PROSPECT_TICKET,
+    }),
+    {
+      org: {
+        slug: "prospect-772",
+        display_name: "Prospect 772",
+        canonical_url: "https://www.prospect772.com/events",
+        match_patterns: null,
+      },
+      venueUrl: PROSPECT_HOME,
+      venueName: "Prospect 772 Winery",
+    }
+  );
+  assert.equal(r.kind, "organizer");
+  assert.equal(r.href, "https://www.prospect772.com/events");
 });
