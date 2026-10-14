@@ -46,7 +46,8 @@ import TwoFiftyBanner from "@/components/TwoFiftyBanner";
 import AdoptAPetBanner from "@/components/AdoptAPetBanner";
 import ClassicRockBanner from "@/components/ClassicRockBanner";
 import { isParadeEvent, isFourthFeatureEvent, isTwoFiftyEvent, isAdoptAPetEvent, isClassicRockEvent } from "@/lib/featured-events";
-import { resolveEventLink, matchOrgForEvent, matchOrganizerForEvent, promotableVenueUrl, aggregatorHostLabel, type LinkOrg } from "@/lib/event-link";
+import { resolveEventLink, matchOrgForEvent, matchOrganizerForEvent, promotableVenueUrl, type LinkOrg } from "@/lib/event-link";
+import SourceReceipt from "@/components/SourceReceipt";
 import { nameWithArtists } from "@/lib/venue-pages";
 import { hermitFestPageSeo } from "@/lib/hermit-fest-page";
 import { ironstoneConcoursPage } from "@/lib/ironstone-concours-page";
@@ -522,9 +523,11 @@ export default async function EventPage({ params }: PageProps) {
                 growth loop (a shared link brings the next visitor), so nothing
                 competes with it for fill. The durable "Visit event page" link is
                 promoted to a clearly-secondary outline button (organizer / venue /
-                stable source only); a non-durable aggregator source renders as an
-                attributed line below, never a button. Directions + calendar are
-                secondary; the rarely-used poster download is demoted to an icon. */}
+                stable source only). A non-durable aggregator is not a button.
+                The Source line below is where the listing was found, and it
+                shows even when Visit points elsewhere.
+                Directions + calendar are secondary; the rarely-used poster
+                download is demoted to an icon. */}
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
               <ShareButton
                 url={`${SITE_URL}/events/${slug}`}
@@ -583,26 +586,10 @@ export default async function EventPage({ params }: PageProps) {
               </a>
             </div>
 
-            {/* Non-durable aggregator source (e.g. GoCalaveras): shown on every
-                such event for credibility + an accuracy safety valve (if our data
-                is wrong, the reader can verify at the source), but as an attributed
-                line, not a button — and it stays out of JSON-LD (offerUrl) too.
-                Durable sources render as the outline button above instead. */}
-            {!link.durable && link.href && (
-              <p className="mt-4 text-sm text-stone">
-                Listed on{" "}
-                <a
-                  href={link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-otrack="more_info"
-                  className="font-medium text-pine underline underline-offset-2 hover:text-forest"
-                >
-                  {aggregatorHostLabel(link.href)}
-                </a>
-                <span aria-hidden="true"> ↗</span>
-              </p>
-            )}
+            {/* Where we found the listing. Independent of the Visit button, so a
+                venue homepage cannot hide the dated GoCalaveras or Visit Murphys
+                page. Community rows with no URL still get a text receipt. */}
+            <SourceReceipt event={event} />
 
             {/* Inline correction form — expands in place so the reader keeps the
                 event they're correcting on screen (no navigating away and back).

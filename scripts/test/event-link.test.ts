@@ -177,7 +177,7 @@ test("facebook event links render, but as a NON-durable source", () => {
   // facebook.com into schema.org offer.url as a matter of course. The site's
   // whole AEO/SEO thesis is to BE the canonical answer for these events, so
   // handing structured-data offers to a login-walled silo works against it.
-  // The link still renders — as the quieter "Listed on Facebook" line.
+  // The link still renders, as the Source line, and stays out of the Visit button.
   const r = resolveEventLink(ev({ name: "Show", event_url: "https://www.facebook.com/events/123" }));
   assert.equal(r.kind, "source");
   assert.equal(r.durable, false);
@@ -416,6 +416,6 @@ test("resolveEventLink: the live Copperopolis Town Square shape stays non-durabl
   assert.equal(r.href, "https://www.facebook.com/events/1801994517316530/");
   assert.equal(r.kind, "source");
   // durable:false keeps it out of JSON-LD offer.url and out of the outline
-  // "Visit …" button; it renders as "Listed on Facebook" instead.
+  // "Visit …" button. The Source receipt still links the post.
   assert.equal(r.durable, false);
 });

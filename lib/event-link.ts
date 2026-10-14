@@ -17,6 +17,11 @@
 //                            excluded for community submissions)
 //   5. none                 (community / no source — our own page is the destination)
 //
+// The Source receipt (lib/source-receipt.ts) is a different question: where we
+// found the listing. It always links event_url, even when this resolver sends
+// the Visit button to an organizer calendar or a venue homepage. A same-host
+// ticket page that should beat that calendar is #362, not this resolver.
+//
 // Primary source always wins: a GoCalaveras event that also matches an organizer
 // or venue keeps linking to that organizer/venue, NOT to GoCalaveras.
 //
@@ -131,8 +136,8 @@ const SOCIAL_HOSTS: ReadonlySet<string> = new Set([
  *  always refused to promote a Facebook page to a durable CTA, and it would be
  *  incoherent for the same host to become a high-contrast "Visit Event Page"
  *  button and a schema.org offer.url purely because the link arrived in a
- *  different column. It renders as the quieter "Listed on facebook.com" line
- *  instead, which is what an aggregator-grade link is for. */
+ *  different column. The Source receipt still links it. It does not become
+ *  the Visit button or a schema.org offer.url. */
 export function isUnstableHost(url: string): boolean {
   const h = hostOf(url);
   if (!h) return true; // unparseable → don't trust it
@@ -140,11 +145,9 @@ export function isUnstableHost(url: string): boolean {
   return UNSTABLE_SOURCE_HOSTS.has(h) || UNSTABLE_SOURCE_HOSTS.has(`www.${h}`);
 }
 
-/** Friendly provenance label for a non-durable aggregator source link — the
- *  "via GoCalaveras" on a card and "Listed on GoCalaveras" on the detail page.
- *  Only aggregator hosts reach this path today; falls back to the bare host so a
- *  future aggregator still reads sensibly. Shared so the card + detail page can't
- *  drift. */
+/** Friendly provenance label for a source host. The Source receipt uses it
+ *  ("GoCalaveras", "Visit Murphys", "Facebook"). Falls back to the bare host
+ *  so an unlabeled site still reads sensibly. */
 export function aggregatorHostLabel(href: string): string {
   const h = hostOf(href);
   if (!h) return "the source";

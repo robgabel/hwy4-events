@@ -6,6 +6,7 @@ import Link from "next/link";
 import EventMap from "@/components/EventMapStatic";
 import NewsletterSignup from "@/components/NewsletterSignup";
 import ShareButton from "@/components/ShareButton";
+import SourceReceipt from "@/components/SourceReceipt";
 
 const NAVY = "#3C3B6E"; // Old Glory Blue
 const RED = "#B22234"; // Old Glory Red
@@ -309,6 +310,7 @@ export default function PatrioticEventDetail({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
             </a>
+            <SourceReceipt event={event} className="mt-3 text-sm text-stone" />
           </div>
         </div>
       </section>
