@@ -89,21 +89,23 @@ test("flyer: a community poster image is the receipt when there is no event URL"
   assert.equal(sourceReceiptSentence(r), "Source: submitted flyer (seen October 8, 2026)");
 });
 
-test("flyer: a calendar PDF with no per-event page links the file", () => {
+test("a calendar PDF links the file under the source name", () => {
   const href =
     "https://img1.wsimg.com/blobby/go/6342668b-0500-4ff8-8ef0-0363a71f22d7/OCTOBER%20Calendar%202026.pdf";
+  const photo = "https://example.com/lodge-photo.jpg";
   const r = resolveSourceReceipt(
     row({
       event_url: null,
-      image_url: null,
+      image_url: photo,
       org_slug: "moose-lodge",
       source_name: "moose-lodge-calendar",
       source_url: href,
     })
   );
-  assert.equal(r.kind, "flyer");
+  assert.equal(r.kind, "durable");
   assert.equal(r.href, href);
-  assert.equal(r.label, "submitted flyer");
+  assert.equal(r.label, "Moose Lodge");
+  assert.notEqual(r.href, photo);
 });
 
 test("community: no URL and no flyer is an honest text receipt", () => {
@@ -141,7 +143,7 @@ test("a calendar page is the receipt when the row has no per-event URL", () => {
   assert.equal(r.label, "Bear Valley Adventure Co.");
 });
 
-test("a stored image beats a venue homepage that has no dated listing", () => {
+test("an external source page beats a stored photo", () => {
   const image =
     "https://static.wixstatic.com/media/8885f1_f870c2d2f1fa4f3c9208621e9b0594e5~mv2.jpg";
   const r = resolveSourceReceipt(
@@ -152,8 +154,25 @@ test("a stored image beats a venue homepage that has no dated listing", () => {
       source_name: "Murphys Irish Pub",
     })
   );
-  assert.equal(r.kind, "flyer");
+  assert.equal(r.kind, "durable");
+  assert.equal(r.href, "https://www.murphysirishpubca.com/");
+  assert.equal(r.label, "Murphys Irish Pub");
+});
+
+test("a scraped photo with no external source links the image under the source name", () => {
+  const image = "https://example.com/band.jpg";
+  const r = resolveSourceReceipt(
+    row({
+      event_url: null,
+      image_url: image,
+      source_url: "https://hwy4events.com/submit",
+      source_name: "Murphys Irish Pub",
+      community_sourced: false,
+    })
+  );
+  assert.equal(r.kind, "durable");
   assert.equal(r.href, image);
+  assert.equal(r.label, "Murphys Irish Pub");
 });
 
 test("javascript: and this site's submit form never become the receipt link", () => {

@@ -7,9 +7,12 @@
 // Priority (first hit wins):
 //   1. event_url, when it is an external http(s) URL (aggregator, durable
 //      host, or Facebook). Our own site is not a receipt.
-//   2. image_url, a stored poster or flyer.
-//   3. source_url, when it is an external http(s) URL (calendar page, PDF).
-//      A PDF or image file is a flyer. Our /submit URL is not a receipt.
+//   2. source_url, when it is an external http(s) URL (calendar page or PDF).
+//      This beats a stored photo. The label is the source name. Our /submit
+//      URL is not a receipt.
+//   3. image_url. "submitted flyer" only when the row is community_sourced.
+//      A scraped photo with no external source links the image under the
+//      source name.
 //   4. community text ("Submitted by community") when nothing is linkable.
 //
 // Always returns a line. A blank beats a guessed URL. Locked by
@@ -75,17 +78,6 @@ function isFacebookUrl(url: string): boolean {
   return !!host && (host === "facebook.com" || host.endsWith(".facebook.com"));
 }
 
-function looksLikeFlyerFile(url: string): boolean {
-  try {
-    const path = decodeURIComponent(new URL(url).pathname).toLowerCase();
-    return (
-      /\.(pdf|png|jpe?g|gif|webp)$/.test(path) || path.includes("/event-posters/")
-    );
-  } catch {
-    return false;
-  }
-}
-
 function listingLabel(ev: SourceReceiptInput, href: string): string {
   const name = ev.source_name?.replace(/\s+/g, " ").trim();
   if (name && /\s/.test(name) && !/community submission/i.test(name)) return name;
@@ -131,20 +123,24 @@ export function resolveSourceReceipt(ev: SourceReceiptInput): SourceReceipt {
     });
   }
 
-  const image = externalUrl(ev.image_url);
-  if (image) {
-    return withSeen(ev, { kind: "flyer", href: image, label: FLYER_LABEL });
-  }
-
   const sourceUrl = externalUrl(ev.source_url);
   if (sourceUrl) {
-    if (looksLikeFlyerFile(sourceUrl)) {
-      return withSeen(ev, { kind: "flyer", href: sourceUrl, label: FLYER_LABEL });
-    }
     return withSeen(ev, {
       kind: "durable",
       href: sourceUrl,
       label: listingLabel(ev, sourceUrl),
+    });
+  }
+
+  const image = externalUrl(ev.image_url);
+  if (image) {
+    if (ev.community_sourced) {
+      return withSeen(ev, { kind: "flyer", href: image, label: FLYER_LABEL });
+    }
+    return withSeen(ev, {
+      kind: "durable",
+      href: image,
+      label: listingLabel(ev, image),
     });
   }
 
