@@ -20,8 +20,9 @@
  * weekly watcher (/api/check-bigtrees-schedule) files a proposed agent_actions
  * row when the program list changes or disappears so we re-transcribe and re-run.
  * To change the schedule, edit the PROGRAMS below and re-run the seed; nothing
- * else writes these rows. omitCancelledOccurrences drops any date already
- * cancelled, so a re-seed cannot republish one.
+ * else writes these rows. omitCancelledOccurrences (scripts/lib/series-bounds.ts,
+ * shared with every weekly seed) drops any date already cancelled, so a re-seed
+ * cannot republish one. Each program passes a season end to expandWeeklyThrough.
  *
  * Modeling notes / judgment calls (the page is prose, sometimes vague):
  *  - South Grove, late-summer page: "Saturdays and Sundays through September,"
@@ -40,10 +41,9 @@
  *    them cost_tier 'free' and price-locked so extraction can't relabel them.
  */
 
-import { generateDedupKey } from "../../lib/event-identity.js";
 import type { ExtractedEvent } from "./extract.js";
+import { expandWeeklyThrough } from "./series-bounds.js";
 import {
-  expandWeekly,
   mergeDates,
   excludeDates,
   MON,
@@ -55,6 +55,8 @@ import {
   EVERY_DAY,
   DAILY_EXCEPT_TUE,
 } from "./recurrence.js";
+
+export { omitCancelledOccurrences } from "./series-bounds.js";
 
 export const VENUE = "Calaveras Big Trees State Park";
 export const TOWN = "Arnold";
@@ -114,20 +116,6 @@ function recurring(base: ProgramBase, dates: readonly string[]): SeededEvent[] {
   return dates.map((d) => occ(base, d));
 }
 
-/**
- * Drop occurrences whose dedup_key is already cancelled. upsertEvents writes
- * status only on INSERT, but a cancelled row the key lookup misses would be
- * inserted again as confirmed. The seed passes the cancelled keys it loaded
- * and never hands those dates to the writer.
- */
-export function omitCancelledOccurrences<T extends { name: string; date: string; town: string }>(
-  events: readonly T[],
-  cancelledDedupKeys: ReadonlySet<string>
-): T[] {
-  if (cancelledDedupKeys.size === 0) return [...events];
-  return events.filter((e) => !cancelledDedupKeys.has(generateDedupKey(e.name, e.date, e.town)));
-}
-
 /** A program given as explicit (date, start_time) pairs, e.g. astronomy nights. */
 function onDates(
   base: ProgramBase,
@@ -161,7 +149,7 @@ export function buildOccurrences(): SeededEvent[] {
         description:
           "A hands-on favorite for all ages. Wade into Beaver Creek with a park interpreter to net and identify the critters living in the water, and learn what they say about the health of the watershed. Meet at Beaver Creek, a short walk from the Beaver Creek Picnic Area, and come with sandals. Free with the $10/vehicle park entrance.",
       },
-      expandWeekly([TUE, SAT], "2026-06-13", "2026-08-15")
+      expandWeeklyThrough([TUE, SAT], "2026-06-13", "2026-08-15")
     )
   );
 
@@ -178,8 +166,8 @@ export function buildOccurrences(): SeededEvent[] {
           "Drop-in programs for kids: Little Rangers (ages 3 to 6) and Junior Rangers (ages 7 to 12) earn wooden badges and work through their logbooks with a park interpreter. Meet at the picnic tables across from Jack Knight Hall. Free with the $10/vehicle park entrance.",
       },
       mergeDates(
-        expandWeekly([SAT, SUN], "2026-05-23", "2026-06-14"),
-        expandWeekly(DAILY_EXCEPT_TUE, "2026-06-15", "2026-08-16")
+        expandWeeklyThrough([SAT, SUN], "2026-05-23", "2026-06-14"),
+        expandWeeklyThrough(DAILY_EXCEPT_TUE, "2026-06-15", "2026-08-16")
       )
     )
   );
@@ -198,8 +186,8 @@ export function buildOccurrences(): SeededEvent[] {
           "A relaxed, interpreter-led loop through the giant sequoias of the North Grove, about 1.7 level miles. Meet at the trailhead by the Visitor Center. Free with the $10/vehicle park entrance.",
       },
       mergeDates(
-        expandWeekly([SAT, SUN], "2026-05-23", "2026-06-14"),
-        expandWeekly(EVERY_DAY, "2026-06-15", "2026-08-16")
+        expandWeeklyThrough([SAT, SUN], "2026-05-23", "2026-06-14"),
+        expandWeeklyThrough(EVERY_DAY, "2026-06-15", "2026-08-16")
       )
     )
   );
@@ -218,7 +206,7 @@ export function buildOccurrences(): SeededEvent[] {
       },
       // Late-summer page: Saturdays and Sundays through September. No Fridays,
       // and no October Sundays (the grove closed Oct 1 for prescribed burns).
-      expandWeekly([SAT, SUN], "2026-05-23", "2026-09-30")
+      expandWeeklyThrough([SAT, SUN], "2026-05-23", "2026-09-30")
     )
   );
 
@@ -235,7 +223,7 @@ export function buildOccurrences(): SeededEvent[] {
         description:
           "Short on time? A brief, half-mile introduction to the giant sequoias with a park interpreter. Meet outside the Visitor Center. Free with the $10/vehicle park entrance.",
       },
-      expandWeekly([SUN], "2026-06-14", "2026-08-16")
+      expandWeeklyThrough([SUN], "2026-06-14", "2026-08-16")
     )
   );
 
@@ -252,7 +240,7 @@ export function buildOccurrences(): SeededEvent[] {
         description:
           "A level, roughly one-mile morning walk around the North Grove, campground, and meadow, looking and listening for birds. No experience or gear required. Meet outside the Visitor Center. Free with the $10/vehicle park entrance.",
       },
-      expandWeekly([THU], "2026-05-28", "2026-09-24")
+      expandWeeklyThrough([THU], "2026-05-28", "2026-09-24")
     )
   );
 
@@ -269,7 +257,7 @@ export function buildOccurrences(): SeededEvent[] {
         description:
           "An easy half-mile stroll through the North Grove meadow with a park interpreter, looking at the plants and wildlife that live there. Meet at North Grove Campsite #16, by the black sandwich board. Free with the $10/vehicle park entrance.",
       },
-      expandWeekly([TUE, SAT], "2026-06-16", "2026-08-15")
+      expandWeeklyThrough([TUE, SAT], "2026-06-16", "2026-08-15")
     )
   );
 
@@ -286,7 +274,7 @@ export function buildOccurrences(): SeededEvent[] {
         description:
           "A Friday-night campfire of songs and silliness with park staff and volunteers. Meet at the Campfire Center by the Visitor Center. Free with the $10/vehicle park entrance.",
       },
-      expandWeekly([FRI], "2026-06-15", "2026-08-16")
+      expandWeeklyThrough([FRI], "2026-06-15", "2026-08-16")
     )
   );
 
@@ -302,7 +290,7 @@ export function buildOccurrences(): SeededEvent[] {
         description:
           "A Monday-night campfire built around Hug-a-Tree, the kid-friendly lesson on what to do if you ever get lost in the woods. Meet at the Campfire Center by the Visitor Center. Free with the $10/vehicle park entrance.",
       },
-      expandWeekly([MON], "2026-06-15", "2026-08-16")
+      expandWeeklyThrough([MON], "2026-06-15", "2026-08-16")
     )
   );
 
@@ -320,8 +308,8 @@ export function buildOccurrences(): SeededEvent[] {
       },
       excludeDates(
         mergeDates(
-          expandWeekly([SAT], "2026-05-23", "2026-08-16"),
-          expandWeekly([SUN], "2026-06-15", "2026-08-16")
+          expandWeeklyThrough([SAT], "2026-05-23", "2026-08-16"),
+          expandWeeklyThrough([SUN], "2026-06-15", "2026-08-16")
         ),
         NIGHT_SKIES_SATURDAYS
       )

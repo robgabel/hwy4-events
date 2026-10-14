@@ -1,6 +1,6 @@
 // CI pin for the *_locked consumer registry (lib/lock-consumers.ts, HWY-50).
 //
-// Five consumers check different subsets of the lock columns, on purpose.
+// Six consumers check different subsets of the lock columns, on purpose.
 // This test fails when repo SQL grows an eighth hwy4_events.*_locked column
 // that any consumer has not guarded or acknowledged, and it fails when a
 // `guards` claim is not what the source actually does. The daily
@@ -97,7 +97,7 @@ function sweepRow(extra: Record<string, unknown>): SweepRow {
   } as SweepRow;
 }
 
-test("five consumers are registered, each with its own stance", () => {
+test("six consumers are registered, each with its own stance", () => {
   assert.deepEqual(
     LOCK_CONSUMERS.map((c) => c.id),
     [
@@ -106,6 +106,7 @@ test("five consumers are registered, each with its own stance", () => {
       "dedup-update",
       "scrape-moose-lodge",
       "scrape-bls",
+      "cancel-event",
     ]
   );
 });
@@ -223,6 +224,19 @@ test("moose-lodge update drops every field its guards name", () => {
       new RegExp(`delete updateRow\\.${field}\\b`),
       `${lock} must drop ${field} from the moose update`
     );
+  }
+});
+
+test("cancel-event writes status and leaves every lock column unread as a write", () => {
+  const cancel = consumer("cancel-event");
+  assert.deepEqual(locksGuardedBy(cancel.guards), []);
+  const body = functionBody(read(cancel.sourceFile), "async function execCancelEvent");
+  assert.match(body, /cancelEventWritePayload\(\)/);
+  assert.doesNotMatch(body, /description\s*:/);
+  assert.doesNotMatch(body, /start_time\s*:/);
+  assert.doesNotMatch(body, /family_friendly\s*:/);
+  for (const lock of Object.keys(cancel.acknowledged)) {
+    assert.ok(body.includes(lock), `execCancelEvent select omits ${lock}`);
   }
 });
 
