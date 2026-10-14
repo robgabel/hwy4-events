@@ -13,6 +13,7 @@ import {
 } from "../../lib/categorize.js";
 import { HAIKU_MODEL } from "../../lib/agent/models.js";
 import { messageText } from "../../lib/agent/message-text.js";
+import { isOutOfCorridorLocation } from "./corridor.js";
 
 /**
  * Facebook Events Discover scraper.
@@ -300,7 +301,7 @@ function mapApifyEvent(
 
   const description = pickString(e.description)?.slice(0, 1000) || null;
   const address = resolveAddress(e);
-  const town = resolveTown(e, config.defaultTown);
+  const city = pickString(e.location?.city);
   // A single-venue page knows its own venue; a town feed or a group does not,
   // so it falls back to the honest "<label> Community" rather than naming a
   // room nobody claimed.
@@ -308,6 +309,17 @@ function mapApifyEvent(
     e,
     config.defaultVenue ?? `${config.label} Community`
   );
+  // Drop before resolveTown. The feed's default town is Copperopolis for
+  // every event in that radius, including Farmington, and stamping it is how
+  // an out-of-corridor campout was listed as a Copperopolis kids event.
+  if (isOutOfCorridorLocation([address, city], venueName, description)) {
+    console.warn(
+      `  OUT_OF_CORRIDOR fb source=${config.orgSlug} venue="${venueName}" ` +
+        `city="${city ?? ""}" name="${name}" addr="${address ?? ""}"`
+    );
+    return null;
+  }
+  const town = resolveTown(e, config.defaultTown);
 
   const eventUrl =
     pickString(e.url) ||
@@ -435,7 +447,9 @@ async function runEventSource(
     const m = mapApifyEvent(e, ctx);
     if (m) mapped.push(m);
   }
-  console.log(`  Mapped ${mapped.length} events (dropped ${raw.length - mapped.length} for missing name/date)`);
+  console.log(
+    `  Mapped ${mapped.length} events (dropped ${raw.length - mapped.length} incomplete or out of corridor)`
+  );
 
   if (mapped.length === 0) {
     fbDiscoverStatus[ctx.orgSlug] = { failed: false, count: 0 };

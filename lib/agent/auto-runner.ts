@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cancelEventAutoReady, CANCEL_EVENT_ACTION_TYPE } from "@/lib/feedback-cancel";
 import { canAutoExecute, type AgentActionRow } from "@/lib/agent/policy";
 import { executeAction } from "@/lib/agent/actions-executor";
 
@@ -13,7 +14,9 @@ import { executeAction } from "@/lib/agent/actions-executor";
 
 export type AutoRunResult = { executed: number; failed: number; skipped: number };
 
-function isAutoReady(action: AgentActionRow): boolean {
+export function isAutoReady(action: Pick<AgentActionRow, "type" | "payload">): boolean {
+  // A "didn't happen" report waits for a human even if a policy row is added later.
+  if (action.type === CANCEL_EVENT_ACTION_TYPE) return cancelEventAutoReady();
   if (action.type === "create_org_row") {
     const p = action.payload as {
       canonical_url?: string;
