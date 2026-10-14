@@ -523,9 +523,9 @@ export default async function EventPage({ params }: PageProps) {
                 growth loop (a shared link brings the next visitor), so nothing
                 competes with it for fill. The durable "Visit event page" link is
                 promoted to a clearly-secondary outline button (organizer / venue /
-                stable source, including a same-host ticket page). A non-durable
-                aggregator is not a button. The Source line below is where the
-                listing was found, and it shows even when Visit points elsewhere.
+                stable source only). A non-durable aggregator is not a button.
+                The Source line below is where the listing was found, and it
+                shows even when Visit points elsewhere.
                 Directions + calendar are secondary; the rarely-used poster
                 download is demoted to an icon. */}
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
