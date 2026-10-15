@@ -48,12 +48,13 @@ export function buildIssueFilingAlert(args: {
   /** URLs of issues that were filed but lost the `proposed` label. */
   ungated?: string[];
 }): Record<string, unknown> | null {
-  const ungated = (args.ungated ?? []).slice(0, MAX_LISTED);
+  // Keep the newest items: a long outage must not freeze the row on its first week.
+  const ungated = (args.ungated ?? []).slice(-MAX_LISTED);
   // A create failure and a dropped label can happen in the same run; the
   // ungated issues must still be named even when the headline error is the other.
   const error = args.error ?? (ungated.length ? "labels_dropped" : null);
   if (!error || !FILING_ERRORS.has(error)) return null;
-  const titles = args.unfiled.slice(0, MAX_LISTED);
+  const titles = args.unfiled.slice(-MAX_LISTED);
   return {
     type: ISSUE_FILING_ALERT_TYPE,
     title: `${SOURCE_LABEL[args.source]} could not file GitHub issues (${error})`,

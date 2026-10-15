@@ -46,3 +46,12 @@ test("an issue that lost its proposed label is named, even when a create also fa
   const onlyDropped = buildIssueFilingAlert({ source: "qa_audit", error: null, unfiled: [], ungated: ["u1"] });
   assert.equal((onlyDropped?.payload as { error: string }).error, "labels_dropped");
 });
+
+test("a long outage keeps the newest items, not the first week's", () => {
+  const many = Array.from({ length: 25 }, (_, i) => `title ${i}`);
+  const row = buildIssueFilingAlert({ source: "growth_memo", error: "list_failed", unfiled: many });
+  const kept = (row?.payload as { unfiled: string[] }).unfiled;
+  assert.equal(kept.length, 20);
+  assert.equal(kept[kept.length - 1], "title 24");
+  assert.ok(!kept.includes("title 0"));
+});

@@ -125,17 +125,27 @@ test("fileTaskIssues: list failure, create failure and dropped labels all surfac
   assert.equal(dropped.proposed, 2);
 });
 
-test("privateSignal holds back figures that must not reach a public repo", () => {
+test("privateSignal holds back any figure or email, allows years, paths and code", () => {
   const t = (body: string) => ({ title: "Fix the newsletter confirm email", body, rationale: "" });
-  assert.equal(privateSignal(t("Confirm rate fell to 40% this week")), "a percentage");
-  assert.equal(privateSignal(t("12 of 30 signups never confirmed")), "an N of M count");
-  assert.equal(privateSignal(t("We have 212 subscribers now")), "a private metric");
-  assert.equal(privateSignal(t("subscribers dropped to 180")), "a private metric");
+  for (const leaky of [
+    "Confirm rate fell to 40% this week",
+    "12 of 30 signups never confirmed",
+    "The newsletter list grew from 180 to 212",
+    "Newsletter net was +12 this week",
+    "1,400 impressions at position 8.2",
+    "Sponsorship pays 300 dollars",
+  ]) {
+    assert.equal(privateSignal(t(leaky)), "a figure", leaky);
+  }
   assert.equal(privateSignal(t("Ask owner@brice.example about the feed")), "an email address");
-  assert.equal(privateSignal(t("Sponsorship worth $500")), "a dollar amount");
-  // describing the kind of signal, without figures, is fine
-  assert.equal(privateSignal(t("Newsletter confirmations are leaking; resend the confirm link after a day")), null);
-  assert.equal(privateSignal(t("Add a /free filter to the 9 town pages")), null);
+  // the kind of signal, a year, a page path or a code span is fine
+  for (const clean of [
+    "Newsletter confirmations are leaking; resend the confirm link after a day",
+    "Lead the /events/grape-stomp-2026 title with the search phrasing for 2027",
+    "Add a filter to the /free page and to `lib/market-pages.ts` hub",
+  ]) {
+    assert.equal(privateSignal(t(clean)), null, clean);
+  }
 });
 
 test("fileTaskIssues: a proposal quoting private figures is held, not filed", async () => {
@@ -146,5 +156,5 @@ test("fileTaskIssues: a proposal quoting private figures is held, not filed", as
   const r = await fileTaskIssues(client, leaky, OPTS);
   assert.equal(client.created.length, 0);
   assert.equal(r.error, "privacy_hold");
-  assert.match(r.unfiled[0], /held: quotes a percentage/);
+  assert.match(r.unfiled[0], /held: quotes a figure/);
 });

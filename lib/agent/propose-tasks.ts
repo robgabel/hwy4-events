@@ -134,24 +134,20 @@ export function titlesCollide(a: string, b: string): boolean {
 // The repo is public, and the growth memo reasons over private signals
 // (newsletter counts, referrals per named business, outreach drafts). The prompt
 // tells the model to leave figures out; this is the check that does not depend
-// on the model obeying. A ticket that quotes an email address, a percentage, a
-// dollar amount, an "N of M" count, or a number next to a private-metric word is
-// held back from GitHub and goes to the private Inbox alert instead.
-const PRIVATE_SIGNAL_RES: { why: string; re: RegExp }[] = [
-  { why: "an email address", re: /[\w.+-]+@[\w-]+\.[\w.]+/ },
-  { why: "a percentage", re: /\d\s?%|\bper ?cent\b/i },
-  { why: "a dollar amount", re: /\$\s?\d/ },
-  { why: "an N of M count", re: /\b\d+\s+(?:of|out of)\s+\d+\b/i },
-  {
-    why: "a private metric",
-    re: /\b\d[\d,.]*\s+(?:\w+\s+){0,2}(?:subscribers?|sign-?ups?|confirm\w*|referrals?|opens?|clicks?|visitors?|sessions?|pageviews?|recipients?|members?)\b|\b(?:subscribers?|sign-?ups?|confirm\w*|referrals?|open rate|click rate|visitors?|sessions?|pageviews?|revenue)\b\W+(?:\w+\W+){0,3}\d/i,
-  },
-];
+// on the model obeying. A word list of "private metrics" kept missing phrasings
+// ("the list grew from 180 to 212"), so the rule is blunt: a growth-memo issue
+// may carry no figures at all. Years (20xx) and digits inside a page path or a
+// code span are allowed; any other digit, or an email address, holds the
+// proposal back from GitHub and sends it to the private Inbox alert instead.
+// People's names can't be caught this way; the prompt rule covers those.
+const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
+const ALLOWED_DIGITS_RE = /`[^`]*`|(?:^|\s)\/[\w\-/.]*|\b20\d\d\b/g;
 
 /** Why this ticket text must not go to a public issue, or null when it's clean. Pure. */
 export function privateSignal(t: Pick<ExtractedTask, "title" | "body" | "rationale">): string | null {
   const text = [t.title, t.body, t.rationale].join("\n");
-  for (const { why, re } of PRIVATE_SIGNAL_RES) if (re.test(text)) return why;
+  if (EMAIL_RE.test(text)) return "an email address";
+  if (/\d/.test(text.replace(ALLOWED_DIGITS_RE, " "))) return "a figure";
   return null;
 }
 

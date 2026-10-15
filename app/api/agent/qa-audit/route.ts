@@ -44,10 +44,17 @@ export async function GET(request: Request) {
           `*Hwy4 QA agent: ${result.filed} GitHub issue(s) filed*`,
           ...result.filed_issues.map((i) => `• <${i.html_url}|#${i.number}> ${i.title}`),
           ...(result.unfiled_titles.length
-            ? [`⚠️ ${result.unfiled_titles.length} finding(s) not filed: ${result.filing_error}. Inbox has the alert.`]
+            ? [`⚠️ ${result.unfiled_titles.length} finding(s) not filed: ${result.filing_error}.`]
             : []),
           ...(result.filed_issues.some((i) => !i.gated)
-            ? ["⚠️ GitHub dropped the labels on some issues, so they are missing `proposed`. Inbox has the alert."]
+            ? ["⚠️ GitHub dropped the labels on some issues, so they are missing `proposed`."]
+            : []),
+          ...(result.filing_error || result.filed_issues.some((i) => !i.gated)
+            ? [
+                filing_alert === "inserted" || filing_alert === "duplicate"
+                  ? "Inbox has the alert."
+                  : "⚠️ The Inbox alert could not be written either; check the Vercel logs.",
+              ]
             : []),
         ];
         try {
