@@ -43,7 +43,7 @@ test("checkKeyLine round-trips through bodyCheckKey, anywhere in the body", () =
   assert.equal(bodyCheckKey("see check_key: foo in the other issue"), null);
 });
 
-test("suppressesRefile: open always, not-planned for 30 days, completed never", () => {
+test("suppressesRefile: open always, not-planned or duplicate for 30 days, completed never", () => {
   assert.equal(suppressesRefile(issue({ state: "open" }), NOW), true);
   assert.equal(
     suppressesRefile(issue({ state: "closed", state_reason: "not_planned", closed_at: "2026-10-01T00:00:00Z" }), NOW),
@@ -52,6 +52,11 @@ test("suppressesRefile: open always, not-planned for 30 days, completed never", 
   assert.equal(
     suppressesRefile(issue({ state: "closed", state_reason: "not_planned", closed_at: "2026-09-01T00:00:00Z" }), NOW),
     false
+  );
+  // closed as a duplicate is a decline too, or the next run refiles it
+  assert.equal(
+    suppressesRefile(issue({ state: "closed", state_reason: "duplicate", closed_at: "2026-10-12T00:00:00Z" }), NOW),
+    true
   );
   // a fixed bug that regresses must be filed again
   assert.equal(
@@ -103,4 +108,36 @@ test("listRecent drops pull requests and throws on a non-200 (fail closed)", asy
 
   const bad = (async () => new Response("rate limited", { status: 403 })) as unknown as typeof fetch;
   await assert.rejects(githubIssuesClient({ GITHUB_ISSUES_TOKEN: "t" }, bad)!.listRecent(NOW));
+});
+
+test("listRecent fails closed when the page cap is reached", async () => {
+  const full = Array.from({ length: 100 }, (_, n) => ({
+    number: n,
+    title: "x",
+    body: null,
+    state: "open",
+    state_reason: null,
+    closed_at: null,
+    html_url: "u",
+  }));
+  const always = (async () => new Response(JSON.stringify(full), { status: 200 })) as unknown as typeof fetch;
+  await assert.rejects(githubIssuesClient({ GITHUB_ISSUES_TOKEN: "t" }, always)!.listRecent(NOW), /raise MAX_PAGES/);
+});
+
+test("create reports whether the proposed label survived", async () => {
+  const respond = (labels: unknown[]) =>
+    (async () =>
+      new Response(JSON.stringify({ number: 9, title: "t", html_url: "u9", labels }), { status: 201 })) as unknown as typeof fetch;
+  const kept = await githubIssuesClient({ GITHUB_ISSUES_TOKEN: "t" }, respond([{ name: "proposed" }, { name: "bug" }]))!.create({
+    title: "t",
+    body: "b",
+    labels: ["bug", "proposed"],
+  });
+  assert.equal(kept.gated, true);
+  const dropped = await githubIssuesClient({ GITHUB_ISSUES_TOKEN: "t" }, respond([]))!.create({
+    title: "t",
+    body: "b",
+    labels: ["bug", "proposed"],
+  });
+  assert.equal(dropped.gated, false);
 });

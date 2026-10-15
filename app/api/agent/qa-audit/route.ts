@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/lib/cron-auth";
 import { SITE_URL } from "@/lib/constants";
 import { runQaAudit } from "@/lib/agent/qa-audit";
+import { fileIssueFilingAlert } from "@/lib/agent/issue-filing-alert";
 
 // QA agent cron. HTTP-checks the live site's key pages + sitemaps for
 // CODE/regression bugs and files `proposed` GitHub issues (advisory; Rob accepts
@@ -24,6 +25,14 @@ export async function GET(request: Request) {
 
   try {
     const result = await runQaAudit(supabase, SITE_URL);
+
+    // Findings that didn't reach GitHub go to the Inbox (agent_actions), not
+    // only Slack, so an expired token can't hide them.
+    const filing_alert = await fileIssueFilingAlert(supabase, {
+      source: "qa_audit",
+      error: result.filing_error,
+      unfiled: result.unfiled_titles,
+    });
 
     // A finding that could not be filed is still news: say so, or the sensor
     // fails silently (token unset, GitHub down).
@@ -49,7 +58,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result, filing_alert });
   } catch (err) {
     console.error("[qa-audit] failed:", err);
     return NextResponse.json({ error: "QA audit failed" }, { status: 500 });

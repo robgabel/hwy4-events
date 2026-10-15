@@ -28,7 +28,14 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 const MODEL = REASONER_MODEL;
 const MAX_PER_RUN = 2; // a reasoner proposes at most 2 tickets/run — precision over volume
 
-export type ProposeTasksResult = { proposed: number; skipped: number; filed: FiledIssue[]; error: string | null };
+export type ProposeTasksResult = {
+  proposed: number;
+  skipped: number;
+  filed: FiledIssue[];
+  error: string | null;
+  /** Titles that didn't reach GitHub because of `error`. */
+  unfiled: string[];
+};
 
 type ExtractedTask = { title: string; body: string; type: TaskType; priority: TaskPriority; rationale: string };
 
@@ -150,13 +157,14 @@ export async function proposeTasksFromDigest(
   opts: { runId: string | null; digest: unknown },
   issues: IssuesClient | null = githubIssuesClient()
 ): Promise<ProposeTasksResult> {
-  const none = (error: string | null = null): ProposeTasksResult => ({ proposed: 0, skipped: 0, filed: [], error });
+  const none = (error: string | null = null, unfiled: string[] = []): ProposeTasksResult => ({
+    proposed: 0,
+    skipped: 0,
+    filed: [],
+    error,
+    unfiled,
+  });
   if (!opts.digest) return none();
-  if (!issues) {
-    console.error("[propose-tasks] GITHUB_ISSUES_TOKEN_MISSING: skipping");
-    return none("GITHUB_ISSUES_TOKEN_MISSING");
-  }
-
   // 1. Extract candidate dev tickets from the digest (best-effort, never throw).
   let extracted: ExtractedTask[];
   try {
@@ -183,6 +191,11 @@ export async function proposeTasksFromDigest(
     return none("extraction_failed");
   }
   if (extracted.length === 0) return none();
+  // Checked after extraction so a missing token reports what it failed to file.
+  if (!issues) {
+    console.error("[propose-tasks] GITHUB_ISSUES_TOKEN_MISSING: not filing");
+    return none("GITHUB_ISSUES_TOKEN_MISSING", extracted.map((t) => t.title));
+  }
 
   // 2. Dedup against open issues + issues closed as not planned in the last 30
   //    days. Fail closed: no list, no filing.
@@ -192,11 +205,12 @@ export async function proposeTasksFromDigest(
     seen = (await issues.listRecent(now)).filter((i) => suppressesRefile(i, now)).map((i) => words(i.title));
   } catch (err) {
     console.error("[propose-tasks] listing issues failed:", err);
-    return none("list_failed");
+    return none("list_failed", extracted.map((t) => t.title));
   }
 
   const date = new Date().toISOString().slice(0, 10);
   const filed: FiledIssue[] = [];
+  const unfiled: string[] = [];
   let skipped = 0;
   let error: string | null = null;
   for (const t of extracted) {
@@ -207,12 +221,18 @@ export async function proposeTasksFromDigest(
     }
     seen.push(w); // guard against two near-identical candidates in the same run
     try {
-      filed.push(await issues.create(taskIssue(t, { runId: opts.runId, date })));
+      const issue = await issues.create(taskIssue(t, { runId: opts.runId, date }));
+      filed.push(issue);
+      if (!issue.gated) {
+        console.error(`[propose-tasks] #${issue.number} was filed without the proposed label`);
+        error ??= "labels_dropped";
+      }
     } catch (err) {
       console.error("[propose-tasks] create issue failed:", err);
       error = "create_failed";
+      unfiled.push(t.title);
       skipped++;
     }
   }
-  return { proposed: filed.length, skipped, filed, error };
+  return { proposed: filed.length, skipped, filed, error, unfiled };
 }

@@ -10,6 +10,7 @@ import {
   type GrowthDigest,
 } from "@/lib/agent/types";
 import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
+import { fileIssueFilingAlert } from "@/lib/agent/issue-filing-alert";
 import { parseModelJson } from "@/lib/agent/model-json";
 import { captureLessonsFromConcludedExperiments } from "@/lib/agent/growth-lessons";
 import { MEDIUM_EFFORT, REASONER_MODEL } from "@/lib/agent/models";
@@ -176,12 +177,16 @@ export async function GET(request: Request) {
     // build, not an outreach email; those stay drafts on the memo). Issue #325.
     // Best-effort: never fails the memo.
     let proposed_tasks = 0;
+    let issue_filing_error: string | null = null;
     if (digest) {
       const r = await proposeTasksFromDigest({
         runId: (runRow as { id?: string } | null)?.id ?? null,
         digest,
       });
       proposed_tasks = r.proposed;
+      issue_filing_error = r.error;
+      // Proposals that didn't reach GitHub go to the Inbox, not nowhere.
+      await fileIssueFilingAlert(supabase, { source: "growth_memo", error: r.error, unfiled: r.unfiled });
     }
 
     return NextResponse.json({
@@ -189,6 +194,7 @@ export async function GET(request: Request) {
       status,
       move: digest?.move_of_the_week?.title ?? null,
       proposed_tasks,
+      issue_filing_error,
       summary: digest?.summary ?? null,
     });
   } catch (err) {

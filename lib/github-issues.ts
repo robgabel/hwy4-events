@@ -22,7 +22,7 @@ export const DEFAULT_ISSUES_REPO = "robgabel/hwy4-events";
 const API = "https://api.github.com";
 const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
-/** A closed-as-not-planned issue suppresses a refile for this long. */
+/** A declined issue (closed as not planned or duplicate) suppresses a refile for this long. */
 export const DECLINED_SUPPRESS_DAYS = 30;
 
 export type IssueLite = {
@@ -36,7 +36,16 @@ export type IssueLite = {
 };
 
 export type NewIssue = { title: string; body: string; labels: string[] };
-export type FiledIssue = { number: number; html_url: string; title: string };
+export type FiledIssue = {
+  number: number;
+  html_url: string;
+  title: string;
+  /** GitHub silently drops labels the caller can't set; false means `proposed` didn't stick. */
+  gated: boolean;
+};
+
+/** Closed as one of these means a person declined it, so a refile waits. */
+const DECLINED_REASONS = new Set(["not_planned", "duplicate"]);
 
 export type IssuesClient = {
   repo: string;
@@ -60,13 +69,13 @@ export function bodyCheckKey(body: string | null | undefined): string | null {
 
 /**
  * Does this existing issue stop a refile of the same finding? Open always does.
- * Closed as not planned does for DECLINED_SUPPRESS_DAYS, so a declined idea is
- * not re-nagged every week. Closed as completed does not: a fixed bug that
- * regressed should be filed again.
+ * Closed as not planned or as a duplicate does for DECLINED_SUPPRESS_DAYS, so a
+ * declined idea is not re-nagged every week. Closed as completed does not: a
+ * fixed bug that regressed should be filed again.
  */
 export function suppressesRefile(issue: IssueLite, now: Date = new Date()): boolean {
   if (issue.state === "open") return true;
-  if (issue.state_reason !== "not_planned" || !issue.closed_at) return false;
+  if (!issue.state_reason || !DECLINED_REASONS.has(issue.state_reason) || !issue.closed_at) return false;
   const closedMs = Date.parse(issue.closed_at);
   if (Number.isNaN(closedMs)) return false;
   return now.getTime() - closedMs <= DECLINED_SUPPRESS_DAYS * 86_400_000;
@@ -135,9 +144,11 @@ export function githubIssuesClient(
       const rows = (await res.json()) as RawIssue[];
       // The issues endpoint also returns pull requests; they never carry a finding.
       for (const r of rows) if (!r.pull_request) out.push(toLite(r));
-      if (rows.length < PAGE_SIZE) break;
+      if (rows.length < PAGE_SIZE) return out;
     }
-    return out;
+    // A full last page means more issues exist than we read. A key on an unread
+    // page would look uncovered and be filed twice, so fail closed instead.
+    throw new Error(`GitHub list issues: more than ${MAX_PAGES * PAGE_SIZE} rows for ${query}; raise MAX_PAGES`);
   }
 
   return {
@@ -158,8 +169,10 @@ export function githubIssuesClient(
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`GitHub create issue ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      const r = (await res.json()) as RawIssue;
-      return { number: r.number, html_url: r.html_url, title: r.title };
+      const r = (await res.json()) as RawIssue & { labels?: ({ name?: string } | string)[] };
+      const names = (r.labels ?? []).map((l) => (typeof l === "string" ? l : l.name ?? ""));
+      const gated = !issue.labels.includes("proposed") || names.includes("proposed");
+      return { number: r.number, html_url: r.html_url, title: r.title, gated };
     },
   };
 }

@@ -196,8 +196,10 @@ export type QaAuditResult = {
   filed: number;
   skipped: number;
   filed_issues: FiledIssue[];
-  /** Why nothing could be filed this run (token missing, list or create failed). */
+  /** Why findings didn't reach GitHub this run (token missing, list/create failed, labels dropped). */
   filing_error: string | null;
+  /** Titles of findings that were not filed because of filing_error. */
+  unfiled_titles: string[];
 };
 
 // PURE: the issue body for one aggregated finding. The check_key line is what the
@@ -310,7 +312,7 @@ export async function runQaAudit(
   const aggs = [...byKey.values()];
 
   if (aggs.length === 0) {
-    return { checked: targets.length, findings: 0, filed: 0, skipped: 0, filed_issues: [], filing_error: null };
+    return { checked: targets.length, findings: 0, filed: 0, skipped: 0, filed_issues: [], filing_error: null, unfiled_titles: [] };
   }
   if (!issues) {
     console.error("[qa-audit] GITHUB_ISSUES_TOKEN_MISSING: findings not filed");
@@ -321,6 +323,7 @@ export async function runQaAudit(
       skipped: aggs.length,
       filed_issues: [],
       filing_error: "GITHUB_ISSUES_TOKEN_MISSING",
+      unfiled_titles: aggs.map((a) => a.title),
     };
   }
 
@@ -340,10 +343,12 @@ export async function runQaAudit(
       skipped: aggs.length,
       filed_issues: [],
       filing_error: "list_failed",
+      unfiled_titles: aggs.map((a) => a.title),
     };
   }
 
   const filed: FiledIssue[] = [];
+  const unfiled: string[] = [];
   let skipped = 0;
   let filingError: string | null = null;
   for (const a of aggs) {
@@ -352,11 +357,17 @@ export async function runQaAudit(
       continue;
     }
     try {
-      filed.push(await issues.create({ title: a.title, body: qaIssueBody(a), labels: QA_ISSUE_LABELS }));
+      const issue = await issues.create({ title: a.title, body: qaIssueBody(a), labels: QA_ISSUE_LABELS });
+      filed.push(issue);
       covered.add(a.key);
+      if (!issue.gated) {
+        console.error(`[qa-audit] #${issue.number} was filed without the proposed label`);
+        filingError ??= "labels_dropped";
+      }
     } catch (err) {
       console.error("[qa-audit] create issue failed:", err);
       filingError = "create_failed";
+      unfiled.push(a.title);
       skipped++;
     }
   }
@@ -368,5 +379,6 @@ export async function runQaAudit(
     skipped,
     filed_issues: filed,
     filing_error: filingError,
+    unfiled_titles: unfiled,
   };
 }
