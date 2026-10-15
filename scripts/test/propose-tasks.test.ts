@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseExtractedTasks, taskIssue, titlesCollide } from "../../lib/agent/propose-tasks.js";
+import { parseExtractedTasks, proposalRow, taskIssue, titlesCollide } from "../../lib/agent/propose-tasks.js";
 import { bodyCheckKey } from "../../lib/github-issues.js";
 
 test("parseExtractedTasks parses a fenced JSON array and keeps valid enums", () => {
@@ -62,7 +62,7 @@ test("titlesCollide catches re-wordings of the same idea, not distinct tickets",
   assert.equal(titlesCollide("", "anything"), false);
 });
 
-test("taskIssue: type label + proposed gate, priority and rationale in the body, a check_key line", () => {
+test("taskIssue: type label + proposed gate, priority and rationale in the body, no check_key (the executor adds one per row)", () => {
   const [t] = parseExtractedTasks(
     JSON.stringify([{ title: "Add a /free filter to town pages!", body: "spec", type: "feature", priority: "p2", rationale: "why" }])
   );
@@ -71,5 +71,28 @@ test("taskIssue: type label + proposed gate, priority and rationale in the body,
   assert.deepEqual(issue.labels, ["feature", "proposed", "lens:growth-memo"]);
   assert.match(issue.body, /Suggested priority: p2/);
   assert.match(issue.body, /## Why now\nwhy/);
-  assert.equal(bodyCheckKey(issue.body), "growth-memo/add-a-free-filter-to-town-pages");
+  assert.equal(bodyCheckKey(issue.body), null);
+});
+
+test("proposalRow: a private, outward-facing, irreversible file_github_issue row with a privacy warning", () => {
+  const [clean, leaky] = parseExtractedTasks(
+    JSON.stringify([
+      { title: "Add a /free filter to town pages", body: "spec", type: "feature", priority: "p2", rationale: "why" },
+      { title: "Resend the confirm link", body: "confirm rate is 40%", type: "growth", priority: "p2" },
+    ])
+  );
+  const r = proposalRow(clean, { runId: "run-1", date: "2026-10-16" });
+  assert.equal(r.type, "file_github_issue");
+  assert.equal(r.status, "proposed");
+  assert.equal(r.outward_facing, true);
+  assert.equal(r.reversible, false);
+  assert.equal(r.run_id, "run-1");
+  const p = r.payload as { title: string; body: string; labels: string[]; privacy_warning: string | null };
+  assert.equal(p.title, "Add a /free filter to town pages");
+  assert.deepEqual(p.labels, ["feature", "proposed", "lens:growth-memo"]);
+  assert.equal(p.privacy_warning, null);
+  // A figure is a warning badge on the row, not a hold: the row is still staged.
+  const held = proposalRow(leaky, { runId: null, date: "2026-10-16" });
+  assert.equal((held.payload as { privacy_warning: string | null }).privacy_warning, "a figure");
+  assert.equal(held.status, "proposed");
 });

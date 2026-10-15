@@ -1,8 +1,9 @@
 // Agents file GitHub issues, not board rows (issue #325: GitHub Issues is the
 // only backlog). A zero-dep REST client for the two agent writers that run in
-// Vercel: the weekly QA audit (lib/agent/qa-audit.ts) and the growth memo's
-// ticket proposer (lib/agent/propose-tasks.ts). Persona QA files through `gh`
-// on Rob's Mac and does not use this.
+// Vercel: the weekly QA audit (lib/agent/qa-audit.ts) and the approve path of a
+// growth-memo file_github_issue row (lib/agent/file-github-issue.ts; the memo
+// itself only reads the list, to dedup its proposals). Persona QA files
+// through `gh` on Rob's Mac and does not use this.
 //
 // Token: GITHUB_ISSUES_TOKEN, a fine-grained token with Issues read/write on
 // this repo only, set in Vercel Production. Unset means the writers are logged

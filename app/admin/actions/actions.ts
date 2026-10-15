@@ -8,6 +8,7 @@ import type { AgentActionRow } from "@/lib/agent/policy";
 import { proposeLinkGapActions, researchActionById } from "@/lib/agent/propose-link-gaps";
 import { proposeVenueRowActions, researchVenueById } from "@/lib/agent/propose-venue-rows";
 import { runAutoExecutor } from "@/lib/agent/auto-runner";
+import { FILE_GITHUB_ISSUE_TYPE } from "@/lib/agent/file-github-issue";
 
 const ADMIN_PATH = "/admin/actions";
 
@@ -47,6 +48,15 @@ function mergeEdits(action: AgentActionRow, formData: FormData): Record<string, 
         : (p.aliases ?? []),
     };
   }
+  if (action.type === FILE_GITHUB_ISSUE_TYPE) {
+    // Rob may trim a figure or a name out before it goes public.
+    const p = action.payload as Record<string, unknown>;
+    return {
+      ...p,
+      title: field(formData, "issue_title") || (p.title as string),
+      body: field(formData, "issue_body") || (p.body as string),
+    };
+  }
   return action.payload;
 }
 
@@ -63,7 +73,10 @@ export async function approveAction(formData: FormData) {
   }
 
   const payload = mergeEdits(action, formData);
-  await supabase
+  // Claim the row with a compare-and-swap on (status, decided_at), so a double
+  // click or a second tab can't run the executor twice. Only the first update
+  // matches; the second finds decided_at already moved and stops here.
+  let claim = supabase
     .from("agent_actions")
     .update({
       status: "approved",
@@ -71,13 +84,22 @@ export async function approveAction(formData: FormData) {
       decided_at: new Date().toISOString(),
       decided_note: field(formData, "decided_note") || null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", action.status);
+  claim = action.decided_at ? claim.eq("decided_at", action.decided_at) : claim.is("decided_at", null);
+  const { data: claimed, error: claimError } = await claim.select("id");
+  if (claimError) failRedirect(ADMIN_PATH, claimError.message);
+  if (!claimed || claimed.length === 0) {
+    failRedirect(ADMIN_PATH, "This action changed while the page was open (approved in another tab?). Reload and check.");
+  }
 
   const result = await executeAction(supabase, { ...action, payload });
   if (!result.ok) {
+    // A retryable failure wrote nothing, so the row stays in the queue with the
+    // reason on it; anything else is final.
     await supabase
       .from("agent_actions")
-      .update({ status: "failed", error: result.error ?? "execution failed" })
+      .update({ status: result.retryable ? "proposed" : "failed", error: result.error ?? "execution failed" })
       .eq("id", id);
     failRedirect(ADMIN_PATH, `Couldn't execute: ${result.error}`);
   }
@@ -97,7 +119,7 @@ export async function approveAction(formData: FormData) {
   // A new org row changes link resolution on every matching event page.
   revalidatePath(ADMIN_PATH);
   revalidatePath("/");
-  flashRedirect(ADMIN_PATH, "Approved and executed.");
+  flashRedirect(ADMIN_PATH, result.note ? `Approved. ${result.note}` : "Approved and executed.");
 }
 
 export async function rejectAction(formData: FormData) {

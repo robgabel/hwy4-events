@@ -1,24 +1,30 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { SupabaseClient } from "@supabase/supabase-js";
 // Relative (not "@/") imports so the scripts/ test runner can import this module.
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";
-import { checkKeyLine, DeadlineError, githubIssuesClient, hasTimeFor, REQUEST_TIMEOUT_MS, suppressesRefile, type FiledIssue, type IssuesClient } from "../github-issues";
+import { githubIssuesClient, hasTimeFor, REQUEST_TIMEOUT_MS, suppressesRefile, type IssuesClient } from "../github-issues";
 
-// Turn the weekly growth memo into `proposed` GitHub issues (issue #325: GitHub
+// Turn the weekly growth memo into proposed dev tickets (issue #325: GitHub
 // Issues is the only backlog). The memo already reasons over the site's signals
-// and writes an agent_runs row; this reads that digest and files an issue for any
-// item that is a concrete DEV change (a feature, a bug fix, a data/SEO fix, a
+// and writes an agent_runs row; this reads that digest and proposes a ticket for
+// any item that is a concrete DEV change (a feature, a bug fix, a data/SEO fix, a
 // page), NOT an ops task like "review a submission" or "send an email", which
-// have their own queues. The daily chief-of-staff digest no longer files here:
+// have their own queues. The daily chief-of-staff digest no longer proposes:
 // it refiled one Brice Station problem three times under different titles, and
 // #332 retires that digest.
 //
-// Filed issues carry `proposed` (the human gate) and land in Proposed on the
-// GitHub Project. Rob moves one to Ready or closes it as not planned.
+// Propose-first: the repo is public and the memo reasons over private figures,
+// so this never calls issues.create. Each ticket becomes a proposed
+// `file_github_issue` row in agent_actions, private in the Inbox. Rob approves
+// it at /admin/actions and lib/agent/file-github-issue.ts files the issue then
+// (with the `proposed` label, so it still lands in Proposed on the GitHub
+// Project). privateSignal() is a warning badge on the row, not a hold.
 //
 // Best-effort + idempotent: it never throws into the reasoner (a proposal failure
-// must not fail the memo), and it dedups by normalized title against open issues
-// and issues declined in the last 30 days, so a weekly memo can't refile an idea.
+// must not fail the memo), and it dedups by normalized title against open and
+// recently decided proposals and against open and recently declined issues, so a
+// weekly memo can't re-propose an idea.
 
 export const TASK_TYPES = ["feature", "bug", "qa", "growth", "chore"] as const;
 export const TASK_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
@@ -29,14 +35,16 @@ const MODEL = REASONER_MODEL;
 const MAX_PER_RUN = 2; // a reasoner proposes at most 2 tickets/run — precision over volume
 
 export type ProposeTasksResult = {
+  /** Proposed agent_actions rows staged this run. */
   proposed: number;
   skipped: number;
-  filed: FiledIssue[];
-  /** The first filing failure of the run (null when everything filed). */
+  /** Staged rows that carry a privacy_warning badge. */
+  warned: number;
+  /** The first failure of the run (null when everything was staged). */
   error: string | null;
-  /** Every distinct filing failure in the run, so one can't mask another. */
+  /** Every distinct failure in the run, so one can't mask another. */
   errors: string[];
-  /** Proposals that didn't reach GitHub, each with its reason, spec and rationale (the extraction is saved nowhere else). */
+  /** Proposals that didn't reach the Inbox, each with its reason, spec and rationale (the extraction is saved nowhere else). */
   unfiled: string[];
 };
 
@@ -136,21 +144,18 @@ export function titlesCollide(a: string, b: string): boolean {
 
 // The repo is public, and the growth memo reasons over private signals
 // (newsletter counts, referrals per named business, outreach drafts). The prompt
-// tells the model to leave figures out; this is the check that does not depend
-// on the model obeying. A word list of "private metrics" kept missing phrasings
-// ("the list grew from 180 to 212"), so the rule is blunt: a growth-memo issue
-// may carry no figures at all. The exceptions are public tokens that carry
-// digits but no data: the site's own name and road (Hwy 4, hwy4events.com,
-// Highway 4, Route 4), an ISO date, a year only where it reads as a year ("in
-// 2027", "the 2027 festival", "-2026" in a slug), and an issue or board ref
-// (#325, HWY-81). Any other digit, a spelled-out number from two up or
-// "percent", or an email address holds the proposal back from GitHub and sends
-// it to the private Inbox alert instead. Known gaps, accepted: a count written
-// as "one", a figure phrased with no number ("doubled"), or a count that sits
-// where a year would ("the 2024 signups") passes, and the prompt rule is the
-// only guard there; an HTTP code ("a 301") is held as a false positive, which
-// costs only an Inbox read.
-// People's names can't be caught this way; the prompt rule covers those.
+// tells the model to leave figures out; this flags a proposal that still carries
+// one, as a warning badge on its Inbox row (Rob reads every proposal before it
+// is filed, so this is no longer a hold). The rule is blunt: any figure at all.
+// The exceptions are public tokens that carry digits but no data: the site's
+// own name and road (Hwy 4, hwy4events.com, Highway 4, Route 4), an ISO date, a
+// year only where it reads as a year ("in 2027", "the 2027 festival", "-2026" in
+// a slug), and an issue or board ref (#325, HWY-81). Any other digit, a
+// spelled-out number from two up or "percent", or an email address raises the
+// badge. Known gaps: a count written as "one", a figure phrased with no number
+// ("doubled"), a count that sits where a year would ("the 2024 signups"), and
+// people's names pass without a badge, which is why the human read, not this
+// check, is the gate. An HTTP code ("a 301") is a false positive.
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
 // "one" is left out on purpose: it is in most sentences and would hold every proposal.
 const SPELLED_COUNT_RE =
@@ -177,19 +182,16 @@ export function privateSignal(t: Pick<ExtractedTask, "title" | "body" | "rationa
   return null;
 }
 
-// PURE: the GitHub issue for one extracted ticket. Locked by
-// scripts/test/propose-tasks.test.ts.
+
+// PURE: the GitHub issue one extracted ticket would become. The check_key line
+// is not here: the executor appends one per agent_actions row when it files
+// (lib/agent/file-github-issue.ts). Locked by scripts/test/propose-tasks.test.ts.
 export function taskIssue(
   t: ExtractedTask,
   opts: { runId: string | null; date: string }
 ): { title: string; body: string; labels: string[] } {
-  const slug = t.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
   const lines = [
-    `**Suggested priority: ${t.priority}.** Filed by the weekly growth memo, ${opts.date}${
+    `**Suggested priority: ${t.priority}.** Proposed by the weekly growth memo, ${opts.date}${
       opts.runId ? ` (agent run \`${opts.runId}\`)` : ""
     }.`,
     "",
@@ -197,27 +199,103 @@ export function taskIssue(
     t.body || t.title,
   ];
   if (t.rationale) lines.push("", "## Why now", t.rationale);
-  lines.push("", checkKeyLine(`growth-memo/${slug || "untitled"}`));
   return { title: t.title, body: lines.join("\n"), labels: [t.type, "proposed", "lens:growth-memo"] };
 }
 
+// Each ticket is a proposed agent_actions row, private in the Inbox, until Rob
+// approves it at /admin/actions (lib/agent/file-github-issue.ts files it then).
+export const FILE_GITHUB_ISSUE_TYPE = "file_github_issue";
+
+export type FileGithubIssuePayload = {
+  title?: string;
+  /** The issue body without its check_key line; the executor appends that. */
+  body?: string;
+  labels?: string[];
+  /** What privateSignal() saw at proposal time ("a figure", "an email address"), or null. A warning, not a hold. */
+  privacy_warning?: string | null;
+  source?: string;
+  run_id?: string | null;
+};
+
+// PURE: the agent_actions row for one ticket. outward_facing (it publishes to a
+// public repo) and irreversible (an issue can be closed, not unfiled), so
+// canAutoExecute can never pass and Approve is the only path. Locked by
+// scripts/test/propose-tasks.test.ts.
+export function proposalRow(
+  t: ExtractedTask,
+  opts: { runId: string | null; date: string }
+): Record<string, unknown> {
+  const issue = taskIssue(t, opts);
+  const payload: FileGithubIssuePayload = {
+    title: issue.title,
+    body: issue.body,
+    labels: issue.labels,
+    privacy_warning: privateSignal(t),
+    source: "growth_memo",
+    run_id: opts.runId,
+  };
+  return {
+    type: FILE_GITHUB_ISSUE_TYPE,
+    run_id: opts.runId,
+    title: issue.title,
+    rationale: t.rationale || null,
+    payload,
+    blast_radius: "med",
+    reversible: false,
+    outward_facing: true,
+    status: "proposed",
+  };
+}
+
+/** How long a rejected or decided proposal blocks a re-proposal of the same idea. */
+const PROPOSAL_SUPPRESS_DAYS = 30;
+
+export type ProposalStore = {
+  /** Titles of file_github_issue rows that block a re-proposal: open ones of any age, and any created in the last 30 days. Throws on failure. */
+  blockingTitles(now: Date): Promise<string[]>;
+  /** Inserts the rows. Throws on failure. */
+  insert(rows: Record<string, unknown>[]): Promise<void>;
+};
+
+export function supabaseProposalStore(supabase: SupabaseClient): ProposalStore {
+  const titlesOf = (rows: { title: string | null; payload: { title?: string } | null }[] | null) =>
+    (rows ?? []).flatMap((r) => [r.title, r.payload?.title].filter((x): x is string => Boolean(x)));
+  return {
+    async blockingTitles(now) {
+      const since = new Date(now.getTime() - PROPOSAL_SUPPRESS_DAYS * 86_400_000).toISOString();
+      const [open, recent] = await Promise.all([
+        supabase.from("agent_actions").select("title, payload").eq("type", FILE_GITHUB_ISSUE_TYPE).in("status", ["proposed", "approved"]),
+        supabase.from("agent_actions").select("title, payload").eq("type", FILE_GITHUB_ISSUE_TYPE).gte("created_at", since),
+      ]);
+      if (open.error) throw new Error(open.error.message);
+      if (recent.error) throw new Error(recent.error.message);
+      return [...titlesOf(open.data), ...titlesOf(recent.data)];
+    },
+    async insert(rows) {
+      const { error } = await supabase.from("agent_actions").insert(rows);
+      if (error) throw new Error(error.message);
+    },
+  };
+}
+
 export async function proposeTasksFromDigest(
-  /** deadline: epoch ms by which filing must stop, so the route can still write the Inbox alert. */
+  /** deadline: epoch ms by which the run must stop, so the route can still write the Inbox alert. */
   opts: { runId: string | null; digest: unknown; deadline?: number },
+  store: ProposalStore,
   issues: IssuesClient | null = githubIssuesClient()
 ): Promise<ProposeTasksResult> {
   const none = (error: string | null = null, unfiled: string[] = []): ProposeTasksResult => ({
     proposed: 0,
     skipped: 0,
-    filed: [],
+    warned: 0,
     error,
     errors: error ? [error] : [],
     unfiled,
   });
   if (!opts.digest) return none();
-  // The extraction shares the route's 60s budget with the memo call before it.
+  // The extraction shares the route's budget with the memo call before it.
   // Bound it so a slow model reply ends in an Inbox alert, not a killed function:
-  // it must finish with room left for one GitHub list and one create.
+  // it must finish with room left for one GitHub list and the row insert.
   const NOT_EXTRACTED = "Growth memo build proposals (not extracted in time; reread this week's memo)";
   let extractTimeoutMs: number | undefined;
   if (opts.deadline !== undefined) {
@@ -250,65 +328,75 @@ export async function proposeTasksFromDigest(
     extracted = parseExtractedTasks(messageText(message.content));
   } catch (err) {
     console.error("[propose-tasks] extraction failed:", err);
-    // A timeout against the deadline is a filing failure the Inbox must show;
-    // any other model error stays a plain extraction failure, as before.
+    // A timeout against the deadline is a failure the Inbox must show; any
+    // other model error stays a plain extraction failure, as before.
     if (err instanceof Anthropic.APIConnectionTimeoutError) return none("deadline_exceeded", [NOT_EXTRACTED]);
     return none("extraction_failed");
   }
   if (extracted.length === 0) return none();
-  // Checked after extraction so a missing token reports what it failed to file.
-  if (!issues) {
-    console.error("[propose-tasks] GITHUB_ISSUES_TOKEN_MISSING: not filing");
-    return none("GITHUB_ISSUES_TOKEN_MISSING", extracted.map((t) => unfiledEntry(t, "GITHUB_ISSUES_TOKEN_MISSING")));
-  }
 
-  return fileTaskIssues(
-    issues,
+  return stageTaskProposals(
+    store,
     extracted,
     { runId: opts.runId, date: new Date().toISOString().slice(0, 10) },
+    issues,
     new Date(),
     opts.deadline
   );
 }
 
-// One Inbox line per proposal that didn't reach GitHub. The extraction isn't
+// One Inbox line per proposal that couldn't be staged. The extraction isn't
 // saved anywhere else and the memo never re-proposes, so the spec and the
 // rationale travel with it; this text lands only in the private agent_actions row.
 function unfiledEntry(t: ExtractedTask, reason: string): string {
   return `[${reason}] ${t.title} (spec: ${t.body || "none"}; why now: ${t.rationale || "none"})`;
 }
 
-// Dedup + file the extracted tickets. Split out so the error paths can be driven
-// with a fake client. Locked by scripts/test/propose-tasks.test.ts.
-export async function fileTaskIssues(
-  issues: IssuesClient,
+// Dedup + stage the extracted tickets as proposed agent_actions rows. Never
+// calls issues.create: the GitHub client, when there is one, is only read, to
+// skip an idea an open or recently declined issue already covers (best-effort;
+// the executor runs that check again, fail-closed, at approval). Split out so
+// the paths can be driven with fakes. Locked by scripts/test/issue-filing-paths.test.ts.
+export async function stageTaskProposals(
+  store: ProposalStore,
   extracted: ExtractedTask[],
   opts: { runId: string | null; date: string },
+  issues: IssuesClient | null = null,
   now: Date = new Date(),
   deadline?: number
 ): Promise<ProposeTasksResult> {
-  // Dedup against open issues + issues declined in the last 30 days. Fail
-  // closed: no list, no filing.
+  const failed = (error: string): ProposeTasksResult => ({
+    proposed: 0,
+    skipped: 0,
+    warned: 0,
+    error,
+    errors: [error],
+    unfiled: extracted.map((t) => unfiledEntry(t, error)),
+  });
+  // Our own queue: an open proposal, or one decided in the last 30 days. Fail
+  // closed: if the queue can't be read, the insert would likely fail too, and a
+  // blind insert could double a still-open proposal.
   let seen: Set<string>[];
   try {
-    seen = (await issues.listRecent(now, deadline)).filter((i) => suppressesRefile(i, now)).map((i) => words(i.title));
+    seen = (await store.blockingTitles(now)).map(words);
   } catch (err) {
-    console.error("[propose-tasks] listing issues failed:", err);
-    const error = err instanceof DeadlineError ? "deadline_exceeded" : "list_failed";
-    return {
-      proposed: 0,
-      skipped: 0,
-      filed: [],
-      error,
-      errors: [error],
-      unfiled: extracted.map((t) => unfiledEntry(t, error)),
-    };
+    console.error("[propose-tasks] reading proposals failed:", err);
+    return failed("inbox_write_failed");
+  }
+  // GitHub: open issues and issues declined in the last 30 days. Read-only and
+  // best-effort; the approval re-checks before it files.
+  if (issues && hasTimeFor(deadline)) {
+    try {
+      const recent = await issues.listRecent(now, deadline);
+      seen.push(...recent.filter((i) => suppressesRefile(i, now)).map((i) => words(i.title)));
+    } catch (err) {
+      console.error("[propose-tasks] listing issues failed (the approval re-checks):", err);
+    }
   }
 
-  const filed: FiledIssue[] = [];
-  const unfiled: string[] = [];
+  const rows: Record<string, unknown>[] = [];
+  const staged: ExtractedTask[] = [];
   let skipped = 0;
-  const errors = new Set<string>();
   for (const t of extracted) {
     const w = words(t.title);
     if (seen.some((s) => similar(w, s))) {
@@ -316,34 +404,23 @@ export async function fileTaskIssues(
       continue;
     }
     seen.push(w); // guard against two near-identical candidates in the same run
-    if (!hasTimeFor(deadline)) {
-      errors.add("deadline_exceeded");
-      unfiled.push(unfiledEntry(t, "deadline_exceeded"));
-      skipped++;
-      continue;
-    }
-    const why = privateSignal(t);
-    if (why) {
-      console.error(`[propose-tasks] held back "${t.title}": quotes ${why}`);
-      errors.add("privacy_hold");
-      unfiled.push(unfiledEntry(t, `privacy_hold, quotes ${why}`));
-      skipped++;
-      continue;
-    }
-    try {
-      const issue = await issues.create(taskIssue(t, opts));
-      filed.push(issue);
-      if (!issue.gated) {
-        console.error(`[propose-tasks] #${issue.number} was filed without the proposed label`);
-        errors.add("labels_dropped");
-      }
-    } catch (err) {
-      console.error("[propose-tasks] create issue failed:", err);
-      errors.add("create_failed");
-      unfiled.push(unfiledEntry(t, "create_failed"));
-      skipped++;
-    }
+    rows.push(proposalRow(t, opts));
+    staged.push(t);
   }
-  const errorList = [...errors];
-  return { proposed: filed.length, skipped, filed, error: errorList[0] ?? null, errors: errorList, unfiled };
+  if (rows.length === 0) return { proposed: 0, skipped, warned: 0, error: null, errors: [], unfiled: [] };
+  try {
+    await store.insert(rows);
+  } catch (err) {
+    console.error("[propose-tasks] inserting proposals failed:", err);
+    return {
+      proposed: 0,
+      skipped,
+      warned: 0,
+      error: "inbox_write_failed",
+      errors: ["inbox_write_failed"],
+      unfiled: staged.map((t) => unfiledEntry(t, "inbox_write_failed")),
+    };
+  }
+  const warned = rows.filter((r) => (r.payload as FileGithubIssuePayload).privacy_warning).length;
+  return { proposed: rows.length, skipped, warned, error: null, errors: [], unfiled: [] };
 }
