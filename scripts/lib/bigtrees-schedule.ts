@@ -23,6 +23,10 @@
  * else writes these rows. omitCancelledOccurrences (scripts/lib/series-bounds.ts,
  * shared with every weekly seed) drops any date already cancelled, so a re-seed
  * cannot republish one. Each program passes a season end to expandWeeklyThrough.
+ * The 2026 season ends 2026-10-25 (BIGTREES_2026_SEASON_END): the programs are
+ * done for the year. buildOccurrences runs every row through boundWeeklySeries,
+ * so a date after that is not emitted even if a rule lists one. South Grove
+ * still stops on September 30; the grove closed Oct 1 for prescribed burns.
  *
  * Modeling notes / judgment calls (the page is prose, sometimes vague):
  *  - South Grove, late-summer page: "Saturdays and Sundays through September,"
@@ -42,7 +46,7 @@
  */
 
 import type { ExtractedEvent } from "./extract.js";
-import { expandWeeklyThrough } from "./series-bounds.js";
+import { boundWeeklySeries, expandWeeklyThrough } from "./series-bounds.js";
 import {
   mergeDates,
   excludeDates,
@@ -57,6 +61,9 @@ import {
 } from "./recurrence.js";
 
 export { omitCancelledOccurrences } from "./series-bounds.js";
+
+/** Last date the 2026 seed may emit. Inclusive. Later rules are clipped. */
+export const BIGTREES_2026_SEASON_END = "2026-10-25";
 
 export const VENUE = "Calaveras Big Trees State Park";
 export const TOWN = "Arnold";
@@ -448,5 +455,5 @@ export function buildOccurrences(): SeededEvent[] {
     )
   );
 
-  return out;
+  return boundWeeklySeries(out, { seasonEnd: BIGTREES_2026_SEASON_END });
 }

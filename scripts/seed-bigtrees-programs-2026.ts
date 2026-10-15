@@ -12,9 +12,10 @@
 // so we re-transcribe and re-run.
 //
 // To change the schedule: edit PROGRAMS in lib/bigtrees-schedule.ts and re-run.
-// Re-runnable: upsertEvents dedups by hash(name|date|town). Dates already
-// cancelled are omitted before the upsert, so a re-seed cannot insert them
-// again as confirmed. After upserting, this
+// Re-runnable: upsertEvents dedups by hash(name|date|town). The 2026 season
+// ends 2026-10-25 (BIGTREES_2026_SEASON_END). Dates after that, and dates
+// already cancelled, are dropped before the upsert (boundWeeklySeries), so a
+// re-seed cannot insert them again as confirmed. After upserting, this
 // finalizes the venue's rows that upsertEvents doesn't manage:
 //   - cost_tier 'free' + price_locked: every program is free with park entrance,
 //     so price extraction must never relabel them.
@@ -30,9 +31,10 @@
 import { supabaseAdmin } from "./lib/supabase-admin.js";
 import { upsertEvents, type UpsertResult } from "./lib/dedup.js";
 import type { ExtractedEvent } from "./lib/extract.js";
+import { boundWeeklySeries } from "./lib/series-bounds.js";
 import {
+  BIGTREES_2026_SEASON_END,
   buildOccurrences,
-  omitCancelledOccurrences,
   SOURCE_NAME,
   ORG_SLUG,
   SOURCE_URL,
@@ -62,10 +64,15 @@ async function loadCancelledDedupKeys(): Promise<Set<string>> {
 async function main(): Promise<void> {
   const cancelledKeys = await loadCancelledDedupKeys();
   const occurrences = buildOccurrences();
-  const seeded = omitCancelledOccurrences(occurrences, cancelledKeys);
+  const seeded = boundWeeklySeries(occurrences, {
+    seasonEnd: BIGTREES_2026_SEASON_END,
+    cancelledDedupKeys: cancelledKeys,
+  });
   const skipped = occurrences.length - seeded.length;
   if (skipped > 0) {
-    console.log(`Skipping ${skipped} occurrence(s) already cancelled. A re-seed will not republish them.`);
+    console.log(
+      `Skipping ${skipped} occurrence(s) past ${BIGTREES_2026_SEASON_END} or already cancelled. A re-seed will not republish them.`
+    );
   }
   // Drop the is_weekly hint — upsertEvents takes plain ExtractedEvents; we apply
   // is_weekly in the finalize step below.
