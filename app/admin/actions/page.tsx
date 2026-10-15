@@ -288,7 +288,8 @@ function ProposedCard({ action }: { action: AgentActionRow }) {
       )}
       {action.status === "approved" && (
         <p style={{ color: "#92400e", fontSize: 14, margin: "0 0 12px" }}>
-          Approved, but the approval didn&apos;t finish. Approve again to finish it; it won&apos;t file twice.
+          Approved, but the approval didn&apos;t finish. An issue may already be filed on GitHub. Approve to find
+          and link it (it won&apos;t file twice); Reject does not close it.
         </p>
       )}
       {action.type === "create_org_row" ? (
