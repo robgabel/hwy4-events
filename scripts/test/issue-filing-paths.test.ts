@@ -142,6 +142,10 @@ test("privateSignal holds back any figure or email; only public digit tokens pas
     "Newsletter list stalled near 500 signups",
     "Murphys Irish Pub sent 2025 referral clicks",
     "The venue drove forty clicks",
+    "Only fifteen people confirmed last week",
+    "Twelve referrals went to Murphys Pour House",
+    "Confirm rate is ten percent",
+    "Signups rose to 2026",
   ]) {
     assert.equal(privateSignal(t(leaky)), "a figure", leaky);
   }
