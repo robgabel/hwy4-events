@@ -31,3 +31,18 @@ test("every filing error has fix text", () => {
     assert.ok(row && String(row.rationale).length > 20, error);
   }
 });
+
+test("an issue that lost its proposed label is named, even when a create also failed", () => {
+  const both = buildIssueFilingAlert({
+    source: "growth_memo",
+    error: "create_failed",
+    unfiled: ["Fix the grape stomp page title"],
+    ungated: ["https://github.com/robgabel/hwy4-events/issues/999"],
+  });
+  assert.ok(both);
+  assert.match(String(both.rationale), /Not filed: Fix the grape stomp page title/);
+  assert.match(String(both.rationale), /issues\/999/);
+  // labels dropped with no other error still files the alert
+  const onlyDropped = buildIssueFilingAlert({ source: "qa_audit", error: null, unfiled: [], ungated: ["u1"] });
+  assert.equal((onlyDropped?.payload as { error: string }).error, "labels_dropped");
+});

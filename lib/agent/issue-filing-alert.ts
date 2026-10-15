@@ -36,14 +36,26 @@ export function buildIssueFilingAlert(args: {
   source: IssueFilingSource;
   error: string | null;
   unfiled: string[];
+  /** URLs of issues that were filed but lost the `proposed` label. */
+  ungated?: string[];
 }): Record<string, unknown> | null {
-  if (!args.error || !FILING_ERRORS.has(args.error)) return null;
+  const ungated = (args.ungated ?? []).slice(0, 10);
+  // A create failure and a dropped label can happen in the same run; the
+  // ungated issues must still be named even when the headline error is the other.
+  const error = args.error ?? (ungated.length ? "labels_dropped" : null);
+  if (!error || !FILING_ERRORS.has(error)) return null;
   const titles = args.unfiled.slice(0, 10);
   return {
     type: ISSUE_FILING_ALERT_TYPE,
-    title: `${SOURCE_LABEL[args.source]} could not file GitHub issues (${args.error})`,
-    rationale: [FIX[args.error], titles.length ? `Not filed: ${titles.join("; ")}.` : null].filter(Boolean).join(" "),
-    payload: { source: args.source, error: args.error, unfiled: titles },
+    title: `${SOURCE_LABEL[args.source]} could not file GitHub issues (${error})`,
+    rationale: [
+      FIX[error],
+      titles.length ? `Not filed: ${titles.join("; ")}.` : null,
+      ungated.length ? `Filed without \`proposed\` (add it by hand): ${ungated.join(" ")}.` : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    payload: { source: args.source, error, unfiled: titles, ungated },
     blast_radius: "low",
     reversible: false,
     outward_facing: false,
@@ -54,7 +66,7 @@ export function buildIssueFilingAlert(args: {
 /** Best-effort: never throws into the cron. */
 export async function fileIssueFilingAlert(
   supabase: SupabaseClient,
-  args: { source: IssueFilingSource; error: string | null; unfiled: string[] }
+  args: { source: IssueFilingSource; error: string | null; unfiled: string[]; ungated?: string[] }
 ): Promise<"inserted" | "duplicate" | "skipped" | "error"> {
   const row = buildIssueFilingAlert(args);
   if (!row) return "skipped";

@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       source: "qa_audit",
       error: result.filing_error,
       unfiled: result.unfiled_titles,
+      ungated: result.filed_issues.filter((i) => !i.gated).map((i) => i.html_url),
     });
 
     // A finding that could not be filed is still news: say so, or the sensor
@@ -42,11 +43,12 @@ export async function GET(request: Request) {
         const lines = [
           `*Hwy4 QA agent: ${result.filed} GitHub issue(s) filed*`,
           ...result.filed_issues.map((i) => `• <${i.html_url}|#${i.number}> ${i.title}`),
-          ...(result.filing_error === "labels_dropped"
-            ? ["⚠️ GitHub dropped the labels, so these issues are missing `proposed`. Inbox has the alert."]
-            : result.filing_error
-              ? [`⚠️ ${result.unfiled_titles.length} finding(s) not filed: ${result.filing_error}. Inbox has the alert.`]
-              : []),
+          ...(result.unfiled_titles.length
+            ? [`⚠️ ${result.unfiled_titles.length} finding(s) not filed: ${result.filing_error}. Inbox has the alert.`]
+            : []),
+          ...(result.filed_issues.some((i) => !i.gated)
+            ? ["⚠️ GitHub dropped the labels on some issues, so they are missing `proposed`. Inbox has the alert."]
+            : []),
         ];
         try {
           await fetch(webhook, {

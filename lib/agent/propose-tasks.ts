@@ -57,6 +57,8 @@ For each real dev ticket, write:
 - priority: one of p0 | p1 | p2 | p3 (p0 = urgent/breaking, p2 = normal, p3 = someday). Reserve p0/p1 for genuine breakage.
 - rationale: one line on why it is worth doing now.
 
+The ticket becomes an issue in a PUBLIC GitHub repo that anyone can read. Never put private numbers or people in title, body or rationale: no subscriber, open, confirm or referral counts or rates, no revenue, no traffic numbers for a named business, no names or emails of subscribers, submitters or organizers. Describe the change and the kind of signal behind it ("newsletter confirmations are leaking", "a venue page gets impressions but no clicks"), not the figures.
+
 Voice: plain, direct, dry. No hype, no emojis, NO EM DASHES (use commas, periods, parentheses).
 
 Output STRICT JSON only, no markdown fences, no preamble: an array (possibly empty) of {"title","body","type","priority","rationale"}. Return [] if nothing qualifies.`;

@@ -186,7 +186,12 @@ export async function GET(request: Request) {
       proposed_tasks = r.proposed;
       issue_filing_error = r.error;
       // Proposals that didn't reach GitHub go to the Inbox, not nowhere.
-      await fileIssueFilingAlert(supabase, { source: "growth_memo", error: r.error, unfiled: r.unfiled });
+      await fileIssueFilingAlert(supabase, {
+        source: "growth_memo",
+        error: r.error,
+        unfiled: r.unfiled,
+        ungated: r.filed.filter((i) => !i.gated).map((i) => i.html_url),
+      });
     }
 
     return NextResponse.json({
