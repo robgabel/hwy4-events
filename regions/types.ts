@@ -206,4 +206,8 @@ export interface RegionOps {
     /** Town slugs the weekly QA audit samples for page checks. */
     townSlugSample: readonly string[];
   };
+  admin: {
+    /** The GitHub Project the admin nav's "Roadmap" item opens (#325). Null hides the item. */
+    roadmapUrl: string | null;
+  };
 }

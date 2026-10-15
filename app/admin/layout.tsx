@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { countPending } from "@/lib/admin/db";
 import { ADMIN_MAX_WIDTH, PAGE_BG } from "@/components/admin/ui";
 import AdminNav from "@/components/admin/AdminNav";
+import { REGION_OPS } from "@/lib/region-ops";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     >
       <div style={{ maxWidth: ADMIN_MAX_WIDTH, margin: "0 auto 20px" }}>
         <Suspense fallback={<div style={{ height: 36 }} />}>
-          <AdminNav badges={{ inbox }} />
+          <AdminNav badges={{ inbox }} roadmapUrl={REGION_OPS.admin.roadmapUrl} />
         </Suspense>
       </div>
       {children}

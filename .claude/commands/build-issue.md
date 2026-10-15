@@ -7,12 +7,12 @@ You are implementing a GitHub issue from the Hwy4Events backlog. GitHub Issues i
 
 Issue: **robgabel/hwy4-events#$ARGUMENTS**
 
-Follow this loop exactly. **Never merge the PR unless Rob says so for this PR: you open a draft and stop.**
+Follow this loop exactly. **Never merge the PR. You open a draft and stop; Rob merges (standing rule).**
 
 ## 1. Read the issue
 - Read the issue, its labels and its comments (`gh issue view $ARGUMENTS -R robgabel/hwy4-events --comments`, or the GitHub MCP `issue_read`).
 - If it is closed: tell the user and stop.
-- If it still carries the `proposed` label: an agent filed it and Rob has not accepted it. Ask before building.
+- Rob running `/build-issue` on an issue is his acceptance of it, even if the `proposed` label (agent-filed) is still on. Don't remove the label; mention it in your report so Rob can clear it.
 - The header table (Size / Build with / Effort / Subagents) says who should build it and which subagents to use. The body is the spec. If it is thin or ambiguous, ask the user 1–2 clarifying questions **before** writing code.
 
 ## 2. Branch from a fresh base (the stale-base lesson)
@@ -29,4 +29,4 @@ Follow this loop exactly. **Never merge the PR unless Rob says so for this PR: y
 - Then run the independent QA pass per `.claude/skills/pr-qa/SKILL.md`.
 
 ## 5. Report back
-Tell the user what you built, the draft PR link, what you verified, and the QA verdict. The merge is Rob's click unless he has said otherwise for this PR.
+Tell the user what you built, the draft PR link, what you verified, and the QA verdict. The merge is Rob's click.

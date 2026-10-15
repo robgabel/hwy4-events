@@ -8,10 +8,6 @@ export type NavBadges = {
   inbox: number;
 };
 
-// The dev backlog is GitHub Issues on this Project (#325). The nav links out to
-// it; there is no in-app board.
-const ROADMAP_URL = "https://github.com/users/robgabel/projects/3";
-
 // Slimmed admin nav: four destinations. "Act" (the Inbox — the unified review
 // queue) is separated from "look / tend" (Pulse = the read-only agent + growth
 // surfaces: briefings, experiments, venues; Analytics; Newsletter). The five
@@ -39,7 +35,9 @@ const PULSE_ROUTES = [
   "/admin/scrapers",
 ];
 
-export default function AdminNav({ badges }: { badges: NavBadges }) {
+// roadmapUrl comes from the server layout (region ops), so this client file
+// never imports server-only config. The dev backlog is GitHub Issues (#325).
+export default function AdminNav({ badges, roadmapUrl }: { badges: NavBadges; roadmapUrl: string | null }) {
   const pathname = usePathname();
 
   const inActive = (routes: string[]) =>
@@ -87,14 +85,16 @@ export default function AdminNav({ badges }: { badges: NavBadges }) {
       <NavLink href="/admin/newsletter" active={startsWith("/admin/newsletter")}>
         Newsletter
       </NavLink>
+      {roadmapUrl && (
       <a
-        href={ROADMAP_URL}
+        href={roadmapUrl}
         target="_blank"
         rel="noopener noreferrer"
         style={{ padding: "6px 12px", borderRadius: 6, color: INK, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}
       >
         Roadmap ↗
       </a>
+      )}
     </nav>
   );
 }
