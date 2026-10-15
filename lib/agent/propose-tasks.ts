@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 // Relative (not "@/") imports so the scripts/ test runner can import this module.
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";
-import { checkKeyLine, DeadlineError, githubIssuesClient, hasTimeFor, suppressesRefile, type FiledIssue, type IssuesClient } from "../github-issues";
+import { checkKeyLine, DeadlineError, githubIssuesClient, hasTimeFor, REQUEST_TIMEOUT_MS, suppressesRefile, type FiledIssue, type IssuesClient } from "../github-issues";
 
 // Turn the weekly growth memo into `proposed` GitHub issues (issue #325: GitHub
 // Issues is the only backlog). The memo already reasons over the site's signals
@@ -211,11 +211,21 @@ export async function proposeTasksFromDigest(
     unfiled,
   });
   if (!opts.digest) return none();
+  // The extraction shares the route's 60s budget with the memo call before it.
+  // Bound it so a slow model reply ends in an Inbox alert, not a killed function:
+  // it must finish with room left for one GitHub list and one create.
+  const NOT_EXTRACTED = "Growth memo build proposals (not extracted in time; reread this week's memo)";
+  let extractTimeoutMs: number | undefined;
+  if (opts.deadline !== undefined) {
+    extractTimeoutMs = opts.deadline - Date.now() - 2 * REQUEST_TIMEOUT_MS;
+    if (extractTimeoutMs < 5_000) return none("deadline_exceeded", [NOT_EXTRACTED]);
+  }
   // 1. Extract candidate dev tickets from the digest (best-effort, never throw).
   let extracted: ExtractedTask[];
   try {
     const anthropic = new Anthropic();
-    const message = await anthropic.messages.create({
+    const message = await anthropic.messages.create(
+      {
       model: MODEL,
       max_tokens: 3000,
       output_config: MEDIUM_EFFORT,
@@ -230,10 +240,15 @@ export async function proposeTasksFromDigest(
           )}`,
         },
       ],
-    });
+      },
+      extractTimeoutMs !== undefined ? { timeout: extractTimeoutMs, maxRetries: 0 } : undefined
+    );
     extracted = parseExtractedTasks(messageText(message.content));
   } catch (err) {
     console.error("[propose-tasks] extraction failed:", err);
+    // A timeout against the deadline is a filing failure the Inbox must show;
+    // any other model error stays a plain extraction failure, as before.
+    if (err instanceof Anthropic.APIConnectionTimeoutError) return none("deadline_exceeded", [NOT_EXTRACTED]);
     return none("extraction_failed");
   }
   if (extracted.length === 0) return none();
