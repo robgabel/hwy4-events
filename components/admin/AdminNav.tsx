@@ -8,7 +8,8 @@ export type NavBadges = {
   inbox: number;
 };
 
-// Slimmed admin nav: four destinations. "Act" (the Inbox — the unified review
+// Slimmed admin nav: four destinations, plus an outbound "Roadmap ↗" link to the
+// GitHub Project (#325). "Act" (the Inbox — the unified review
 // queue) is separated from "look / tend" (Pulse = the read-only agent + growth
 // surfaces: briefings, experiments, venues; Analytics; Newsletter). The five
 // former queue routes (submissions / posters / verification / feedback / actions)
