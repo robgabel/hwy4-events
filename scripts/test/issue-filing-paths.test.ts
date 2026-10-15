@@ -125,7 +125,7 @@ test("fileTaskIssues: list failure, create failure and dropped labels all surfac
   assert.equal(dropped.proposed, 2);
 });
 
-test("privateSignal holds back any figure or email, allows years, paths and code", () => {
+test("privateSignal holds back any figure or email; only a near-term year is allowed", () => {
   const t = (body: string) => ({ title: "Fix the newsletter confirm email", body, rationale: "" });
   for (const leaky of [
     "Confirm rate fell to 40% this week",
@@ -134,6 +134,9 @@ test("privateSignal holds back any figure or email, allows years, paths and code
     "Newsletter net was +12 this week",
     "1,400 impressions at position 8.2",
     "Sponsorship pays 300 dollars",
+    "Murphys Irish Pub drove 2031 clicks",
+    "list stuck at `212` confirmed",
+    "see /admin/growth-memo/123",
   ]) {
     assert.equal(privateSignal(t(leaky)), "a figure", leaky);
   }
@@ -143,6 +146,7 @@ test("privateSignal holds back any figure or email, allows years, paths and code
     "Newsletter confirmations are leaking; resend the confirm link after a day",
     "Lead the /events/grape-stomp-2026 title with the search phrasing for 2027",
     "Add a filter to the /free page and to `lib/market-pages.ts` hub",
+    "Year-less URL for the 2027 festival, not /events/hermitfest-west-2026",
   ]) {
     assert.equal(privateSignal(t(clean)), null, clean);
   }

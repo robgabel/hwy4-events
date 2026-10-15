@@ -136,12 +136,13 @@ export function titlesCollide(a: string, b: string): boolean {
 // tells the model to leave figures out; this is the check that does not depend
 // on the model obeying. A word list of "private metrics" kept missing phrasings
 // ("the list grew from 180 to 212"), so the rule is blunt: a growth-memo issue
-// may carry no figures at all. Years (20xx) and digits inside a page path or a
-// code span are allowed; any other digit, or an email address, holds the
-// proposal back from GitHub and sends it to the private Inbox alert instead.
+// may carry no figures at all. The one exception is a near-term year
+// (2024-2029, so "grape stomp 2027" works, also inside a path). Any other
+// digit, or an email address, holds the proposal back from GitHub and sends it
+// to the private Inbox alert instead.
 // People's names can't be caught this way; the prompt rule covers those.
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
-const ALLOWED_DIGITS_RE = /`[^`]*`|(?:^|\s)\/[\w\-/.]*|\b20\d\d\b/g;
+const ALLOWED_DIGITS_RE = /\b202[4-9]\b/g;
 
 /** Why this ticket text must not go to a public issue, or null when it's clean. Pure. */
 export function privateSignal(t: Pick<ExtractedTask, "title" | "body" | "rationale">): string | null {
