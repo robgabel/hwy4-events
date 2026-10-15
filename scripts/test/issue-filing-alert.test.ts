@@ -6,7 +6,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildIssueFilingAlert, ISSUE_FILING_ALERT_TYPE } from "../../lib/agent/issue-filing-alert.js";
+import { buildIssueFilingAlert, fileIssueFilingAlert, ISSUE_FILING_ALERT_TYPE } from "../../lib/agent/issue-filing-alert.js";
 
 test("a filing failure becomes one proposed, non-reversible agent_actions row", () => {
   const row = buildIssueFilingAlert({ source: "qa_audit", error: "list_failed", unfiled: ["QA: The /free page returns an error"] });
@@ -54,4 +54,50 @@ test("a long outage keeps the newest items, not the first week's", () => {
   assert.equal(kept.length, 20);
   assert.equal(kept[kept.length - 1], "title 24");
   assert.ok(!kept.includes("title 0"));
+});
+
+// A minimal chainable stand-in for the two Supabase calls fileIssueFilingAlert makes.
+function fakeSupabase(open: { id: string; payload: unknown }[]) {
+  const writes: { op: string; row: Record<string, unknown> }[] = [];
+  const chain = {
+    select: () => chain,
+    eq: () => chain,
+    limit: async () => ({ data: open, error: null }),
+    insert: async (row: Record<string, unknown>) => {
+      writes.push({ op: "insert", row });
+      return { error: null };
+    },
+    update: (row: Record<string, unknown>) => ({
+      eq: async () => {
+        writes.push({ op: "update", row });
+        return { error: null };
+      },
+    }),
+  };
+  return { client: { from: () => chain } as unknown as Parameters<typeof fileIssueFilingAlert>[0], writes };
+}
+
+test("fileIssueFilingAlert inserts the first row, then merges later runs into it", async () => {
+  const first = fakeSupabase([]);
+  assert.equal(
+    await fileIssueFilingAlert(first.client, { source: "growth_memo", error: "privacy_hold", unfiled: ["a (held: quotes a figure; spec: x)"] }),
+    "inserted"
+  );
+  assert.equal(first.writes[0].op, "insert");
+
+  const second = fakeSupabase([{ id: "row1", payload: { unfiled: ["a (held: quotes a figure; spec: x)"], ungated: [] } }]);
+  assert.equal(
+    await fileIssueFilingAlert(second.client, { source: "growth_memo", error: "list_failed", unfiled: ["b"] }),
+    "duplicate"
+  );
+  assert.equal(second.writes[0].op, "update");
+  const payload = second.writes[0].row.payload as { unfiled: string[]; error: string };
+  assert.deepEqual(payload.unfiled, ["a (held: quotes a figure; spec: x)", "b"]);
+  assert.equal(payload.error, "list_failed");
+});
+
+test("fileIssueFilingAlert skips when there is nothing to report", async () => {
+  const s = fakeSupabase([]);
+  assert.equal(await fileIssueFilingAlert(s.client, { source: "qa_audit", error: null, unfiled: [] }), "skipped");
+  assert.equal(s.writes.length, 0);
 });
