@@ -14,6 +14,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import CloudflareAnalytics from "@/components/CloudflareAnalytics";
 import PageViewTracker from "@/components/PageViewTracker";
+import SiteAlertBanner from "@/components/SiteAlertBanner";
 import { Bitter, DM_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -115,6 +116,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${bitter.variable} ${dmSans.variable}`}>
       <body className="min-h-screen bg-cream font-sans antialiased">
+        <SiteAlertBanner />
         <JsonLd data={buildWebSite()} />
         <JsonLd data={buildOrganization()} />
         {cfBeaconToken && <CloudflareAnalytics token={cfBeaconToken} />}
