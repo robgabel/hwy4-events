@@ -136,13 +136,24 @@ export function titlesCollide(a: string, b: string): boolean {
 // tells the model to leave figures out; this is the check that does not depend
 // on the model obeying. A word list of "private metrics" kept missing phrasings
 // ("the list grew from 180 to 212"), so the rule is blunt: a growth-memo issue
-// may carry no figures at all. The one exception is a near-term year
-// (2024-2029, so "grape stomp 2027" works, also inside a path). Any other
-// digit, or an email address, holds the proposal back from GitHub and sends it
-// to the private Inbox alert instead.
+// may carry no figures at all. The exceptions are public tokens that carry
+// digits but no data: the site's own name and road (Hwy 4, hwy4events.com,
+// Highway 4, Route 4), a near-term year or ISO date (2024-2029), an HTTP error
+// code, and an issue or board ref (#325, HWY-81). Any other digit, or an email
+// address, holds the proposal back from GitHub and sends it to the private
+// Inbox alert instead.
 // People's names can't be caught this way; the prompt rule covers those.
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
-const ALLOWED_DIGITS_RE = /\b202[4-9]\b/g;
+const ALLOWED_DIGITS_RE = new RegExp(
+  [
+    String.raw`\b(?:hwy|highway|route|sr|state route)[\s-]?4(?!\d)`, // the corridor and the brand (hwy4events.com)
+    String.raw`\b202[4-9](?:-\d\d-\d\d)?\b`, // a near-term year or ISO date
+    String.raw`\b(?:301|302|308|404|410|429|500|502|503|504)\b`, // HTTP status codes
+    String.raw`#\d+\b`, // GitHub issue / PR refs
+    String.raw`\bHWY-\d+\b`, // old board refs
+  ].join("|"),
+  "gi"
+);
 
 /** Why this ticket text must not go to a public issue, or null when it's clean. Pure. */
 export function privateSignal(t: Pick<ExtractedTask, "title" | "body" | "rationale">): string | null {

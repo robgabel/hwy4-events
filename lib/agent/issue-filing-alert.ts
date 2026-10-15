@@ -36,7 +36,7 @@ const FIX: Record<string, string> = {
   labels_dropped:
     "An issue was filed without its `proposed` label, so GitHub dropped the labels. Give the token Issues read/write and add the label by hand.",
   privacy_hold:
-    "A proposal quoted private numbers or an email, and the repo is public, so it was not filed. If you want it, file it by hand without the figures.",
+    "A proposal contained a number or an email address, and the repo is public, so it was held back (the check can't tell a private figure from a harmless one). Read the held text below; if it is safe, file it by hand.",
 };
 
 // PURE: the proposed row, or null when the error isn't a filing failure.
