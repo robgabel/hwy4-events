@@ -3,16 +3,16 @@ description: Implement a GitHub issue (#N) end-to-end and open a draft PR
 argument-hint: 342
 ---
 
-You are implementing a GitHub issue from the Hwy4Events backlog. GitHub Issues is the only backlog (#325); the board is the GitHub Project https://github.com/users/robgabel/projects/3.
+You are implementing a GitHub issue from this repo's backlog. GitHub Issues is the only backlog (#325); the board is the GitHub Project named in the active region's `admin.roadmapUrl` (`regions/<slug>/ops.ts`).
 
-Issue: **robgabel/hwy4-events#$ARGUMENTS**
+Issue: **#$ARGUMENTS** in the repo this checkout's `origin` points at. Resolve it first with `git remote get-url origin` (call it `<owner>/<repo>`); never assume the upstream `robgabel/hwy4-events`, or a fork would build the upstream issue with the same number.
 
 Follow this loop exactly. **Never merge the PR. You open a draft and stop; Rob merges (standing rule).**
 
 ## 1. Read the issue
-- Read the issue, its labels and its comments (`gh issue view $ARGUMENTS -R robgabel/hwy4-events --comments`, or the GitHub MCP `issue_read`).
+- Read the issue, its labels and its comments (`gh issue view $ARGUMENTS -R <owner>/<repo> --comments`, or the GitHub MCP `issue_read`).
 - If it is closed: tell the user and stop.
-- Rob running `/build-issue` on an issue is his acceptance of it, even if the `proposed` label (agent-filed) is still on. Don't remove the label; mention it in your report so Rob can clear it.
+- Rob accepts an agent-filed issue by moving it to Ready and removing `proposed`. Rob running `/build-issue` on it also counts as acceptance, even if the label is still on. Never remove the label yourself; mention it in your report so Rob can clear it.
 - The header table (Size / Build with / Effort / Subagents) says who should build it and which subagents to use. The body is the spec. If it is thin or ambiguous, ask the user 1–2 clarifying questions **before** writing code.
 
 ## 2. Branch from a fresh base (the stale-base lesson)

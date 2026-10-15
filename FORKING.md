@@ -297,8 +297,8 @@ nightly date verification).
    The admin nav's "Roadmap" item opens `admin.roadmapUrl` in your region's
    `regions/<slug>/ops.ts`; point it at your own GitHub Project, or set it to
    `null` to hide the item. Dev tickets live in GitHub Issues (#325): there is no
-   in-app board, merge webhook or `/build-ticket`, so there is nothing of it to
-   replicate.
+   in-app board, merge webhook or `/build-ticket`. `/build-issue N` resolves the
+   repo from `git remote get-url origin`, so it builds your fork's issue #N.
    **Set `GITHUB_ISSUES_REPO` to your fork's `owner/repo`** whenever you set
    `GITHUB_ISSUES_TOKEN`. Unset, it defaults to `robgabel/hwy4-events`: the
    QA audit and growth memo would dedup against the original repo's issues
