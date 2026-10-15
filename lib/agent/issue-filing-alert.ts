@@ -47,6 +47,8 @@ const FIX: Record<string, string> = {
 export function buildIssueFilingAlert(args: {
   source: IssueFilingSource;
   error: string | null;
+  /** Every distinct failure, so a later or second error never hides an earlier one's fix text. */
+  errors?: string[];
   unfiled: string[];
   /** URLs of issues that were filed but lost the `proposed` label. */
   ungated?: string[];
@@ -55,20 +57,21 @@ export function buildIssueFilingAlert(args: {
   const ungated = (args.ungated ?? []).slice(-MAX_LISTED);
   // A create failure and a dropped label can happen in the same run; the
   // ungated issues must still be named even when the headline error is the other.
-  const error = args.error ?? (ungated.length ? "labels_dropped" : null);
-  if (!error || !FILING_ERRORS.has(error)) return null;
+  const all = [...(args.errors ?? []), ...(args.error ? [args.error] : []), ...(ungated.length ? ["labels_dropped"] : [])];
+  const errors = [...new Set(all)].filter((e) => FILING_ERRORS.has(e));
+  if (errors.length === 0) return null;
   const titles = args.unfiled.slice(-MAX_LISTED);
   return {
     type: ISSUE_FILING_ALERT_TYPE,
-    title: `${SOURCE_LABEL[args.source]} could not file GitHub issues (${error})`,
+    title: `${SOURCE_LABEL[args.source]} could not file GitHub issues (${errors.join(", ")})`,
     rationale: [
-      FIX[error],
+      ...errors.map((e) => FIX[e]),
       titles.length ? `Not filed: ${titles.join("; ")}.` : null,
       ungated.length ? `Filed without \`proposed\` (add it by hand): ${ungated.join(" ")}.` : null,
     ]
       .filter(Boolean)
       .join(" "),
-    payload: { source: args.source, error, unfiled: titles, ungated },
+    payload: { source: args.source, error: errors[0], errors, unfiled: titles, ungated },
     blast_radius: "low",
     reversible: false,
     outward_facing: false,
@@ -79,7 +82,7 @@ export function buildIssueFilingAlert(args: {
 /** Best-effort: never throws into the cron. */
 export async function fileIssueFilingAlert(
   supabase: SupabaseClient,
-  args: { source: IssueFilingSource; error: string | null; unfiled: string[]; ungated?: string[] }
+  args: { source: IssueFilingSource; error: string | null; errors?: string[]; unfiled: string[]; ungated?: string[] }
 ): Promise<"inserted" | "duplicate" | "skipped" | "error"> {
   const row = buildIssueFilingAlert(args);
   if (!row) return "skipped";
@@ -92,12 +95,19 @@ export async function fileIssueFilingAlert(
       .eq("payload->>source", args.source)
       .limit(1);
     if (readErr) throw new Error(readErr.message);
-    const existing = (open ?? [])[0] as { id: string; payload: { unfiled?: string[]; ungated?: string[] } | null } | undefined;
+    const existing = (open ?? [])[0] as
+      | { id: string; payload: { error?: string; errors?: string[]; unfiled?: string[]; ungated?: string[] } | null }
+      | undefined;
     if (existing) {
       // One open row per source, but a later run's items must not be lost: the
       // growth memo never regenerates past proposals. Merge them into the row.
       const merged = buildIssueFilingAlert({
         ...args,
+        // Keep the earlier runs' reasons: their items are still in the row.
+        errors: [
+          ...(existing.payload?.errors ?? (existing.payload?.error ? [existing.payload.error] : [])),
+          ...(args.errors ?? []),
+        ],
         unfiled: [...new Set([...(existing.payload?.unfiled ?? []), ...args.unfiled])],
         ungated: [...new Set([...(existing.payload?.ungated ?? []), ...(args.ungated ?? [])])],
       });

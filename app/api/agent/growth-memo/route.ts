@@ -194,6 +194,7 @@ export async function GET(request: Request) {
       await fileIssueFilingAlert(supabase, {
         source: "growth_memo",
         error: r.error,
+        errors: r.errors,
         unfiled: r.unfiled,
         ungated: r.filed.filter((i) => !i.gated).map((i) => i.html_url),
       });

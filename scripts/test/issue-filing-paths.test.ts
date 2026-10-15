@@ -59,7 +59,7 @@ const agg = (scope: string): QaAgg => ({
 
 test("fileQaFindings: no findings is a clean no-op", async () => {
   const r = await fileQaFindings(fakeClient({}), []);
-  assert.deepEqual(r, { filed: 0, skipped: 0, filed_issues: [], filing_error: null, unfiled_titles: [] });
+  assert.deepEqual(r, { filed: 0, skipped: 0, filed_issues: [], filing_error: null, filing_errors: [], unfiled_titles: [] });
 });
 
 test("fileQaFindings: no token and a failed list each report every finding as unfiled", async () => {
@@ -118,7 +118,8 @@ test("fileTaskIssues: list failure, create failure and dropped labels all surfac
 
   const createFailed = await fileTaskIssues(fakeClient({ createFails: (i) => i.title.startsWith("Fix") }), tasks, OPTS);
   assert.equal(createFailed.error, "create_failed");
-  assert.deepEqual(createFailed.unfiled, ["Fix the grape stomp page title"]);
+  assert.equal(createFailed.unfiled.length, 1);
+  assert.match(createFailed.unfiled[0], /^\[create_failed\] Fix the grape stomp page title \(spec: spec;/);
   assert.equal(createFailed.proposed, 1);
 
   const dropped = await fileTaskIssues(fakeClient({ dropLabels: true }), tasks, OPTS);
@@ -176,7 +177,7 @@ test("fileTaskIssues: a proposal quoting private figures is held, not filed", as
   const r = await fileTaskIssues(client, leaky, OPTS);
   assert.equal(client.created.length, 0);
   assert.equal(r.error, "privacy_hold");
-  assert.match(r.unfiled[0], /held: quotes a figure/);
+  assert.match(r.unfiled[0], /^\[privacy_hold, quotes a figure\] Resend the confirm link \(spec: confirm rate is 40%/);
 });
 
 test("both writers stop at the deadline and report what they didn't file", async () => {
@@ -214,4 +215,15 @@ test("a held proposal's alert text includes the rationale that may have tripped 
   );
   const r = await fileTaskIssues(fakeClient({}), leaky, OPTS);
   assert.match(r.unfiled[0], /why now: confirmations fell to 40/);
+});
+
+test("one run's failures don't mask each other", async () => {
+  const mixed = parseExtractedTasks(
+    JSON.stringify([
+      { title: "Resend the confirm link", body: "rate is 40%", type: "growth" },
+      { title: "Fix the grape stomp page title", body: "spec", type: "bug" },
+    ])
+  );
+  const r = await fileTaskIssues(fakeClient({ createFails: () => true }), mixed, OPTS);
+  assert.deepEqual(r.errors.sort(), ["create_failed", "privacy_hold"]);
 });

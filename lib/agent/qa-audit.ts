@@ -196,8 +196,10 @@ export type QaAuditResult = {
   filed: number;
   skipped: number;
   filed_issues: FiledIssue[];
-  /** Why findings didn't reach GitHub this run (token missing, list/create failed, labels dropped). */
+  /** The first reason findings didn't reach GitHub this run (token missing, list/create failed, labels dropped, deadline). */
   filing_error: string | null;
+  /** Every distinct filing failure in the run, so one can't mask another. */
+  filing_errors: string[];
   /** Titles of findings that were not filed because of filing_error. */
   unfiled_titles: string[];
 };
@@ -332,10 +334,11 @@ export async function fileQaFindings(
     skipped: aggs.length,
     filed_issues: [],
     filing_error,
+    filing_errors: [filing_error],
     unfiled_titles: aggs.map((a) => a.title),
   });
   if (aggs.length === 0) {
-    return { filed: 0, skipped: 0, filed_issues: [], filing_error: null, unfiled_titles: [] };
+    return { filed: 0, skipped: 0, filed_issues: [], filing_error: null, filing_errors: [], unfiled_titles: [] };
   }
   if (!issues) {
     console.error("[qa-audit] GITHUB_ISSUES_TOKEN_MISSING: findings not filed");
@@ -357,14 +360,14 @@ export async function fileQaFindings(
   const filed: FiledIssue[] = [];
   const unfiled: string[] = [];
   let skipped = 0;
-  let filingError: string | null = null;
+  const filingErrors = new Set<string>();
   for (const a of aggs) {
     if (covered.has(a.key)) {
       skipped++;
       continue;
     }
     if (!hasTimeFor(deadline)) {
-      filingError = "deadline_exceeded";
+      filingErrors.add("deadline_exceeded");
       unfiled.push(a.title);
       skipped++;
       continue;
@@ -375,15 +378,23 @@ export async function fileQaFindings(
       covered.add(a.key);
       if (!issue.gated) {
         console.error(`[qa-audit] #${issue.number} was filed without the proposed label`);
-        filingError ??= "labels_dropped";
+        filingErrors.add("labels_dropped");
       }
     } catch (err) {
       console.error("[qa-audit] create issue failed:", err);
-      filingError = "create_failed";
+      filingErrors.add("create_failed");
       unfiled.push(a.title);
       skipped++;
     }
   }
 
-  return { filed: filed.length, skipped, filed_issues: filed, filing_error: filingError, unfiled_titles: unfiled };
+  const errorList = [...filingErrors];
+  return {
+    filed: filed.length,
+    skipped,
+    filed_issues: filed,
+    filing_error: errorList[0] ?? null,
+    filing_errors: errorList,
+    unfiled_titles: unfiled,
+  };
 }

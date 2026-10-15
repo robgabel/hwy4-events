@@ -85,7 +85,9 @@ test("fileIssueFilingAlert inserts the first row, then merges later runs into it
   );
   assert.equal(first.writes[0].op, "insert");
 
-  const second = fakeSupabase([{ id: "row1", payload: { unfiled: ["a (held: quotes a figure; spec: x)"], ungated: [] } }]);
+  const second = fakeSupabase([
+    { id: "row1", payload: { error: "privacy_hold", errors: ["privacy_hold"], unfiled: ["a (held: quotes a figure; spec: x)"], ungated: [] } },
+  ]);
   assert.equal(
     await fileIssueFilingAlert(second.client, { source: "growth_memo", error: "list_failed", unfiled: ["b"] }),
     "duplicate"
@@ -93,7 +95,10 @@ test("fileIssueFilingAlert inserts the first row, then merges later runs into it
   assert.equal(second.writes[0].op, "update");
   const payload = second.writes[0].row.payload as { unfiled: string[]; error: string };
   assert.deepEqual(payload.unfiled, ["a (held: quotes a figure; spec: x)", "b"]);
-  assert.equal(payload.error, "list_failed");
+  // the earlier run's reason and its fix text survive the merge
+  assert.deepEqual((second.writes[0].row.payload as { errors: string[] }).errors, ["privacy_hold", "list_failed"]);
+  assert.match(String(second.writes[0].row.rationale), /repo is public/);
+  assert.match(String(second.writes[0].row.title), /privacy_hold, list_failed/);
 });
 
 test("fileIssueFilingAlert skips when there is nothing to report", async () => {

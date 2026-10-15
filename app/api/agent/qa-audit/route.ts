@@ -33,6 +33,7 @@ export async function GET(request: Request) {
     const filing_alert = await fileIssueFilingAlert(supabase, {
       source: "qa_audit",
       error: result.filing_error,
+      errors: result.filing_errors,
       unfiled: result.unfiled_titles,
       ungated: result.filed_issues.filter((i) => !i.gated).map((i) => i.html_url),
     });

@@ -32,8 +32,11 @@ export type ProposeTasksResult = {
   proposed: number;
   skipped: number;
   filed: FiledIssue[];
+  /** The first filing failure of the run (null when everything filed). */
   error: string | null;
-  /** Titles that didn't reach GitHub because of `error`. */
+  /** Every distinct filing failure in the run, so one can't mask another. */
+  errors: string[];
+  /** Proposals that didn't reach GitHub, each with its reason, spec and rationale (the extraction is saved nowhere else). */
   unfiled: string[];
 };
 
@@ -208,6 +211,7 @@ export async function proposeTasksFromDigest(
     skipped: 0,
     filed: [],
     error,
+    errors: error ? [error] : [],
     unfiled,
   });
   if (!opts.digest) return none();
@@ -255,7 +259,7 @@ export async function proposeTasksFromDigest(
   // Checked after extraction so a missing token reports what it failed to file.
   if (!issues) {
     console.error("[propose-tasks] GITHUB_ISSUES_TOKEN_MISSING: not filing");
-    return none("GITHUB_ISSUES_TOKEN_MISSING", extracted.map((t) => t.title));
+    return none("GITHUB_ISSUES_TOKEN_MISSING", extracted.map((t) => unfiledEntry(t, "GITHUB_ISSUES_TOKEN_MISSING")));
   }
 
   return fileTaskIssues(
@@ -265,6 +269,13 @@ export async function proposeTasksFromDigest(
     new Date(),
     opts.deadline
   );
+}
+
+// One Inbox line per proposal that didn't reach GitHub. The extraction isn't
+// saved anywhere else and the memo never re-proposes, so the spec and the
+// rationale travel with it; this text lands only in the private agent_actions row.
+function unfiledEntry(t: ExtractedTask, reason: string): string {
+  return `[${reason}] ${t.title} (spec: ${t.body || "none"}; why now: ${t.rationale || "none"})`;
 }
 
 // Dedup + file the extracted tickets. Split out so the error paths can be driven
@@ -283,19 +294,21 @@ export async function fileTaskIssues(
     seen = (await issues.listRecent(now, deadline)).filter((i) => suppressesRefile(i, now)).map((i) => words(i.title));
   } catch (err) {
     console.error("[propose-tasks] listing issues failed:", err);
+    const error = err instanceof DeadlineError ? "deadline_exceeded" : "list_failed";
     return {
       proposed: 0,
       skipped: 0,
       filed: [],
-      error: err instanceof DeadlineError ? "deadline_exceeded" : "list_failed",
-      unfiled: extracted.map((t) => t.title),
+      error,
+      errors: [error],
+      unfiled: extracted.map((t) => unfiledEntry(t, error)),
     };
   }
 
   const filed: FiledIssue[] = [];
   const unfiled: string[] = [];
   let skipped = 0;
-  let error: string | null = null;
+  const errors = new Set<string>();
   for (const t of extracted) {
     const w = words(t.title);
     if (seen.some((s) => similar(w, s))) {
@@ -304,16 +317,16 @@ export async function fileTaskIssues(
     }
     seen.push(w); // guard against two near-identical candidates in the same run
     if (!hasTimeFor(deadline)) {
-      error = "deadline_exceeded";
-      unfiled.push(t.title);
+      errors.add("deadline_exceeded");
+      unfiled.push(unfiledEntry(t, "deadline_exceeded"));
       skipped++;
       continue;
     }
     const why = privateSignal(t);
     if (why) {
       console.error(`[propose-tasks] held back "${t.title}": quotes ${why}`);
-      error ??= "privacy_hold";
-      unfiled.push(`${t.title} (held: quotes ${why}; spec: ${t.body}; why now: ${t.rationale || "none"})`);
+      errors.add("privacy_hold");
+      unfiled.push(unfiledEntry(t, `privacy_hold, quotes ${why}`));
       skipped++;
       continue;
     }
@@ -322,14 +335,15 @@ export async function fileTaskIssues(
       filed.push(issue);
       if (!issue.gated) {
         console.error(`[propose-tasks] #${issue.number} was filed without the proposed label`);
-        error ??= "labels_dropped";
+        errors.add("labels_dropped");
       }
     } catch (err) {
       console.error("[propose-tasks] create issue failed:", err);
-      error = "create_failed";
-      unfiled.push(t.title);
+      errors.add("create_failed");
+      unfiled.push(unfiledEntry(t, "create_failed"));
       skipped++;
     }
   }
-  return { proposed: filed.length, skipped, filed, error, unfiled };
+  const errorList = [...errors];
+  return { proposed: filed.length, skipped, filed, error: errorList[0] ?? null, errors: errorList, unfiled };
 }
