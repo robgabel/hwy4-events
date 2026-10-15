@@ -138,17 +138,20 @@ export function titlesCollide(a: string, b: string): boolean {
 // ("the list grew from 180 to 212"), so the rule is blunt: a growth-memo issue
 // may carry no figures at all. The exceptions are public tokens that carry
 // digits but no data: the site's own name and road (Hwy 4, hwy4events.com,
-// Highway 4, Route 4), a near-term year or ISO date (2024-2029), an HTTP error
-// code, and an issue or board ref (#325, HWY-81). Any other digit, or an email
-// address, holds the proposal back from GitHub and sends it to the private
-// Inbox alert instead.
+// Highway 4, Route 4), an ISO date, a year only where it reads as a year ("in
+// 2027", "the 2027 festival", "-2026" in a slug), and an issue or board ref
+// (#325, HWY-81). Any other digit, a spelled-out count ("forty clicks"), or an
+// email address holds the proposal back from GitHub and sends it to the
+// private Inbox alert instead.
 // People's names can't be caught this way; the prompt rule covers those.
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
+const SPELLED_COUNT_RE = /\b(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundreds?|thousands?|dozens?|million)\b/i;
 const ALLOWED_DIGITS_RE = new RegExp(
   [
     String.raw`\b(?:hwy|highway|route|sr|state route)[\s-]?4(?!\d)`, // the corridor and the brand (hwy4events.com)
-    String.raw`\b202[4-9](?:-\d\d-\d\d)?\b`, // a near-term year or ISO date
-    String.raw`\b(?:301|302|308|404|410|429|500|502|503|504)\b`, // HTTP status codes
+    String.raw`\b202[4-9]-\d\d-\d\d\b`, // an ISO date
+    // a year only in a year-shaped position, never as a bare count ("sent 2025 clicks")
+    String.raw`(?:\b(?:in|for|of|since|by|until|the|from|to)\s+|[-/])202[4-9]\b`,
     String.raw`#\d+\b`, // GitHub issue / PR refs
     String.raw`\bHWY-\d+\b`, // old board refs
   ].join("|"),
@@ -160,6 +163,7 @@ export function privateSignal(t: Pick<ExtractedTask, "title" | "body" | "rationa
   const text = [t.title, t.body, t.rationale].join("\n");
   if (EMAIL_RE.test(text)) return "an email address";
   if (/\d/.test(text.replace(ALLOWED_DIGITS_RE, " "))) return "a figure";
+  if (SPELLED_COUNT_RE.test(text)) return "a figure";
   return null;
 }
 

@@ -22,6 +22,8 @@ export const DEFAULT_ISSUES_REPO = "robgabel/hwy4-events";
 const API = "https://api.github.com";
 const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
+/** Per-request cap: the calling routes have a 60s budget, and a stalled GitHub must fail into the Inbox alert, not past it. */
+const REQUEST_TIMEOUT_MS = 10_000;
 /** A declined issue (closed as not planned or duplicate) suppresses a refile for this long. */
 export const DECLINED_SUPPRESS_DAYS = 30;
 
@@ -139,6 +141,7 @@ export function githubIssuesClient(
       const res = await fetchImpl(`${API}/repos/${repo}/issues?${query}&per_page=${PAGE_SIZE}&page=${page}`, {
         headers,
         cache: "no-store",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error(`GitHub list issues ${res.status}: ${(await res.text()).slice(0, 200)}`);
       const rows = (await res.json()) as RawIssue[];
@@ -167,6 +170,7 @@ export function githubIssuesClient(
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(issue),
         cache: "no-store",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error(`GitHub create issue ${res.status}: ${(await res.text()).slice(0, 200)}`);
       const r = (await res.json()) as RawIssue & { labels?: ({ name?: string } | string)[] };

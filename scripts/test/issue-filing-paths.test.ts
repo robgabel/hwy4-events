@@ -139,6 +139,9 @@ test("privateSignal holds back any figure or email; only public digit tokens pas
     "see /admin/growth-memo/123",
     "Hwy 4 newsletter has 212 readers",
     "Highway 40 traffic was 900",
+    "Newsletter list stalled near 500 signups",
+    "Murphys Irish Pub sent 2025 referral clicks",
+    "The venue drove forty clicks",
   ]) {
     assert.equal(privateSignal(t(leaky)), "a figure", leaky);
   }
@@ -152,7 +155,7 @@ test("privateSignal holds back any figure or email; only public digit tokens pas
     "Add a Hwy 4 events link to the footer",
     "Link hwy4events.com town pages from the newsletter",
     "Give each Highway 4 town page a FAQ block",
-    "Fix the 404 on /towns/arnold",
+    "Fix the broken link on /towns/arnold",
     "Grape stomp 2026-10-15 alias, follow-up to #325 and HWY-78",
   ]) {
     assert.equal(privateSignal(t(clean)), null, clean);
