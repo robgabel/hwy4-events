@@ -15,7 +15,14 @@ export const ISSUE_FILING_ALERT_TYPE = "issue_filing_alert";
 export type IssueFilingSource = "qa_audit" | "growth_memo";
 
 /** Errors that mean "findings did not reach GitHub". An LLM extraction failure is not one. */
-export const FILING_ERRORS = new Set(["GITHUB_ISSUES_TOKEN_MISSING", "list_failed", "create_failed", "labels_dropped"]);
+export const FILING_ERRORS = new Set([
+  "GITHUB_ISSUES_TOKEN_MISSING",
+  "list_failed",
+  "create_failed",
+  "labels_dropped",
+  "privacy_hold",
+]);
+const MAX_LISTED = 20;
 
 const SOURCE_LABEL: Record<IssueFilingSource, string> = {
   qa_audit: "Weekly QA audit",
@@ -28,6 +35,8 @@ const FIX: Record<string, string> = {
   create_failed: "Creating an issue failed. Check the Vercel logs for the GitHub status code.",
   labels_dropped:
     "An issue was filed without its `proposed` label, so GitHub dropped the labels. Give the token Issues read/write and add the label by hand.",
+  privacy_hold:
+    "A proposal quoted private numbers or an email, and the repo is public, so it was not filed. If you want it, file it by hand without the figures.",
 };
 
 // PURE: the proposed row, or null when the error isn't a filing failure.
@@ -39,12 +48,12 @@ export function buildIssueFilingAlert(args: {
   /** URLs of issues that were filed but lost the `proposed` label. */
   ungated?: string[];
 }): Record<string, unknown> | null {
-  const ungated = (args.ungated ?? []).slice(0, 10);
+  const ungated = (args.ungated ?? []).slice(0, MAX_LISTED);
   // A create failure and a dropped label can happen in the same run; the
   // ungated issues must still be named even when the headline error is the other.
   const error = args.error ?? (ungated.length ? "labels_dropped" : null);
   if (!error || !FILING_ERRORS.has(error)) return null;
-  const titles = args.unfiled.slice(0, 10);
+  const titles = args.unfiled.slice(0, MAX_LISTED);
   return {
     type: ISSUE_FILING_ALERT_TYPE,
     title: `${SOURCE_LABEL[args.source]} could not file GitHub issues (${error})`,
@@ -73,13 +82,28 @@ export async function fileIssueFilingAlert(
   try {
     const { data: open, error: readErr } = await supabase
       .from("agent_actions")
-      .select("id")
+      .select("id, payload")
       .eq("type", ISSUE_FILING_ALERT_TYPE)
       .eq("status", "proposed")
       .eq("payload->>source", args.source)
       .limit(1);
     if (readErr) throw new Error(readErr.message);
-    if ((open ?? []).length > 0) return "duplicate";
+    const existing = (open ?? [])[0] as { id: string; payload: { unfiled?: string[]; ungated?: string[] } | null } | undefined;
+    if (existing) {
+      // One open row per source, but a later run's items must not be lost: the
+      // growth memo never regenerates past proposals. Merge them into the row.
+      const merged = buildIssueFilingAlert({
+        ...args,
+        unfiled: [...new Set([...(existing.payload?.unfiled ?? []), ...args.unfiled])],
+        ungated: [...new Set([...(existing.payload?.ungated ?? []), ...(args.ungated ?? [])])],
+      });
+      const { error: upErr } = await supabase
+        .from("agent_actions")
+        .update({ title: merged!.title, rationale: merged!.rationale, payload: merged!.payload })
+        .eq("id", existing.id);
+      if (upErr) throw new Error(upErr.message);
+      return "duplicate";
+    }
     const { error } = await supabase.from("agent_actions").insert(row);
     if (error) throw new Error(error.message);
     return "inserted";

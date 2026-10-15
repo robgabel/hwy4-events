@@ -131,6 +131,30 @@ export function titlesCollide(a: string, b: string): boolean {
   return similar(words(a), words(b));
 }
 
+// The repo is public, and the growth memo reasons over private signals
+// (newsletter counts, referrals per named business, outreach drafts). The prompt
+// tells the model to leave figures out; this is the check that does not depend
+// on the model obeying. A ticket that quotes an email address, a percentage, a
+// dollar amount, an "N of M" count, or a number next to a private-metric word is
+// held back from GitHub and goes to the private Inbox alert instead.
+const PRIVATE_SIGNAL_RES: { why: string; re: RegExp }[] = [
+  { why: "an email address", re: /[\w.+-]+@[\w-]+\.[\w.]+/ },
+  { why: "a percentage", re: /\d\s?%|\bper ?cent\b/i },
+  { why: "a dollar amount", re: /\$\s?\d/ },
+  { why: "an N of M count", re: /\b\d+\s+(?:of|out of)\s+\d+\b/i },
+  {
+    why: "a private metric",
+    re: /\b\d[\d,.]*\s+(?:\w+\s+){0,2}(?:subscribers?|sign-?ups?|confirm\w*|referrals?|opens?|clicks?|visitors?|sessions?|pageviews?|recipients?|members?)\b|\b(?:subscribers?|sign-?ups?|confirm\w*|referrals?|open rate|click rate|visitors?|sessions?|pageviews?|revenue)\b\W+(?:\w+\W+){0,3}\d/i,
+  },
+];
+
+/** Why this ticket text must not go to a public issue, or null when it's clean. Pure. */
+export function privateSignal(t: Pick<ExtractedTask, "title" | "body" | "rationale">): string | null {
+  const text = [t.title, t.body, t.rationale].join("\n");
+  for (const { why, re } of PRIVATE_SIGNAL_RES) if (re.test(text)) return why;
+  return null;
+}
+
 // PURE: the GitHub issue for one extracted ticket. Locked by
 // scripts/test/propose-tasks.test.ts.
 export function taskIssue(
@@ -231,6 +255,14 @@ export async function fileTaskIssues(
       continue;
     }
     seen.push(w); // guard against two near-identical candidates in the same run
+    const why = privateSignal(t);
+    if (why) {
+      console.error(`[propose-tasks] held back "${t.title}": quotes ${why}`);
+      error ??= "privacy_hold";
+      unfiled.push(`${t.title} (held: quotes ${why}; spec: ${t.body})`);
+      skipped++;
+      continue;
+    }
     try {
       const issue = await issues.create(taskIssue(t, opts));
       filed.push(issue);

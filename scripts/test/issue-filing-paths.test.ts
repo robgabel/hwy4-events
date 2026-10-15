@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileQaFindings, checkKey, type QaAgg } from "../../lib/agent/qa-audit.js";
-import { fileTaskIssues, parseExtractedTasks } from "../../lib/agent/propose-tasks.js";
+import { fileTaskIssues, parseExtractedTasks, privateSignal } from "../../lib/agent/propose-tasks.js";
 import { checkKeyLine, type IssueLite, type IssuesClient, type NewIssue } from "../../lib/github-issues.js";
 
 function fakeClient(opts: {
@@ -123,4 +123,28 @@ test("fileTaskIssues: list failure, create failure and dropped labels all surfac
   const dropped = await fileTaskIssues(fakeClient({ dropLabels: true }), tasks, OPTS);
   assert.equal(dropped.error, "labels_dropped");
   assert.equal(dropped.proposed, 2);
+});
+
+test("privateSignal holds back figures that must not reach a public repo", () => {
+  const t = (body: string) => ({ title: "Fix the newsletter confirm email", body, rationale: "" });
+  assert.equal(privateSignal(t("Confirm rate fell to 40% this week")), "a percentage");
+  assert.equal(privateSignal(t("12 of 30 signups never confirmed")), "an N of M count");
+  assert.equal(privateSignal(t("We have 212 subscribers now")), "a private metric");
+  assert.equal(privateSignal(t("subscribers dropped to 180")), "a private metric");
+  assert.equal(privateSignal(t("Ask owner@brice.example about the feed")), "an email address");
+  assert.equal(privateSignal(t("Sponsorship worth $500")), "a dollar amount");
+  // describing the kind of signal, without figures, is fine
+  assert.equal(privateSignal(t("Newsletter confirmations are leaking; resend the confirm link after a day")), null);
+  assert.equal(privateSignal(t("Add a /free filter to the 9 town pages")), null);
+});
+
+test("fileTaskIssues: a proposal quoting private figures is held, not filed", async () => {
+  const leaky = parseExtractedTasks(
+    JSON.stringify([{ title: "Resend the confirm link", body: "confirm rate is 40%", type: "growth", priority: "p2" }])
+  );
+  const client = fakeClient({});
+  const r = await fileTaskIssues(client, leaky, OPTS);
+  assert.equal(client.created.length, 0);
+  assert.equal(r.error, "privacy_hold");
+  assert.match(r.unfiled[0], /held: quotes a percentage/);
 });
