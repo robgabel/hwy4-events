@@ -86,14 +86,14 @@ export default function AdminNav({ badges, roadmapUrl }: { badges: NavBadges; ro
         Newsletter
       </NavLink>
       {roadmapUrl && (
-      <a
-        href={roadmapUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ padding: "6px 12px", borderRadius: 6, color: INK, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}
-      >
-        Roadmap ↗
-      </a>
+        <a
+          href={roadmapUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ padding: "6px 12px", borderRadius: 6, color: INK, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}
+        >
+          Roadmap ↗
+        </a>
       )}
     </nav>
   );
