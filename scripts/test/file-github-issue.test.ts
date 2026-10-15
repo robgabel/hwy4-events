@@ -11,7 +11,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { executeAction } from "../../lib/agent/actions-executor.js";
-import { actionCheckKey, FILE_GITHUB_ISSUE_TYPE, fileIssueForAction, issueForAction } from "../../lib/agent/file-github-issue.js";
+import { actionCheckKey, FILE_GITHUB_ISSUE_TYPE, fileIssueForAction, issueForAction, mergeIssueEdits } from "../../lib/agent/file-github-issue.js";
+import { approvable, APPROVAL_IN_FLIGHT_MS, recordExecution, type ApprovalDb } from "../../lib/agent/approval-record.js";
 import { canAutoExecute, type AgentActionRow } from "../../lib/agent/policy.js";
 import { isAutoReady } from "../../lib/agent/auto-runner.js";
 import { parseExtractedTasks, proposalRow } from "../../lib/agent/propose-tasks.js";
@@ -161,4 +162,79 @@ test("a file_github_issue row can never auto-run", () => {
   assert.equal(r.type, FILE_GITHUB_ISSUE_TYPE);
   assert.equal(canAutoExecute(r, { auto_execute: true }), false);
   assert.equal(isAutoReady(r), false);
+});
+
+test("clearing the body files a title-only issue, never the stored text (QA F1)", async () => {
+  const leaky = row({ payload: { ...row().payload, body: "Confirm rate fell to 40%." } });
+  const cleared = mergeIssueEdits(leaky.payload, { title: "Resend the confirm link", body: "" });
+  const { client, created } = fakeRepo();
+  const r = await executeAction(noDb, { ...leaky, payload: cleared }, { issues: client });
+  assert.equal(r.ok, true);
+  assert.doesNotMatch(created[0].body, /40%/);
+  assert.equal(created[0].body, `Resend the confirm link\n\ncheck_key: ${actionCheckKey(leaky.id)}`);
+  // A field that wasn't submitted keeps the stored value.
+  assert.equal(mergeIssueEdits(leaky.payload, { title: null, body: null }).body, "Confirm rate fell to 40%.");
+  // A cleared title is refused, not filed under the old one.
+  const noTitle = await executeAction(noDb, { ...leaky, payload: mergeIssueEdits(leaky.payload, { title: "", body: null }) }, { issues: client });
+  assert.equal(noTitle.ok, false);
+  assert.equal(created.length, 1);
+});
+
+// A fake agent_actions table holding one row's status.
+function fakeDb(status: string, opts: { writeFails?: boolean } = {}): ApprovalDb & { row: Record<string, unknown> } {
+  const row: Record<string, unknown> = { status };
+  return {
+    row,
+    async updateIfApproved(_id, fields) {
+      if (opts.writeFails) throw new Error("db down");
+      if (row.status !== "approved") return 0;
+      Object.assign(row, fields);
+      return 1;
+    },
+  };
+}
+
+test("recordExecution: success marks executed; a retryable failure re-queues; a final one fails", async () => {
+  const done = fakeDb("approved");
+  const ok = await recordExecution(done, "id", { ok: true, targetTable: "github_issues", targetId: "401", note: "Filed #401." });
+  assert.deepEqual(ok, { ok: true, message: "Approved. Filed #401." });
+  assert.equal(done.row.status, "executed");
+  assert.equal(done.row.target_id, "401");
+
+  const retry = fakeDb("approved");
+  await recordExecution(retry, "id", { ok: false, retryable: true, error: "502" });
+  assert.equal(retry.row.status, "proposed");
+  assert.equal(retry.row.error, "502");
+
+  const final = fakeDb("approved");
+  await recordExecution(final, "id", { ok: false, error: "covered by #77" });
+  assert.equal(final.row.status, "failed");
+});
+
+test("recordExecution: a Reject clicked meanwhile wins over the approval's writes (QA F2)", async () => {
+  const filed = fakeDb("rejected");
+  const r1 = await recordExecution(filed, "id", { ok: true, targetId: "401", note: "Filed #401." });
+  assert.equal(r1.ok, false);
+  assert.equal(filed.row.status, "rejected");
+  assert.match(r1.message, /Filed #401\. The row was rejected while this ran/);
+
+  const failed = fakeDb("rejected");
+  await recordExecution(failed, "id", { ok: false, retryable: true, error: "502" });
+  assert.equal(failed.row.status, "rejected"); // not pulled back into the queue
+});
+
+test("recordExecution: a failed row save after a filed issue is reported, not a clean success (QA F3)", async () => {
+  const r = await recordExecution(fakeDb("approved", { writeFails: true }), "id", { ok: true, targetId: "401", note: "Filed #401." });
+  assert.equal(r.ok, false);
+  assert.match(r.message, /Filed #401\. But saving the row failed \(db down\).*Approve it again/);
+});
+
+test("approvable: an approved row only after the function limit, so two executors can't race", () => {
+  const now = Date.parse("2026-10-16T16:10:00Z");
+  assert.equal(approvable({ status: "proposed", decided_at: null }, now), true);
+  assert.equal(approvable({ status: "approved", decided_at: new Date(now - 30_000).toISOString() }, now), false);
+  assert.equal(approvable({ status: "approved", decided_at: new Date(now - APPROVAL_IN_FLIGHT_MS - 1).toISOString() }, now), true);
+  for (const status of ["executed", "rejected", "failed", "reverted"]) {
+    assert.equal(approvable({ status, decided_at: null }, now), false);
+  }
 });

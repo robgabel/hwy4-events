@@ -183,6 +183,7 @@ export async function GET(request: Request) {
     // Issue #325. Nothing reaches the public repo until Rob approves the row.
     // Best-effort: never fails the memo.
     let proposed_tasks = 0;
+    let warned_tasks = 0;
     let issue_filing_error: string | null = null;
     if (digest) {
       const r = await proposeTasksFromDigest(
@@ -195,7 +196,11 @@ export async function GET(request: Request) {
         supabaseProposalStore(supabase)
       );
       proposed_tasks = r.proposed;
+      warned_tasks = r.warned;
       issue_filing_error = r.error;
+      if (r.warned > 0) {
+        console.warn(`[growth-memo] ${r.warned} proposal(s) carry a privacy warning; read them before approving.`);
+      }
       // Proposals that couldn't be staged go to the Inbox alert, not nowhere.
       await fileIssueFilingAlert(supabase, {
         source: "growth_memo",
@@ -210,6 +215,7 @@ export async function GET(request: Request) {
       status,
       move: digest?.move_of_the_week?.title ?? null,
       proposed_tasks,
+      warned_tasks,
       issue_filing_error,
       summary: digest?.summary ?? null,
     });

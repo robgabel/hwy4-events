@@ -131,3 +131,22 @@ export async function fileIssueForAction(
 function errText(err: unknown): string {
   return (err instanceof Error ? err.message : String(err)).slice(0, 200);
 }
+
+/**
+ * PURE: overlay Rob's approve-form edits on the row's payload. A field that was
+ * submitted wins even when empty: clearing the body to drop a flagged figure
+ * must file a title-only issue, never fall back to the stored text. A field
+ * that was not submitted (null) keeps the stored value. Locked by
+ * scripts/test/file-github-issue.test.ts.
+ */
+export function mergeIssueEdits(
+  payload: Record<string, unknown>,
+  edits: { title: string | null; body: string | null }
+): Record<string, unknown> {
+  return {
+    ...payload,
+    // An empty title can't be filed; issueForAction refuses it rather than guessing.
+    ...(edits.title !== null ? { title: edits.title } : {}),
+    ...(edits.body !== null ? { body: edits.body } : {}),
+  };
+}

@@ -15,6 +15,7 @@ import {
 import type { AgentActionRow, AgentPolicyRow } from "@/lib/agent/policy";
 import { FILE_GITHUB_ISSUE_TYPE, type FileGithubIssuePayload } from "@/lib/agent/file-github-issue";
 import { issuesUrl } from "@/lib/github-issues";
+import { approvable } from "@/lib/agent/approval-record";
 import {
   approveAction,
   rejectAction,
@@ -95,8 +96,13 @@ export default async function ActionsPage({
   const { error, flash } = readFlash(await searchParams);
   const all = await loadActions();
   const policies = await loadPolicy();
-  const proposed = all.filter((a) => a.status === "proposed");
-  const recent = all.filter((a) => a.status !== "proposed").slice(0, 15);
+  // An approved file_github_issue row is one whose approval didn't finish (the
+  // row save failed after GitHub answered). It stays actionable: Approve again
+  // finishes it and the check_key stops a second issue.
+  const actionable = (a: AgentActionRow) =>
+    a.status === "proposed" || (a.type === FILE_GITHUB_ISSUE_TYPE && approvable(a));
+  const proposed = all.filter(actionable);
+  const recent = all.filter((a) => !actionable(a)).slice(0, 15);
 
   return (
     <QueueShell
@@ -279,6 +285,11 @@ function ProposedCard({ action }: { action: AgentActionRow }) {
       <CardHeader title={action.title ?? action.type} meta={action.rationale ?? undefined} />
       {action.error && (
         <p style={{ color: "#922b21", fontSize: 14, margin: "0 0 12px" }}>Last attempt: {action.error}</p>
+      )}
+      {action.status === "approved" && (
+        <p style={{ color: "#92400e", fontSize: 14, margin: "0 0 12px" }}>
+          Approved, but the approval didn&apos;t finish. Approve again to finish it; it won&apos;t file twice.
+        </p>
       )}
       {action.type === "create_org_row" ? (
         <OrgProposedBody action={action} />

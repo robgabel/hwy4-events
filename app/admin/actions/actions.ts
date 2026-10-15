@@ -8,7 +8,8 @@ import type { AgentActionRow } from "@/lib/agent/policy";
 import { proposeLinkGapActions, researchActionById } from "@/lib/agent/propose-link-gaps";
 import { proposeVenueRowActions, researchVenueById } from "@/lib/agent/propose-venue-rows";
 import { runAutoExecutor } from "@/lib/agent/auto-runner";
-import { FILE_GITHUB_ISSUE_TYPE } from "@/lib/agent/file-github-issue";
+import { FILE_GITHUB_ISSUE_TYPE, mergeIssueEdits } from "@/lib/agent/file-github-issue";
+import { approvable, recordExecution, supabaseApprovalDb } from "@/lib/agent/approval-record";
 
 const ADMIN_PATH = "/admin/actions";
 
@@ -49,13 +50,12 @@ function mergeEdits(action: AgentActionRow, formData: FormData): Record<string, 
     };
   }
   if (action.type === FILE_GITHUB_ISSUE_TYPE) {
-    // Rob may trim a figure or a name out before it goes public.
-    const p = action.payload as Record<string, unknown>;
-    return {
-      ...p,
-      title: field(formData, "issue_title") || (p.title as string),
-      body: field(formData, "issue_body") || (p.body as string),
-    };
+    // Rob may trim a figure or a name out before it goes public. A submitted
+    // field wins even when empty, so clearing the body never files the original.
+    return mergeIssueEdits(action.payload, {
+      title: formData.has("issue_title") ? field(formData, "issue_title") : null,
+      body: formData.has("issue_body") ? field(formData, "issue_body") : null,
+    });
   }
   return action.payload;
 }
@@ -68,8 +68,13 @@ export async function approveAction(formData: FormData) {
   const supabase = getAdminClient();
   const action = await load(supabase, id);
   if (!action) failRedirect(ADMIN_PATH, "Action not found.");
-  if (action.status !== "proposed" && action.status !== "approved") {
-    failRedirect(ADMIN_PATH, `Action is "${action.status}", not approvable.`);
+  if (!approvable(action)) {
+    failRedirect(
+      ADMIN_PATH,
+      action.status === "approved"
+        ? "This action is being approved right now. Wait two minutes, reload, and check before approving again."
+        : `Action is "${action.status}", not approvable.`
+    );
   }
 
   const payload = mergeEdits(action, formData);
@@ -94,32 +99,15 @@ export async function approveAction(formData: FormData) {
   }
 
   const result = await executeAction(supabase, { ...action, payload });
-  if (!result.ok) {
-    // A retryable failure wrote nothing, so the row stays in the queue with the
-    // reason on it; anything else is final.
-    await supabase
-      .from("agent_actions")
-      .update({ status: result.retryable ? "proposed" : "failed", error: result.error ?? "execution failed" })
-      .eq("id", id);
-    failRedirect(ADMIN_PATH, `Couldn't execute: ${result.error}`);
-  }
-
-  await supabase
-    .from("agent_actions")
-    .update({
-      status: "executed",
-      executed_at: new Date().toISOString(),
-      target_table: result.targetTable ?? null,
-      target_id: result.targetId ?? null,
-      before_snapshot: result.beforeSnapshot ?? null,
-      error: null,
-    })
-    .eq("id", id);
+  // Every write from here applies only while the row is still approved, so a
+  // Reject clicked meanwhile wins, and each write's outcome reaches the flash.
+  const outcome = await recordExecution(supabaseApprovalDb(supabase), id, result);
+  revalidatePath(ADMIN_PATH);
+  if (!outcome.ok) failRedirect(ADMIN_PATH, outcome.message);
 
   // A new org row changes link resolution on every matching event page.
-  revalidatePath(ADMIN_PATH);
   revalidatePath("/");
-  flashRedirect(ADMIN_PATH, result.note ? `Approved. ${result.note}` : "Approved and executed.");
+  flashRedirect(ADMIN_PATH, outcome.message);
 }
 
 export async function rejectAction(formData: FormData) {
