@@ -1,32 +1,48 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
-// Relative (not "@/") import so the scripts/ test runner can import this module.
-import { TASK_PRIORITIES, TASK_TYPES, type TaskPriority, type TaskType } from "../tasks";
+// Relative (not "@/") imports so the scripts/ test runner can import this module.
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";
+import { checkKeyLine, DeadlineError, githubIssuesClient, hasTimeFor, REQUEST_TIMEOUT_MS, suppressesRefile, type FiledIssue, type IssuesClient } from "../github-issues";
 
-// Phase 2 of the Roadmap board (PRD-roadmap-board.md §5): turn a cockpit reasoner's
-// digest into `proposed` hwy4_tasks tickets. The chief-of-staff (daily) and the
-// growth-memo (weekly) already reason over the site's signals and write an
-// agent_runs row; this reads that digest and files a ticket for any item that is a
-// concrete DEV change (a feature, a bug fix, a data/SEO fix, a page) — NOT an ops
-// task like "review a submission" or "send an email", which have their own queues.
+// Turn the weekly growth memo into `proposed` GitHub issues (issue #325: GitHub
+// Issues is the only backlog). The memo already reasons over the site's signals
+// and writes an agent_runs row; this reads that digest and files an issue for any
+// item that is a concrete DEV change (a feature, a bug fix, a data/SEO fix, a
+// page), NOT an ops task like "review a submission" or "send an email", which
+// have their own queues. The daily chief-of-staff digest no longer files here:
+// it refiled one Brice Station problem three times under different titles, and
+// #332 retires that digest.
 //
-// Agent-filed tickets land status='proposed' and wait for a human to Promote them
-// in /admin/roadmap (the approval gate), same as every other cockpit proposal.
+// Filed issues carry `proposed` (the human gate) and land in Proposed on the
+// GitHub Project. Rob moves one to Ready or closes it as not planned.
 //
 // Best-effort + idempotent: it never throws into the reasoner (a proposal failure
-// must not fail the digest), and it dedups against open + recently-dismissed
-// tickets by normalized title so a daily reasoner can't refile the same idea.
+// must not fail the memo), and it dedups by normalized title against open issues
+// and issues declined in the last 30 days, so a weekly memo can't refile an idea.
+
+export const TASK_TYPES = ["feature", "bug", "qa", "growth", "chore"] as const;
+export const TASK_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
+export type TaskType = (typeof TASK_TYPES)[number];
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 const MODEL = REASONER_MODEL;
 const MAX_PER_RUN = 2; // a reasoner proposes at most 2 tickets/run — precision over volume
 
-export type ProposeTasksResult = { proposed: number; skipped: number };
+export type ProposeTasksResult = {
+  proposed: number;
+  skipped: number;
+  filed: FiledIssue[];
+  /** The first filing failure of the run (null when everything filed). */
+  error: string | null;
+  /** Every distinct filing failure in the run, so one can't mask another. */
+  errors: string[];
+  /** Proposals that didn't reach GitHub, each with its reason, spec and rationale (the extraction is saved nowhere else). */
+  unfiled: string[];
+};
 
-type ExtractedTask = { title: string; body: string; type: TaskType; priority: TaskPriority; rationale: string };
+export type ExtractedTask = { title: string; body: string; type: TaskType; priority: TaskPriority; rationale: string };
 
-const SYSTEM_PROMPT = `You triage a daily/weekly ops digest for Hwy4Events.com (a one-person community events site) into DEVELOPER tickets for a kanban board.
+const SYSTEM_PROMPT = `You triage a daily/weekly ops digest for Hwy4Events.com (a one-person community events site) into DEVELOPER tickets for a GitHub issue backlog.
 
 A ticket is warranted ONLY for a concrete change to the CODEBASE or the SITE that a developer (Claude Code) would implement: a new feature or page, a bug fix, a data-quality or SEO fix, a UX change, a script.
 
@@ -43,6 +59,8 @@ For each real dev ticket, write:
 - type: one of feature | bug | qa | growth | chore.
 - priority: one of p0 | p1 | p2 | p3 (p0 = urgent/breaking, p2 = normal, p3 = someday). Reserve p0/p1 for genuine breakage.
 - rationale: one line on why it is worth doing now.
+
+The ticket becomes an issue in a PUBLIC GitHub repo that anyone can read. Never put private numbers or people in title, body or rationale: no subscriber, open, confirm or referral counts or rates, no revenue, no traffic numbers for a named business, no names or emails of subscribers, submitters or organizers. Describe the change and the kind of signal behind it ("newsletter confirmations are leaking", "a venue page gets impressions but no clicks"), not the figures.
 
 Voice: plain, direct, dry. No hype, no emojis, NO EM DASHES (use commas, periods, parentheses).
 
@@ -80,8 +98,8 @@ function coerce(raw: unknown): ExtractedTask | null {
   const r = raw as Record<string, unknown>;
   const title = typeof r.title === "string" ? r.title.trim() : "";
   if (!title) return null;
-  const type = (TASK_TYPES as string[]).includes(String(r.type)) ? (r.type as TaskType) : "chore";
-  const priority = (TASK_PRIORITIES as string[]).includes(String(r.priority)) ? (r.priority as TaskPriority) : "p3";
+  const type = (TASK_TYPES as readonly string[]).includes(String(r.type)) ? (r.type as TaskType) : "chore";
+  const priority = (TASK_PRIORITIES as readonly string[]).includes(String(r.priority)) ? (r.priority as TaskPriority) : "p3";
   return {
     title: title.slice(0, 200),
     body: typeof r.body === "string" ? r.body.trim() : "",
@@ -116,17 +134,102 @@ export function titlesCollide(a: string, b: string): boolean {
   return similar(words(a), words(b));
 }
 
-export async function proposeTasksFromDigest(
-  supabase: SupabaseClient,
-  opts: { source: "chief_of_staff" | "growth_memo"; runId: string | null; digest: unknown }
-): Promise<ProposeTasksResult> {
-  if (!opts.digest) return { proposed: 0, skipped: 0 };
+// The repo is public, and the growth memo reasons over private signals
+// (newsletter counts, referrals per named business, outreach drafts). The prompt
+// tells the model to leave figures out; this is the check that does not depend
+// on the model obeying. A word list of "private metrics" kept missing phrasings
+// ("the list grew from 180 to 212"), so the rule is blunt: a growth-memo issue
+// may carry no figures at all. The exceptions are public tokens that carry
+// digits but no data: the site's own name and road (Hwy 4, hwy4events.com,
+// Highway 4, Route 4), an ISO date, a year only where it reads as a year ("in
+// 2027", "the 2027 festival", "-2026" in a slug), and an issue or board ref
+// (#325, HWY-81). Any other digit, a spelled-out number from two up or
+// "percent", or an email address holds the proposal back from GitHub and sends
+// it to the private Inbox alert instead. Known gaps, accepted: a count written
+// as "one", a figure phrased with no number ("doubled"), or a count that sits
+// where a year would ("the 2024 signups") passes, and the prompt rule is the
+// only guard there; an HTTP code ("a 301") is held as a false positive, which
+// costs only an Inbox read.
+// People's names can't be caught this way; the prompt rule covers those.
+const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
+// "one" is left out on purpose: it is in most sentences and would hold every proposal.
+const SPELLED_COUNT_RE =
+  /\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundreds?|thousands?|dozens?|million|percent)\b/i;
+const ALLOWED_DIGITS_RE = new RegExp(
+  [
+    String.raw`\b(?:hwy|highway|route|sr|state route)[\s-]?4(?!\d)`, // the corridor and the brand (hwy4events.com)
+    String.raw`\b202[4-9]-\d\d-\d\d\b`, // an ISO date
+    // a year only in a year-shaped position, never as a bare count ("sent 2025 clicks")
+    String.raw`(?:\b(?:in|for|of|since|by|until|the)\s+|[-/])202[4-9]\b`,
+    String.raw`#\d+\b`, // GitHub issue / PR refs
+    String.raw`\bH[1-6]\b`, // heading levels ("the title and H1")
+    String.raw`\bHWY-\d+\b`, // old board refs
+  ].join("|"),
+  "gi"
+);
 
-  // 1. Extract candidate dev tickets from the digest (best-effort — never throw).
+/** Why this ticket text must not go to a public issue, or null when it's clean. Pure. */
+export function privateSignal(t: Pick<ExtractedTask, "title" | "body" | "rationale">): string | null {
+  const text = [t.title, t.body, t.rationale].join("\n");
+  if (EMAIL_RE.test(text)) return "an email address";
+  if (/\d/.test(text.replace(ALLOWED_DIGITS_RE, " "))) return "a figure";
+  if (SPELLED_COUNT_RE.test(text)) return "a figure";
+  return null;
+}
+
+// PURE: the GitHub issue for one extracted ticket. Locked by
+// scripts/test/propose-tasks.test.ts.
+export function taskIssue(
+  t: ExtractedTask,
+  opts: { runId: string | null; date: string }
+): { title: string; body: string; labels: string[] } {
+  const slug = t.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  const lines = [
+    `**Suggested priority: ${t.priority}.** Filed by the weekly growth memo, ${opts.date}${
+      opts.runId ? ` (agent run \`${opts.runId}\`)` : ""
+    }.`,
+    "",
+    "## Proposed change",
+    t.body || t.title,
+  ];
+  if (t.rationale) lines.push("", "## Why now", t.rationale);
+  lines.push("", checkKeyLine(`growth-memo/${slug || "untitled"}`));
+  return { title: t.title, body: lines.join("\n"), labels: [t.type, "proposed", "lens:growth-memo"] };
+}
+
+export async function proposeTasksFromDigest(
+  /** deadline: epoch ms by which filing must stop, so the route can still write the Inbox alert. */
+  opts: { runId: string | null; digest: unknown; deadline?: number },
+  issues: IssuesClient | null = githubIssuesClient()
+): Promise<ProposeTasksResult> {
+  const none = (error: string | null = null, unfiled: string[] = []): ProposeTasksResult => ({
+    proposed: 0,
+    skipped: 0,
+    filed: [],
+    error,
+    errors: error ? [error] : [],
+    unfiled,
+  });
+  if (!opts.digest) return none();
+  // The extraction shares the route's 60s budget with the memo call before it.
+  // Bound it so a slow model reply ends in an Inbox alert, not a killed function:
+  // it must finish with room left for one GitHub list and one create.
+  const NOT_EXTRACTED = "Growth memo build proposals (not extracted in time; reread this week's memo)";
+  let extractTimeoutMs: number | undefined;
+  if (opts.deadline !== undefined) {
+    extractTimeoutMs = opts.deadline - Date.now() - 2 * REQUEST_TIMEOUT_MS;
+    if (extractTimeoutMs < 5_000) return none("deadline_exceeded", [NOT_EXTRACTED]);
+  }
+  // 1. Extract candidate dev tickets from the digest (best-effort, never throw).
   let extracted: ExtractedTask[];
   try {
     const anthropic = new Anthropic();
-    const message = await anthropic.messages.create({
+    const message = await anthropic.messages.create(
+      {
       model: MODEL,
       max_tokens: 3000,
       output_config: MEDIUM_EFFORT,
@@ -134,39 +237,78 @@ export async function proposeTasksFromDigest(
       messages: [
         {
           role: "user",
-          content: `Here is the ${opts.source === "growth_memo" ? "weekly growth memo" : "daily chief-of-staff digest"} as JSON. File dev tickets for any concrete build it implies (usually none).\n\n${JSON.stringify(
+          content: `Here is the weekly growth memo as JSON. File dev tickets for any concrete build it implies (usually none).\n\n${JSON.stringify(
             opts.digest,
             null,
             2
           )}`,
         },
       ],
-    });
-    const text = messageText(message.content);
-    extracted = safeJsonArray(text).map(coerce).filter((t): t is ExtractedTask => t !== null).slice(0, MAX_PER_RUN);
+      },
+      extractTimeoutMs !== undefined ? { timeout: extractTimeoutMs, maxRetries: 0 } : undefined
+    );
+    extracted = parseExtractedTasks(messageText(message.content));
   } catch (err) {
-    console.error(`[propose-tasks:${opts.source}] extraction failed:`, err);
-    return { proposed: 0, skipped: 0 };
+    console.error("[propose-tasks] extraction failed:", err);
+    // A timeout against the deadline is a filing failure the Inbox must show;
+    // any other model error stays a plain extraction failure, as before.
+    if (err instanceof Anthropic.APIConnectionTimeoutError) return none("deadline_exceeded", [NOT_EXTRACTED]);
+    return none("extraction_failed");
   }
-  if (extracted.length === 0) return { proposed: 0, skipped: 0 };
+  if (extracted.length === 0) return none();
+  // Checked after extraction so a missing token reports what it failed to file.
+  if (!issues) {
+    console.error("[propose-tasks] GITHUB_ISSUES_TOKEN_MISSING: not filing");
+    return none("GITHUB_ISSUES_TOKEN_MISSING", extracted.map((t) => unfiledEntry(t, "GITHUB_ISSUES_TOKEN_MISSING")));
+  }
 
-  // 2. Dedup against open tickets + tickets dismissed in the last 30 days (so a
-  //    rejected idea doesn't get re-nagged every run). Two simple selects, merged —
-  //    clearer than one nested PostgREST .or() with a timestamp.
-  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const [openRows, dismissedRows] = await Promise.all([
-    supabase
-      .from("hwy4_tasks")
-      .select("title")
-      .in("status", ["proposed", "backlog", "ready", "in_progress", "in_review"]),
-    supabase.from("hwy4_tasks").select("title").eq("status", "wont_do").gte("updated_at", cutoff),
-  ]);
-  const seen = [...((openRows.data ?? []) as { title: string }[]), ...((dismissedRows.data ?? []) as { title: string }[])].map(
-    (t) => words(t.title)
+  return fileTaskIssues(
+    issues,
+    extracted,
+    { runId: opts.runId, date: new Date().toISOString().slice(0, 10) },
+    new Date(),
+    opts.deadline
   );
+}
 
-  const rows: Record<string, unknown>[] = [];
+// One Inbox line per proposal that didn't reach GitHub. The extraction isn't
+// saved anywhere else and the memo never re-proposes, so the spec and the
+// rationale travel with it; this text lands only in the private agent_actions row.
+function unfiledEntry(t: ExtractedTask, reason: string): string {
+  return `[${reason}] ${t.title} (spec: ${t.body || "none"}; why now: ${t.rationale || "none"})`;
+}
+
+// Dedup + file the extracted tickets. Split out so the error paths can be driven
+// with a fake client. Locked by scripts/test/propose-tasks.test.ts.
+export async function fileTaskIssues(
+  issues: IssuesClient,
+  extracted: ExtractedTask[],
+  opts: { runId: string | null; date: string },
+  now: Date = new Date(),
+  deadline?: number
+): Promise<ProposeTasksResult> {
+  // Dedup against open issues + issues declined in the last 30 days. Fail
+  // closed: no list, no filing.
+  let seen: Set<string>[];
+  try {
+    seen = (await issues.listRecent(now, deadline)).filter((i) => suppressesRefile(i, now)).map((i) => words(i.title));
+  } catch (err) {
+    console.error("[propose-tasks] listing issues failed:", err);
+    const error = err instanceof DeadlineError ? "deadline_exceeded" : "list_failed";
+    return {
+      proposed: 0,
+      skipped: 0,
+      filed: [],
+      error,
+      errors: [error],
+      unfiled: extracted.map((t) => unfiledEntry(t, error)),
+    };
+  }
+
+  const filed: FiledIssue[] = [];
+  const unfiled: string[] = [];
   let skipped = 0;
+  const errors = new Set<string>();
   for (const t of extracted) {
     const w = words(t.title);
     if (seen.some((s) => similar(w, s))) {
@@ -174,27 +316,34 @@ export async function proposeTasksFromDigest(
       continue;
     }
     seen.push(w); // guard against two near-identical candidates in the same run
-    rows.push({
-      title: t.title,
-      body: t.body || null,
-      type: t.type,
-      priority: t.priority,
-      status: "proposed",
-      source: opts.source,
-      created_by: opts.source,
-      linked_run_id: opts.runId,
-      ai_rationale: { rationale: t.rationale, from: opts.source, run_id: opts.runId },
-    });
-  }
-
-  let proposed = 0;
-  if (rows.length > 0) {
-    const { error, count } = await supabase.from("hwy4_tasks").insert(rows, { count: "exact" });
-    if (error) {
-      console.error(`[propose-tasks:${opts.source}] insert failed:`, error.message);
-    } else {
-      proposed = count ?? rows.length;
+    if (!hasTimeFor(deadline)) {
+      errors.add("deadline_exceeded");
+      unfiled.push(unfiledEntry(t, "deadline_exceeded"));
+      skipped++;
+      continue;
+    }
+    const why = privateSignal(t);
+    if (why) {
+      console.error(`[propose-tasks] held back "${t.title}": quotes ${why}`);
+      errors.add("privacy_hold");
+      unfiled.push(unfiledEntry(t, `privacy_hold, quotes ${why}`));
+      skipped++;
+      continue;
+    }
+    try {
+      const issue = await issues.create(taskIssue(t, opts));
+      filed.push(issue);
+      if (!issue.gated) {
+        console.error(`[propose-tasks] #${issue.number} was filed without the proposed label`);
+        errors.add("labels_dropped");
+      }
+    } catch (err) {
+      console.error("[propose-tasks] create issue failed:", err);
+      errors.add("create_failed");
+      unfiled.push(unfiledEntry(t, "create_failed"));
+      skipped++;
     }
   }
-  return { proposed, skipped: skipped + (rows.length - proposed) };
+  const errorList = [...errors];
+  return { proposed: filed.length, skipped, filed, error: errorList[0] ?? null, errors: errorList, unfiled };
 }

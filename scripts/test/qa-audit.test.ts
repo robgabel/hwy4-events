@@ -6,7 +6,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkPage, checkKey } from "../../lib/agent/qa-audit.js";
+import { checkPage, checkKey, qaIssueBody, QA_ISSUE_LABELS } from "../../lib/agent/qa-audit.js";
+import { bodyCheckKey } from "../../lib/github-issues.js";
 
 test("checkPage: a non-200 is the only finding, regardless of kind", () => {
   for (const kind of ["page", "event", "sitemap"] as const) {
@@ -63,4 +64,19 @@ test("checkPage flags a doubled brand suffix in the title", () => {
 
   const clean = `<html><head><title>Arnold CA Events This Week | Hwy 4 Events</title></head><body></body></html>`;
   assert.deepEqual(checkPage("page", 200, clean), []);
+});
+
+test("qaIssueBody: carries the check_key the next run dedups on, and the issue labels gate it", () => {
+  const body = qaIssueBody({
+    key: checkKey("status", "/free"),
+    check: "status",
+    severity: "p1",
+    detail: "HTTP 500",
+    examples: ["/free"],
+  });
+  assert.equal(bodyCheckKey(body), "qa:status:/free");
+  assert.match(body, /Suggested priority: p1/);
+  assert.match(body, /Affected: \/free\./);
+  assert.ok(QA_ISSUE_LABELS.includes("proposed"));
+  assert.ok(QA_ISSUE_LABELS.includes("bug"));
 });

@@ -294,6 +294,10 @@ nightly date verification).
 
 1. **Vercel:** import your fork, set every variable from `.env.example`
    (Production scope). Point your domain at the project.
+   **Set `GITHUB_ISSUES_REPO` to your fork's `owner/repo`** whenever you set
+   `GITHUB_ISSUES_TOKEN`. Unset, it defaults to `robgabel/hwy4-events`: the
+   QA audit and growth memo would dedup against the original repo's issues
+   and then fail to file (your token can't write there), every week.
 2. **GitHub Actions:** add the five scraper secrets
    (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`,
    `FIRECRAWL_API_KEY`, `APIFY_API_TOKEN` — the last is optional) in your

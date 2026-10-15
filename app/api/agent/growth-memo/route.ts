@@ -10,6 +10,7 @@ import {
   type GrowthDigest,
 } from "@/lib/agent/types";
 import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
+import { fileIssueFilingAlert } from "@/lib/agent/issue-filing-alert";
 import { parseModelJson } from "@/lib/agent/model-json";
 import { captureLessonsFromConcludedExperiments } from "@/lib/agent/growth-lessons";
 import { MEDIUM_EFFORT, REASONER_MODEL } from "@/lib/agent/models";
@@ -24,7 +25,9 @@ import { messageText } from "@/lib/agent/message-text";
 // READ-ONLY: it proposes and drafts copy. It executes nothing and sends
 // nothing — outward actions stay a human click, per the cockpit's hard rule.
 
-export const maxDuration = 60;
+// 120s, not 60: the memo call, then the ticket extraction and GitHub filing,
+// must fit with room for the Inbox alert (issue #325).
+export const maxDuration = 120;
 
 const MODEL = REASONER_MODEL;
 
@@ -131,6 +134,7 @@ async function postSlack(digest: GrowthDigest): Promise<void> {
 }
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
   const cronDenied = requireCronAuth(request);
   if (cronDenied) return cronDenied;
 
@@ -172,17 +176,28 @@ export async function GET(request: Request) {
 
     if (digest) await postSlack(digest);
 
-    // Phase 2 (PRD-roadmap-board.md): file `proposed` roadmap tickets for any
-    // concrete dev work the memo implies (a build, not an outreach email — those
-    // stay drafts on the memo). Best-effort — never fails the memo.
+    // File `proposed` GitHub issues for any concrete dev work the memo implies (a
+    // build, not an outreach email; those stay drafts on the memo). Issue #325.
+    // Best-effort: never fails the memo.
     let proposed_tasks = 0;
+    let issue_filing_error: string | null = null;
     if (digest) {
-      const r = await proposeTasksFromDigest(supabase, {
-        source: "growth_memo",
+      const r = await proposeTasksFromDigest({
         runId: (runRow as { id?: string } | null)?.id ?? null,
         digest,
+        // Stop filing with 15s of the 120s budget left, so the Inbox alert still lands.
+        deadline: startedAt + 105_000,
       });
       proposed_tasks = r.proposed;
+      issue_filing_error = r.error;
+      // Proposals that didn't reach GitHub go to the Inbox, not nowhere.
+      await fileIssueFilingAlert(supabase, {
+        source: "growth_memo",
+        error: r.error,
+        errors: r.errors,
+        unfiled: r.unfiled,
+        ungated: r.filed.filter((i) => !i.gated).map((i) => i.html_url),
+      });
     }
 
     return NextResponse.json({
@@ -190,6 +205,7 @@ export async function GET(request: Request) {
       status,
       move: digest?.move_of_the_week?.title ?? null,
       proposed_tasks,
+      issue_filing_error,
       summary: digest?.summary ?? null,
     });
   } catch (err) {
