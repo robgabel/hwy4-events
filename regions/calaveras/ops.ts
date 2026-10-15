@@ -59,4 +59,8 @@ export const CALAVERAS_OPS: RegionOps = {
   qaAudit: {
     townSlugSample: ["arnold", "murphys", "angels-camp"],
   },
+  // The dev backlog is GitHub Issues on this Project (#325).
+  admin: {
+    roadmapUrl: "https://github.com/users/robgabel/projects/3",
+  },
 };

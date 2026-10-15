@@ -6,10 +6,10 @@ import { INK, MUTED, ACCENT, BORDER } from "@/components/admin/ui";
 
 export type NavBadges = {
   inbox: number;
-  roadmap: number;
 };
 
-// Slimmed admin nav: four destinations. "Act" (the Inbox — the unified review
+// Slimmed admin nav: four destinations, plus an outbound "Roadmap ↗" link to the
+// GitHub Project (#325). "Act" (the Inbox — the unified review
 // queue) is separated from "look / tend" (Pulse = the read-only agent + growth
 // surfaces: briefings, experiments, venues; Analytics; Newsletter). The five
 // former queue routes (submissions / posters / verification / feedback / actions)
@@ -36,7 +36,9 @@ const PULSE_ROUTES = [
   "/admin/scrapers",
 ];
 
-export default function AdminNav({ badges }: { badges: NavBadges }) {
+// roadmapUrl comes from the server layout (region ops), so this client file
+// never imports server-only config. The dev backlog is GitHub Issues (#325).
+export default function AdminNav({ badges, roadmapUrl }: { badges: NavBadges; roadmapUrl: string | null }) {
   const pathname = usePathname();
 
   const inActive = (routes: string[]) =>
@@ -84,9 +86,16 @@ export default function AdminNav({ badges }: { badges: NavBadges }) {
       <NavLink href="/admin/newsletter" active={startsWith("/admin/newsletter")}>
         Newsletter
       </NavLink>
-      <NavLink href="/admin/roadmap" active={startsWith("/admin/roadmap")} badge={badges.roadmap}>
-        Roadmap
-      </NavLink>
+      {roadmapUrl && (
+        <a
+          href={roadmapUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ padding: "6px 12px", borderRadius: 6, color: INK, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}
+        >
+          Roadmap ↗
+        </a>
+      )}
     </nav>
   );
 }

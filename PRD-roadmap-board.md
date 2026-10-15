@@ -1,6 +1,8 @@
 # PRD — Roadmap Board (agent-fed kanban inside `/admin`)
 
-**Status:** Phases 1 + 2 + 3 built (2026-07-03 → 07-04), live in prod. Phase 4 pending. **One manual step for the auto-Done loop:** add `CRON_SECRET` as a GitHub Actions repo secret (see §9 Phase 3).
+> **Status (2026-10-15):** Retired by #325. GitHub Issues is the only backlog, triaged on the GitHub Project (https://github.com/users/robgabel/projects/3). `/admin/roadmap`, the `Builds HWY-N` merge webhook and `/build-ticket` are deleted; the QA audit and the growth memo file `proposed` GitHub issues (`lib/github-issues.ts`). The `hwy4_tasks` rows have NOT been exported (the repo is public and the table holds internal agent reasoning). The table stays in place, unread by any code, as the archive; a later migration (Rob's OK) renames it to `hwy4_tasks_archive_2026_10` rather than dropping it, the same way `scrape_runs_prototype_2026_06` was kept. Current truth: [Cron jobs](docs/subsystems/crons.md) and [Admin cockpit](docs/subsystems/cockpit.md). This doc is a frozen record.
+
+**Original status:** Phases 1 + 2 + 3 built (2026-07-03 → 07-04), live in prod. Phase 4 pending. **One manual step for the auto-Done loop:** add `CRON_SECRET` as a GitHub Actions repo secret (see §9 Phase 3).
 **Origin:** Rob wants to manage hwy4-events with a kanban + tickets — AI agents (growth/QA) file and prioritize work, Rob adds incremental features, **Claude Code implements them and updates the ticket**, and the `/admin` panel shows the cards and links over.
 **Decision (build, not buy):** a lightweight kanban on **Supabase** (`hwy4_tasks`), rendered natively in `/admin/roadmap`, linked to **GitHub PRs** (not GitHub Issues). See "Why build" below.
 **Confirmed by Rob:** table name `hwy4_tasks`, kept **separate** from PAOS `paos_improvements`; the build command is **repo-local** (`.claude/commands/build-ticket.md`); autonomy is **auto-draft, you approve** (Claude Code opens a draft PR, never merges).

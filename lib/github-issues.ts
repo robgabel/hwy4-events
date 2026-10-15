@@ -9,8 +9,9 @@
 // no-ops (GITHUB_ISSUES_TOKEN_MISSING), never a throw into the cron.
 //
 // The `proposed` label is the human gate. Rob accepts an issue by moving it to
-// Ready on the GitHub Project (which auto-adds every new issue) and declines it
-// by closing it as not planned.
+// Ready on the GitHub Project (which auto-adds every new issue) and removing
+// `proposed`; he declines it by closing it as not planned. Agents never remove
+// the label (the persona-qa convention).
 //
 // Dedup fails closed: if the issue list cannot be read, nothing is filed, so a
 // GitHub hiccup can never turn into a weekly duplicate.
