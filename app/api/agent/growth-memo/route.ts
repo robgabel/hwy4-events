@@ -25,7 +25,9 @@ import { messageText } from "@/lib/agent/message-text";
 // READ-ONLY: it proposes and drafts copy. It executes nothing and sends
 // nothing — outward actions stay a human click, per the cockpit's hard rule.
 
-export const maxDuration = 60;
+// 120s, not 60: the memo call, then the ticket extraction and GitHub filing,
+// must fit with room for the Inbox alert (issue #325).
+export const maxDuration = 120;
 
 const MODEL = REASONER_MODEL;
 
@@ -183,8 +185,8 @@ export async function GET(request: Request) {
       const r = await proposeTasksFromDigest({
         runId: (runRow as { id?: string } | null)?.id ?? null,
         digest,
-        // Stop filing with 15s of the 60s budget left, so the Inbox alert still lands.
-        deadline: startedAt + 45_000,
+        // Stop filing with 15s of the 120s budget left, so the Inbox alert still lands.
+        deadline: startedAt + 105_000,
       });
       proposed_tasks = r.proposed;
       issue_filing_error = r.error;

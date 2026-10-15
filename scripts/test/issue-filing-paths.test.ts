@@ -9,7 +9,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileQaFindings, checkKey, type QaAgg } from "../../lib/agent/qa-audit.js";
-import { fileTaskIssues, parseExtractedTasks, privateSignal } from "../../lib/agent/propose-tasks.js";
+import { fileTaskIssues, parseExtractedTasks, privateSignal, proposeTasksFromDigest } from "../../lib/agent/propose-tasks.js";
+import { FILING_ERRORS } from "../../lib/agent/issue-filing-alert.js";
 import { checkKeyLine, type IssueLite, type IssuesClient, type NewIssue } from "../../lib/github-issues.js";
 
 function fakeClient(opts: {
@@ -195,4 +196,22 @@ test("both writers stop at the deadline and report what they didn't file", async
   // no deadline means no limit
   const free = await fileQaFindings(fakeClient({}), [agg("/free")]);
   assert.equal(free.filed, 1);
+});
+
+test("proposeTasksFromDigest: no time left for extraction is a filing failure the Inbox sees", async () => {
+  const r = await proposeTasksFromDigest(
+    { runId: "r1", digest: { summary: "x" }, deadline: Date.now() - 1 },
+    fakeClient({})
+  );
+  assert.equal(r.error, "deadline_exceeded");
+  assert.equal(r.unfiled.length, 1);
+  assert.ok(FILING_ERRORS.has(r.error!));
+});
+
+test("a held proposal's alert text includes the rationale that may have tripped it", async () => {
+  const leaky = parseExtractedTasks(
+    JSON.stringify([{ title: "Resend the confirm link", body: "clean spec", rationale: "confirmations fell to 40", type: "growth" }])
+  );
+  const r = await fileTaskIssues(fakeClient({}), leaky, OPTS);
+  assert.match(r.unfiled[0], /why now: confirmations fell to 40/);
 });

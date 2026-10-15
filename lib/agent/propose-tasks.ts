@@ -313,7 +313,7 @@ export async function fileTaskIssues(
     if (why) {
       console.error(`[propose-tasks] held back "${t.title}": quotes ${why}`);
       error ??= "privacy_hold";
-      unfiled.push(`${t.title} (held: quotes ${why}; spec: ${t.body})`);
+      unfiled.push(`${t.title} (held: quotes ${why}; spec: ${t.body}; why now: ${t.rationale || "none"})`);
       skipped++;
       continue;
     }
