@@ -289,8 +289,7 @@ export async function runQaAudit(
 
   // Collapse to one entry per check_key, collecting example paths (dedup a class
   // that fails on multiple sampled slugs into a single ticket).
-  type Agg = { key: string; check: string; severity: QaSeverity; title: string; examples: string[]; detail: string };
-  const byKey = new Map<string, Agg>();
+  const byKey = new Map<string, QaAgg>();
   for (const { target, findings } of perTarget) {
     for (const f of findings) {
       const key = checkKey(f.check, target.keyScope);
@@ -311,40 +310,42 @@ export async function runQaAudit(
   }
   const aggs = [...byKey.values()];
 
+  return { checked: targets.length, findings: aggs.length, ...(await fileQaFindings(issues, aggs)) };
+}
+
+export type QaAgg = { key: string; check: string; severity: QaSeverity; title: string; examples: string[]; detail: string };
+
+export type QaFilingResult = Omit<QaAuditResult, "checked" | "findings">;
+
+// File one issue per aggregated finding. Split out of runQaAudit so the error
+// paths (no token, list failed, create failed, labels dropped) can be driven
+// with a fake client. Locked by scripts/test/qa-audit.test.ts.
+export async function fileQaFindings(issues: IssuesClient | null, aggs: QaAgg[]): Promise<QaFilingResult> {
+  const notFiled = (filing_error: string): QaFilingResult => ({
+    filed: 0,
+    skipped: aggs.length,
+    filed_issues: [],
+    filing_error,
+    unfiled_titles: aggs.map((a) => a.title),
+  });
   if (aggs.length === 0) {
-    return { checked: targets.length, findings: 0, filed: 0, skipped: 0, filed_issues: [], filing_error: null, unfiled_titles: [] };
+    return { filed: 0, skipped: 0, filed_issues: [], filing_error: null, unfiled_titles: [] };
   }
   if (!issues) {
     console.error("[qa-audit] GITHUB_ISSUES_TOKEN_MISSING: findings not filed");
-    return {
-      checked: targets.length,
-      findings: aggs.length,
-      filed: 0,
-      skipped: aggs.length,
-      filed_issues: [],
-      filing_error: "GITHUB_ISSUES_TOKEN_MISSING",
-      unfiled_titles: aggs.map((a) => a.title),
-    };
+    return notFiled("GITHUB_ISSUES_TOKEN_MISSING");
   }
 
-  // Dedup against issues already open, or closed as not planned in the last 30
-  // days (don't re-nag a declined one). An issue closed as completed does not
-  // count, so a fixed bug that regresses is filed again. Fail closed: if the list
-  // can't be read, file nothing rather than risk a duplicate.
+  // Dedup against issues already open, or declined (not planned / duplicate) in
+  // the last 30 days. An issue closed as completed does not count, so a fixed bug
+  // that regresses is filed again. Fail closed: if the list can't be read, file
+  // nothing rather than risk a duplicate.
   let covered: Set<string>;
   try {
     covered = coveredCheckKeys(await issues.listRecent());
   } catch (err) {
     console.error("[qa-audit] listing issues failed:", err);
-    return {
-      checked: targets.length,
-      findings: aggs.length,
-      filed: 0,
-      skipped: aggs.length,
-      filed_issues: [],
-      filing_error: "list_failed",
-      unfiled_titles: aggs.map((a) => a.title),
-    };
+    return notFiled("list_failed");
   }
 
   const filed: FiledIssue[] = [];
@@ -372,13 +373,5 @@ export async function runQaAudit(
     }
   }
 
-  return {
-    checked: targets.length,
-    findings: aggs.length,
-    filed: filed.length,
-    skipped,
-    filed_issues: filed,
-    filing_error: filingError,
-    unfiled_titles: unfiled,
-  };
+  return { filed: filed.length, skipped, filed_issues: filed, filing_error: filingError, unfiled_titles: unfiled };
 }

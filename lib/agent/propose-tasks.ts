@@ -37,7 +37,7 @@ export type ProposeTasksResult = {
   unfiled: string[];
 };
 
-type ExtractedTask = { title: string; body: string; type: TaskType; priority: TaskPriority; rationale: string };
+export type ExtractedTask = { title: string; body: string; type: TaskType; priority: TaskPriority; rationale: string };
 
 const SYSTEM_PROMPT = `You triage a daily/weekly ops digest for Hwy4Events.com (a one-person community events site) into DEVELOPER tickets for a GitHub issue backlog.
 
@@ -197,18 +197,27 @@ export async function proposeTasksFromDigest(
     return none("GITHUB_ISSUES_TOKEN_MISSING", extracted.map((t) => t.title));
   }
 
-  // 2. Dedup against open issues + issues closed as not planned in the last 30
-  //    days. Fail closed: no list, no filing.
+  return fileTaskIssues(issues, extracted, { runId: opts.runId, date: new Date().toISOString().slice(0, 10) });
+}
+
+// Dedup + file the extracted tickets. Split out so the error paths can be driven
+// with a fake client. Locked by scripts/test/propose-tasks.test.ts.
+export async function fileTaskIssues(
+  issues: IssuesClient,
+  extracted: ExtractedTask[],
+  opts: { runId: string | null; date: string },
+  now: Date = new Date()
+): Promise<ProposeTasksResult> {
+  // Dedup against open issues + issues declined in the last 30 days. Fail
+  // closed: no list, no filing.
   let seen: Set<string>[];
   try {
-    const now = new Date();
     seen = (await issues.listRecent(now)).filter((i) => suppressesRefile(i, now)).map((i) => words(i.title));
   } catch (err) {
     console.error("[propose-tasks] listing issues failed:", err);
-    return none("list_failed", extracted.map((t) => t.title));
+    return { proposed: 0, skipped: 0, filed: [], error: "list_failed", unfiled: extracted.map((t) => t.title) };
   }
 
-  const date = new Date().toISOString().slice(0, 10);
   const filed: FiledIssue[] = [];
   const unfiled: string[] = [];
   let skipped = 0;
@@ -221,7 +230,7 @@ export async function proposeTasksFromDigest(
     }
     seen.push(w); // guard against two near-identical candidates in the same run
     try {
-      const issue = await issues.create(taskIssue(t, { runId: opts.runId, date }));
+      const issue = await issues.create(taskIssue(t, opts));
       filed.push(issue);
       if (!issue.gated) {
         console.error(`[propose-tasks] #${issue.number} was filed without the proposed label`);

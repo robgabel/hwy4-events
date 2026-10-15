@@ -42,9 +42,11 @@ export async function GET(request: Request) {
         const lines = [
           `*Hwy4 QA agent: ${result.filed} GitHub issue(s) filed*`,
           ...result.filed_issues.map((i) => `• <${i.html_url}|#${i.number}> ${i.title}`),
-          ...(result.filing_error
-            ? [`⚠️ Some of ${result.findings} finding(s) were not filed: ${result.filing_error}. Check Vercel logs.`]
-            : []),
+          ...(result.filing_error === "labels_dropped"
+            ? ["⚠️ GitHub dropped the labels, so these issues are missing `proposed`. Inbox has the alert."]
+            : result.filing_error
+              ? [`⚠️ ${result.unfiled_titles.length} finding(s) not filed: ${result.filing_error}. Inbox has the alert.`]
+              : []),
         ];
         try {
           await fetch(webhook, {
