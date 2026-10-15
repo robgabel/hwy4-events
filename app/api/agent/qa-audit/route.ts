@@ -47,7 +47,7 @@ export async function GET(request: Request) {
           `*Hwy4 QA agent: ${result.filed} GitHub issue(s) filed*`,
           ...result.filed_issues.map((i) => `• <${i.html_url}|#${i.number}> ${i.title}`),
           ...(result.unfiled_titles.length
-            ? [`⚠️ ${result.unfiled_titles.length} finding(s) not filed: ${result.filing_error}.`]
+            ? [`⚠️ ${result.unfiled_titles.length} finding(s) not filed: ${result.filing_errors.join(", ")}.`]
             : []),
           ...(result.filed_issues.some((i) => !i.gated)
             ? ["⚠️ GitHub dropped the labels on some issues, so they are missing `proposed`."]
