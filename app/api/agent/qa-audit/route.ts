@@ -13,6 +13,7 @@ import { fileIssueFilingAlert } from "@/lib/agent/issue-filing-alert";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
   const denied = requireCronAuth(request);
   if (denied) return denied;
 
@@ -24,7 +25,8 @@ export async function GET(request: Request) {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    const result = await runQaAudit(supabase, SITE_URL);
+    // Stop filing with 15s of the 60s budget left, so the Inbox alert and Slack still run.
+    const result = await runQaAudit(supabase, SITE_URL, undefined, startedAt + 45_000);
 
     // Findings that didn't reach GitHub go to the Inbox (agent_actions), not
     // only Slack, so an expired token can't hide them.

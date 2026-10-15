@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 // Relative (not "@/") imports so the scripts/ test runner can import this module.
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";
-import { checkKeyLine, githubIssuesClient, suppressesRefile, type FiledIssue, type IssuesClient } from "../github-issues";
+import { checkKeyLine, DeadlineError, githubIssuesClient, hasTimeFor, suppressesRefile, type FiledIssue, type IssuesClient } from "../github-issues";
 
 // Turn the weekly growth memo into `proposed` GitHub issues (issue #325: GitHub
 // Issues is the only backlog). The memo already reasons over the site's signals
@@ -142,9 +142,11 @@ export function titlesCollide(a: string, b: string): boolean {
 // 2027", "the 2027 festival", "-2026" in a slug), and an issue or board ref
 // (#325, HWY-81). Any other digit, a spelled-out number from two up or
 // "percent", or an email address holds the proposal back from GitHub and sends
-// it to the private Inbox alert instead. Known gap: a count written as "one",
-// or a figure phrased with no number at all, still passes; the prompt rule is
-// the only guard there.
+// it to the private Inbox alert instead. Known gaps, accepted: a count written
+// as "one", a figure phrased with no number ("doubled"), or a count that sits
+// where a year would ("the 2024 signups") passes, and the prompt rule is the
+// only guard there; an HTTP code ("a 301") is held as a false positive, which
+// costs only an Inbox read.
 // People's names can't be caught this way; the prompt rule covers those.
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]+/;
 // "one" is left out on purpose: it is in most sentences and would hold every proposal.
@@ -157,6 +159,7 @@ const ALLOWED_DIGITS_RE = new RegExp(
     // a year only in a year-shaped position, never as a bare count ("sent 2025 clicks")
     String.raw`(?:\b(?:in|for|of|since|by|until|the)\s+|[-/])202[4-9]\b`,
     String.raw`#\d+\b`, // GitHub issue / PR refs
+    String.raw`\bH[1-6]\b`, // heading levels ("the title and H1")
     String.raw`\bHWY-\d+\b`, // old board refs
   ].join("|"),
   "gi"
@@ -196,7 +199,8 @@ export function taskIssue(
 }
 
 export async function proposeTasksFromDigest(
-  opts: { runId: string | null; digest: unknown },
+  /** deadline: epoch ms by which filing must stop, so the route can still write the Inbox alert. */
+  opts: { runId: string | null; digest: unknown; deadline?: number },
   issues: IssuesClient | null = githubIssuesClient()
 ): Promise<ProposeTasksResult> {
   const none = (error: string | null = null, unfiled: string[] = []): ProposeTasksResult => ({
@@ -239,7 +243,13 @@ export async function proposeTasksFromDigest(
     return none("GITHUB_ISSUES_TOKEN_MISSING", extracted.map((t) => t.title));
   }
 
-  return fileTaskIssues(issues, extracted, { runId: opts.runId, date: new Date().toISOString().slice(0, 10) });
+  return fileTaskIssues(
+    issues,
+    extracted,
+    { runId: opts.runId, date: new Date().toISOString().slice(0, 10) },
+    new Date(),
+    opts.deadline
+  );
 }
 
 // Dedup + file the extracted tickets. Split out so the error paths can be driven
@@ -248,16 +258,23 @@ export async function fileTaskIssues(
   issues: IssuesClient,
   extracted: ExtractedTask[],
   opts: { runId: string | null; date: string },
-  now: Date = new Date()
+  now: Date = new Date(),
+  deadline?: number
 ): Promise<ProposeTasksResult> {
   // Dedup against open issues + issues declined in the last 30 days. Fail
   // closed: no list, no filing.
   let seen: Set<string>[];
   try {
-    seen = (await issues.listRecent(now)).filter((i) => suppressesRefile(i, now)).map((i) => words(i.title));
+    seen = (await issues.listRecent(now, deadline)).filter((i) => suppressesRefile(i, now)).map((i) => words(i.title));
   } catch (err) {
     console.error("[propose-tasks] listing issues failed:", err);
-    return { proposed: 0, skipped: 0, filed: [], error: "list_failed", unfiled: extracted.map((t) => t.title) };
+    return {
+      proposed: 0,
+      skipped: 0,
+      filed: [],
+      error: err instanceof DeadlineError ? "deadline_exceeded" : "list_failed",
+      unfiled: extracted.map((t) => t.title),
+    };
   }
 
   const filed: FiledIssue[] = [];
@@ -271,6 +288,12 @@ export async function fileTaskIssues(
       continue;
     }
     seen.push(w); // guard against two near-identical candidates in the same run
+    if (!hasTimeFor(deadline)) {
+      error = "deadline_exceeded";
+      unfiled.push(t.title);
+      skipped++;
+      continue;
+    }
     const why = privateSignal(t);
     if (why) {
       console.error(`[propose-tasks] held back "${t.title}": quotes ${why}`);

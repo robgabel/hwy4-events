@@ -15,6 +15,9 @@ import {
   issuesRepo,
   suppressesRefile,
   DEFAULT_ISSUES_REPO,
+  DeadlineError,
+  hasTimeFor,
+  REQUEST_TIMEOUT_MS,
   type IssueLite,
 } from "../../lib/github-issues.js";
 
@@ -140,4 +143,20 @@ test("create reports whether the proposed label survived", async () => {
     labels: ["bug", "proposed"],
   });
   assert.equal(dropped.gated, false);
+});
+
+test("hasTimeFor leaves room for one full request; listRecent stops at the deadline", async () => {
+  assert.equal(hasTimeFor(undefined), true);
+  assert.equal(hasTimeFor(1_000_000 + REQUEST_TIMEOUT_MS, 1_000_000), true);
+  assert.equal(hasTimeFor(1_000_000 + REQUEST_TIMEOUT_MS - 1, 1_000_000), false);
+  let calls = 0;
+  const counting = (async () => {
+    calls++;
+    return new Response("[]", { status: 200 });
+  }) as unknown as typeof fetch;
+  await assert.rejects(
+    githubIssuesClient({ GITHUB_ISSUES_TOKEN: "t" }, counting)!.listRecent(NOW, Date.now()),
+    DeadlineError
+  );
+  assert.equal(calls, 0);
 });

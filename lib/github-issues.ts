@@ -23,7 +23,19 @@ const API = "https://api.github.com";
 const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
 /** Per-request cap: the calling routes have a 60s budget, and a stalled GitHub must fail into the Inbox alert, not past it. */
-const REQUEST_TIMEOUT_MS = 10_000;
+export const REQUEST_TIMEOUT_MS = 10_000;
+
+/** Thrown when a request would not finish before the caller's deadline. */
+export class DeadlineError extends Error {}
+
+/**
+ * Is there room for one more GitHub request before `deadline` (epoch ms)? The
+ * routes have a 60s budget; the writers stop early and report what they didn't
+ * file, so the Inbox alert still gets written. No deadline means no limit.
+ */
+export function hasTimeFor(deadline: number | undefined, now: number = Date.now()): boolean {
+  return deadline === undefined || now + REQUEST_TIMEOUT_MS <= deadline;
+}
 /** A declined issue (closed as not planned or duplicate) suppresses a refile for this long. */
 export const DECLINED_SUPPRESS_DAYS = 30;
 
@@ -52,7 +64,7 @@ const DECLINED_REASONS = new Set(["not_planned", "duplicate"]);
 export type IssuesClient = {
   repo: string;
   /** Open issues plus issues closed in the last DECLINED_SUPPRESS_DAYS. Throws on failure. */
-  listRecent(now?: Date): Promise<IssueLite[]>;
+  listRecent(now?: Date, deadline?: number): Promise<IssueLite[]>;
   /** Creates one issue. Throws on failure. */
   create(issue: NewIssue): Promise<FiledIssue>;
 };
@@ -135,9 +147,10 @@ export function githubIssuesClient(
     "User-Agent": `${SITE_NAME} agent`,
   };
 
-  async function listPages(query: string): Promise<IssueLite[]> {
+  async function listPages(query: string, deadline?: number): Promise<IssueLite[]> {
     const out: IssueLite[] = [];
     for (let page = 1; page <= MAX_PAGES; page++) {
+      if (!hasTimeFor(deadline)) throw new DeadlineError("GitHub list issues: out of time");
       const res = await fetchImpl(`${API}/repos/${repo}/issues?${query}&per_page=${PAGE_SIZE}&page=${page}`, {
         headers,
         cache: "no-store",
@@ -156,11 +169,11 @@ export function githubIssuesClient(
 
   return {
     repo,
-    async listRecent(now = new Date()) {
+    async listRecent(now = new Date(), deadline?: number) {
       const since = new Date(now.getTime() - DECLINED_SUPPRESS_DAYS * 86_400_000).toISOString();
       const [open, closed] = await Promise.all([
-        listPages("state=open"),
-        listPages(`state=closed&since=${encodeURIComponent(since)}`),
+        listPages("state=open", deadline),
+        listPages(`state=closed&since=${encodeURIComponent(since)}`, deadline),
       ]);
       return [...open, ...closed];
     },

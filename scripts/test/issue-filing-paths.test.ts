@@ -161,6 +161,7 @@ test("privateSignal holds back any figure or email; only public digit tokens pas
     "Give each Highway 4 town page a FAQ block",
     "Fix the broken link on /towns/arnold",
     "Grape stomp 2026-10-15 alias, follow-up to #325 and HWY-78",
+    "Sharpen the /things-to-do title and H1 for the wine tasting query",
   ]) {
     assert.equal(privateSignal(t(clean)), null, clean);
   }
@@ -175,4 +176,23 @@ test("fileTaskIssues: a proposal quoting private figures is held, not filed", as
   assert.equal(client.created.length, 0);
   assert.equal(r.error, "privacy_hold");
   assert.match(r.unfiled[0], /held: quotes a figure/);
+});
+
+test("both writers stop at the deadline and report what they didn't file", async () => {
+  const past = Date.now() - 1;
+  const qaClient = fakeClient({});
+  const qa = await fileQaFindings(qaClient, [agg("/free")], past);
+  assert.equal(qa.filing_error, "deadline_exceeded");
+  assert.deepEqual(qa.unfiled_titles, ["QA: /free returns an error"]);
+  assert.equal(qaClient.created.length, 0);
+
+  const memoClient = fakeClient({});
+  const memo = await fileTaskIssues(memoClient, tasks, OPTS, new Date(), past);
+  assert.equal(memo.error, "deadline_exceeded");
+  assert.equal(memo.unfiled.length, 2);
+  assert.equal(memoClient.created.length, 0);
+
+  // no deadline means no limit
+  const free = await fileQaFindings(fakeClient({}), [agg("/free")]);
+  assert.equal(free.filed, 1);
 });

@@ -21,6 +21,7 @@ export const FILING_ERRORS = new Set([
   "create_failed",
   "labels_dropped",
   "privacy_hold",
+  "deadline_exceeded",
 ]);
 const MAX_LISTED = 20;
 
@@ -35,6 +36,8 @@ const FIX: Record<string, string> = {
   create_failed: "Creating an issue failed. Check the Vercel logs for the GitHub status code.",
   labels_dropped:
     "An issue was filed without its `proposed` label, so GitHub dropped the labels. Give the token Issues read/write and add the label by hand.",
+  deadline_exceeded:
+    "GitHub was too slow and the run hit its time limit before filing these. They will be refiled next run if the finding still holds; growth-memo proposals will not, so file those by hand.",
   privacy_hold:
     "A proposal contained a number or an email address, and the repo is public, so it was held back (the check can't tell a private figure from a harmless one). Read the held text below; if it is safe, file it by hand.",
 };

@@ -132,6 +132,7 @@ async function postSlack(digest: GrowthDigest): Promise<void> {
 }
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
   const cronDenied = requireCronAuth(request);
   if (cronDenied) return cronDenied;
 
@@ -182,6 +183,8 @@ export async function GET(request: Request) {
       const r = await proposeTasksFromDigest({
         runId: (runRow as { id?: string } | null)?.id ?? null,
         digest,
+        // Stop filing with 15s of the 60s budget left, so the Inbox alert still lands.
+        deadline: startedAt + 45_000,
       });
       proposed_tasks = r.proposed;
       issue_filing_error = r.error;

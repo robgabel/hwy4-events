@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateEventSlug } from "../slugs";
-import { checkKeyLine, coveredCheckKeys, githubIssuesClient, type FiledIssue, type IssuesClient } from "../github-issues";
+import { checkKeyLine, coveredCheckKeys, DeadlineError, githubIssuesClient, hasTimeFor, type FiledIssue, type IssuesClient } from "../github-issues";
 import { SITE_NAME } from "../constants";
 import { REGION_OPS } from "../region-ops";
 
@@ -265,7 +265,9 @@ async function dynamicTargets(supabase: SupabaseClient): Promise<QaTarget[]> {
 export async function runQaAudit(
   supabase: SupabaseClient,
   baseUrl: string,
-  issues: IssuesClient | null = githubIssuesClient()
+  issues: IssuesClient | null = githubIssuesClient(),
+  /** Epoch ms by which filing must stop, so the route can still write the Inbox alert. */
+  deadline?: number
 ): Promise<QaAuditResult> {
   const targets = [...STATIC_TARGETS, ...(await dynamicTargets(supabase))];
 
@@ -310,7 +312,7 @@ export async function runQaAudit(
   }
   const aggs = [...byKey.values()];
 
-  return { checked: targets.length, findings: aggs.length, ...(await fileQaFindings(issues, aggs)) };
+  return { checked: targets.length, findings: aggs.length, ...(await fileQaFindings(issues, aggs, deadline)) };
 }
 
 export type QaAgg = { key: string; check: string; severity: QaSeverity; title: string; examples: string[]; detail: string };
@@ -320,7 +322,11 @@ export type QaFilingResult = Omit<QaAuditResult, "checked" | "findings">;
 // File one issue per aggregated finding. Split out of runQaAudit so the error
 // paths (no token, list failed, create failed, labels dropped) can be driven
 // with a fake client. Locked by scripts/test/qa-audit.test.ts.
-export async function fileQaFindings(issues: IssuesClient | null, aggs: QaAgg[]): Promise<QaFilingResult> {
+export async function fileQaFindings(
+  issues: IssuesClient | null,
+  aggs: QaAgg[],
+  deadline?: number
+): Promise<QaFilingResult> {
   const notFiled = (filing_error: string): QaFilingResult => ({
     filed: 0,
     skipped: aggs.length,
@@ -342,10 +348,10 @@ export async function fileQaFindings(issues: IssuesClient | null, aggs: QaAgg[])
   // nothing rather than risk a duplicate.
   let covered: Set<string>;
   try {
-    covered = coveredCheckKeys(await issues.listRecent());
+    covered = coveredCheckKeys(await issues.listRecent(new Date(), deadline));
   } catch (err) {
     console.error("[qa-audit] listing issues failed:", err);
-    return notFiled("list_failed");
+    return notFiled(err instanceof DeadlineError ? "deadline_exceeded" : "list_failed");
   }
 
   const filed: FiledIssue[] = [];
@@ -354,6 +360,12 @@ export async function fileQaFindings(issues: IssuesClient | null, aggs: QaAgg[])
   let filingError: string | null = null;
   for (const a of aggs) {
     if (covered.has(a.key)) {
+      skipped++;
+      continue;
+    }
+    if (!hasTimeFor(deadline)) {
+      filingError = "deadline_exceeded";
+      unfiled.push(a.title);
       skipped++;
       continue;
     }
