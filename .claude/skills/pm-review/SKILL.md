@@ -31,7 +31,7 @@ codebase. The cron reasoners have neither a repo nor a shell.
 `agent_runs` audit row, post to Slack.
 
 **May not:** touch `hwy4_events`, publish or send anything, merge or push code,
-file or modify `hwy4_tasks` rows, disable RLS. Concluding an experiment is the only
+file or modify GitHub issues, disable RLS. Concluding an experiment is the only
 state change in scope. PRD-ifying tickets and ranking the board are **later phases,
 explicitly out of scope here** — do not do them even if they look easy.
 

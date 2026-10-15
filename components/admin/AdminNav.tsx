@@ -6,8 +6,11 @@ import { INK, MUTED, ACCENT, BORDER } from "@/components/admin/ui";
 
 export type NavBadges = {
   inbox: number;
-  roadmap: number;
 };
+
+// The dev backlog is GitHub Issues on this Project (#325). The nav links out to
+// it; there is no in-app board.
+const ROADMAP_URL = "https://github.com/users/robgabel/projects/3";
 
 // Slimmed admin nav: four destinations. "Act" (the Inbox — the unified review
 // queue) is separated from "look / tend" (Pulse = the read-only agent + growth
@@ -84,9 +87,14 @@ export default function AdminNav({ badges }: { badges: NavBadges }) {
       <NavLink href="/admin/newsletter" active={startsWith("/admin/newsletter")}>
         Newsletter
       </NavLink>
-      <NavLink href="/admin/roadmap" active={startsWith("/admin/roadmap")} badge={badges.roadmap}>
-        Roadmap
-      </NavLink>
+      <a
+        href={ROADMAP_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ padding: "6px 12px", borderRadius: 6, color: INK, textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}
+      >
+        Roadmap ↗
+      </a>
     </nav>
   );
 }
