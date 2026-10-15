@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { TaskPriority } from "../tasks";
 import { generateEventSlug } from "../slugs";
+import { checkKeyLine, coveredCheckKeys, githubIssuesClient, type FiledIssue, type IssuesClient } from "../github-issues";
 import { SITE_NAME } from "../constants";
 import { REGION_OPS } from "../region-ops";
 
@@ -13,15 +13,19 @@ const DOUBLED_BRAND_RE = new RegExp(
   "i"
 );
 
-// QA agent (PRD-roadmap-board.md Phase 3). A sibling to /api/check-events, but where
-// that audit reports DATA issues to Slack, this one HTTP-checks the live SITE for
-// CODE/regression bugs (a page erroring, missing JSON-LD, a broken sitemap) and files
-// `type='bug'` `proposed` tickets onto the Roadmap board. Advisory only — a human
-// promotes each one, same gate as every cockpit proposal.
+// QA agent. A sibling to /api/check-events, but where that audit reports DATA
+// issues to Slack, this one HTTP-checks the live SITE for CODE/regression bugs (a
+// page erroring, missing JSON-LD, a broken sitemap) and files GitHub issues
+// labelled `proposed` (issue #325: GitHub Issues is the only backlog). Advisory
+// only: Rob accepts or closes each one.
 //
 // Deterministic checks (no LLM): cheap, and a hit is an unambiguous "this is broken."
-// One ticket per check-class (deduped by a stable check_key stored in ai_rationale)
-// so a recurring failure never floods the board.
+// One issue per check-class, deduped by the `check_key:` line in the issue body, so
+// a recurring failure never floods the backlog.
+
+export type QaSeverity = "p0" | "p1" | "p2" | "p3";
+
+export const QA_ISSUE_LABELS = ["bug", "proposed", "qa", "lens:qa-audit"];
 
 export type QaKind = "page" | "event" | "sitemap" | "bot";
 
@@ -37,9 +41,9 @@ export type QaTarget = {
   userAgent?: string;
 };
 
-export type QaFinding = { check: string; severity: TaskPriority; detail: string };
+export type QaFinding = { check: string; severity: QaSeverity; detail: string };
 
-const SEV_LABEL: Record<string, { title: string; severity: TaskPriority }> = {
+const SEV_LABEL: Record<string, { title: string; severity: QaSeverity }> = {
   status: { title: "returns an error", severity: "p1" },
   malformed: { title: "is malformed", severity: "p1" },
   jsonld: { title: "is missing JSON-LD structured data", severity: "p2" },
@@ -191,8 +195,35 @@ export type QaAuditResult = {
   findings: number;
   filed: number;
   skipped: number;
-  filed_titles: string[];
+  filed_issues: FiledIssue[];
+  /** Why nothing could be filed this run (token missing, list or create failed). */
+  filing_error: string | null;
 };
+
+// PURE: the issue body for one aggregated finding. The check_key line is what the
+// next run matches on, so it stays the last line. Locked by scripts/test/qa-audit.test.ts.
+export function qaIssueBody(a: { key: string; check: string; severity: QaSeverity; detail: string; examples: string[] }): string {
+  const examples = a.examples.slice(0, 5).join(", ");
+  const fix =
+    a.check === "bot_blocked"
+      ? "Reproduce in the Vercel Firewall logs for that crawler, then remove or relax the rule that blocks it."
+      : "Reproduce by loading the URL(s) above and confirming, then fix the underlying page or route.";
+  return [
+    `**Suggested priority: ${a.severity}.** Filed automatically by the weekly QA audit (\`/api/agent/qa-audit\`).`,
+    "",
+    "## Problem",
+    `The QA audit found a problem on the live site: ${a.detail}.`,
+    "",
+    `Affected: ${examples}.`,
+    "",
+    "## Proposed fix",
+    fix,
+    "",
+    "If this is a false alarm or already fixed, close it as not planned. The audit will not refile it for 30 days.",
+    "",
+    checkKeyLine(a.key),
+  ].join("\n");
+}
 
 // Build the dynamic sample: a few live event-detail pages + a few town pages. Slugs
 // rotate, so these key by class (event-detail / town-page), not by slug.
@@ -229,7 +260,11 @@ async function dynamicTargets(supabase: SupabaseClient): Promise<QaTarget[]> {
   return targets;
 }
 
-export async function runQaAudit(supabase: SupabaseClient, baseUrl: string): Promise<QaAuditResult> {
+export async function runQaAudit(
+  supabase: SupabaseClient,
+  baseUrl: string,
+  issues: IssuesClient | null = githubIssuesClient()
+): Promise<QaAuditResult> {
   const targets = [...STATIC_TARGETS, ...(await dynamicTargets(supabase))];
 
   // Fetch + evaluate all targets in parallel.
@@ -252,7 +287,7 @@ export async function runQaAudit(supabase: SupabaseClient, baseUrl: string): Pro
 
   // Collapse to one entry per check_key, collecting example paths (dedup a class
   // that fails on multiple sampled slugs into a single ticket).
-  type Agg = { key: string; check: string; severity: TaskPriority; title: string; examples: string[]; detail: string };
+  type Agg = { key: string; check: string; severity: QaSeverity; title: string; examples: string[]; detail: string };
   const byKey = new Map<string, Agg>();
   for (const { target, findings } of perTarget) {
     for (const f of findings) {
@@ -274,69 +309,64 @@ export async function runQaAudit(supabase: SupabaseClient, baseUrl: string): Pro
   }
   const aggs = [...byKey.values()];
 
-  // Dedup against QA tickets already open, or dismissed in the last 30 days (don't
-  // re-nag a declined one). We DO refile something that was previously done and has
-  // regressed, so `done` is deliberately not in this set.
-  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const [openRows, dismissedRows] = await Promise.all([
-    supabase
-      .from("hwy4_tasks")
-      .select("ai_rationale")
-      .eq("source", "qa_agent")
-      .in("status", ["proposed", "backlog", "ready", "in_progress", "in_review"]),
-    supabase
-      .from("hwy4_tasks")
-      .select("ai_rationale")
-      .eq("source", "qa_agent")
-      .eq("status", "wont_do")
-      .gte("updated_at", cutoff),
-  ]);
-  const seenKeys = new Set(
-    [...((openRows.data ?? []) as { ai_rationale: { check_key?: string } | null }[]),
-     ...((dismissedRows.data ?? []) as { ai_rationale: { check_key?: string } | null }[])]
-      .map((r) => r.ai_rationale?.check_key)
-      .filter((k): k is string => Boolean(k))
-  );
+  if (aggs.length === 0) {
+    return { checked: targets.length, findings: 0, filed: 0, skipped: 0, filed_issues: [], filing_error: null };
+  }
+  if (!issues) {
+    console.error("[qa-audit] GITHUB_ISSUES_TOKEN_MISSING: findings not filed");
+    return {
+      checked: targets.length,
+      findings: aggs.length,
+      filed: 0,
+      skipped: aggs.length,
+      filed_issues: [],
+      filing_error: "GITHUB_ISSUES_TOKEN_MISSING",
+    };
+  }
 
-  const rows: Record<string, unknown>[] = [];
+  // Dedup against issues already open, or closed as not planned in the last 30
+  // days (don't re-nag a declined one). An issue closed as completed does not
+  // count, so a fixed bug that regresses is filed again. Fail closed: if the list
+  // can't be read, file nothing rather than risk a duplicate.
+  let covered: Set<string>;
+  try {
+    covered = coveredCheckKeys(await issues.listRecent());
+  } catch (err) {
+    console.error("[qa-audit] listing issues failed:", err);
+    return {
+      checked: targets.length,
+      findings: aggs.length,
+      filed: 0,
+      skipped: aggs.length,
+      filed_issues: [],
+      filing_error: "list_failed",
+    };
+  }
+
+  const filed: FiledIssue[] = [];
   let skipped = 0;
+  let filingError: string | null = null;
   for (const a of aggs) {
-    if (seenKeys.has(a.key)) {
+    if (covered.has(a.key)) {
       skipped++;
       continue;
     }
-    const examples = a.examples.slice(0, 5).join(", ");
-    rows.push({
-      title: a.title,
-      body: `The QA audit found a problem on the live site: ${a.detail}.\n\nAffected: ${examples}.\n\n${
-        a.check === "bot_blocked"
-          ? "Reproduce in the Vercel Firewall logs for that crawler, then remove or relax the rule that blocks it."
-          : "Reproduce by loading the URL(s) above and confirming, then fix the underlying page/route."
-      } (Filed automatically by the QA agent; if it is a false alarm or already fixed, Dismiss it.)`,
-      type: "bug",
-      priority: a.severity,
-      status: "proposed",
-      source: "qa_agent",
-      created_by: "qa_agent",
-      ai_rationale: { check_key: a.key, rationale: `${a.detail} (${examples})`, examples: a.examples },
-    });
-  }
-
-  let filed = 0;
-  if (rows.length > 0) {
-    const { error, count } = await supabase.from("hwy4_tasks").insert(rows, { count: "exact" });
-    if (error) {
-      console.error("[qa-audit] insert failed:", error.message);
-    } else {
-      filed = count ?? rows.length;
+    try {
+      filed.push(await issues.create({ title: a.title, body: qaIssueBody(a), labels: QA_ISSUE_LABELS }));
+      covered.add(a.key);
+    } catch (err) {
+      console.error("[qa-audit] create issue failed:", err);
+      filingError = "create_failed";
+      skipped++;
     }
   }
 
   return {
     checked: targets.length,
     findings: aggs.length,
-    filed,
-    skipped: skipped + (rows.length - filed),
-    filed_titles: rows.slice(0, filed || rows.length).map((r) => String(r.title)),
+    filed: filed.length,
+    skipped,
+    filed_issues: filed,
+    filing_error: filingError,
   };
 }

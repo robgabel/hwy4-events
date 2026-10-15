@@ -8,7 +8,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseExtractedTasks, titlesCollide } from "../../lib/agent/propose-tasks.js";
+import { parseExtractedTasks, taskIssue, titlesCollide } from "../../lib/agent/propose-tasks.js";
+import { bodyCheckKey } from "../../lib/github-issues.js";
 
 test("parseExtractedTasks parses a fenced JSON array and keeps valid enums", () => {
   const text = "```json\n" +
@@ -59,4 +60,16 @@ test("titlesCollide catches re-wordings of the same idea, not distinct tickets",
   assert.equal(titlesCollide("Add a /free filter to town pages", "Build a QA audit cron for broken links"), false);
   // Degenerate inputs never collide.
   assert.equal(titlesCollide("", "anything"), false);
+});
+
+test("taskIssue: type label + proposed gate, priority and rationale in the body, a check_key line", () => {
+  const [t] = parseExtractedTasks(
+    JSON.stringify([{ title: "Add a /free filter to town pages!", body: "spec", type: "feature", priority: "p2", rationale: "why" }])
+  );
+  const issue = taskIssue(t, { runId: "run-1", date: "2026-10-16" });
+  assert.equal(issue.title, "Add a /free filter to town pages!");
+  assert.deepEqual(issue.labels, ["feature", "proposed", "lens:growth-memo"]);
+  assert.match(issue.body, /Suggested priority: p2/);
+  assert.match(issue.body, /## Why now\nwhy/);
+  assert.equal(bodyCheckKey(issue.body), "growth-memo/add-a-free-filter-to-town-pages");
 });

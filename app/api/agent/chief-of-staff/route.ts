@@ -10,7 +10,6 @@ import {
   type DigestContext,
   type Vitals,
 } from "@/lib/agent/types";
-import { proposeTasksFromDigest } from "@/lib/agent/propose-tasks";
 import {
   computePicksRunway,
   ensurePicksRunwayItem,
@@ -284,39 +283,26 @@ export async function GET(request: Request) {
     // it, append the deterministic item (lib/agent/audit-signal.ts).
     ensureAuditItems(digest, context.audit ?? null);
 
-    const { data: runRow, error } = await supabase
-      .from("agent_runs")
-      .insert({
-        status,
-        model: MODEL,
-        input_tokens: usage.input,
-        output_tokens: usage.output,
-        context_in: context,
-        digest,
-      })
-      .select("id")
-      .single();
+    const { error } = await supabase.from("agent_runs").insert({
+      status,
+      model: MODEL,
+      input_tokens: usage.input,
+      output_tokens: usage.output,
+      context_in: context,
+      digest,
+    });
     if (error) throw error;
 
     await postSlack(digest, context.vitals.audit_backlog ?? null);
 
-    // Phase 2 (PRD-roadmap-board.md): file `proposed` roadmap tickets for any
-    // concrete dev work the digest implies. Best-effort — never fails the digest.
-    let proposed_tasks = 0;
-    if (status === "ok") {
-      const r = await proposeTasksFromDigest(supabase, {
-        source: "chief_of_staff",
-        runId: (runRow as { id?: string } | null)?.id ?? null,
-        digest,
-      });
-      proposed_tasks = r.proposed;
-    }
+    // The digest no longer files tickets (issue #325): it refiled the same scrape
+    // problem under three titles, and #332 retires it. The growth memo is the
+    // reasoner that files GitHub issues.
 
     return NextResponse.json({
       ok: true,
       status,
       needs_you: digest.needs_you.length,
-      proposed_tasks,
       summary: digest.summary,
     });
   } catch (err) {

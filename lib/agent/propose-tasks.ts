@@ -1,32 +1,38 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
-// Relative (not "@/") import so the scripts/ test runner can import this module.
-import { TASK_PRIORITIES, TASK_TYPES, type TaskPriority, type TaskType } from "../tasks";
+// Relative (not "@/") imports so the scripts/ test runner can import this module.
 import { MEDIUM_EFFORT, REASONER_MODEL } from "./models";
 import { messageText } from "./message-text";
+import { checkKeyLine, githubIssuesClient, suppressesRefile, type FiledIssue, type IssuesClient } from "../github-issues";
 
-// Phase 2 of the Roadmap board (PRD-roadmap-board.md §5): turn a cockpit reasoner's
-// digest into `proposed` hwy4_tasks tickets. The chief-of-staff (daily) and the
-// growth-memo (weekly) already reason over the site's signals and write an
-// agent_runs row; this reads that digest and files a ticket for any item that is a
-// concrete DEV change (a feature, a bug fix, a data/SEO fix, a page) — NOT an ops
-// task like "review a submission" or "send an email", which have their own queues.
+// Turn the weekly growth memo into `proposed` GitHub issues (issue #325: GitHub
+// Issues is the only backlog). The memo already reasons over the site's signals
+// and writes an agent_runs row; this reads that digest and files an issue for any
+// item that is a concrete DEV change (a feature, a bug fix, a data/SEO fix, a
+// page), NOT an ops task like "review a submission" or "send an email", which
+// have their own queues. The daily chief-of-staff digest no longer files here:
+// it refiled one Brice Station problem three times under different titles, and
+// #332 retires that digest.
 //
-// Agent-filed tickets land status='proposed' and wait for a human to Promote them
-// in /admin/roadmap (the approval gate), same as every other cockpit proposal.
+// Filed issues carry `proposed` (the human gate) and land in Proposed on the
+// GitHub Project. Rob moves one to Ready or closes it as not planned.
 //
 // Best-effort + idempotent: it never throws into the reasoner (a proposal failure
-// must not fail the digest), and it dedups against open + recently-dismissed
-// tickets by normalized title so a daily reasoner can't refile the same idea.
+// must not fail the memo), and it dedups by normalized title against open issues
+// and issues declined in the last 30 days, so a weekly memo can't refile an idea.
+
+export const TASK_TYPES = ["feature", "bug", "qa", "growth", "chore"] as const;
+export const TASK_PRIORITIES = ["p0", "p1", "p2", "p3"] as const;
+export type TaskType = (typeof TASK_TYPES)[number];
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 const MODEL = REASONER_MODEL;
 const MAX_PER_RUN = 2; // a reasoner proposes at most 2 tickets/run — precision over volume
 
-export type ProposeTasksResult = { proposed: number; skipped: number };
+export type ProposeTasksResult = { proposed: number; skipped: number; filed: FiledIssue[]; error: string | null };
 
 type ExtractedTask = { title: string; body: string; type: TaskType; priority: TaskPriority; rationale: string };
 
-const SYSTEM_PROMPT = `You triage a daily/weekly ops digest for Hwy4Events.com (a one-person community events site) into DEVELOPER tickets for a kanban board.
+const SYSTEM_PROMPT = `You triage a daily/weekly ops digest for Hwy4Events.com (a one-person community events site) into DEVELOPER tickets for a GitHub issue backlog.
 
 A ticket is warranted ONLY for a concrete change to the CODEBASE or the SITE that a developer (Claude Code) would implement: a new feature or page, a bug fix, a data-quality or SEO fix, a UX change, a script.
 
@@ -80,8 +86,8 @@ function coerce(raw: unknown): ExtractedTask | null {
   const r = raw as Record<string, unknown>;
   const title = typeof r.title === "string" ? r.title.trim() : "";
   if (!title) return null;
-  const type = (TASK_TYPES as string[]).includes(String(r.type)) ? (r.type as TaskType) : "chore";
-  const priority = (TASK_PRIORITIES as string[]).includes(String(r.priority)) ? (r.priority as TaskPriority) : "p3";
+  const type = (TASK_TYPES as readonly string[]).includes(String(r.type)) ? (r.type as TaskType) : "chore";
+  const priority = (TASK_PRIORITIES as readonly string[]).includes(String(r.priority)) ? (r.priority as TaskPriority) : "p3";
   return {
     title: title.slice(0, 200),
     body: typeof r.body === "string" ? r.body.trim() : "",
@@ -116,13 +122,42 @@ export function titlesCollide(a: string, b: string): boolean {
   return similar(words(a), words(b));
 }
 
-export async function proposeTasksFromDigest(
-  supabase: SupabaseClient,
-  opts: { source: "chief_of_staff" | "growth_memo"; runId: string | null; digest: unknown }
-): Promise<ProposeTasksResult> {
-  if (!opts.digest) return { proposed: 0, skipped: 0 };
+// PURE: the GitHub issue for one extracted ticket. Locked by
+// scripts/test/propose-tasks.test.ts.
+export function taskIssue(
+  t: ExtractedTask,
+  opts: { runId: string | null; date: string }
+): { title: string; body: string; labels: string[] } {
+  const slug = t.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  const lines = [
+    `**Suggested priority: ${t.priority}.** Filed by the weekly growth memo, ${opts.date}${
+      opts.runId ? ` (agent run \`${opts.runId}\`)` : ""
+    }.`,
+    "",
+    "## Proposed change",
+    t.body || t.title,
+  ];
+  if (t.rationale) lines.push("", "## Why now", t.rationale);
+  lines.push("", checkKeyLine(`growth-memo/${slug || "untitled"}`));
+  return { title: t.title, body: lines.join("\n"), labels: [t.type, "proposed", "lens:growth-memo"] };
+}
 
-  // 1. Extract candidate dev tickets from the digest (best-effort — never throw).
+export async function proposeTasksFromDigest(
+  opts: { runId: string | null; digest: unknown },
+  issues: IssuesClient | null = githubIssuesClient()
+): Promise<ProposeTasksResult> {
+  const none = (error: string | null = null): ProposeTasksResult => ({ proposed: 0, skipped: 0, filed: [], error });
+  if (!opts.digest) return none();
+  if (!issues) {
+    console.error("[propose-tasks] GITHUB_ISSUES_TOKEN_MISSING: skipping");
+    return none("GITHUB_ISSUES_TOKEN_MISSING");
+  }
+
+  // 1. Extract candidate dev tickets from the digest (best-effort, never throw).
   let extracted: ExtractedTask[];
   try {
     const anthropic = new Anthropic();
@@ -134,7 +169,7 @@ export async function proposeTasksFromDigest(
       messages: [
         {
           role: "user",
-          content: `Here is the ${opts.source === "growth_memo" ? "weekly growth memo" : "daily chief-of-staff digest"} as JSON. File dev tickets for any concrete build it implies (usually none).\n\n${JSON.stringify(
+          content: `Here is the weekly growth memo as JSON. File dev tickets for any concrete build it implies (usually none).\n\n${JSON.stringify(
             opts.digest,
             null,
             2
@@ -142,31 +177,28 @@ export async function proposeTasksFromDigest(
         },
       ],
     });
-    const text = messageText(message.content);
-    extracted = safeJsonArray(text).map(coerce).filter((t): t is ExtractedTask => t !== null).slice(0, MAX_PER_RUN);
+    extracted = parseExtractedTasks(messageText(message.content));
   } catch (err) {
-    console.error(`[propose-tasks:${opts.source}] extraction failed:`, err);
-    return { proposed: 0, skipped: 0 };
+    console.error("[propose-tasks] extraction failed:", err);
+    return none("extraction_failed");
   }
-  if (extracted.length === 0) return { proposed: 0, skipped: 0 };
+  if (extracted.length === 0) return none();
 
-  // 2. Dedup against open tickets + tickets dismissed in the last 30 days (so a
-  //    rejected idea doesn't get re-nagged every run). Two simple selects, merged —
-  //    clearer than one nested PostgREST .or() with a timestamp.
-  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const [openRows, dismissedRows] = await Promise.all([
-    supabase
-      .from("hwy4_tasks")
-      .select("title")
-      .in("status", ["proposed", "backlog", "ready", "in_progress", "in_review"]),
-    supabase.from("hwy4_tasks").select("title").eq("status", "wont_do").gte("updated_at", cutoff),
-  ]);
-  const seen = [...((openRows.data ?? []) as { title: string }[]), ...((dismissedRows.data ?? []) as { title: string }[])].map(
-    (t) => words(t.title)
-  );
+  // 2. Dedup against open issues + issues closed as not planned in the last 30
+  //    days. Fail closed: no list, no filing.
+  let seen: Set<string>[];
+  try {
+    const now = new Date();
+    seen = (await issues.listRecent(now)).filter((i) => suppressesRefile(i, now)).map((i) => words(i.title));
+  } catch (err) {
+    console.error("[propose-tasks] listing issues failed:", err);
+    return none("list_failed");
+  }
 
-  const rows: Record<string, unknown>[] = [];
+  const date = new Date().toISOString().slice(0, 10);
+  const filed: FiledIssue[] = [];
   let skipped = 0;
+  let error: string | null = null;
   for (const t of extracted) {
     const w = words(t.title);
     if (seen.some((s) => similar(w, s))) {
@@ -174,27 +206,13 @@ export async function proposeTasksFromDigest(
       continue;
     }
     seen.push(w); // guard against two near-identical candidates in the same run
-    rows.push({
-      title: t.title,
-      body: t.body || null,
-      type: t.type,
-      priority: t.priority,
-      status: "proposed",
-      source: opts.source,
-      created_by: opts.source,
-      linked_run_id: opts.runId,
-      ai_rationale: { rationale: t.rationale, from: opts.source, run_id: opts.runId },
-    });
-  }
-
-  let proposed = 0;
-  if (rows.length > 0) {
-    const { error, count } = await supabase.from("hwy4_tasks").insert(rows, { count: "exact" });
-    if (error) {
-      console.error(`[propose-tasks:${opts.source}] insert failed:`, error.message);
-    } else {
-      proposed = count ?? rows.length;
+    try {
+      filed.push(await issues.create(taskIssue(t, { runId: opts.runId, date })));
+    } catch (err) {
+      console.error("[propose-tasks] create issue failed:", err);
+      error = "create_failed";
+      skipped++;
     }
   }
-  return { proposed, skipped: skipped + (rows.length - proposed) };
+  return { proposed: filed.length, skipped, filed, error };
 }

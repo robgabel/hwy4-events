@@ -4,10 +4,10 @@ import { requireCronAuth } from "@/lib/cron-auth";
 import { SITE_URL } from "@/lib/constants";
 import { runQaAudit } from "@/lib/agent/qa-audit";
 
-// QA agent cron (PRD-roadmap-board.md Phase 3). HTTP-checks the live site's key
-// pages + sitemaps for CODE/regression bugs and files `type='bug'` `proposed`
-// Roadmap tickets (advisory — a human promotes each). Weekly; low-noise by design
-// (one ticket per check-class, deduped). See lib/agent/qa-audit.ts.
+// QA agent cron. HTTP-checks the live site's key pages + sitemaps for
+// CODE/regression bugs and files `proposed` GitHub issues (advisory; Rob accepts
+// or closes each, issue #325). Weekly; low-noise by design (one issue per
+// check-class, deduped by check_key). See lib/agent/qa-audit.ts.
 
 export const maxDuration = 60;
 
@@ -25,13 +25,17 @@ export async function GET(request: Request) {
   try {
     const result = await runQaAudit(supabase, SITE_URL);
 
-    if (result.filed > 0) {
+    // A finding that could not be filed is still news: say so, or the sensor
+    // fails silently (token unset, GitHub down).
+    if (result.filed > 0 || result.filing_error) {
       const webhook = process.env.SLACK_WEBHOOK_URL;
       if (webhook) {
         const lines = [
-          `*Hwy4 QA agent — ${result.filed} bug ticket(s) filed*`,
-          ...result.filed_titles.map((t) => `• ${t}`),
-          `→ ${SITE_URL}/admin/roadmap`,
+          `*Hwy4 QA agent: ${result.filed} GitHub issue(s) filed*`,
+          ...result.filed_issues.map((i) => `• <${i.html_url}|#${i.number}> ${i.title}`),
+          ...(result.filing_error
+            ? [`⚠️ Some of ${result.findings} finding(s) were not filed: ${result.filing_error}. Check Vercel logs.`]
+            : []),
         ];
         try {
           await fetch(webhook, {

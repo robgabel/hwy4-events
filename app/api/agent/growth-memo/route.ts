@@ -172,13 +172,12 @@ export async function GET(request: Request) {
 
     if (digest) await postSlack(digest);
 
-    // Phase 2 (PRD-roadmap-board.md): file `proposed` roadmap tickets for any
-    // concrete dev work the memo implies (a build, not an outreach email — those
-    // stay drafts on the memo). Best-effort — never fails the memo.
+    // File `proposed` GitHub issues for any concrete dev work the memo implies (a
+    // build, not an outreach email; those stay drafts on the memo). Issue #325.
+    // Best-effort: never fails the memo.
     let proposed_tasks = 0;
     if (digest) {
-      const r = await proposeTasksFromDigest(supabase, {
-        source: "growth_memo",
+      const r = await proposeTasksFromDigest({
         runId: (runRow as { id?: string } | null)?.id ?? null,
         digest,
       });
