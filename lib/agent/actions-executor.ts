@@ -15,12 +15,15 @@ import {
   validateQaFixPayload,
   type QaFixEventPayload,
 } from "@/lib/agent/qa-fix-event";
+import { FILE_GITHUB_ISSUE_TYPE, fileIssueForAction } from "@/lib/agent/file-github-issue";
+import { githubIssuesClient, type IssuesClient } from "@/lib/github-issues";
 
 // The action executor (PRD-agent-cockpit.md, Stage 1). Performs the same write a
 // human would do by hand, AFTER capturing before_snapshot for reversibility. The
 // caller (the /admin/actions approve server action) gates on the policy guardrail,
 // then writes the returned target_* / before_snapshot back onto the agent_actions
-// row. Every action type here is internal + reversible.
+// row. Every action type here is internal + reversible except file_github_issue,
+// which publishes to the public repo and can only be closed there, not undone.
 
 export type ExecuteResult = {
   ok: boolean;
@@ -28,7 +31,14 @@ export type ExecuteResult = {
   targetId?: string;
   beforeSnapshot?: Record<string, unknown> | null;
   error?: string;
+  /** Nothing was written and approving again may work: the row goes back to proposed, not failed. */
+  retryable?: boolean;
+  /** Shown in the approve flash on success. */
+  note?: string;
 };
+
+/** Injected for tests; production builds the live clients. */
+export type ExecuteDeps = { issues?: IssuesClient | null; now?: Date };
 
 export type CreateOrgRowPayload = {
   slug?: string;
@@ -48,9 +58,16 @@ export type CreateVenueRowPayload = {
 
 export async function executeAction(
   supabase: SupabaseClient,
-  action: AgentActionRow
+  action: AgentActionRow,
+  deps: ExecuteDeps = {}
 ): Promise<ExecuteResult> {
   switch (action.type) {
+    case FILE_GITHUB_ISSUE_TYPE:
+      return fileIssueForAction(
+        deps.issues === undefined ? githubIssuesClient() : deps.issues,
+        action,
+        deps.now
+      );
     case "create_org_row":
       return execCreateOrgRow(supabase, action.payload as CreateOrgRowPayload);
     case "create_venue_row":
@@ -121,6 +138,9 @@ export async function revertAction(
       const { error } = await supabase.from("hwy4_events").update(payload).eq("id", action.target_id);
       return error ? { ok: false, error: error.message } : { ok: true };
     }
+    case FILE_GITHUB_ISSUE_TYPE:
+      // reversible=false, so the cockpit shows no Revert button. Belt and braces.
+      return { ok: false, error: `An issue can't be unfiled from here. Close #${action.target_id} on GitHub.` };
     default:
       return { ok: false, error: `Cannot revert unknown type: ${action.type}` };
   }

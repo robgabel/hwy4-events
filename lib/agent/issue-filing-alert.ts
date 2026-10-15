@@ -1,7 +1,10 @@
 // When an agent can't file its GitHub issues (token unset or expired, GitHub
 // down, labels dropped), the findings would otherwise vanish. Standing rule: a
 // finding a person has to act on goes to agent_actions, not Slack alone. So the
-// QA audit and the growth memo file one proposed row here instead (issue #325).
+// QA audit files one proposed row here instead (issue #325). The growth memo no
+// longer files issues itself (each ticket is a file_github_issue row); it uses
+// this row only when it can't stage those (extraction ran out of time, or the
+// agent_actions read or insert failed).
 //
 // Same shape as the scrape alerts (lib/scrape-alerts.ts): `agent_actions.type`
 // is unconstrained text, `reversible: false` keeps it out of auto-execute, and
@@ -22,6 +25,7 @@ export const FILING_ERRORS = new Set([
   "labels_dropped",
   "privacy_hold",
   "deadline_exceeded",
+  "inbox_write_failed",
 ]);
 const MAX_LISTED = 20;
 
@@ -38,6 +42,9 @@ const FIX: Record<string, string> = {
     "An issue was filed without its `proposed` label, so GitHub dropped the labels. Give the token Issues read/write and add the label by hand.",
   deadline_exceeded:
     "GitHub was too slow and the run hit its time limit before filing these. They will be refiled next run if the finding still holds; growth-memo proposals will not, so file those by hand.",
+  inbox_write_failed:
+    "Reading or writing the growth memo's file_github_issue proposals in agent_actions failed, so these were not staged. Check the Vercel logs, then file them by hand or wait for next week's memo.",
+  // Kept for rows filed before the growth memo went propose-first.
   privacy_hold:
     "A proposal contained a number or an email address, and the repo is public, so it was held back (the check can't tell a private figure from a harmless one). Read the held text below; if it is safe, file it by hand.",
 };

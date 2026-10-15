@@ -13,6 +13,9 @@ import {
   adminInput,
 } from "@/components/admin/ui";
 import type { AgentActionRow, AgentPolicyRow } from "@/lib/agent/policy";
+import { FILE_GITHUB_ISSUE_TYPE, type FileGithubIssuePayload } from "@/lib/agent/file-github-issue";
+import { issuesUrl } from "@/lib/github-issues";
+import { approvable } from "@/lib/agent/approval-record";
 import {
   approveAction,
   rejectAction,
@@ -93,8 +96,13 @@ export default async function ActionsPage({
   const { error, flash } = readFlash(await searchParams);
   const all = await loadActions();
   const policies = await loadPolicy();
-  const proposed = all.filter((a) => a.status === "proposed");
-  const recent = all.filter((a) => a.status !== "proposed").slice(0, 15);
+  // An approved file_github_issue row is one whose approval didn't finish (the
+  // row save failed after GitHub answered). It stays actionable: Approve again
+  // finishes it and the check_key stops a second issue.
+  const actionable = (a: AgentActionRow) =>
+    a.status === "proposed" || (a.type === FILE_GITHUB_ISSUE_TYPE && approvable(a));
+  const proposed = all.filter(actionable);
+  const recent = all.filter((a) => !actionable(a)).slice(0, 15);
 
   return (
     <QueueShell
@@ -104,7 +112,8 @@ export default async function ActionsPage({
           What the agent proposes; what you dispose. Stage 1 of the cockpit: the agent stages
           low-stakes, reversible, internal actions and a human approves each one. Nothing here
           auto-runs. Today: <strong>create_org_row</strong> (link-gap worklist) and{" "}
-          <strong>create_venue_row</strong> (unregistered venues with upcoming events).
+          <strong>create_venue_row</strong> (unregistered venues with upcoming events), plus{" "}
+          <strong>file_github_issue</strong> (growth-memo build tickets, filed to the public repo only on Approve).
         </>
       }
       error={error}
@@ -274,10 +283,21 @@ function ProposedCard({ action }: { action: AgentActionRow }) {
     <QueueCard>
       <Badges action={action} />
       <CardHeader title={action.title ?? action.type} meta={action.rationale ?? undefined} />
+      {action.error && (
+        <p style={{ color: "#922b21", fontSize: 14, margin: "0 0 12px" }}>Last attempt: {action.error}</p>
+      )}
+      {action.status === "approved" && (
+        <p style={{ color: "#92400e", fontSize: 14, margin: "0 0 12px" }}>
+          Approved, but the approval didn&apos;t finish. An issue may already be filed on GitHub. Approve to find
+          and link it (it won&apos;t file twice); Reject does not close it.
+        </p>
+      )}
       {action.type === "create_org_row" ? (
         <OrgProposedBody action={action} />
       ) : action.type === "create_venue_row" ? (
         <VenueProposedBody action={action} />
+      ) : action.type === FILE_GITHUB_ISSUE_TYPE ? (
+        <FileIssueProposedBody action={action} />
       ) : (
         <GenericProposedBody action={action} />
       )}
@@ -506,6 +526,55 @@ function VenueProposedBody({ action }: { action: AgentActionRow }) {
   );
 }
 
+// A growth-memo ticket for the PUBLIC repo. Rob reads it, may trim a figure or a
+// name out of the title or body, and Approve files it (lib/agent/file-github-issue.ts).
+// The privacy badge is privateSignal()'s read at proposal time: a prompt to look
+// harder, not a hold.
+function FileIssueProposedBody({ action }: { action: AgentActionRow }) {
+  const p = action.payload as FileGithubIssuePayload;
+  return (
+    <form action={approveAction} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <input type="hidden" name="id" value={action.id} />
+      {p.privacy_warning ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: 14,
+            fontWeight: 600,
+            color: "#922b21",
+            background: "#fdecea",
+            border: "1px solid #922b2133",
+            borderRadius: 8,
+            padding: "8px 12px",
+          }}
+        >
+          ⚠ Possible private data: this text quotes {p.privacy_warning}. The repo is public; edit it out before approving.
+        </p>
+      ) : (
+        <p style={{ margin: 0, fontSize: 13, color: MUTED }}>
+          No figure or email spotted. Still check for names before it goes public.
+        </p>
+      )}
+      <Field label="Issue title" name="issue_title" defaultValue={p.title ?? ""} required />
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "#888" }}>
+          Issue body (public)
+        </span>
+        <textarea name="issue_body" defaultValue={p.body ?? ""} rows={10} style={{ ...adminInput, fontFamily: "monospace", fontSize: 13 }} />
+      </label>
+      <span style={{ fontSize: 13, color: MUTED }}>Labels: {(p.labels ?? []).join(", ") || "none"}</span>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="submit" style={adminBtn.primary}>
+          Approve and file on GitHub
+        </button>
+        <button type="submit" formAction={rejectAction} formNoValidate style={adminBtn.danger}>
+          Reject
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // Generic fallback for other action types (e.g. flag_spam_submission).
 function GenericProposedBody({ action }: { action: AgentActionRow }) {
   return (
@@ -558,7 +627,16 @@ function DecidedRow({ action }: { action: AgentActionRow }) {
       <span style={{ color: INK, fontSize: 15, fontWeight: 600, flex: 1, minWidth: 200 }}>
         {action.title ?? action.type}
       </span>
-      {action.target_table && (
+      {action.type === FILE_GITHUB_ISSUE_TYPE && action.target_id ? (
+        <a
+          href={`${issuesUrl()}/${action.target_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "#2d5a3d", fontSize: 13 }}
+        >
+          #{action.target_id} ↗
+        </a>
+      ) : action.target_table && (
         <span style={{ color: MUTED, fontSize: 13 }}>
           {action.target_table}
           {action.target_id ? ` · ${action.target_id.slice(0, 8)}` : ""}

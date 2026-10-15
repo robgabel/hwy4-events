@@ -24,7 +24,10 @@ export type ActionType =
   | "qa_fix_event"
   // Proposed from visitor feedback. No agent_policy row: approval is the only
   // path, and canAutoExecute cannot pass (med blast, outward-facing).
-  | "cancel_event";
+  | "cancel_event"
+  // A growth-memo ticket for the public GitHub repo. No agent_policy row:
+  // approval is the only path (outward-facing, irreversible).
+  | "file_github_issue";
 
 export type AgentActionRow = {
   id: string;

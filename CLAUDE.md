@@ -85,7 +85,7 @@ Schedule only. The full purpose of each row, including the flags and the failure
 | `/api/agent/propose-actions` | Mon 7:30pm UTC | Propose org and venue rows. Does not execute them. |
 | `/api/agent/qa-audit` | Sun 8pm UTC | HTTP-check money pages and file `proposed` GitHub issues. |
 | `/api/agent/scraper-health-memo` | Mon 6:30pm UTC | Weekly scraper memo. Read-only. |
-| `/api/agent/growth-memo` | Fri 4pm UTC | Weekly growth memo. Drafts copy and sends nothing; files `proposed` GitHub issues for builds it implies. |
+| `/api/agent/growth-memo` | Fri 4pm UTC | Weekly growth memo. Drafts copy and sends nothing; stages `file_github_issue` proposals in the Inbox, and only Approve files them. |
 
 The weekly PM pass is a Cowork scheduled task, not a row in `vercel.json`. It is documented in [Admin cockpit](docs/subsystems/cockpit.md).
 
@@ -100,7 +100,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://hwy4events.com/api/<route>
 - `APIFY_API_TOKEN` (GitHub Action scrape env, not Vercel) — Apify token for the Facebook scrapers (`scripts/lib/apify-client.ts`, `scripts/lib/facebook.ts`, `scripts/scrapers/hwy4-fb-discover.ts`). The scrape orchestrator skips Facebook sources when unset.
 - `INDEXNOW_KEY` (optional) — overrides the region's IndexNow key (`REGION_OPS.seo.indexNowKey`, 8-128 chars of `[A-Za-z0-9-]`). Not a secret: the key is published at `/indexnow-key.txt`. Unset → the region default; neither valid → `/api/indexnow` is a logged no-op.
 - `CRON_SECRET`
-- `GITHUB_ISSUES_TOKEN`: fine-grained GitHub token, Issues read/write on `robgabel/hwy4-events` only, Vercel Production only. The QA audit and the growth memo file `proposed` GitHub issues with it ([lib/github-issues.ts](lib/github-issues.ts), #325). Unset → both log `GITHUB_ISSUES_TOKEN_MISSING` and file nothing (the QA audit also says so in Slack). It expires; re-mint it before then. `GITHUB_ISSUES_REPO` (optional, `owner/repo`) points a fork at its own repo.
+- `GITHUB_ISSUES_TOKEN`: fine-grained GitHub token, Issues read/write on `robgabel/hwy4-events` only, Vercel Production only. The QA audit files `proposed` GitHub issues with it, and approving a growth-memo `file_github_issue` row at `/admin/actions` files that one ([lib/github-issues.ts](lib/github-issues.ts), #325). Unset → the QA audit logs `GITHUB_ISSUES_TOKEN_MISSING` and files nothing (it also says so in Slack); an approval fails and the row stays proposed. It expires; re-mint it before then. `GITHUB_ISSUES_REPO` (optional, `owner/repo`) points a fork at its own repo.
 - `NEXT_PUBLIC_CF_BEACON_TOKEN` (optional) — Cloudflare Web Analytics beacon token. When set, `app/layout.tsx` injects the Cloudflare RUM script. Get it from https://dash.cloudflare.com/?to=/:account/web-analytics.
 - `CLOUDFLARE_API_TOKEN` — account-owned Cloudflare API token (permission: Account · Account Analytics · Read). Server-only. Powers the analytics **read** path (`lib/cloudflare-analytics.ts`, `/api/analytics`, `/api/snapshot-analytics`). ⚠️ Gotcha: account-owned tokens do NOT validate against `/user/tokens/verify` (that endpoint only knows *user* tokens — it returns code 1000 "Invalid API Token" for a perfectly good account token). Test against the GraphQL endpoint (`POST /client/v4/graphql`) instead. See PRD-cloudflare-analytics.md.
 - `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account tag (32-hex); the `accountTag` filter for the GraphQL Analytics API.

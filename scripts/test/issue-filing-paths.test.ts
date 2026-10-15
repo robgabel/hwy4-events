@@ -1,7 +1,9 @@
-// Drives the two agent issue writers (lib/agent/qa-audit.ts fileQaFindings,
-// lib/agent/propose-tasks.ts fileTaskIssues) through every filing path with a
-// fake GitHub client: no token, list failed, create failed, labels dropped, and
-// dedup. These paths decide whether the Inbox alert fires (issue #325), so a
+// Drives the QA audit's issue writer (lib/agent/qa-audit.ts fileQaFindings)
+// through every filing path with a fake GitHub client: no token, list failed,
+// create failed, labels dropped, and dedup. Also drives the growth memo's
+// proposer (lib/agent/propose-tasks.ts stageTaskProposals), which never files:
+// it stages proposed file_github_issue rows, and the fakes prove it never calls
+// create. These paths decide whether the Inbox alert fires (issue #325), so a
 // quiet regression here is a sensor failing silently.
 //
 // Run: `cd scripts && npm test`
@@ -9,7 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileQaFindings, checkKey, type QaAgg } from "../../lib/agent/qa-audit.js";
-import { fileTaskIssues, parseExtractedTasks, privateSignal, proposeTasksFromDigest } from "../../lib/agent/propose-tasks.js";
+import { parseExtractedTasks, privateSignal, proposeTasksFromDigest, stageTaskProposals, type ProposalStore } from "../../lib/agent/propose-tasks.js";
 import { FILING_ERRORS } from "../../lib/agent/issue-filing-alert.js";
 import { checkKeyLine, type IssueLite, type IssuesClient, type NewIssue } from "../../lib/github-issues.js";
 
@@ -102,32 +104,69 @@ const tasks = parseExtractedTasks(
 );
 const OPTS = { runId: "r1", date: "2026-10-16" };
 
-test("fileTaskIssues: dedups by title against open issues and files the rest", async () => {
-  const client = fakeClient({ existing: [open({ title: "Add free events filter to the town pages" })] });
-  const r = await fileTaskIssues(client, tasks, OPTS);
-  assert.equal(r.proposed, 1);
-  assert.equal(r.skipped, 1);
+function fakeStore(opts: { blocking?: string[]; readFails?: boolean; insertFails?: boolean } = {}): ProposalStore & {
+  inserted: Record<string, unknown>[];
+} {
+  const inserted: Record<string, unknown>[] = [];
+  return {
+    inserted,
+    async blockingTitles() {
+      if (opts.readFails) throw new Error("db down");
+      return opts.blocking ?? [];
+    },
+    async insert(rows) {
+      if (opts.insertFails) throw new Error("db down");
+      inserted.push(...rows);
+    },
+  };
+}
+
+test("stageTaskProposals: stages proposed rows and never calls create", async () => {
+  const store = fakeStore();
+  const client = fakeClient({ createFails: () => assert.fail("the growth memo must never create an issue") });
+  const r = await stageTaskProposals(store, tasks, OPTS, client);
+  assert.equal(r.proposed, 2);
   assert.equal(r.error, null);
-  assert.deepEqual(client.created.map((i) => i.title), ["Fix the grape stomp page title"]);
+  assert.equal(client.created.length, 0);
+  assert.deepEqual(
+    store.inserted.map((row) => [row.type, row.status, row.title]),
+    [
+      ["file_github_issue", "proposed", "Add a free events filter to town pages"],
+      ["file_github_issue", "proposed", "Fix the grape stomp page title"],
+    ]
+  );
 });
 
-test("fileTaskIssues: list failure, create failure and dropped labels all surface", async () => {
-  const listFailed = await fileTaskIssues(fakeClient({ listFails: true }), tasks, OPTS);
-  assert.equal(listFailed.error, "list_failed");
-  assert.equal(listFailed.unfiled.length, 2);
+test("stageTaskProposals: dedups by title against open issues and against our own proposals", async () => {
+  const byIssue = fakeStore();
+  const r1 = await stageTaskProposals(byIssue, tasks, OPTS, fakeClient({ existing: [open({ title: "Add free events filter to the town pages" })] }));
+  assert.equal(r1.proposed, 1);
+  assert.equal(r1.skipped, 1);
+  assert.deepEqual(byIssue.inserted.map((row) => row.title), ["Fix the grape stomp page title"]);
 
-  const createFailed = await fileTaskIssues(fakeClient({ createFails: (i) => i.title.startsWith("Fix") }), tasks, OPTS);
-  assert.equal(createFailed.error, "create_failed");
-  assert.equal(createFailed.unfiled.length, 1);
-  assert.match(createFailed.unfiled[0], /^\[create_failed\] Fix the grape stomp page title \(spec: spec;/);
-  assert.equal(createFailed.proposed, 1);
+  const byRow = fakeStore({ blocking: ["Fix the grape stomp page title"] });
+  const r2 = await stageTaskProposals(byRow, tasks, OPTS, null);
+  assert.equal(r2.proposed, 1);
+  assert.deepEqual(byRow.inserted.map((row) => row.title), ["Add a free events filter to town pages"]);
 
-  const dropped = await fileTaskIssues(fakeClient({ dropLabels: true }), tasks, OPTS);
-  assert.equal(dropped.error, "labels_dropped");
-  assert.equal(dropped.proposed, 2);
+  // A GitHub list failure is not fatal here: the approval re-checks before it files.
+  const r3 = await stageTaskProposals(fakeStore(), tasks, OPTS, fakeClient({ listFails: true }));
+  assert.equal(r3.proposed, 2);
+  assert.equal(r3.error, null);
 });
 
-test("privateSignal holds back any figure or email; only public digit tokens pass", () => {
+test("stageTaskProposals: a failed read or insert of agent_actions reaches the Inbox alert with the spec", async () => {
+  const read = await stageTaskProposals(fakeStore({ readFails: true }), tasks, OPTS);
+  assert.equal(read.error, "inbox_write_failed");
+  assert.equal(read.unfiled.length, 2);
+  assert.ok(FILING_ERRORS.has(read.error!));
+
+  const ins = await stageTaskProposals(fakeStore({ insertFails: true }), tasks, OPTS);
+  assert.equal(ins.error, "inbox_write_failed");
+  assert.match(ins.unfiled[0], /^\[inbox_write_failed\] Add a free events filter to town pages \(spec: spec;/);
+});
+
+test("privateSignal flags any figure or email; only public digit tokens pass", () => {
   const t = (body: string) => ({ title: "Fix the newsletter confirm email", body, rationale: "" });
   for (const leaky of [
     "Confirm rate fell to 40% this week",
@@ -169,18 +208,21 @@ test("privateSignal holds back any figure or email; only public digit tokens pas
   }
 });
 
-test("fileTaskIssues: a proposal quoting private figures is held, not filed", async () => {
+test("stageTaskProposals: a proposal quoting private figures is staged with a warning, not held", async () => {
   const leaky = parseExtractedTasks(
     JSON.stringify([{ title: "Resend the confirm link", body: "confirm rate is 40%", type: "growth", priority: "p2" }])
   );
+  const store = fakeStore();
   const client = fakeClient({});
-  const r = await fileTaskIssues(client, leaky, OPTS);
+  const r = await stageTaskProposals(store, leaky, OPTS, client);
   assert.equal(client.created.length, 0);
-  assert.equal(r.error, "privacy_hold");
-  assert.match(r.unfiled[0], /^\[privacy_hold, quotes a figure\] Resend the confirm link \(spec: confirm rate is 40%/);
+  assert.equal(r.error, null);
+  assert.equal(r.proposed, 1);
+  assert.equal(r.warned, 1);
+  assert.equal((store.inserted[0].payload as { privacy_warning: string }).privacy_warning, "a figure");
 });
 
-test("both writers stop at the deadline and report what they didn't file", async () => {
+test("the QA audit stops at the deadline and reports what it didn't file", async () => {
   const past = Date.now() - 1;
   const qaClient = fakeClient({});
   const qa = await fileQaFindings(qaClient, [agg("/free")], past);
@@ -188,42 +230,20 @@ test("both writers stop at the deadline and report what they didn't file", async
   assert.deepEqual(qa.unfiled_titles, ["QA: /free returns an error"]);
   assert.equal(qaClient.created.length, 0);
 
-  const memoClient = fakeClient({});
-  const memo = await fileTaskIssues(memoClient, tasks, OPTS, new Date(), past);
-  assert.equal(memo.error, "deadline_exceeded");
-  assert.equal(memo.unfiled.length, 2);
-  assert.equal(memoClient.created.length, 0);
-
   // no deadline means no limit
   const free = await fileQaFindings(fakeClient({}), [agg("/free")]);
   assert.equal(free.filed, 1);
 });
 
-test("proposeTasksFromDigest: no time left for extraction is a filing failure the Inbox sees", async () => {
+test("proposeTasksFromDigest: no time left for extraction is a failure the Inbox sees", async () => {
+  const store = fakeStore();
   const r = await proposeTasksFromDigest(
     { runId: "r1", digest: { summary: "x" }, deadline: Date.now() - 1 },
+    store,
     fakeClient({})
   );
   assert.equal(r.error, "deadline_exceeded");
   assert.equal(r.unfiled.length, 1);
   assert.ok(FILING_ERRORS.has(r.error!));
-});
-
-test("a held proposal's alert text includes the rationale that may have tripped it", async () => {
-  const leaky = parseExtractedTasks(
-    JSON.stringify([{ title: "Resend the confirm link", body: "clean spec", rationale: "confirmations fell to 40", type: "growth" }])
-  );
-  const r = await fileTaskIssues(fakeClient({}), leaky, OPTS);
-  assert.match(r.unfiled[0], /why now: confirmations fell to 40/);
-});
-
-test("one run's failures don't mask each other", async () => {
-  const mixed = parseExtractedTasks(
-    JSON.stringify([
-      { title: "Resend the confirm link", body: "rate is 40%", type: "growth" },
-      { title: "Fix the grape stomp page title", body: "spec", type: "bug" },
-    ])
-  );
-  const r = await fileTaskIssues(fakeClient({ createFails: () => true }), mixed, OPTS);
-  assert.deepEqual(r.errors.sort(), ["create_failed", "privacy_hold"]);
+  assert.equal(store.inserted.length, 0);
 });

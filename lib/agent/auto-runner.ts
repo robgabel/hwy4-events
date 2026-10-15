@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cancelEventAutoReady, CANCEL_EVENT_ACTION_TYPE } from "@/lib/feedback-cancel";
 import { canAutoExecute, type AgentActionRow } from "@/lib/agent/policy";
 import { executeAction } from "@/lib/agent/actions-executor";
+import { FILE_GITHUB_ISSUE_TYPE } from "@/lib/agent/file-github-issue";
 
 // Stage 2 (PRD-agent-cockpit.md): execute the proposals whose type has graduated
 // to autonomous. An action runs WITHOUT a human only if both hold:
@@ -17,6 +18,8 @@ export type AutoRunResult = { executed: number; failed: number; skipped: number 
 export function isAutoReady(action: Pick<AgentActionRow, "type" | "payload">): boolean {
   // A "didn't happen" report waits for a human even if a policy row is added later.
   if (action.type === CANCEL_EVENT_ACTION_TYPE) return cancelEventAutoReady();
+  // A public GitHub issue is read by a person first, always.
+  if (action.type === FILE_GITHUB_ISSUE_TYPE) return false;
   if (action.type === "create_org_row") {
     const p = action.payload as {
       canonical_url?: string;
