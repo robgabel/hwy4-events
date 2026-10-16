@@ -48,17 +48,28 @@ export function withSrc(url: string, src: string): string {
 }
 
 /**
+ * `source_name` values that name our pipeline, not a host: aggregators,
+ * community submissions, and the Facebook discover scraper (#406).
+ */
+const NOT_A_HOST = /gocalaveras|community submission|facebook events discover|fb[-_ ]discover/i;
+
+/**
  * Turn a raw `source_name` into a human "hosted by" label, or null to hide it.
  * De-slugs ("cameo-plaza" → "Cameo Plaza"), drops aggregator/automated sources,
- * and suppresses it when it just repeats the event title.
+ * strips a trailing feed word ("moose-lodge-calendar" → "Moose Lodge"), and
+ * suppresses it when it just repeats the event title.
  */
 export function humanizeHost(
   raw: string | null | undefined,
   title: string
 ): string | null {
   if (!raw) return null;
-  if (/gocalaveras|community submission/i.test(raw)) return null;
-  const cleaned = raw.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+  if (NOT_A_HOST.test(raw)) return null;
+  const cleaned = raw
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+(calendar|newsletter|feed)$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!cleaned) return null;
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
   if (norm(cleaned) === norm(title)) return null; // just repeats the title
