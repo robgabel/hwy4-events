@@ -22,6 +22,11 @@ import {
   type BriefingPickRow,
 } from "@/lib/briefing-picks";
 import { getPickRowsBetween } from "@/lib/briefing-picks-data";
+import {
+  realCancellations,
+  type CancelledRow,
+  type LiveRow,
+} from "@/lib/briefing-cancellations";
 import { FESTIVAL_GUIDES } from "@/lib/event-guides";
 import { addDaysIso } from "@/lib/picks";
 import {
@@ -91,22 +96,45 @@ async function getWeekendEvents(weekend: WeekendPreview) {
   return data || [];
 }
 
-async function getCancelledWeekendEvents(weekend: WeekendPreview) {
+// status='cancelled' is also the dedup merge tombstone (Phase 0), so the
+// rows come back with the merge-log ids that mark them; `realCancellations`
+// in lib/briefing-cancellations.ts keeps only organizer cancellations
+// (issue #405). A failed merge-log read fails closed: no cancelled section
+// rather than a tombstone announced as a cancellation.
+async function getCancelledWeekendEvents(
+  weekend: WeekendPreview
+): Promise<{ cancelled: CancelledRow[]; tombstoneIds: string[] }> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return [];
+  if (!supabaseUrl || !serviceKey) return { cancelled: [], tombstoneIds: [] };
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
   const { data } = await supabase
     .from("hwy4_events")
-    .select("name, date, venue_name, town")
+    .select("id, name, date, venue_name, town")
     .gte("date", weekend.friday)
     .lte("date", weekend.sunday)
     .eq("status", "cancelled")
     .order("date", { ascending: true });
+  const cancelled = (data || []) as CancelledRow[];
+  if (cancelled.length === 0) return { cancelled, tombstoneIds: [] };
 
-  return data || [];
+  const { data: log, error: logError } = await supabase
+    .from("event_merge_log")
+    .select("merged_from_id")
+    .in(
+      "merged_from_id",
+      cancelled.map((c) => c.id)
+    );
+  if (logError) {
+    console.error("weekend-briefing: merge log read failed, dropping cancelled section", logError);
+    return { cancelled: [], tombstoneIds: [] };
+  }
+  return {
+    cancelled,
+    tombstoneIds: (log || []).map((r) => r.merged_from_id as string),
+  };
 }
 
 async function getRecentBriefings() {
@@ -141,7 +169,7 @@ async function generateWeekendBriefing(
   weekend: WeekendPreview,
   events: Record<string, unknown>[],
   recentBriefings: { briefing_date: string; text: string }[],
-  cancelledEvents: { name: string; date: string; venue_name: string; town: string }[] = [],
+  cancelledEvents: CancelledRow[] = [],
   picks: { inWindow: BriefingPick[]; lookahead: BriefingPick[] } = {
     inWindow: [],
     lookahead: [],
@@ -207,7 +235,16 @@ async function generateWeekendBriefing(
   let cancelledSection = "";
   if (cancelledEvents.length > 0) {
     const cancelledList = cancelledEvents
-      .map((e) => `- ${e.name} at ${e.venue_name} (${e.town}) on ${e.date}`)
+      .map((e) =>
+        [
+          `- ${e.name}`,
+          e.venue_name ? `at ${e.venue_name}` : "",
+          e.town ? `(${e.town})` : "",
+          `on ${e.date}`,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      )
       .join("\n");
     cancelledSection = `\n\nCANCELLED EVENTS (mention briefly so locals know — one sentence max):\n${cancelledList}`;
   }
@@ -309,11 +346,22 @@ export async function GET(request: Request) {
     // One window for the whole request. Friday cron: the following Fri–Sun.
     // Thursday cron: that same weekend, now one day out, reread from the DB.
     const weekend = upcomingWeekendPreview();
-    const [events, recentBriefings, cancelledEvents] = await Promise.all([
+    const [events, recentBriefings, cancelledRead] = await Promise.all([
       getWeekendEvents(weekend),
       getRecentBriefings(),
       getCancelledWeekendEvents(weekend),
     ]);
+    const cancelledEvents = realCancellations(
+      cancelledRead.cancelled,
+      cancelledRead.tombstoneIds,
+      events as unknown as LiveRow[]
+    );
+    const tombstones = cancelledRead.cancelled.length - cancelledEvents.length;
+    if (tombstones > 0) {
+      console.log(
+        `weekend-briefing: dropped ${tombstones} merge tombstone(s) from the cancelled list`
+      );
+    }
     // Rob's Picks under the homepage's own rule (issue #356), plus one
     // mark-your-calendar pick from the two weeks after this weekend.
     const { friday, sunday } = weekend;
